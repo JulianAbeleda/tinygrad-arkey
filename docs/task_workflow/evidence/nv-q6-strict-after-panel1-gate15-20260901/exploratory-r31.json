@@ -1,0 +1,6026 @@
+{
+  "schema": "tinygrad.nv_q6_true_late_panel1.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "launch": {
+    "grid": [
+      170,
+      1,
+      1
+    ],
+    "block": [
+      256,
+      1,
+      1
+    ],
+    "shared_bytes": 58368
+  },
+  "arms": {
+    "anchor": "early combined all-partials",
+    "candidate": "dependency-constrained true-late tail preload"
+  },
+  "binary_gates": {
+    "anchor_cubin_frozen": true,
+    "fixup_cubin_frozen": true,
+    "anchor_family_census": true,
+    "candidate_family_census": true,
+    "ast_signature_exact": true,
+    "panel1_18_loads_18_stores": true,
+    "panel1_span_le_160": true,
+    "panel1_between_initial_and_overwrite_barriers": true,
+    "instruction_total_le_5144": true,
+    "registers_le_255": true,
+    "zero_stack": true,
+    "zero_ldl_stl": true,
+    "shared_static_1024": true,
+    "local_static_zero": true
+  },
+  "signatures": {
+    "early_combined_all_partials": {
+      "instruction_total": 5136,
+      "registers": 255,
+      "stack_bytes": 0,
+      "shared_static_bytes": 1024,
+      "local_static_bytes": 0,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 109,
+      "STS": 73,
+      "STG": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": 0,
+      "LDL": 0,
+      "STL": 0,
+      "q8_panel1": {
+        "q8_loads": 36,
+        "q8_stores": 36,
+        "panel1_loads": 18,
+        "panel1_stores": 18,
+        "panel1_offsets_exact": true,
+        "panel1_first_load_ordinal": 488,
+        "panel1_first_store_ordinal": 2713,
+        "panel1_first_load_pc": "0x1e80",
+        "panel1_first_store_pc": "0xa990",
+        "panel1_load_to_store_span_instructions": 2225,
+        "classified": true,
+        "barrier_ordinals": [
+          774,
+          2707,
+          2731,
+          4251
+        ],
+        "barrier_pcs": [
+          "0x3060",
+          "0xa930",
+          "0xaab0",
+          "0x109b0"
+        ]
+      }
+    },
+    "true_late_q8_panel1": {
+      "instruction_total": 5136,
+      "registers": 255,
+      "stack_bytes": 0,
+      "shared_static_bytes": 1024,
+      "local_static_bytes": 0,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 184,
+      "LDG": 109,
+      "STS": 73,
+      "STG": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": 0,
+      "LDL": 0,
+      "STL": 0,
+      "q8_panel1": {
+        "q8_loads": 36,
+        "q8_stores": 36,
+        "panel1_loads": 18,
+        "panel1_stores": 18,
+        "panel1_offsets_exact": true,
+        "panel1_first_load_ordinal": 2424,
+        "panel1_first_store_ordinal": 2712,
+        "panel1_first_load_pc": "0x9780",
+        "panel1_first_store_pc": "0xa980",
+        "panel1_load_to_store_span_instructions": 288,
+        "classified": true,
+        "barrier_ordinals": [
+          751,
+          2707,
+          2730,
+          4245
+        ],
+        "barrier_pcs": [
+          "0x2ef0",
+          "0xa930",
+          "0xaaa0",
+          "0x10950"
+        ]
+      }
+    }
+  },
+  "compiler": {
+    "early_combined_all_partials": {
+      "source": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/early_combined_all_partials.cu",
+      "source_bytes": 177839,
+      "source_sha256": "40cca7e5d0b11d37c7df5843206eaf0a27cbb128dd556f879f7b4f43ace324d3",
+      "cubin": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/early_combined_all_partials.cubin",
+      "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "render_ms": 8042.681582737714,
+      "compile_ms": 436.4910596050322,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/early_combined_all_partials.cubin",
+        "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+        "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+        "instruction_total": 5136,
+        "families": {
+          "BAR": 4,
+          "BRA": 4,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2": 69,
+          "I2F": 8,
+          "I2FP": 1024,
+          "IADD": 72,
+          "IADD3": 3,
+          "IDP": 1,
+          "IMAD": 25,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 109,
+          "LDS": 176,
+          "LDSM": 32,
+          "LEA": 42,
+          "LOP3": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF": 67,
+          "STG": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 12,
+          "UISETP": 2,
+          "ULEA": 3,
+          "ULOP3": 1,
+          "UMOV": 7,
+          "UPLOP3": 4,
+          "USEL": 2,
+          "USHF": 3,
+          "UVIMNMX": 2
+        },
+        "opcodes": {
+          "BAR.SYNC.DEFER_BLOCKING": 4,
+          "BRA": 2,
+          "BRA.U": 2,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F.F16.F32": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2.F32": 69,
+          "I2F.S16": 4,
+          "I2F.S8": 4,
+          "I2FP.F32.S32": 1024,
+          "IADD": 41,
+          "IADD.64": 31,
+          "IADD3": 3,
+          "IDP.2A.LO.U16.U8": 1,
+          "IMAD": 17,
+          "IMAD.WIDE": 7,
+          "IMAD.WIDE.U32": 1,
+          "IMMA.16816.S8.S8": 256,
+          "ISETP.LT.U32.AND": 1,
+          "LDC": 1,
+          "LDC.64": 3,
+          "LDCU.64": 1,
+          "LDG.E": 36,
+          "LDG.E.U16": 73,
+          "LDS": 136,
+          "LDS.128": 36,
+          "LDS.64": 4,
+          "LDSM.16.M88.2": 32,
+          "LEA": 42,
+          "LOP3.LUT": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3.LUT": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF.L.U32": 21,
+          "SHF.R.S32.HI": 4,
+          "SHF.R.U32.HI": 42,
+          "STG.E": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 9,
+          "UIMAD.WIDE.U32": 3,
+          "UISETP.GE.AND": 1,
+          "UISETP.NE.U32.AND": 1,
+          "ULEA": 2,
+          "ULEA.HI": 1,
+          "ULOP3.LUT": 1,
+          "UMOV": 7,
+          "UPLOP3.LUT": 4,
+          "USEL": 2,
+          "USHF.R.U32.HI": 3,
+          "UVIMNMX.S32": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/sass/early_combined_all_partials-6eb663b3a3fd628e.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/sass/early_combined_all_partials-6eb663b3a3fd628e.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/early_combined_all_partials/sass/early_combined_all_partials-6eb663b3a3fd628e.resources.txt"
+      }
+    },
+    "true_late_q8_panel1": {
+      "source": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/true_late_q8_panel1.cu",
+      "source_bytes": 177147,
+      "source_sha256": "3ae6b6b167a1e80a7676544c8d660c89ae445b69b4d73e0ffdc99a4794383b7a",
+      "cubin": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/true_late_q8_panel1.cubin",
+      "cubin_sha256": "51edb7a2406f81c565702597b6f1fb5f934ea659194a0a7b84186da5489e96cc",
+      "render_ms": 6249.045229051262,
+      "compile_ms": 283.5170216858387,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/true_late_q8_panel1.cubin",
+        "cubin_sha256": "51edb7a2406f81c565702597b6f1fb5f934ea659194a0a7b84186da5489e96cc",
+        "symbol": "nv_q6_oracle_broad_cta_serial_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+        "instruction_total": 5136,
+        "families": {
+          "BAR": 4,
+          "BRA": 4,
+          "CS2R": 56,
+          "EXIT": 1,
+          "F2F": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2": 69,
+          "I2F": 8,
+          "I2FP": 1024,
+          "IADD": 74,
+          "IADD3": 3,
+          "IDP": 1,
+          "IMAD": 24,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 109,
+          "LDS": 184,
+          "LDSM": 32,
+          "LEA": 42,
+          "LOP3": 213,
+          "MOV": 103,
+          "NOP": 8,
+          "PLOP3": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF": 67,
+          "STG": 64,
+          "STS": 73,
+          "UIADD3": 10,
+          "UIMAD": 12,
+          "UISETP": 2,
+          "ULEA": 3,
+          "ULOP3": 1,
+          "UMOV": 7,
+          "UPLOP3": 4,
+          "USEL": 2,
+          "USHF": 3,
+          "UVIMNMX": 2
+        },
+        "opcodes": {
+          "BAR.SYNC.DEFER_BLOCKING": 4,
+          "BRA": 2,
+          "BRA.U": 2,
+          "CS2R": 56,
+          "EXIT": 1,
+          "F2F.F16.F32": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2.F32": 69,
+          "I2F.S16": 4,
+          "I2F.S8": 4,
+          "I2FP.F32.S32": 1024,
+          "IADD": 42,
+          "IADD.64": 32,
+          "IADD3": 3,
+          "IDP.2A.LO.U16.U8": 1,
+          "IMAD": 16,
+          "IMAD.WIDE": 7,
+          "IMAD.WIDE.U32": 1,
+          "IMMA.16816.S8.S8": 256,
+          "ISETP.LT.U32.AND": 1,
+          "LDC": 1,
+          "LDC.64": 3,
+          "LDCU.64": 1,
+          "LDG.E": 36,
+          "LDG.E.U16": 73,
+          "LDS": 144,
+          "LDS.128": 32,
+          "LDS.64": 8,
+          "LDSM.16.M88.2": 32,
+          "LEA": 42,
+          "LOP3.LUT": 213,
+          "MOV": 103,
+          "NOP": 8,
+          "PLOP3.LUT": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF.L.U32": 21,
+          "SHF.R.S32.HI": 4,
+          "SHF.R.U32.HI": 42,
+          "STG.E": 64,
+          "STS": 73,
+          "UIADD3": 10,
+          "UIMAD": 9,
+          "UIMAD.WIDE.U32": 3,
+          "UISETP.GE.AND": 1,
+          "UISETP.NE.U32.AND": 1,
+          "ULEA": 2,
+          "ULEA.HI": 1,
+          "ULOP3.LUT": 1,
+          "UMOV": 7,
+          "UPLOP3.LUT": 4,
+          "USEL": 2,
+          "USHF.R.U32.HI": 3,
+          "UVIMNMX.S32": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/sass/true_late_q8_panel1-51edb7a2406f81c5.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/sass/true_late_q8_panel1-51edb7a2406f81c5.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/true_late_q8_panel1/sass/true_late_q8_panel1-51edb7a2406f81c5.resources.txt"
+      }
+    },
+    "fixup": {
+      "source": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/frozen_all_partials_fixup.cu",
+      "source_bytes": 25261,
+      "source_sha256": "232cdd9fd88d51326419983712f08fdf2962f75fec77119a3faf14bfc7d582a4",
+      "cubin": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/frozen_all_partials_fixup.cubin",
+      "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+      "render_ms": 212.86658197641373,
+      "compile_ms": 12.150891125202179,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/frozen_all_partials_fixup.cubin",
+        "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+        "symbol": "nv_q6_ordered_fixup_all_partials",
+        "instruction_total": 672,
+        "families": {
+          "BRA": 10,
+          "CS2R": 121,
+          "EXIT": 1,
+          "FADD": 192,
+          "HFMA2": 3,
+          "IADD": 2,
+          "IMAD": 8,
+          "ISETP": 8,
+          "LDC": 5,
+          "LDCU": 1,
+          "LDG": 196,
+          "LDL": 4,
+          "LEA": 1,
+          "LOP3": 8,
+          "MOV": 7,
+          "NOP": 15,
+          "S2R": 4,
+          "SEL": 5,
+          "SHF": 9,
+          "STG": 64,
+          "STL": 8
+        },
+        "opcodes": {
+          "BRA": 10,
+          "CS2R": 121,
+          "EXIT": 1,
+          "FADD": 192,
+          "HFMA2": 3,
+          "IADD": 2,
+          "IMAD.WIDE": 6,
+          "IMAD.WIDE.U32": 2,
+          "ISETP.GE.AND": 3,
+          "ISETP.GT.AND": 5,
+          "LDC": 1,
+          "LDC.64": 4,
+          "LDCU.64": 1,
+          "LDG.E": 196,
+          "LDL.LU": 4,
+          "LEA": 1,
+          "LOP3.LUT": 8,
+          "MOV": 7,
+          "NOP": 15,
+          "S2R": 4,
+          "SEL": 5,
+          "SHF.L.U32": 8,
+          "SHF.R.U32.HI": 1,
+          "STG.E": 64,
+          "STL": 8
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 16,
+          "shared_static_bytes": 0,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 4,
+            "STL": 8,
+            "pcs": [
+              "0xd0",
+              "0xe0",
+              "0xf0",
+              "0x100",
+              "0x990",
+              "0x9a0",
+              "0x9b0",
+              "0x9c0",
+              "0x17d0",
+              "0x17e0",
+              "0x17f0",
+              "0x1800"
+            ],
+            "stack_offsets": {
+              "0x0": 3,
+              "0x4": 3,
+              "0x8": 3,
+              "0xc": 3
+            }
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/sass/frozen_all_partials_fixup-483de2ee3eed3597.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/sass/frozen_all_partials_fixup-483de2ee3eed3597.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/frozen_all_partials_fixup/sass/frozen_all_partials_fixup-483de2ee3eed3597.resources.txt"
+      }
+    }
+  },
+  "ownership": {
+    "owners": 170,
+    "tiles": 128,
+    "k256_per_tile": 48,
+    "slot_layout": "plane_major: slot=plane*170+owner",
+    "allocated_slots": 340,
+    "active_slots": 294,
+    "preceding_segments": 166,
+    "final_segments": 128,
+    "fold_order": "nonfinal contributors in descending owner order, then the final contributor",
+    "descriptors": [
+      [
+        {
+          "owner": 0,
+          "plane": 0,
+          "slot": 0,
+          "tile": 0,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 1,
+          "plane": 0,
+          "slot": 1,
+          "tile": 0,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 1,
+          "plane": 1,
+          "slot": 171,
+          "tile": 1,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 2,
+          "plane": 0,
+          "slot": 2,
+          "tile": 1,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 2,
+          "plane": 1,
+          "slot": 172,
+          "tile": 2,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 3,
+          "plane": 0,
+          "slot": 3,
+          "tile": 2,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 4,
+          "plane": 0,
+          "slot": 4,
+          "tile": 3,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 5,
+          "plane": 0,
+          "slot": 5,
+          "tile": 3,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 5,
+          "plane": 1,
+          "slot": 175,
+          "tile": 4,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 6,
+          "plane": 0,
+          "slot": 6,
+          "tile": 4,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 6,
+          "plane": 1,
+          "slot": 176,
+          "tile": 5,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 7,
+          "plane": 0,
+          "slot": 7,
+          "tile": 5,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 8,
+          "plane": 0,
+          "slot": 8,
+          "tile": 6,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 7,
+          "plane": 1,
+          "slot": 177,
+          "tile": 6,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 9,
+          "plane": 0,
+          "slot": 9,
+          "tile": 6,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 9,
+          "plane": 1,
+          "slot": 179,
+          "tile": 7,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 10,
+          "plane": 0,
+          "slot": 10,
+          "tile": 7,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 10,
+          "plane": 1,
+          "slot": 180,
+          "tile": 8,
+          "k_begin": 0,
+          "k_end": 13,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 11,
+          "plane": 0,
+          "slot": 11,
+          "tile": 8,
+          "k_begin": 13,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 12,
+          "plane": 0,
+          "slot": 12,
+          "tile": 9,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 11,
+          "plane": 1,
+          "slot": 181,
+          "tile": 9,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 13,
+          "plane": 0,
+          "slot": 13,
+          "tile": 9,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 13,
+          "plane": 1,
+          "slot": 183,
+          "tile": 10,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 14,
+          "plane": 0,
+          "slot": 14,
+          "tile": 10,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 14,
+          "plane": 1,
+          "slot": 184,
+          "tile": 11,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 15,
+          "plane": 0,
+          "slot": 15,
+          "tile": 11,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 16,
+          "plane": 0,
+          "slot": 16,
+          "tile": 12,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 15,
+          "plane": 1,
+          "slot": 185,
+          "tile": 12,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 17,
+          "plane": 0,
+          "slot": 17,
+          "tile": 12,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 17,
+          "plane": 1,
+          "slot": 187,
+          "tile": 13,
+          "k_begin": 0,
+          "k_end": 26,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 18,
+          "plane": 0,
+          "slot": 18,
+          "tile": 13,
+          "k_begin": 26,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 18,
+          "plane": 1,
+          "slot": 188,
+          "tile": 14,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 19,
+          "plane": 0,
+          "slot": 19,
+          "tile": 14,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 20,
+          "plane": 0,
+          "slot": 20,
+          "tile": 15,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 19,
+          "plane": 1,
+          "slot": 189,
+          "tile": 15,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 21,
+          "plane": 0,
+          "slot": 21,
+          "tile": 15,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 21,
+          "plane": 1,
+          "slot": 191,
+          "tile": 16,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 22,
+          "plane": 0,
+          "slot": 22,
+          "tile": 16,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 22,
+          "plane": 1,
+          "slot": 192,
+          "tile": 17,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 23,
+          "plane": 0,
+          "slot": 23,
+          "tile": 17,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 24,
+          "plane": 0,
+          "slot": 24,
+          "tile": 18,
+          "k_begin": 3,
+          "k_end": 39,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 23,
+          "plane": 1,
+          "slot": 193,
+          "tile": 18,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 25,
+          "plane": 0,
+          "slot": 25,
+          "tile": 18,
+          "k_begin": 39,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 25,
+          "plane": 1,
+          "slot": 195,
+          "tile": 19,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 26,
+          "plane": 0,
+          "slot": 26,
+          "tile": 19,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 26,
+          "plane": 1,
+          "slot": 196,
+          "tile": 20,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 27,
+          "plane": 0,
+          "slot": 27,
+          "tile": 20,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 28,
+          "plane": 0,
+          "slot": 28,
+          "tile": 21,
+          "k_begin": 3,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 27,
+          "plane": 1,
+          "slot": 197,
+          "tile": 21,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 29,
+          "plane": 0,
+          "slot": 29,
+          "tile": 21,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 29,
+          "plane": 1,
+          "slot": 199,
+          "tile": 22,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 30,
+          "plane": 0,
+          "slot": 30,
+          "tile": 22,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 30,
+          "plane": 1,
+          "slot": 200,
+          "tile": 23,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 31,
+          "plane": 0,
+          "slot": 31,
+          "tile": 23,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 32,
+          "plane": 0,
+          "slot": 32,
+          "tile": 24,
+          "k_begin": 4,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 31,
+          "plane": 1,
+          "slot": 201,
+          "tile": 24,
+          "k_begin": 0,
+          "k_end": 4,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 33,
+          "plane": 0,
+          "slot": 33,
+          "tile": 24,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 33,
+          "plane": 1,
+          "slot": 203,
+          "tile": 25,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 34,
+          "plane": 0,
+          "slot": 34,
+          "tile": 25,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 34,
+          "plane": 1,
+          "slot": 204,
+          "tile": 26,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 35,
+          "plane": 0,
+          "slot": 35,
+          "tile": 26,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 36,
+          "plane": 0,
+          "slot": 36,
+          "tile": 27,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 35,
+          "plane": 1,
+          "slot": 205,
+          "tile": 27,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 37,
+          "plane": 0,
+          "slot": 37,
+          "tile": 27,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 37,
+          "plane": 1,
+          "slot": 207,
+          "tile": 28,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 38,
+          "plane": 0,
+          "slot": 38,
+          "tile": 28,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 38,
+          "plane": 1,
+          "slot": 208,
+          "tile": 29,
+          "k_begin": 0,
+          "k_end": 17,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 39,
+          "plane": 0,
+          "slot": 39,
+          "tile": 29,
+          "k_begin": 17,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 40,
+          "plane": 0,
+          "slot": 40,
+          "tile": 30,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 39,
+          "plane": 1,
+          "slot": 209,
+          "tile": 30,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 41,
+          "plane": 0,
+          "slot": 41,
+          "tile": 30,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 41,
+          "plane": 1,
+          "slot": 211,
+          "tile": 31,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 42,
+          "plane": 0,
+          "slot": 42,
+          "tile": 31,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 42,
+          "plane": 1,
+          "slot": 212,
+          "tile": 32,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 43,
+          "plane": 0,
+          "slot": 43,
+          "tile": 32,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 44,
+          "plane": 0,
+          "slot": 44,
+          "tile": 33,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 43,
+          "plane": 1,
+          "slot": 213,
+          "tile": 33,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 45,
+          "plane": 0,
+          "slot": 45,
+          "tile": 33,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 45,
+          "plane": 1,
+          "slot": 215,
+          "tile": 34,
+          "k_begin": 0,
+          "k_end": 30,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 46,
+          "plane": 0,
+          "slot": 46,
+          "tile": 34,
+          "k_begin": 30,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 46,
+          "plane": 1,
+          "slot": 216,
+          "tile": 35,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 47,
+          "plane": 0,
+          "slot": 47,
+          "tile": 35,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 48,
+          "plane": 0,
+          "slot": 48,
+          "tile": 36,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 47,
+          "plane": 1,
+          "slot": 217,
+          "tile": 36,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 49,
+          "plane": 0,
+          "slot": 49,
+          "tile": 36,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 49,
+          "plane": 1,
+          "slot": 219,
+          "tile": 37,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 50,
+          "plane": 0,
+          "slot": 50,
+          "tile": 37,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 50,
+          "plane": 1,
+          "slot": 220,
+          "tile": 38,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 51,
+          "plane": 0,
+          "slot": 51,
+          "tile": 38,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 52,
+          "plane": 0,
+          "slot": 52,
+          "tile": 39,
+          "k_begin": 7,
+          "k_end": 43,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 51,
+          "plane": 1,
+          "slot": 221,
+          "tile": 39,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 53,
+          "plane": 0,
+          "slot": 53,
+          "tile": 39,
+          "k_begin": 43,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 53,
+          "plane": 1,
+          "slot": 223,
+          "tile": 40,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 54,
+          "plane": 0,
+          "slot": 54,
+          "tile": 40,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 54,
+          "plane": 1,
+          "slot": 224,
+          "tile": 41,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 55,
+          "plane": 0,
+          "slot": 55,
+          "tile": 41,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 56,
+          "plane": 0,
+          "slot": 56,
+          "tile": 42,
+          "k_begin": 7,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 55,
+          "plane": 1,
+          "slot": 225,
+          "tile": 42,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 57,
+          "plane": 0,
+          "slot": 57,
+          "tile": 42,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 57,
+          "plane": 1,
+          "slot": 227,
+          "tile": 43,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 58,
+          "plane": 0,
+          "slot": 58,
+          "tile": 43,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 58,
+          "plane": 1,
+          "slot": 228,
+          "tile": 44,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 59,
+          "plane": 0,
+          "slot": 59,
+          "tile": 44,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 60,
+          "plane": 0,
+          "slot": 60,
+          "tile": 45,
+          "k_begin": 8,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 59,
+          "plane": 1,
+          "slot": 229,
+          "tile": 45,
+          "k_begin": 0,
+          "k_end": 8,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 61,
+          "plane": 0,
+          "slot": 61,
+          "tile": 45,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 61,
+          "plane": 1,
+          "slot": 231,
+          "tile": 46,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 62,
+          "plane": 0,
+          "slot": 62,
+          "tile": 46,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 62,
+          "plane": 1,
+          "slot": 232,
+          "tile": 47,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 63,
+          "plane": 0,
+          "slot": 63,
+          "tile": 47,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 64,
+          "plane": 0,
+          "slot": 64,
+          "tile": 48,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 63,
+          "plane": 1,
+          "slot": 233,
+          "tile": 48,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 65,
+          "plane": 0,
+          "slot": 65,
+          "tile": 48,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 65,
+          "plane": 1,
+          "slot": 235,
+          "tile": 49,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 66,
+          "plane": 0,
+          "slot": 66,
+          "tile": 49,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 66,
+          "plane": 1,
+          "slot": 236,
+          "tile": 50,
+          "k_begin": 0,
+          "k_end": 21,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 67,
+          "plane": 0,
+          "slot": 67,
+          "tile": 50,
+          "k_begin": 21,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 68,
+          "plane": 0,
+          "slot": 68,
+          "tile": 51,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 67,
+          "plane": 1,
+          "slot": 237,
+          "tile": 51,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 69,
+          "plane": 0,
+          "slot": 69,
+          "tile": 51,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 69,
+          "plane": 1,
+          "slot": 239,
+          "tile": 52,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 70,
+          "plane": 0,
+          "slot": 70,
+          "tile": 52,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 70,
+          "plane": 1,
+          "slot": 240,
+          "tile": 53,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 71,
+          "plane": 0,
+          "slot": 71,
+          "tile": 53,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 72,
+          "plane": 0,
+          "slot": 72,
+          "tile": 54,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 71,
+          "plane": 1,
+          "slot": 241,
+          "tile": 54,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 73,
+          "plane": 0,
+          "slot": 73,
+          "tile": 54,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 73,
+          "plane": 1,
+          "slot": 243,
+          "tile": 55,
+          "k_begin": 0,
+          "k_end": 34,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 74,
+          "plane": 0,
+          "slot": 74,
+          "tile": 55,
+          "k_begin": 34,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 74,
+          "plane": 1,
+          "slot": 244,
+          "tile": 56,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 75,
+          "plane": 0,
+          "slot": 75,
+          "tile": 56,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 76,
+          "plane": 0,
+          "slot": 76,
+          "tile": 57,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 75,
+          "plane": 1,
+          "slot": 245,
+          "tile": 57,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 77,
+          "plane": 0,
+          "slot": 77,
+          "tile": 57,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 77,
+          "plane": 1,
+          "slot": 247,
+          "tile": 58,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 78,
+          "plane": 0,
+          "slot": 78,
+          "tile": 58,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 78,
+          "plane": 1,
+          "slot": 248,
+          "tile": 59,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 79,
+          "plane": 0,
+          "slot": 79,
+          "tile": 59,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 80,
+          "plane": 0,
+          "slot": 80,
+          "tile": 60,
+          "k_begin": 11,
+          "k_end": 47,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 79,
+          "plane": 1,
+          "slot": 249,
+          "tile": 60,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 81,
+          "plane": 0,
+          "slot": 81,
+          "tile": 60,
+          "k_begin": 47,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 81,
+          "plane": 1,
+          "slot": 251,
+          "tile": 61,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 82,
+          "plane": 0,
+          "slot": 82,
+          "tile": 61,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 82,
+          "plane": 1,
+          "slot": 252,
+          "tile": 62,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 83,
+          "plane": 0,
+          "slot": 83,
+          "tile": 62,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 83,
+          "plane": 1,
+          "slot": 253,
+          "tile": 63,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 84,
+          "plane": 0,
+          "slot": 84,
+          "tile": 63,
+          "k_begin": 11,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 85,
+          "plane": 0,
+          "slot": 85,
+          "tile": 64,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 86,
+          "plane": 0,
+          "slot": 86,
+          "tile": 64,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 86,
+          "plane": 1,
+          "slot": 256,
+          "tile": 65,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 87,
+          "plane": 0,
+          "slot": 87,
+          "tile": 65,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 87,
+          "plane": 1,
+          "slot": 257,
+          "tile": 66,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 88,
+          "plane": 0,
+          "slot": 88,
+          "tile": 66,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 89,
+          "plane": 0,
+          "slot": 89,
+          "tile": 67,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 90,
+          "plane": 0,
+          "slot": 90,
+          "tile": 67,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 90,
+          "plane": 1,
+          "slot": 260,
+          "tile": 68,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 91,
+          "plane": 0,
+          "slot": 91,
+          "tile": 68,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 91,
+          "plane": 1,
+          "slot": 261,
+          "tile": 69,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 92,
+          "plane": 0,
+          "slot": 92,
+          "tile": 69,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 93,
+          "plane": 0,
+          "slot": 93,
+          "tile": 70,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 92,
+          "plane": 1,
+          "slot": 262,
+          "tile": 70,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 94,
+          "plane": 0,
+          "slot": 94,
+          "tile": 70,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 94,
+          "plane": 1,
+          "slot": 264,
+          "tile": 71,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 95,
+          "plane": 0,
+          "slot": 95,
+          "tile": 71,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 95,
+          "plane": 1,
+          "slot": 265,
+          "tile": 72,
+          "k_begin": 0,
+          "k_end": 13,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 96,
+          "plane": 0,
+          "slot": 96,
+          "tile": 72,
+          "k_begin": 13,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 97,
+          "plane": 0,
+          "slot": 97,
+          "tile": 73,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 96,
+          "plane": 1,
+          "slot": 266,
+          "tile": 73,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 98,
+          "plane": 0,
+          "slot": 98,
+          "tile": 73,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 98,
+          "plane": 1,
+          "slot": 268,
+          "tile": 74,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 99,
+          "plane": 0,
+          "slot": 99,
+          "tile": 74,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 99,
+          "plane": 1,
+          "slot": 269,
+          "tile": 75,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 100,
+          "plane": 0,
+          "slot": 100,
+          "tile": 75,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 101,
+          "plane": 0,
+          "slot": 101,
+          "tile": 76,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 100,
+          "plane": 1,
+          "slot": 270,
+          "tile": 76,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 102,
+          "plane": 0,
+          "slot": 102,
+          "tile": 76,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 102,
+          "plane": 1,
+          "slot": 272,
+          "tile": 77,
+          "k_begin": 0,
+          "k_end": 26,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 103,
+          "plane": 0,
+          "slot": 103,
+          "tile": 77,
+          "k_begin": 26,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 103,
+          "plane": 1,
+          "slot": 273,
+          "tile": 78,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 104,
+          "plane": 0,
+          "slot": 104,
+          "tile": 78,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 105,
+          "plane": 0,
+          "slot": 105,
+          "tile": 79,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 104,
+          "plane": 1,
+          "slot": 274,
+          "tile": 79,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 106,
+          "plane": 0,
+          "slot": 106,
+          "tile": 79,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 106,
+          "plane": 1,
+          "slot": 276,
+          "tile": 80,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 107,
+          "plane": 0,
+          "slot": 107,
+          "tile": 80,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 107,
+          "plane": 1,
+          "slot": 277,
+          "tile": 81,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 108,
+          "plane": 0,
+          "slot": 108,
+          "tile": 81,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 109,
+          "plane": 0,
+          "slot": 109,
+          "tile": 82,
+          "k_begin": 3,
+          "k_end": 39,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 108,
+          "plane": 1,
+          "slot": 278,
+          "tile": 82,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 110,
+          "plane": 0,
+          "slot": 110,
+          "tile": 82,
+          "k_begin": 39,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 110,
+          "plane": 1,
+          "slot": 280,
+          "tile": 83,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 111,
+          "plane": 0,
+          "slot": 111,
+          "tile": 83,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 111,
+          "plane": 1,
+          "slot": 281,
+          "tile": 84,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 112,
+          "plane": 0,
+          "slot": 112,
+          "tile": 84,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 113,
+          "plane": 0,
+          "slot": 113,
+          "tile": 85,
+          "k_begin": 3,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 112,
+          "plane": 1,
+          "slot": 282,
+          "tile": 85,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 114,
+          "plane": 0,
+          "slot": 114,
+          "tile": 85,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 114,
+          "plane": 1,
+          "slot": 284,
+          "tile": 86,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 115,
+          "plane": 0,
+          "slot": 115,
+          "tile": 86,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 115,
+          "plane": 1,
+          "slot": 285,
+          "tile": 87,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 116,
+          "plane": 0,
+          "slot": 116,
+          "tile": 87,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 117,
+          "plane": 0,
+          "slot": 117,
+          "tile": 88,
+          "k_begin": 4,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 116,
+          "plane": 1,
+          "slot": 286,
+          "tile": 88,
+          "k_begin": 0,
+          "k_end": 4,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 118,
+          "plane": 0,
+          "slot": 118,
+          "tile": 88,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 118,
+          "plane": 1,
+          "slot": 288,
+          "tile": 89,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 119,
+          "plane": 0,
+          "slot": 119,
+          "tile": 89,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 119,
+          "plane": 1,
+          "slot": 289,
+          "tile": 90,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 120,
+          "plane": 0,
+          "slot": 120,
+          "tile": 90,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 121,
+          "plane": 0,
+          "slot": 121,
+          "tile": 91,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 120,
+          "plane": 1,
+          "slot": 290,
+          "tile": 91,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 122,
+          "plane": 0,
+          "slot": 122,
+          "tile": 91,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 122,
+          "plane": 1,
+          "slot": 292,
+          "tile": 92,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 123,
+          "plane": 0,
+          "slot": 123,
+          "tile": 92,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 123,
+          "plane": 1,
+          "slot": 293,
+          "tile": 93,
+          "k_begin": 0,
+          "k_end": 17,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 124,
+          "plane": 0,
+          "slot": 124,
+          "tile": 93,
+          "k_begin": 17,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 125,
+          "plane": 0,
+          "slot": 125,
+          "tile": 94,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 124,
+          "plane": 1,
+          "slot": 294,
+          "tile": 94,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 126,
+          "plane": 0,
+          "slot": 126,
+          "tile": 94,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 126,
+          "plane": 1,
+          "slot": 296,
+          "tile": 95,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 127,
+          "plane": 0,
+          "slot": 127,
+          "tile": 95,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 127,
+          "plane": 1,
+          "slot": 297,
+          "tile": 96,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 128,
+          "plane": 0,
+          "slot": 128,
+          "tile": 96,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 129,
+          "plane": 0,
+          "slot": 129,
+          "tile": 97,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 128,
+          "plane": 1,
+          "slot": 298,
+          "tile": 97,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 130,
+          "plane": 0,
+          "slot": 130,
+          "tile": 97,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 130,
+          "plane": 1,
+          "slot": 300,
+          "tile": 98,
+          "k_begin": 0,
+          "k_end": 30,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 131,
+          "plane": 0,
+          "slot": 131,
+          "tile": 98,
+          "k_begin": 30,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 131,
+          "plane": 1,
+          "slot": 301,
+          "tile": 99,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 132,
+          "plane": 0,
+          "slot": 132,
+          "tile": 99,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 133,
+          "plane": 0,
+          "slot": 133,
+          "tile": 100,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 132,
+          "plane": 1,
+          "slot": 302,
+          "tile": 100,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 134,
+          "plane": 0,
+          "slot": 134,
+          "tile": 100,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 134,
+          "plane": 1,
+          "slot": 304,
+          "tile": 101,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 135,
+          "plane": 0,
+          "slot": 135,
+          "tile": 101,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 135,
+          "plane": 1,
+          "slot": 305,
+          "tile": 102,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 136,
+          "plane": 0,
+          "slot": 136,
+          "tile": 102,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 137,
+          "plane": 0,
+          "slot": 137,
+          "tile": 103,
+          "k_begin": 7,
+          "k_end": 43,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 136,
+          "plane": 1,
+          "slot": 306,
+          "tile": 103,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 138,
+          "plane": 0,
+          "slot": 138,
+          "tile": 103,
+          "k_begin": 43,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 138,
+          "plane": 1,
+          "slot": 308,
+          "tile": 104,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 139,
+          "plane": 0,
+          "slot": 139,
+          "tile": 104,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 139,
+          "plane": 1,
+          "slot": 309,
+          "tile": 105,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 140,
+          "plane": 0,
+          "slot": 140,
+          "tile": 105,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 141,
+          "plane": 0,
+          "slot": 141,
+          "tile": 106,
+          "k_begin": 7,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 140,
+          "plane": 1,
+          "slot": 310,
+          "tile": 106,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 142,
+          "plane": 0,
+          "slot": 142,
+          "tile": 106,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 142,
+          "plane": 1,
+          "slot": 312,
+          "tile": 107,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 143,
+          "plane": 0,
+          "slot": 143,
+          "tile": 107,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 143,
+          "plane": 1,
+          "slot": 313,
+          "tile": 108,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 144,
+          "plane": 0,
+          "slot": 144,
+          "tile": 108,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 145,
+          "plane": 0,
+          "slot": 145,
+          "tile": 109,
+          "k_begin": 8,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 144,
+          "plane": 1,
+          "slot": 314,
+          "tile": 109,
+          "k_begin": 0,
+          "k_end": 8,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 146,
+          "plane": 0,
+          "slot": 146,
+          "tile": 109,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 146,
+          "plane": 1,
+          "slot": 316,
+          "tile": 110,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 147,
+          "plane": 0,
+          "slot": 147,
+          "tile": 110,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 147,
+          "plane": 1,
+          "slot": 317,
+          "tile": 111,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 148,
+          "plane": 0,
+          "slot": 148,
+          "tile": 111,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 149,
+          "plane": 0,
+          "slot": 149,
+          "tile": 112,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 148,
+          "plane": 1,
+          "slot": 318,
+          "tile": 112,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 150,
+          "plane": 0,
+          "slot": 150,
+          "tile": 112,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 150,
+          "plane": 1,
+          "slot": 320,
+          "tile": 113,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 151,
+          "plane": 0,
+          "slot": 151,
+          "tile": 113,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 151,
+          "plane": 1,
+          "slot": 321,
+          "tile": 114,
+          "k_begin": 0,
+          "k_end": 21,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 152,
+          "plane": 0,
+          "slot": 152,
+          "tile": 114,
+          "k_begin": 21,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 153,
+          "plane": 0,
+          "slot": 153,
+          "tile": 115,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 152,
+          "plane": 1,
+          "slot": 322,
+          "tile": 115,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 154,
+          "plane": 0,
+          "slot": 154,
+          "tile": 115,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 154,
+          "plane": 1,
+          "slot": 324,
+          "tile": 116,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 155,
+          "plane": 0,
+          "slot": 155,
+          "tile": 116,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 155,
+          "plane": 1,
+          "slot": 325,
+          "tile": 117,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 156,
+          "plane": 0,
+          "slot": 156,
+          "tile": 117,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 157,
+          "plane": 0,
+          "slot": 157,
+          "tile": 118,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 156,
+          "plane": 1,
+          "slot": 326,
+          "tile": 118,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 158,
+          "plane": 0,
+          "slot": 158,
+          "tile": 118,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 158,
+          "plane": 1,
+          "slot": 328,
+          "tile": 119,
+          "k_begin": 0,
+          "k_end": 34,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 159,
+          "plane": 0,
+          "slot": 159,
+          "tile": 119,
+          "k_begin": 34,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 159,
+          "plane": 1,
+          "slot": 329,
+          "tile": 120,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 160,
+          "plane": 0,
+          "slot": 160,
+          "tile": 120,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 161,
+          "plane": 0,
+          "slot": 161,
+          "tile": 121,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 160,
+          "plane": 1,
+          "slot": 330,
+          "tile": 121,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 162,
+          "plane": 0,
+          "slot": 162,
+          "tile": 121,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 162,
+          "plane": 1,
+          "slot": 332,
+          "tile": 122,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 163,
+          "plane": 0,
+          "slot": 163,
+          "tile": 122,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 163,
+          "plane": 1,
+          "slot": 333,
+          "tile": 123,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 164,
+          "plane": 0,
+          "slot": 164,
+          "tile": 123,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 165,
+          "plane": 0,
+          "slot": 165,
+          "tile": 124,
+          "k_begin": 11,
+          "k_end": 47,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 164,
+          "plane": 1,
+          "slot": 334,
+          "tile": 124,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 166,
+          "plane": 0,
+          "slot": 166,
+          "tile": 124,
+          "k_begin": 47,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 166,
+          "plane": 1,
+          "slot": 336,
+          "tile": 125,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 167,
+          "plane": 0,
+          "slot": 167,
+          "tile": 125,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 167,
+          "plane": 1,
+          "slot": 337,
+          "tile": 126,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 168,
+          "plane": 0,
+          "slot": 168,
+          "tile": 126,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 168,
+          "plane": 1,
+          "slot": 338,
+          "tile": 127,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 169,
+          "plane": 0,
+          "slot": 169,
+          "tile": 127,
+          "k_begin": 11,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ]
+    ],
+    "slot_map": [
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        171,
+        2,
+        0
+      ],
+      [
+        172,
+        3,
+        0
+      ],
+      [
+        4,
+        5,
+        0
+      ],
+      [
+        175,
+        6,
+        0
+      ],
+      [
+        176,
+        7,
+        0
+      ],
+      [
+        8,
+        177,
+        9
+      ],
+      [
+        179,
+        10,
+        0
+      ],
+      [
+        180,
+        11,
+        0
+      ],
+      [
+        12,
+        181,
+        13
+      ],
+      [
+        183,
+        14,
+        0
+      ],
+      [
+        184,
+        15,
+        0
+      ],
+      [
+        16,
+        185,
+        17
+      ],
+      [
+        187,
+        18,
+        0
+      ],
+      [
+        188,
+        19,
+        0
+      ],
+      [
+        20,
+        189,
+        21
+      ],
+      [
+        191,
+        22,
+        0
+      ],
+      [
+        192,
+        23,
+        0
+      ],
+      [
+        24,
+        193,
+        25
+      ],
+      [
+        195,
+        26,
+        0
+      ],
+      [
+        196,
+        27,
+        0
+      ],
+      [
+        28,
+        197,
+        29
+      ],
+      [
+        199,
+        30,
+        0
+      ],
+      [
+        200,
+        31,
+        0
+      ],
+      [
+        32,
+        201,
+        33
+      ],
+      [
+        203,
+        34,
+        0
+      ],
+      [
+        204,
+        35,
+        0
+      ],
+      [
+        36,
+        205,
+        37
+      ],
+      [
+        207,
+        38,
+        0
+      ],
+      [
+        208,
+        39,
+        0
+      ],
+      [
+        40,
+        209,
+        41
+      ],
+      [
+        211,
+        42,
+        0
+      ],
+      [
+        212,
+        43,
+        0
+      ],
+      [
+        44,
+        213,
+        45
+      ],
+      [
+        215,
+        46,
+        0
+      ],
+      [
+        216,
+        47,
+        0
+      ],
+      [
+        48,
+        217,
+        49
+      ],
+      [
+        219,
+        50,
+        0
+      ],
+      [
+        220,
+        51,
+        0
+      ],
+      [
+        52,
+        221,
+        53
+      ],
+      [
+        223,
+        54,
+        0
+      ],
+      [
+        224,
+        55,
+        0
+      ],
+      [
+        56,
+        225,
+        57
+      ],
+      [
+        227,
+        58,
+        0
+      ],
+      [
+        228,
+        59,
+        0
+      ],
+      [
+        60,
+        229,
+        61
+      ],
+      [
+        231,
+        62,
+        0
+      ],
+      [
+        232,
+        63,
+        0
+      ],
+      [
+        64,
+        233,
+        65
+      ],
+      [
+        235,
+        66,
+        0
+      ],
+      [
+        236,
+        67,
+        0
+      ],
+      [
+        68,
+        237,
+        69
+      ],
+      [
+        239,
+        70,
+        0
+      ],
+      [
+        240,
+        71,
+        0
+      ],
+      [
+        72,
+        241,
+        73
+      ],
+      [
+        243,
+        74,
+        0
+      ],
+      [
+        244,
+        75,
+        0
+      ],
+      [
+        76,
+        245,
+        77
+      ],
+      [
+        247,
+        78,
+        0
+      ],
+      [
+        248,
+        79,
+        0
+      ],
+      [
+        80,
+        249,
+        81
+      ],
+      [
+        251,
+        82,
+        0
+      ],
+      [
+        252,
+        83,
+        0
+      ],
+      [
+        253,
+        84,
+        0
+      ],
+      [
+        85,
+        86,
+        0
+      ],
+      [
+        256,
+        87,
+        0
+      ],
+      [
+        257,
+        88,
+        0
+      ],
+      [
+        89,
+        90,
+        0
+      ],
+      [
+        260,
+        91,
+        0
+      ],
+      [
+        261,
+        92,
+        0
+      ],
+      [
+        93,
+        262,
+        94
+      ],
+      [
+        264,
+        95,
+        0
+      ],
+      [
+        265,
+        96,
+        0
+      ],
+      [
+        97,
+        266,
+        98
+      ],
+      [
+        268,
+        99,
+        0
+      ],
+      [
+        269,
+        100,
+        0
+      ],
+      [
+        101,
+        270,
+        102
+      ],
+      [
+        272,
+        103,
+        0
+      ],
+      [
+        273,
+        104,
+        0
+      ],
+      [
+        105,
+        274,
+        106
+      ],
+      [
+        276,
+        107,
+        0
+      ],
+      [
+        277,
+        108,
+        0
+      ],
+      [
+        109,
+        278,
+        110
+      ],
+      [
+        280,
+        111,
+        0
+      ],
+      [
+        281,
+        112,
+        0
+      ],
+      [
+        113,
+        282,
+        114
+      ],
+      [
+        284,
+        115,
+        0
+      ],
+      [
+        285,
+        116,
+        0
+      ],
+      [
+        117,
+        286,
+        118
+      ],
+      [
+        288,
+        119,
+        0
+      ],
+      [
+        289,
+        120,
+        0
+      ],
+      [
+        121,
+        290,
+        122
+      ],
+      [
+        292,
+        123,
+        0
+      ],
+      [
+        293,
+        124,
+        0
+      ],
+      [
+        125,
+        294,
+        126
+      ],
+      [
+        296,
+        127,
+        0
+      ],
+      [
+        297,
+        128,
+        0
+      ],
+      [
+        129,
+        298,
+        130
+      ],
+      [
+        300,
+        131,
+        0
+      ],
+      [
+        301,
+        132,
+        0
+      ],
+      [
+        133,
+        302,
+        134
+      ],
+      [
+        304,
+        135,
+        0
+      ],
+      [
+        305,
+        136,
+        0
+      ],
+      [
+        137,
+        306,
+        138
+      ],
+      [
+        308,
+        139,
+        0
+      ],
+      [
+        309,
+        140,
+        0
+      ],
+      [
+        141,
+        310,
+        142
+      ],
+      [
+        312,
+        143,
+        0
+      ],
+      [
+        313,
+        144,
+        0
+      ],
+      [
+        145,
+        314,
+        146
+      ],
+      [
+        316,
+        147,
+        0
+      ],
+      [
+        317,
+        148,
+        0
+      ],
+      [
+        149,
+        318,
+        150
+      ],
+      [
+        320,
+        151,
+        0
+      ],
+      [
+        321,
+        152,
+        0
+      ],
+      [
+        153,
+        322,
+        154
+      ],
+      [
+        324,
+        155,
+        0
+      ],
+      [
+        325,
+        156,
+        0
+      ],
+      [
+        157,
+        326,
+        158
+      ],
+      [
+        328,
+        159,
+        0
+      ],
+      [
+        329,
+        160,
+        0
+      ],
+      [
+        161,
+        330,
+        162
+      ],
+      [
+        332,
+        163,
+        0
+      ],
+      [
+        333,
+        164,
+        0
+      ],
+      [
+        165,
+        334,
+        166
+      ],
+      [
+        336,
+        167,
+        0
+      ],
+      [
+        337,
+        168,
+        0
+      ],
+      [
+        338,
+        169,
+        0
+      ]
+    ],
+    "counts": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      2
+    ],
+    "final_indices": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1
+    ],
+    "admitted_plane_major_slot_order": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        171
+      ],
+      [
+        3,
+        172
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        6,
+        175
+      ],
+      [
+        7,
+        176
+      ],
+      [
+        8,
+        9,
+        177
+      ],
+      [
+        10,
+        179
+      ],
+      [
+        11,
+        180
+      ],
+      [
+        12,
+        13,
+        181
+      ],
+      [
+        14,
+        183
+      ],
+      [
+        15,
+        184
+      ],
+      [
+        16,
+        17,
+        185
+      ],
+      [
+        18,
+        187
+      ],
+      [
+        19,
+        188
+      ],
+      [
+        20,
+        21,
+        189
+      ],
+      [
+        22,
+        191
+      ],
+      [
+        23,
+        192
+      ],
+      [
+        24,
+        25,
+        193
+      ],
+      [
+        26,
+        195
+      ],
+      [
+        27,
+        196
+      ],
+      [
+        28,
+        29,
+        197
+      ],
+      [
+        30,
+        199
+      ],
+      [
+        31,
+        200
+      ],
+      [
+        32,
+        33,
+        201
+      ],
+      [
+        34,
+        203
+      ],
+      [
+        35,
+        204
+      ],
+      [
+        36,
+        37,
+        205
+      ],
+      [
+        38,
+        207
+      ],
+      [
+        39,
+        208
+      ],
+      [
+        40,
+        41,
+        209
+      ],
+      [
+        42,
+        211
+      ],
+      [
+        43,
+        212
+      ],
+      [
+        44,
+        45,
+        213
+      ],
+      [
+        46,
+        215
+      ],
+      [
+        47,
+        216
+      ],
+      [
+        48,
+        49,
+        217
+      ],
+      [
+        50,
+        219
+      ],
+      [
+        51,
+        220
+      ],
+      [
+        52,
+        53,
+        221
+      ],
+      [
+        54,
+        223
+      ],
+      [
+        55,
+        224
+      ],
+      [
+        56,
+        57,
+        225
+      ],
+      [
+        58,
+        227
+      ],
+      [
+        59,
+        228
+      ],
+      [
+        60,
+        61,
+        229
+      ],
+      [
+        62,
+        231
+      ],
+      [
+        63,
+        232
+      ],
+      [
+        64,
+        65,
+        233
+      ],
+      [
+        66,
+        235
+      ],
+      [
+        67,
+        236
+      ],
+      [
+        68,
+        69,
+        237
+      ],
+      [
+        70,
+        239
+      ],
+      [
+        71,
+        240
+      ],
+      [
+        72,
+        73,
+        241
+      ],
+      [
+        74,
+        243
+      ],
+      [
+        75,
+        244
+      ],
+      [
+        76,
+        77,
+        245
+      ],
+      [
+        78,
+        247
+      ],
+      [
+        79,
+        248
+      ],
+      [
+        80,
+        81,
+        249
+      ],
+      [
+        82,
+        251
+      ],
+      [
+        83,
+        252
+      ],
+      [
+        84,
+        253
+      ],
+      [
+        85,
+        86
+      ],
+      [
+        87,
+        256
+      ],
+      [
+        88,
+        257
+      ],
+      [
+        89,
+        90
+      ],
+      [
+        91,
+        260
+      ],
+      [
+        92,
+        261
+      ],
+      [
+        93,
+        94,
+        262
+      ],
+      [
+        95,
+        264
+      ],
+      [
+        96,
+        265
+      ],
+      [
+        97,
+        98,
+        266
+      ],
+      [
+        99,
+        268
+      ],
+      [
+        100,
+        269
+      ],
+      [
+        101,
+        102,
+        270
+      ],
+      [
+        103,
+        272
+      ],
+      [
+        104,
+        273
+      ],
+      [
+        105,
+        106,
+        274
+      ],
+      [
+        107,
+        276
+      ],
+      [
+        108,
+        277
+      ],
+      [
+        109,
+        110,
+        278
+      ],
+      [
+        111,
+        280
+      ],
+      [
+        112,
+        281
+      ],
+      [
+        113,
+        114,
+        282
+      ],
+      [
+        115,
+        284
+      ],
+      [
+        116,
+        285
+      ],
+      [
+        117,
+        118,
+        286
+      ],
+      [
+        119,
+        288
+      ],
+      [
+        120,
+        289
+      ],
+      [
+        121,
+        122,
+        290
+      ],
+      [
+        123,
+        292
+      ],
+      [
+        124,
+        293
+      ],
+      [
+        125,
+        126,
+        294
+      ],
+      [
+        127,
+        296
+      ],
+      [
+        128,
+        297
+      ],
+      [
+        129,
+        130,
+        298
+      ],
+      [
+        131,
+        300
+      ],
+      [
+        132,
+        301
+      ],
+      [
+        133,
+        134,
+        302
+      ],
+      [
+        135,
+        304
+      ],
+      [
+        136,
+        305
+      ],
+      [
+        137,
+        138,
+        306
+      ],
+      [
+        139,
+        308
+      ],
+      [
+        140,
+        309
+      ],
+      [
+        141,
+        142,
+        310
+      ],
+      [
+        143,
+        312
+      ],
+      [
+        144,
+        313
+      ],
+      [
+        145,
+        146,
+        314
+      ],
+      [
+        147,
+        316
+      ],
+      [
+        148,
+        317
+      ],
+      [
+        149,
+        150,
+        318
+      ],
+      [
+        151,
+        320
+      ],
+      [
+        152,
+        321
+      ],
+      [
+        153,
+        154,
+        322
+      ],
+      [
+        155,
+        324
+      ],
+      [
+        156,
+        325
+      ],
+      [
+        157,
+        158,
+        326
+      ],
+      [
+        159,
+        328
+      ],
+      [
+        160,
+        329
+      ],
+      [
+        161,
+        162,
+        330
+      ],
+      [
+        163,
+        332
+      ],
+      [
+        164,
+        333
+      ],
+      [
+        165,
+        166,
+        334
+      ],
+      [
+        167,
+        336
+      ],
+      [
+        168,
+        337
+      ],
+      [
+        169,
+        338
+      ]
+    ]
+  },
+  "reference": {
+    "kind": "compiler_wide_direct",
+    "result": {
+      "shape": {
+        "M": 512,
+        "N": 4096,
+        "K": 12288
+      },
+      "identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+      "geometry": {
+        "tile": [
+          128,
+          128,
+          64
+        ],
+        "waves": [
+          2,
+          4
+        ],
+        "threads": 256,
+        "global_size": [
+          32,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          4
+        ],
+        "ctas": 128
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 2097152,
+        "max_abs": 0.001220703125,
+        "mean_abs": 3.766872760024853e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/wide/wide_direct.cubin",
+          "sass": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-artifacts/wide/wide_direct.sass",
+          "returncode": 0,
+          "imma": 64,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 214,
+            "stack_bytes": 0,
+            "shared_bytes": 21504,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          496.51199999999994,
+          462.176,
+          460.8,
+          460.032,
+          459.968,
+          460.0,
+          459.808,
+          460.096,
+          459.744,
+          459.808,
+          459.744,
+          459.872,
+          459.648,
+          459.776,
+          459.872,
+          459.392,
+          459.296,
+          459.168,
+          459.104,
+          459.264,
+          459.2,
+          459.456,
+          459.2,
+          459.2,
+          458.912,
+          459.232,
+          459.264,
+          459.264,
+          459.84,
+          459.744,
+          459.264
+        ],
+        "min_us": 458.912,
+        "median_us": 459.744,
+        "max_us": 496.51199999999994
+      },
+      "passed": true
+    }
+  },
+  "correctness": {
+    "early_combined_all_partials": {
+      "finite": true,
+      "gpu_fixup_cpu_bit_exact": true,
+      "written_slots_finite": true,
+      "unused_slots_nan": true,
+      "reference_max_abs": 0.00067138671875,
+      "reference_mean_abs": 2.1467494661919773e-05,
+      "reference_failing_count": 0,
+      "reference_passed": true,
+      "full_partial_sha256": "14d509484f4db97f1196aa958632d77e1e12abfe06797a79b21b08c2cf1ae3d8",
+      "final_output_sha256": "51ab501f46be3f395263a7655bd204c2397d385496eb3f1d440a3c3e4ef11205"
+    },
+    "true_late_q8_panel1": {
+      "finite": true,
+      "gpu_fixup_cpu_bit_exact": true,
+      "written_slots_finite": true,
+      "unused_slots_nan": true,
+      "reference_max_abs": 0.00067138671875,
+      "reference_mean_abs": 2.1467494661919773e-05,
+      "reference_failing_count": 0,
+      "reference_passed": true,
+      "full_partial_sha256": "14d509484f4db97f1196aa958632d77e1e12abfe06797a79b21b08c2cf1ae3d8",
+      "final_output_sha256": "51ab501f46be3f395263a7655bd204c2397d385496eb3f1d440a3c3e4ef11205"
+    }
+  },
+  "exactness": {
+    "partials_bit_exact": true,
+    "final_bit_exact": true
+  },
+  "correctness_passed": true,
+  "timing": {
+    "early_combined_all_partials": {
+      "main": {
+        "r9": {
+          "samples_us": [
+            230.752,
+            229.344,
+            229.952,
+            229.472,
+            229.152,
+            229.856,
+            228.928,
+            229.984,
+            229.152
+          ],
+          "min_us": 228.928,
+          "median_us": 229.472,
+          "max_us": 230.752
+        },
+        "r31": {
+          "samples_us": [
+            230.752,
+            229.344,
+            229.952,
+            229.472,
+            229.152,
+            229.856,
+            228.928,
+            229.984,
+            229.152,
+            229.568,
+            229.376,
+            231.072,
+            229.504,
+            230.176,
+            229.344,
+            232.032,
+            229.216,
+            230.112,
+            230.848,
+            230.944,
+            229.088,
+            231.52,
+            230.592,
+            230.976,
+            229.792,
+            230.304,
+            228.832,
+            229.824,
+            229.184,
+            230.368,
+            228.832
+          ],
+          "min_us": 228.832,
+          "median_us": 229.824,
+          "max_us": 232.032
+        }
+      },
+      "fixup": {
+        "r9": {
+          "samples_us": [
+            24.8,
+            25.024,
+            24.576,
+            24.8,
+            24.32,
+            25.024,
+            24.288,
+            25.12,
+            24.384
+          ],
+          "min_us": 24.288,
+          "median_us": 24.8,
+          "max_us": 25.12
+        },
+        "r31": {
+          "samples_us": [
+            24.8,
+            25.024,
+            24.576,
+            24.8,
+            24.32,
+            25.024,
+            24.288,
+            25.12,
+            24.384,
+            24.736,
+            24.512,
+            24.768,
+            24.608,
+            25.504,
+            24.544,
+            24.704,
+            24.608,
+            24.704,
+            24.512,
+            24.448,
+            24.544,
+            24.8,
+            24.704,
+            24.544,
+            24.256,
+            25.024,
+            24.704,
+            24.608,
+            24.192,
+            24.928,
+            24.512
+          ],
+          "min_us": 24.192,
+          "median_us": 24.608,
+          "max_us": 25.504
+        }
+      },
+      "total": {
+        "r9": {
+          "samples_us": [
+            255.55200000000002,
+            254.368,
+            254.528,
+            254.27200000000002,
+            253.47199999999998,
+            254.88,
+            253.216,
+            255.104,
+            253.536
+          ],
+          "min_us": 253.216,
+          "median_us": 254.368,
+          "max_us": 255.55200000000002
+        },
+        "r31": {
+          "samples_us": [
+            255.55200000000002,
+            254.368,
+            254.528,
+            254.27200000000002,
+            253.47199999999998,
+            254.88,
+            253.216,
+            255.104,
+            253.536,
+            254.304,
+            253.888,
+            255.84,
+            254.112,
+            255.67999999999998,
+            253.888,
+            256.736,
+            253.824,
+            254.816,
+            255.36,
+            255.392,
+            253.632,
+            256.32,
+            255.29600000000002,
+            255.52,
+            254.048,
+            255.328,
+            253.536,
+            254.43200000000002,
+            253.376,
+            255.296,
+            253.344
+          ],
+          "min_us": 253.216,
+          "median_us": 254.43200000000002,
+          "max_us": 256.736
+        }
+      }
+    },
+    "true_late_q8_panel1": {
+      "main": {
+        "r9": {
+          "samples_us": [
+            228.384,
+            227.008,
+            228.64,
+            227.808,
+            228.128,
+            227.488,
+            228.224,
+            227.072,
+            228.16
+          ],
+          "min_us": 227.008,
+          "median_us": 228.128,
+          "max_us": 228.64
+        },
+        "r31": {
+          "samples_us": [
+            228.384,
+            227.008,
+            228.64,
+            227.808,
+            228.128,
+            227.488,
+            228.224,
+            227.072,
+            228.16,
+            227.296,
+            227.68,
+            227.552,
+            229.12,
+            229.504,
+            229.824,
+            229.152,
+            230.88,
+            228.64,
+            229.888,
+            228.416,
+            228.704,
+            227.328,
+            230.688,
+            227.072,
+            229.504,
+            229.248,
+            228.384,
+            228.224,
+            228.864,
+            227.872,
+            228.992
+          ],
+          "min_us": 227.008,
+          "median_us": 228.384,
+          "max_us": 230.88
+        }
+      },
+      "fixup": {
+        "r9": {
+          "samples_us": [
+            24.992,
+            24.224,
+            24.96,
+            24.32,
+            25.088,
+            24.16,
+            24.896,
+            24.256,
+            24.992
+          ],
+          "min_us": 24.16,
+          "median_us": 24.896,
+          "max_us": 25.088
+        },
+        "r31": {
+          "samples_us": [
+            24.992,
+            24.224,
+            24.96,
+            24.32,
+            25.088,
+            24.16,
+            24.896,
+            24.256,
+            24.992,
+            24.224,
+            25.12,
+            24.128,
+            25.152,
+            24.416,
+            25.184,
+            24.224,
+            25.12,
+            24.416,
+            25.44,
+            24.768,
+            25.312,
+            24.128,
+            25.152,
+            24.064,
+            25.12,
+            24.224,
+            25.088,
+            24.384,
+            25.184,
+            24.16,
+            25.248
+          ],
+          "min_us": 24.064,
+          "median_us": 24.896,
+          "max_us": 25.44
+        }
+      },
+      "total": {
+        "r9": {
+          "samples_us": [
+            253.37599999999998,
+            251.232,
+            253.6,
+            252.128,
+            253.21599999999998,
+            251.648,
+            253.12,
+            251.328,
+            253.152
+          ],
+          "min_us": 251.232,
+          "median_us": 253.12,
+          "max_us": 253.6
+        },
+        "r31": {
+          "samples_us": [
+            253.37599999999998,
+            251.232,
+            253.6,
+            252.128,
+            253.21599999999998,
+            251.648,
+            253.12,
+            251.328,
+            253.152,
+            251.51999999999998,
+            252.8,
+            251.68,
+            254.272,
+            253.92,
+            255.008,
+            253.37599999999998,
+            256.0,
+            253.05599999999998,
+            255.328,
+            253.184,
+            254.01600000000002,
+            251.45600000000002,
+            255.83999999999997,
+            251.136,
+            254.624,
+            253.47199999999998,
+            253.47199999999998,
+            252.608,
+            254.048,
+            252.032,
+            254.23999999999998
+          ],
+          "min_us": 251.136,
+          "median_us": 253.21599999999998,
+          "max_us": 256.0
+        }
+      }
+    }
+  },
+  "paired": {
+    "main": {
+      "r9": {
+        "samples_us": [
+          -2.3680000000000234,
+          -2.3359999999999843,
+          -1.3120000000000118,
+          -1.6640000000000157,
+          -1.024000000000001,
+          -2.367999999999995,
+          -0.7040000000000077,
+          -2.912000000000006,
+          -0.9919999999999902
+        ],
+        "min_us": -2.912000000000006,
+        "median_us": -1.6640000000000157,
+        "max_us": -0.7040000000000077
+      },
+      "r31": {
+        "samples_us": [
+          -2.3680000000000234,
+          -2.3359999999999843,
+          -1.3120000000000118,
+          -1.6640000000000157,
+          -1.024000000000001,
+          -2.367999999999995,
+          -0.7040000000000077,
+          -2.912000000000006,
+          -0.9919999999999902,
+          -2.27200000000002,
+          -1.695999999999998,
+          -3.5200000000000102,
+          -0.38399999999998613,
+          -0.671999999999997,
+          0.4800000000000182,
+          -2.880000000000024,
+          1.6639999999999873,
+          -1.4720000000000084,
+          -0.960000000000008,
+          -2.5279999999999916,
+          -0.38399999999998613,
+          -4.192000000000007,
+          0.09599999999997522,
+          -3.9039999999999964,
+          -0.2880000000000109,
+          -1.0560000000000116,
+          -0.4480000000000075,
+          -1.6000000000000227,
+          -0.3199999999999932,
+          -2.495999999999981,
+          0.1599999999999966
+        ],
+        "min_us": -4.192000000000007,
+        "median_us": -1.3120000000000118,
+        "max_us": 1.6639999999999873
+      },
+      "paired_mad_us": 0.9920000000000186,
+      "candidate_wins": 27,
+      "pairs": 31
+    },
+    "fixup": {
+      "r9": {
+        "samples_us": [
+          0.19200000000000017,
+          -0.8000000000000007,
+          0.38400000000000034,
+          -0.4800000000000004,
+          0.7680000000000007,
+          -0.8640000000000008,
+          0.6080000000000005,
+          -0.8640000000000008,
+          0.6080000000000005
+        ],
+        "min_us": -0.8640000000000008,
+        "median_us": 0.19200000000000017,
+        "max_us": 0.7680000000000007
+      },
+      "r31": {
+        "samples_us": [
+          0.19200000000000017,
+          -0.8000000000000007,
+          0.38400000000000034,
+          -0.4800000000000004,
+          0.7680000000000007,
+          -0.8640000000000008,
+          0.6080000000000005,
+          -0.8640000000000008,
+          0.6080000000000005,
+          -0.5120000000000005,
+          0.6080000000000005,
+          -0.6400000000000006,
+          0.5440000000000005,
+          -1.088000000000001,
+          0.6400000000000006,
+          -0.4800000000000004,
+          0.5120000000000005,
+          -0.28800000000000026,
+          0.9280000000000008,
+          0.3200000000000003,
+          0.7680000000000007,
+          -0.6720000000000006,
+          0.4480000000000004,
+          -0.4800000000000004,
+          0.8640000000000008,
+          -0.8000000000000007,
+          0.38400000000000034,
+          -0.2240000000000002,
+          0.9920000000000009,
+          -0.7680000000000007,
+          0.7360000000000007
+        ],
+        "min_us": -1.088000000000001,
+        "median_us": 0.3200000000000003,
+        "max_us": 0.9920000000000009
+      },
+      "paired_mad_us": 0.5440000000000005,
+      "candidate_wins": 14,
+      "pairs": 31
+    },
+    "total": {
+      "r9": {
+        "samples_us": [
+          -2.1760000000000446,
+          -3.1359999999999957,
+          -0.9279999999999973,
+          -2.144000000000034,
+          -0.2560000000000002,
+          -3.2319999999999993,
+          -0.09600000000000364,
+          -3.7760000000000105,
+          -0.38400000000001455
+        ],
+        "min_us": -3.7760000000000105,
+        "median_us": -2.144000000000034,
+        "max_us": -0.09600000000000364
+      },
+      "r31": {
+        "samples_us": [
+          -2.1760000000000446,
+          -3.1359999999999957,
+          -0.9279999999999973,
+          -2.144000000000034,
+          -0.2560000000000002,
+          -3.2319999999999993,
+          -0.09600000000000364,
+          -3.7760000000000105,
+          -0.38400000000001455,
+          -2.7840000000000202,
+          -1.0879999999999939,
+          -4.159999999999997,
+          0.1599999999999966,
+          -1.759999999999991,
+          1.1200000000000045,
+          -3.3600000000000136,
+          2.1759999999999877,
+          -1.7600000000000193,
+          -0.03200000000001069,
+          -2.2079999999999984,
+          0.38400000000001455,
+          -4.863999999999976,
+          0.5439999999999543,
+          -4.3840000000000146,
+          0.5759999999999934,
+          -1.856000000000023,
+          -0.06400000000002137,
+          -1.8240000000000123,
+          0.671999999999997,
+          -3.2639999999999816,
+          0.8959999999999866
+        ],
+        "min_us": -4.863999999999976,
+        "median_us": -1.759999999999991,
+        "max_us": 2.1759999999999877
+      },
+      "paired_mad_us": 1.6000000000000227,
+      "candidate_wins": 23,
+      "pairs": 31
+    }
+  },
+  "performance_gates": {
+    "main": false,
+    "total": false
+  },
+  "launch_orders": [
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ],
+    [
+      "true_late_q8_panel1",
+      "early_combined_all_partials"
+    ],
+    [
+      "early_combined_all_partials",
+      "true_late_q8_panel1"
+    ]
+  ],
+  "thresholds": {
+    "median_improvement_us": 3.0,
+    "minimum_wins": 24,
+    "rounds": 31,
+    "warmups": 3
+  },
+  "gpu_work_started": true,
+  "gpu_lock": {
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "acquired": true
+  },
+  "promotion_eligible": false,
+  "verdict": "REJECT_TRUE_LATE_Q8_PANEL1_PERFORMANCE",
+  "evidence_path": "docs/task_workflow/evidence/nv-q6-strict-after-panel1-gate15-20260901/exploratory-r31.json"
+}

@@ -1,0 +1,106 @@
+{
+  "gate": "nv-q6-strict-after-panel1-gate9-20260831",
+  "date": "2026-08-31",
+  "verdict": "REJECT_COMPILE_TIMEOUT",
+  "admission": false,
+  "route": {
+    "weight_scale_contract": "trusted_fp16_packed",
+    "prefetch_second_panel": true,
+    "combined_initial_publish": true,
+    "oracle_publisher": true,
+    "streamk_segments_in_cta": true,
+    "all_partials_fixup": true
+  },
+  "frozen": {
+    "anchor_cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin",
+    "anchor_cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "anchor_symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+    "fixup_sha256": "483d997cb16bacf35db3184825833e6f921a4b23efbb6d3c6836723d18285514",
+    "timing_reference_us": 256.256
+  },
+  "binding": {
+    "source_tuple": {"kphase": 0, "cg": 7, "n": 1, "p": 1, "r": 3},
+    "frozen_anchor_producer": {"pc": "0x9f80", "ordinal": 2552, "instruction": "FADD R167, R53, R36"},
+    "shared_dependency_count": 1,
+    "dependent_q8_panel1_load_count": 18,
+    "source": [
+      "strict_token=UOp.placeholder((1,),weighted.dtype.scalar(),91,addrspace=AddrSpace.REG)",
+      "strict_token=strict_token.after(strict_token[0].store(weighted))",
+      "panel1_base=(q8_epoch+Q8_WORDS+lid).strict_after(strict_token[0])",
+      "panel1_raw=tuple(q8_record[panel1_base+i*256].load() for i in range(18))"
+    ],
+    "loaded_value_wrapped": false
+  },
+  "focused_tests": {
+    "command": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env PYTHONPATH=. .venv/bin/python -m pytest -q test/unit/test_strict_after.py test/unit/test_nv_q6_strict_after_panel1.py",
+    "exit_code": 0,
+    "result": "5 passed in 1.64s",
+    "lock_acquired": true,
+    "lock_released": true
+  },
+  "compile_attempts": [
+    {
+      "variant": "direct_live_weighted_token",
+      "bound_s": null,
+      "elapsed_s_approx": 516,
+      "exit_code": 130,
+      "terminated_by": "operator_bounded_ctrl_c",
+      "last_phase": "to_program/full_rewrite_to_sink/initial symbolic",
+      "last_stack": "simplify_valid -> valid.backward_slice -> UOp.toposort",
+      "cuda_emitted": false,
+      "cubin_emitted": false,
+      "sass_emitted": false
+    },
+    {
+      "variant": "scalar_define_reg_materialized_token",
+      "repair_ordinal": 1,
+      "bound_s": 240,
+      "elapsed_s": 240,
+      "exit_code": 124,
+      "terminated_by": "timeout --signal=INT --kill-after=10s 240s",
+      "last_phase": "to_program/full_rewrite_to_sink/initial symbolic",
+      "last_stack": "symbolic commutative ordering -> _commutative_key -> norm(u.tuplize)",
+      "cuda_emitted": false,
+      "cubin_emitted": false,
+      "sass_emitted": false
+    }
+  ],
+  "compile_command": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock timeout --signal=INT --kill-after=10s 240s env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python - <<'PY' ... gate._compile_ast(gate._ast('true_late_tail'),'strict_after_reg_token',root) ... PY",
+  "sass_gates": {
+    "status": "NOT_RUN_NO_CUBIN",
+    "dependency_lt_ldg_lt_sts": null,
+    "panel1_ldg_count_18": null,
+    "panel1_sts_count_18": null,
+    "dependency_to_first_sts_span_le_160": null,
+    "families_equal_anchor": null,
+    "expected_families": {"IMMA": 256, "LDSM": 32, "LDS": 176, "LDG": 109, "STS": 73, "STG": 64, "BAR": 4},
+    "no_added_bar_or_membar": null,
+    "stack_bytes_0": null,
+    "ldl_0": null,
+    "stl_0": null,
+    "registers_le_255": null
+  },
+  "correctness": {
+    "status": "NOT_RUN_SASS_GATE_UNAVAILABLE",
+    "trusted_exactness": null,
+    "partial_uint32_identity": null,
+    "final_uint32_identity": null
+  },
+  "timing": {
+    "status": "NOT_RUN_SASS_GATE_UNAVAILABLE",
+    "rounds": 31,
+    "required_main_delta_us": -3.0,
+    "required_total_delta_us": -3.0,
+    "required_wins": 24,
+    "measured": null
+  },
+  "gpu_lock": {
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "wait_s": 1200,
+    "acquired": true,
+    "released": true,
+    "gpu_kernel_launches": 0
+  },
+  "blocker": "The current strict-after dependency remains structurally transparent to initial symbolic canonicalization. Even after scalar DEFINE_REG store/load materialization, the full phase-0 arithmetic graph is recursively tuplized through the ordered index and cannot reach CUDA emission inside 240 seconds.",
+  "next_gate": "Before another Q6 schedule experiment, make STRICT_AFTER dependency identity opaque to symbolic validity/commutative canonicalization after semantic reachability is established, and prove that behavior with a large-DAG compile-scaling unit test. Then rerun this unchanged single-base 18-load integration against the frozen anchor."
+}

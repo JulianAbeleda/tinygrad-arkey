@@ -1,0 +1,142 @@
+{
+  "schema": "tinygrad.nv_q6_region_load_panel1_gate11.v1",
+  "gate": "Gate11 RegionLoad Q8 panel1",
+  "date": "2026-08-31",
+  "verdict": "REJECT_SOURCE_SASS",
+  "promotion_eligible": false,
+  "primitive": {
+    "region": "before_overwrite.post_barrier_region(UOp.const(dtypes.bool, True), workgroup_uniform=True)",
+    "load": "q8_record[index].load().load_in_region(panel1_region)",
+    "close": "panel1_region.end_region(*panel1_publish)",
+    "logical_loads": 18,
+    "direct_publication_roots": 18,
+    "marker_outside_index": true,
+    "source_dtype": "uint32",
+    "source_address_space": "global PARAM",
+    "region_writes_source": false
+  },
+  "frozen": {
+    "anchor_main_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "all_partials_fixup_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+    "anchor_r31_us": 256.256
+  },
+  "commands": {
+    "focused": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env PYTHONPATH=. .venv/bin/python -m pytest -q test/unit/test_lexical_load_region.py test/unit/test_nv_q6_region_load_panel1.py",
+    "source_sass": "timeout --signal=INT --kill-after=10s 520s flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python extra/llm_research/prefill/bench_nv_q6_oracle_region_load_panel1.py --out docs/task_workflow/evidence/nv-q6-region-load-panel1-gate11-20260831/pre-sass.json --artifacts docs/task_workflow/evidence/nv-q6-region-load-panel1-gate11-20260831/artifacts --compile-bound 240",
+    "lock_release_check": "flock -n /tmp/nv-q6-oracle-gpu.lock true"
+  },
+  "focused_tests": {
+    "passed": 5,
+    "failed": 0,
+    "elapsed_s": 1.16,
+    "initial_harness_assertion_repaired": "The initial test treated every kernel-wide q8_record store as a mutation inside the region. The corrected check restricts writes to the 18 region publication roots."
+  },
+  "attempts": [
+    {
+      "name": "all_loads_then_publications",
+      "candidate_cubin_sha256": "ae5ce52319802c7c2d475ce2672ea5359f0cc7e86fca45497d26af795fbbb89a",
+      "span_instructions": 251,
+      "semantic_harness_exact": false,
+      "artifact": "pre-sass-attempt1.json"
+    },
+    {
+      "name": "one_permitted_pairwise_load_publication_construction_repair",
+      "candidate_cubin_sha256": "ae5ce52319802c7c2d475ce2672ea5359f0cc7e86fca45497d26af795fbbb89a",
+      "span_instructions": 251,
+      "semantic_harness_exact": true,
+      "artifact": "pre-sass.json",
+      "binary_changed_from_attempt1": false
+    }
+  ],
+  "compile": {
+    "anchor_elapsed_s": 8.975148065946996,
+    "candidate_elapsed_s": 7.0305712865665555,
+    "candidate_bound_s": 240,
+    "candidate_cubin_sha256": "ae5ce52319802c7c2d475ce2672ea5359f0cc7e86fca45497d26af795fbbb89a",
+    "candidate_source_sha256": "70d9523f5ffaf9860af28e4e4d82bcdfd3af0faaf905ec9a362f8e039864aaa9",
+    "candidate_symbol": "nv_q6_oracle_broad_cta_prefetch_region_load_q8_panel1_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0"
+  },
+  "sass": {
+    "overwrite_barrier_pc": "0x9820",
+    "panel1_load_pcs": ["0x9830", "0x9840", "0x9850", "0x9860", "0x9870", "0x9880", "0x9890", "0x98a0", "0x98b0", "0x98c0", "0x98d0", "0x98e0", "0x98f0", "0x9900", "0x9910", "0x9920", "0x9930", "0x9940"],
+    "panel1_load_registers": ["R126", "R127", "R128", "R129", "R130", "R131", "R141", "R142", "R145", "R146", "R147", "R148", "R149", "R150", "R117", "R118", "R119", "R124"],
+    "panel1_global_offsets": ["0x4800", "0x4c00", "0x5000", "0x5400", "0x5800", "0x5c00", "0x6000", "0x6400", "0x6800", "0x6c00", "0x7000", "0x7400", "0x7800", "0x7c00", "0x8000", "0x8400", "0x8800", "0x8c00"],
+    "frozen_phase_tail_fadd_pc": "0x9f80",
+    "panel1_store_pcs": ["0xa7e0", "0xa800", "0xa820", "0xa830", "0xa840", "0xa850", "0xa860", "0xa870", "0xa880", "0xa890", "0xa8a0", "0xa8b0", "0xa8c0", "0xa8d0", "0xa8e0", "0xa8f0", "0xa900", "0xa910"],
+    "panel1_store_registers": ["R126", "R127", "R128", "R129", "R130", "R131", "R141", "R142", "R145", "R146", "R147", "R148", "R149", "R150", "R117", "R118", "R119", "R124"],
+    "panel1_shared_offsets": ["0x9800", "0x9c00", "0xa000", "0xa400", "0xa800", "0xac00", "0xb000", "0xb400", "0xb800", "0xbc00", "0xc000", "0xc400", "0xc800", "0xcc00", "0xd000", "0xd400", "0xd800", "0xdc00"],
+    "closing_barrier_pc": "0xa930",
+    "first_load_ordinal": 2435,
+    "first_store_ordinal": 2686,
+    "first_load_to_first_store_span_instructions": 251,
+    "panel1_loads": 18,
+    "panel1_stores": 18,
+    "one_physical_ldg_per_logical_load": true,
+    "all_q8_loads": 36,
+    "all_q8_stores": 36
+  },
+  "census": {
+    "anchor_instruction_total": 5136,
+    "candidate_instruction_total": 5168,
+    "candidate": {
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 184,
+      "LDG": 109,
+      "STS": 73,
+      "STG": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": 0,
+      "LOP3": 212,
+      "MEMBAR": 0,
+      "ATOM": 0,
+      "LDL": 8,
+      "STL": 8
+    },
+    "anchor_delta": {
+      "instructions": 32,
+      "LDS": 8,
+      "LOP3": 1,
+      "LDL": 8,
+      "STL": 8
+    }
+  },
+  "resources": {
+    "registers": 255,
+    "stack_bytes": 32,
+    "local_static_bytes": 0,
+    "shared_static_bytes": 1024
+  },
+  "gates": {
+    "default_anchor_byte_identical": true,
+    "region_semantics_exact": true,
+    "panel_18_loads_18_stores": true,
+    "span_le_160": false,
+    "census_exact": false,
+    "unchanged_arithmetic": true,
+    "no_scheduling_lop3": false,
+    "no_membar_atom": true,
+    "stack_local_ldl_stl_zero": false
+  },
+  "correctness": {
+    "run": false,
+    "reason": "Static SASS gates failed."
+  },
+  "timing": {
+    "run": false,
+    "rounds": 0,
+    "reason": "Correctness and R31 are forbidden after static SASS rejection."
+  },
+  "gpu_lock": {
+    "flock_path": "/tmp/nv-q6-oracle-gpu.lock",
+    "wait_bound_s": 1200,
+    "held_during_focused_and_compile": true,
+    "gpu_work_started": false,
+    "released": true,
+    "release_check_exit_code": 0
+  },
+  "causal_finding": "RegionLoad kept the 18 LDGs after the existing overwrite BAR, but it did not establish a late boundary within the remaining accumulator fold. All 18 registers are live from PCs 0x9830..0x9940 through STS at 0xa7e0..0xa910, crossing the frozen phase-tail FADD at 0x9f80. Pairwise graph construction emitted the identical cubin, so UOp creation order is not a control lever."
+}

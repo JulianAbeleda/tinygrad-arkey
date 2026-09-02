@@ -1,0 +1,6856 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_reduction_policy.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "arms": {
+    "all_partials_ascending": {
+      "output_policy": "all_partials",
+      "segment_order": "ascending",
+      "direct_final": false
+    },
+    "llama_standalone_ascending": {
+      "output_policy": "llama_standalone",
+      "segment_order": "ascending",
+      "direct_final": true
+    },
+    "llama_standalone_nonfinal_first": {
+      "output_policy": "llama_standalone",
+      "segment_order": "nonfinal_first",
+      "direct_final": true
+    }
+  },
+  "ownership": {
+    "owners": 170,
+    "tiles": 128,
+    "k256_per_tile": 48,
+    "slot_layout": "plane_major: slot=plane*170+owner",
+    "allocated_slots": 340,
+    "active_slots": 294,
+    "preceding_segments": 166,
+    "final_segments": 128,
+    "fold_order": "nonfinal contributors in descending owner order, then the final contributor",
+    "descriptors": [
+      [
+        {
+          "owner": 0,
+          "plane": 0,
+          "slot": 0,
+          "tile": 0,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 1,
+          "plane": 0,
+          "slot": 1,
+          "tile": 0,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 1,
+          "plane": 1,
+          "slot": 171,
+          "tile": 1,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 2,
+          "plane": 0,
+          "slot": 2,
+          "tile": 1,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 2,
+          "plane": 1,
+          "slot": 172,
+          "tile": 2,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 3,
+          "plane": 0,
+          "slot": 3,
+          "tile": 2,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 4,
+          "plane": 0,
+          "slot": 4,
+          "tile": 3,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 5,
+          "plane": 0,
+          "slot": 5,
+          "tile": 3,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 5,
+          "plane": 1,
+          "slot": 175,
+          "tile": 4,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 6,
+          "plane": 0,
+          "slot": 6,
+          "tile": 4,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 6,
+          "plane": 1,
+          "slot": 176,
+          "tile": 5,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 7,
+          "plane": 0,
+          "slot": 7,
+          "tile": 5,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 8,
+          "plane": 0,
+          "slot": 8,
+          "tile": 6,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 7,
+          "plane": 1,
+          "slot": 177,
+          "tile": 6,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 9,
+          "plane": 0,
+          "slot": 9,
+          "tile": 6,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 9,
+          "plane": 1,
+          "slot": 179,
+          "tile": 7,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 10,
+          "plane": 0,
+          "slot": 10,
+          "tile": 7,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 10,
+          "plane": 1,
+          "slot": 180,
+          "tile": 8,
+          "k_begin": 0,
+          "k_end": 13,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 11,
+          "plane": 0,
+          "slot": 11,
+          "tile": 8,
+          "k_begin": 13,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 12,
+          "plane": 0,
+          "slot": 12,
+          "tile": 9,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 11,
+          "plane": 1,
+          "slot": 181,
+          "tile": 9,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 13,
+          "plane": 0,
+          "slot": 13,
+          "tile": 9,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 13,
+          "plane": 1,
+          "slot": 183,
+          "tile": 10,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 14,
+          "plane": 0,
+          "slot": 14,
+          "tile": 10,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 14,
+          "plane": 1,
+          "slot": 184,
+          "tile": 11,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 15,
+          "plane": 0,
+          "slot": 15,
+          "tile": 11,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 16,
+          "plane": 0,
+          "slot": 16,
+          "tile": 12,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 15,
+          "plane": 1,
+          "slot": 185,
+          "tile": 12,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 17,
+          "plane": 0,
+          "slot": 17,
+          "tile": 12,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 17,
+          "plane": 1,
+          "slot": 187,
+          "tile": 13,
+          "k_begin": 0,
+          "k_end": 26,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 18,
+          "plane": 0,
+          "slot": 18,
+          "tile": 13,
+          "k_begin": 26,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 18,
+          "plane": 1,
+          "slot": 188,
+          "tile": 14,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 19,
+          "plane": 0,
+          "slot": 19,
+          "tile": 14,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 20,
+          "plane": 0,
+          "slot": 20,
+          "tile": 15,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 19,
+          "plane": 1,
+          "slot": 189,
+          "tile": 15,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 21,
+          "plane": 0,
+          "slot": 21,
+          "tile": 15,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 21,
+          "plane": 1,
+          "slot": 191,
+          "tile": 16,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 22,
+          "plane": 0,
+          "slot": 22,
+          "tile": 16,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 22,
+          "plane": 1,
+          "slot": 192,
+          "tile": 17,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 23,
+          "plane": 0,
+          "slot": 23,
+          "tile": 17,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 24,
+          "plane": 0,
+          "slot": 24,
+          "tile": 18,
+          "k_begin": 3,
+          "k_end": 39,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 23,
+          "plane": 1,
+          "slot": 193,
+          "tile": 18,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 25,
+          "plane": 0,
+          "slot": 25,
+          "tile": 18,
+          "k_begin": 39,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 25,
+          "plane": 1,
+          "slot": 195,
+          "tile": 19,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 26,
+          "plane": 0,
+          "slot": 26,
+          "tile": 19,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 26,
+          "plane": 1,
+          "slot": 196,
+          "tile": 20,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 27,
+          "plane": 0,
+          "slot": 27,
+          "tile": 20,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 28,
+          "plane": 0,
+          "slot": 28,
+          "tile": 21,
+          "k_begin": 3,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 27,
+          "plane": 1,
+          "slot": 197,
+          "tile": 21,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 29,
+          "plane": 0,
+          "slot": 29,
+          "tile": 21,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 29,
+          "plane": 1,
+          "slot": 199,
+          "tile": 22,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 30,
+          "plane": 0,
+          "slot": 30,
+          "tile": 22,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 30,
+          "plane": 1,
+          "slot": 200,
+          "tile": 23,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 31,
+          "plane": 0,
+          "slot": 31,
+          "tile": 23,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 32,
+          "plane": 0,
+          "slot": 32,
+          "tile": 24,
+          "k_begin": 4,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 31,
+          "plane": 1,
+          "slot": 201,
+          "tile": 24,
+          "k_begin": 0,
+          "k_end": 4,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 33,
+          "plane": 0,
+          "slot": 33,
+          "tile": 24,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 33,
+          "plane": 1,
+          "slot": 203,
+          "tile": 25,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 34,
+          "plane": 0,
+          "slot": 34,
+          "tile": 25,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 34,
+          "plane": 1,
+          "slot": 204,
+          "tile": 26,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 35,
+          "plane": 0,
+          "slot": 35,
+          "tile": 26,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 36,
+          "plane": 0,
+          "slot": 36,
+          "tile": 27,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 35,
+          "plane": 1,
+          "slot": 205,
+          "tile": 27,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 37,
+          "plane": 0,
+          "slot": 37,
+          "tile": 27,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 37,
+          "plane": 1,
+          "slot": 207,
+          "tile": 28,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 38,
+          "plane": 0,
+          "slot": 38,
+          "tile": 28,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 38,
+          "plane": 1,
+          "slot": 208,
+          "tile": 29,
+          "k_begin": 0,
+          "k_end": 17,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 39,
+          "plane": 0,
+          "slot": 39,
+          "tile": 29,
+          "k_begin": 17,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 40,
+          "plane": 0,
+          "slot": 40,
+          "tile": 30,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 39,
+          "plane": 1,
+          "slot": 209,
+          "tile": 30,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 41,
+          "plane": 0,
+          "slot": 41,
+          "tile": 30,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 41,
+          "plane": 1,
+          "slot": 211,
+          "tile": 31,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 42,
+          "plane": 0,
+          "slot": 42,
+          "tile": 31,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 42,
+          "plane": 1,
+          "slot": 212,
+          "tile": 32,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 43,
+          "plane": 0,
+          "slot": 43,
+          "tile": 32,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 44,
+          "plane": 0,
+          "slot": 44,
+          "tile": 33,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 43,
+          "plane": 1,
+          "slot": 213,
+          "tile": 33,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 45,
+          "plane": 0,
+          "slot": 45,
+          "tile": 33,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 45,
+          "plane": 1,
+          "slot": 215,
+          "tile": 34,
+          "k_begin": 0,
+          "k_end": 30,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 46,
+          "plane": 0,
+          "slot": 46,
+          "tile": 34,
+          "k_begin": 30,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 46,
+          "plane": 1,
+          "slot": 216,
+          "tile": 35,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 47,
+          "plane": 0,
+          "slot": 47,
+          "tile": 35,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 48,
+          "plane": 0,
+          "slot": 48,
+          "tile": 36,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 47,
+          "plane": 1,
+          "slot": 217,
+          "tile": 36,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 49,
+          "plane": 0,
+          "slot": 49,
+          "tile": 36,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 49,
+          "plane": 1,
+          "slot": 219,
+          "tile": 37,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 50,
+          "plane": 0,
+          "slot": 50,
+          "tile": 37,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 50,
+          "plane": 1,
+          "slot": 220,
+          "tile": 38,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 51,
+          "plane": 0,
+          "slot": 51,
+          "tile": 38,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 52,
+          "plane": 0,
+          "slot": 52,
+          "tile": 39,
+          "k_begin": 7,
+          "k_end": 43,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 51,
+          "plane": 1,
+          "slot": 221,
+          "tile": 39,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 53,
+          "plane": 0,
+          "slot": 53,
+          "tile": 39,
+          "k_begin": 43,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 53,
+          "plane": 1,
+          "slot": 223,
+          "tile": 40,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 54,
+          "plane": 0,
+          "slot": 54,
+          "tile": 40,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 54,
+          "plane": 1,
+          "slot": 224,
+          "tile": 41,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 55,
+          "plane": 0,
+          "slot": 55,
+          "tile": 41,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 56,
+          "plane": 0,
+          "slot": 56,
+          "tile": 42,
+          "k_begin": 7,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 55,
+          "plane": 1,
+          "slot": 225,
+          "tile": 42,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 57,
+          "plane": 0,
+          "slot": 57,
+          "tile": 42,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 57,
+          "plane": 1,
+          "slot": 227,
+          "tile": 43,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 58,
+          "plane": 0,
+          "slot": 58,
+          "tile": 43,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 58,
+          "plane": 1,
+          "slot": 228,
+          "tile": 44,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 59,
+          "plane": 0,
+          "slot": 59,
+          "tile": 44,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 60,
+          "plane": 0,
+          "slot": 60,
+          "tile": 45,
+          "k_begin": 8,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 59,
+          "plane": 1,
+          "slot": 229,
+          "tile": 45,
+          "k_begin": 0,
+          "k_end": 8,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 61,
+          "plane": 0,
+          "slot": 61,
+          "tile": 45,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 61,
+          "plane": 1,
+          "slot": 231,
+          "tile": 46,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 62,
+          "plane": 0,
+          "slot": 62,
+          "tile": 46,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 62,
+          "plane": 1,
+          "slot": 232,
+          "tile": 47,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 63,
+          "plane": 0,
+          "slot": 63,
+          "tile": 47,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 64,
+          "plane": 0,
+          "slot": 64,
+          "tile": 48,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 63,
+          "plane": 1,
+          "slot": 233,
+          "tile": 48,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 65,
+          "plane": 0,
+          "slot": 65,
+          "tile": 48,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 65,
+          "plane": 1,
+          "slot": 235,
+          "tile": 49,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 66,
+          "plane": 0,
+          "slot": 66,
+          "tile": 49,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 66,
+          "plane": 1,
+          "slot": 236,
+          "tile": 50,
+          "k_begin": 0,
+          "k_end": 21,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 67,
+          "plane": 0,
+          "slot": 67,
+          "tile": 50,
+          "k_begin": 21,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 68,
+          "plane": 0,
+          "slot": 68,
+          "tile": 51,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 67,
+          "plane": 1,
+          "slot": 237,
+          "tile": 51,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 69,
+          "plane": 0,
+          "slot": 69,
+          "tile": 51,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 69,
+          "plane": 1,
+          "slot": 239,
+          "tile": 52,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 70,
+          "plane": 0,
+          "slot": 70,
+          "tile": 52,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 70,
+          "plane": 1,
+          "slot": 240,
+          "tile": 53,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 71,
+          "plane": 0,
+          "slot": 71,
+          "tile": 53,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 72,
+          "plane": 0,
+          "slot": 72,
+          "tile": 54,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 71,
+          "plane": 1,
+          "slot": 241,
+          "tile": 54,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 73,
+          "plane": 0,
+          "slot": 73,
+          "tile": 54,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 73,
+          "plane": 1,
+          "slot": 243,
+          "tile": 55,
+          "k_begin": 0,
+          "k_end": 34,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 74,
+          "plane": 0,
+          "slot": 74,
+          "tile": 55,
+          "k_begin": 34,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 74,
+          "plane": 1,
+          "slot": 244,
+          "tile": 56,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 75,
+          "plane": 0,
+          "slot": 75,
+          "tile": 56,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 76,
+          "plane": 0,
+          "slot": 76,
+          "tile": 57,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 75,
+          "plane": 1,
+          "slot": 245,
+          "tile": 57,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 77,
+          "plane": 0,
+          "slot": 77,
+          "tile": 57,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 77,
+          "plane": 1,
+          "slot": 247,
+          "tile": 58,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 78,
+          "plane": 0,
+          "slot": 78,
+          "tile": 58,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 78,
+          "plane": 1,
+          "slot": 248,
+          "tile": 59,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 79,
+          "plane": 0,
+          "slot": 79,
+          "tile": 59,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 80,
+          "plane": 0,
+          "slot": 80,
+          "tile": 60,
+          "k_begin": 11,
+          "k_end": 47,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 79,
+          "plane": 1,
+          "slot": 249,
+          "tile": 60,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 81,
+          "plane": 0,
+          "slot": 81,
+          "tile": 60,
+          "k_begin": 47,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 81,
+          "plane": 1,
+          "slot": 251,
+          "tile": 61,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 82,
+          "plane": 0,
+          "slot": 82,
+          "tile": 61,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 82,
+          "plane": 1,
+          "slot": 252,
+          "tile": 62,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 83,
+          "plane": 0,
+          "slot": 83,
+          "tile": 62,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 83,
+          "plane": 1,
+          "slot": 253,
+          "tile": 63,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 84,
+          "plane": 0,
+          "slot": 84,
+          "tile": 63,
+          "k_begin": 11,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 85,
+          "plane": 0,
+          "slot": 85,
+          "tile": 64,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 86,
+          "plane": 0,
+          "slot": 86,
+          "tile": 64,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 86,
+          "plane": 1,
+          "slot": 256,
+          "tile": 65,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 87,
+          "plane": 0,
+          "slot": 87,
+          "tile": 65,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 87,
+          "plane": 1,
+          "slot": 257,
+          "tile": 66,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 88,
+          "plane": 0,
+          "slot": 88,
+          "tile": 66,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 89,
+          "plane": 0,
+          "slot": 89,
+          "tile": 67,
+          "k_begin": 0,
+          "k_end": 36,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 90,
+          "plane": 0,
+          "slot": 90,
+          "tile": 67,
+          "k_begin": 36,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 90,
+          "plane": 1,
+          "slot": 260,
+          "tile": 68,
+          "k_begin": 0,
+          "k_end": 24,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 91,
+          "plane": 0,
+          "slot": 91,
+          "tile": 68,
+          "k_begin": 24,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 91,
+          "plane": 1,
+          "slot": 261,
+          "tile": 69,
+          "k_begin": 0,
+          "k_end": 12,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 92,
+          "plane": 0,
+          "slot": 92,
+          "tile": 69,
+          "k_begin": 12,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 93,
+          "plane": 0,
+          "slot": 93,
+          "tile": 70,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 92,
+          "plane": 1,
+          "slot": 262,
+          "tile": 70,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 94,
+          "plane": 0,
+          "slot": 94,
+          "tile": 70,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 94,
+          "plane": 1,
+          "slot": 264,
+          "tile": 71,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 95,
+          "plane": 0,
+          "slot": 95,
+          "tile": 71,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 95,
+          "plane": 1,
+          "slot": 265,
+          "tile": 72,
+          "k_begin": 0,
+          "k_end": 13,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 96,
+          "plane": 0,
+          "slot": 96,
+          "tile": 72,
+          "k_begin": 13,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 97,
+          "plane": 0,
+          "slot": 97,
+          "tile": 73,
+          "k_begin": 1,
+          "k_end": 37,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 96,
+          "plane": 1,
+          "slot": 266,
+          "tile": 73,
+          "k_begin": 0,
+          "k_end": 1,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 98,
+          "plane": 0,
+          "slot": 98,
+          "tile": 73,
+          "k_begin": 37,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 98,
+          "plane": 1,
+          "slot": 268,
+          "tile": 74,
+          "k_begin": 0,
+          "k_end": 25,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 99,
+          "plane": 0,
+          "slot": 99,
+          "tile": 74,
+          "k_begin": 25,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 99,
+          "plane": 1,
+          "slot": 269,
+          "tile": 75,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 100,
+          "plane": 0,
+          "slot": 100,
+          "tile": 75,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 101,
+          "plane": 0,
+          "slot": 101,
+          "tile": 76,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 100,
+          "plane": 1,
+          "slot": 270,
+          "tile": 76,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 102,
+          "plane": 0,
+          "slot": 102,
+          "tile": 76,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 102,
+          "plane": 1,
+          "slot": 272,
+          "tile": 77,
+          "k_begin": 0,
+          "k_end": 26,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 103,
+          "plane": 0,
+          "slot": 103,
+          "tile": 77,
+          "k_begin": 26,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 103,
+          "plane": 1,
+          "slot": 273,
+          "tile": 78,
+          "k_begin": 0,
+          "k_end": 14,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 104,
+          "plane": 0,
+          "slot": 104,
+          "tile": 78,
+          "k_begin": 14,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 105,
+          "plane": 0,
+          "slot": 105,
+          "tile": 79,
+          "k_begin": 2,
+          "k_end": 38,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 104,
+          "plane": 1,
+          "slot": 274,
+          "tile": 79,
+          "k_begin": 0,
+          "k_end": 2,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 106,
+          "plane": 0,
+          "slot": 106,
+          "tile": 79,
+          "k_begin": 38,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 106,
+          "plane": 1,
+          "slot": 276,
+          "tile": 80,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 107,
+          "plane": 0,
+          "slot": 107,
+          "tile": 80,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 107,
+          "plane": 1,
+          "slot": 277,
+          "tile": 81,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 108,
+          "plane": 0,
+          "slot": 108,
+          "tile": 81,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 109,
+          "plane": 0,
+          "slot": 109,
+          "tile": 82,
+          "k_begin": 3,
+          "k_end": 39,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 108,
+          "plane": 1,
+          "slot": 278,
+          "tile": 82,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 110,
+          "plane": 0,
+          "slot": 110,
+          "tile": 82,
+          "k_begin": 39,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 110,
+          "plane": 1,
+          "slot": 280,
+          "tile": 83,
+          "k_begin": 0,
+          "k_end": 27,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 111,
+          "plane": 0,
+          "slot": 111,
+          "tile": 83,
+          "k_begin": 27,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 111,
+          "plane": 1,
+          "slot": 281,
+          "tile": 84,
+          "k_begin": 0,
+          "k_end": 15,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 112,
+          "plane": 0,
+          "slot": 112,
+          "tile": 84,
+          "k_begin": 15,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 113,
+          "plane": 0,
+          "slot": 113,
+          "tile": 85,
+          "k_begin": 3,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 112,
+          "plane": 1,
+          "slot": 282,
+          "tile": 85,
+          "k_begin": 0,
+          "k_end": 3,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 114,
+          "plane": 0,
+          "slot": 114,
+          "tile": 85,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 114,
+          "plane": 1,
+          "slot": 284,
+          "tile": 86,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 115,
+          "plane": 0,
+          "slot": 115,
+          "tile": 86,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 115,
+          "plane": 1,
+          "slot": 285,
+          "tile": 87,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 116,
+          "plane": 0,
+          "slot": 116,
+          "tile": 87,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 117,
+          "plane": 0,
+          "slot": 117,
+          "tile": 88,
+          "k_begin": 4,
+          "k_end": 40,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 116,
+          "plane": 1,
+          "slot": 286,
+          "tile": 88,
+          "k_begin": 0,
+          "k_end": 4,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 118,
+          "plane": 0,
+          "slot": 118,
+          "tile": 88,
+          "k_begin": 40,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 118,
+          "plane": 1,
+          "slot": 288,
+          "tile": 89,
+          "k_begin": 0,
+          "k_end": 28,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 119,
+          "plane": 0,
+          "slot": 119,
+          "tile": 89,
+          "k_begin": 28,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 119,
+          "plane": 1,
+          "slot": 289,
+          "tile": 90,
+          "k_begin": 0,
+          "k_end": 16,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 120,
+          "plane": 0,
+          "slot": 120,
+          "tile": 90,
+          "k_begin": 16,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 121,
+          "plane": 0,
+          "slot": 121,
+          "tile": 91,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 120,
+          "plane": 1,
+          "slot": 290,
+          "tile": 91,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 122,
+          "plane": 0,
+          "slot": 122,
+          "tile": 91,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 122,
+          "plane": 1,
+          "slot": 292,
+          "tile": 92,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 123,
+          "plane": 0,
+          "slot": 123,
+          "tile": 92,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 123,
+          "plane": 1,
+          "slot": 293,
+          "tile": 93,
+          "k_begin": 0,
+          "k_end": 17,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 124,
+          "plane": 0,
+          "slot": 124,
+          "tile": 93,
+          "k_begin": 17,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 125,
+          "plane": 0,
+          "slot": 125,
+          "tile": 94,
+          "k_begin": 5,
+          "k_end": 41,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 124,
+          "plane": 1,
+          "slot": 294,
+          "tile": 94,
+          "k_begin": 0,
+          "k_end": 5,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 126,
+          "plane": 0,
+          "slot": 126,
+          "tile": 94,
+          "k_begin": 41,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 126,
+          "plane": 1,
+          "slot": 296,
+          "tile": 95,
+          "k_begin": 0,
+          "k_end": 29,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 127,
+          "plane": 0,
+          "slot": 127,
+          "tile": 95,
+          "k_begin": 29,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 127,
+          "plane": 1,
+          "slot": 297,
+          "tile": 96,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 128,
+          "plane": 0,
+          "slot": 128,
+          "tile": 96,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 129,
+          "plane": 0,
+          "slot": 129,
+          "tile": 97,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 128,
+          "plane": 1,
+          "slot": 298,
+          "tile": 97,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 130,
+          "plane": 0,
+          "slot": 130,
+          "tile": 97,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 130,
+          "plane": 1,
+          "slot": 300,
+          "tile": 98,
+          "k_begin": 0,
+          "k_end": 30,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 131,
+          "plane": 0,
+          "slot": 131,
+          "tile": 98,
+          "k_begin": 30,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 131,
+          "plane": 1,
+          "slot": 301,
+          "tile": 99,
+          "k_begin": 0,
+          "k_end": 18,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 132,
+          "plane": 0,
+          "slot": 132,
+          "tile": 99,
+          "k_begin": 18,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 133,
+          "plane": 0,
+          "slot": 133,
+          "tile": 100,
+          "k_begin": 6,
+          "k_end": 42,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 132,
+          "plane": 1,
+          "slot": 302,
+          "tile": 100,
+          "k_begin": 0,
+          "k_end": 6,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 134,
+          "plane": 0,
+          "slot": 134,
+          "tile": 100,
+          "k_begin": 42,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 134,
+          "plane": 1,
+          "slot": 304,
+          "tile": 101,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 135,
+          "plane": 0,
+          "slot": 135,
+          "tile": 101,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 135,
+          "plane": 1,
+          "slot": 305,
+          "tile": 102,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 136,
+          "plane": 0,
+          "slot": 136,
+          "tile": 102,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 137,
+          "plane": 0,
+          "slot": 137,
+          "tile": 103,
+          "k_begin": 7,
+          "k_end": 43,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 136,
+          "plane": 1,
+          "slot": 306,
+          "tile": 103,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 138,
+          "plane": 0,
+          "slot": 138,
+          "tile": 103,
+          "k_begin": 43,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 138,
+          "plane": 1,
+          "slot": 308,
+          "tile": 104,
+          "k_begin": 0,
+          "k_end": 31,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 139,
+          "plane": 0,
+          "slot": 139,
+          "tile": 104,
+          "k_begin": 31,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 139,
+          "plane": 1,
+          "slot": 309,
+          "tile": 105,
+          "k_begin": 0,
+          "k_end": 19,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 140,
+          "plane": 0,
+          "slot": 140,
+          "tile": 105,
+          "k_begin": 19,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 141,
+          "plane": 0,
+          "slot": 141,
+          "tile": 106,
+          "k_begin": 7,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 140,
+          "plane": 1,
+          "slot": 310,
+          "tile": 106,
+          "k_begin": 0,
+          "k_end": 7,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 142,
+          "plane": 0,
+          "slot": 142,
+          "tile": 106,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 142,
+          "plane": 1,
+          "slot": 312,
+          "tile": 107,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 143,
+          "plane": 0,
+          "slot": 143,
+          "tile": 107,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 143,
+          "plane": 1,
+          "slot": 313,
+          "tile": 108,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 144,
+          "plane": 0,
+          "slot": 144,
+          "tile": 108,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 145,
+          "plane": 0,
+          "slot": 145,
+          "tile": 109,
+          "k_begin": 8,
+          "k_end": 44,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 144,
+          "plane": 1,
+          "slot": 314,
+          "tile": 109,
+          "k_begin": 0,
+          "k_end": 8,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 146,
+          "plane": 0,
+          "slot": 146,
+          "tile": 109,
+          "k_begin": 44,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 146,
+          "plane": 1,
+          "slot": 316,
+          "tile": 110,
+          "k_begin": 0,
+          "k_end": 32,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 147,
+          "plane": 0,
+          "slot": 147,
+          "tile": 110,
+          "k_begin": 32,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 147,
+          "plane": 1,
+          "slot": 317,
+          "tile": 111,
+          "k_begin": 0,
+          "k_end": 20,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 148,
+          "plane": 0,
+          "slot": 148,
+          "tile": 111,
+          "k_begin": 20,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 149,
+          "plane": 0,
+          "slot": 149,
+          "tile": 112,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 148,
+          "plane": 1,
+          "slot": 318,
+          "tile": 112,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 150,
+          "plane": 0,
+          "slot": 150,
+          "tile": 112,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 150,
+          "plane": 1,
+          "slot": 320,
+          "tile": 113,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 151,
+          "plane": 0,
+          "slot": 151,
+          "tile": 113,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 151,
+          "plane": 1,
+          "slot": 321,
+          "tile": 114,
+          "k_begin": 0,
+          "k_end": 21,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 152,
+          "plane": 0,
+          "slot": 152,
+          "tile": 114,
+          "k_begin": 21,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 153,
+          "plane": 0,
+          "slot": 153,
+          "tile": 115,
+          "k_begin": 9,
+          "k_end": 45,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 152,
+          "plane": 1,
+          "slot": 322,
+          "tile": 115,
+          "k_begin": 0,
+          "k_end": 9,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 154,
+          "plane": 0,
+          "slot": 154,
+          "tile": 115,
+          "k_begin": 45,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 154,
+          "plane": 1,
+          "slot": 324,
+          "tile": 116,
+          "k_begin": 0,
+          "k_end": 33,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 155,
+          "plane": 0,
+          "slot": 155,
+          "tile": 116,
+          "k_begin": 33,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 155,
+          "plane": 1,
+          "slot": 325,
+          "tile": 117,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 156,
+          "plane": 0,
+          "slot": 156,
+          "tile": 117,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 157,
+          "plane": 0,
+          "slot": 157,
+          "tile": 118,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 156,
+          "plane": 1,
+          "slot": 326,
+          "tile": 118,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 158,
+          "plane": 0,
+          "slot": 158,
+          "tile": 118,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 158,
+          "plane": 1,
+          "slot": 328,
+          "tile": 119,
+          "k_begin": 0,
+          "k_end": 34,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 159,
+          "plane": 0,
+          "slot": 159,
+          "tile": 119,
+          "k_begin": 34,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 159,
+          "plane": 1,
+          "slot": 329,
+          "tile": 120,
+          "k_begin": 0,
+          "k_end": 22,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 160,
+          "plane": 0,
+          "slot": 160,
+          "tile": 120,
+          "k_begin": 22,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 161,
+          "plane": 0,
+          "slot": 161,
+          "tile": 121,
+          "k_begin": 10,
+          "k_end": 46,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 160,
+          "plane": 1,
+          "slot": 330,
+          "tile": 121,
+          "k_begin": 0,
+          "k_end": 10,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 162,
+          "plane": 0,
+          "slot": 162,
+          "tile": 121,
+          "k_begin": 46,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 162,
+          "plane": 1,
+          "slot": 332,
+          "tile": 122,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 163,
+          "plane": 0,
+          "slot": 163,
+          "tile": 122,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 163,
+          "plane": 1,
+          "slot": 333,
+          "tile": 123,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 164,
+          "plane": 0,
+          "slot": 164,
+          "tile": 123,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 165,
+          "plane": 0,
+          "slot": 165,
+          "tile": 124,
+          "k_begin": 11,
+          "k_end": 47,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 164,
+          "plane": 1,
+          "slot": 334,
+          "tile": 124,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 1
+        },
+        {
+          "owner": 166,
+          "plane": 0,
+          "slot": 166,
+          "tile": 124,
+          "k_begin": 47,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 2
+        }
+      ],
+      [
+        {
+          "owner": 166,
+          "plane": 1,
+          "slot": 336,
+          "tile": 125,
+          "k_begin": 0,
+          "k_end": 35,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 167,
+          "plane": 0,
+          "slot": 167,
+          "tile": 125,
+          "k_begin": 35,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 167,
+          "plane": 1,
+          "slot": 337,
+          "tile": 126,
+          "k_begin": 0,
+          "k_end": 23,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 168,
+          "plane": 0,
+          "slot": 168,
+          "tile": 126,
+          "k_begin": 23,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ],
+      [
+        {
+          "owner": 168,
+          "plane": 1,
+          "slot": 338,
+          "tile": 127,
+          "k_begin": 0,
+          "k_end": 11,
+          "is_final": false,
+          "fold_position": 0
+        },
+        {
+          "owner": 169,
+          "plane": 0,
+          "slot": 169,
+          "tile": 127,
+          "k_begin": 11,
+          "k_end": 48,
+          "is_final": true,
+          "fold_position": 1
+        }
+      ]
+    ],
+    "slot_map": [
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        171,
+        2,
+        0
+      ],
+      [
+        172,
+        3,
+        0
+      ],
+      [
+        4,
+        5,
+        0
+      ],
+      [
+        175,
+        6,
+        0
+      ],
+      [
+        176,
+        7,
+        0
+      ],
+      [
+        8,
+        177,
+        9
+      ],
+      [
+        179,
+        10,
+        0
+      ],
+      [
+        180,
+        11,
+        0
+      ],
+      [
+        12,
+        181,
+        13
+      ],
+      [
+        183,
+        14,
+        0
+      ],
+      [
+        184,
+        15,
+        0
+      ],
+      [
+        16,
+        185,
+        17
+      ],
+      [
+        187,
+        18,
+        0
+      ],
+      [
+        188,
+        19,
+        0
+      ],
+      [
+        20,
+        189,
+        21
+      ],
+      [
+        191,
+        22,
+        0
+      ],
+      [
+        192,
+        23,
+        0
+      ],
+      [
+        24,
+        193,
+        25
+      ],
+      [
+        195,
+        26,
+        0
+      ],
+      [
+        196,
+        27,
+        0
+      ],
+      [
+        28,
+        197,
+        29
+      ],
+      [
+        199,
+        30,
+        0
+      ],
+      [
+        200,
+        31,
+        0
+      ],
+      [
+        32,
+        201,
+        33
+      ],
+      [
+        203,
+        34,
+        0
+      ],
+      [
+        204,
+        35,
+        0
+      ],
+      [
+        36,
+        205,
+        37
+      ],
+      [
+        207,
+        38,
+        0
+      ],
+      [
+        208,
+        39,
+        0
+      ],
+      [
+        40,
+        209,
+        41
+      ],
+      [
+        211,
+        42,
+        0
+      ],
+      [
+        212,
+        43,
+        0
+      ],
+      [
+        44,
+        213,
+        45
+      ],
+      [
+        215,
+        46,
+        0
+      ],
+      [
+        216,
+        47,
+        0
+      ],
+      [
+        48,
+        217,
+        49
+      ],
+      [
+        219,
+        50,
+        0
+      ],
+      [
+        220,
+        51,
+        0
+      ],
+      [
+        52,
+        221,
+        53
+      ],
+      [
+        223,
+        54,
+        0
+      ],
+      [
+        224,
+        55,
+        0
+      ],
+      [
+        56,
+        225,
+        57
+      ],
+      [
+        227,
+        58,
+        0
+      ],
+      [
+        228,
+        59,
+        0
+      ],
+      [
+        60,
+        229,
+        61
+      ],
+      [
+        231,
+        62,
+        0
+      ],
+      [
+        232,
+        63,
+        0
+      ],
+      [
+        64,
+        233,
+        65
+      ],
+      [
+        235,
+        66,
+        0
+      ],
+      [
+        236,
+        67,
+        0
+      ],
+      [
+        68,
+        237,
+        69
+      ],
+      [
+        239,
+        70,
+        0
+      ],
+      [
+        240,
+        71,
+        0
+      ],
+      [
+        72,
+        241,
+        73
+      ],
+      [
+        243,
+        74,
+        0
+      ],
+      [
+        244,
+        75,
+        0
+      ],
+      [
+        76,
+        245,
+        77
+      ],
+      [
+        247,
+        78,
+        0
+      ],
+      [
+        248,
+        79,
+        0
+      ],
+      [
+        80,
+        249,
+        81
+      ],
+      [
+        251,
+        82,
+        0
+      ],
+      [
+        252,
+        83,
+        0
+      ],
+      [
+        253,
+        84,
+        0
+      ],
+      [
+        85,
+        86,
+        0
+      ],
+      [
+        256,
+        87,
+        0
+      ],
+      [
+        257,
+        88,
+        0
+      ],
+      [
+        89,
+        90,
+        0
+      ],
+      [
+        260,
+        91,
+        0
+      ],
+      [
+        261,
+        92,
+        0
+      ],
+      [
+        93,
+        262,
+        94
+      ],
+      [
+        264,
+        95,
+        0
+      ],
+      [
+        265,
+        96,
+        0
+      ],
+      [
+        97,
+        266,
+        98
+      ],
+      [
+        268,
+        99,
+        0
+      ],
+      [
+        269,
+        100,
+        0
+      ],
+      [
+        101,
+        270,
+        102
+      ],
+      [
+        272,
+        103,
+        0
+      ],
+      [
+        273,
+        104,
+        0
+      ],
+      [
+        105,
+        274,
+        106
+      ],
+      [
+        276,
+        107,
+        0
+      ],
+      [
+        277,
+        108,
+        0
+      ],
+      [
+        109,
+        278,
+        110
+      ],
+      [
+        280,
+        111,
+        0
+      ],
+      [
+        281,
+        112,
+        0
+      ],
+      [
+        113,
+        282,
+        114
+      ],
+      [
+        284,
+        115,
+        0
+      ],
+      [
+        285,
+        116,
+        0
+      ],
+      [
+        117,
+        286,
+        118
+      ],
+      [
+        288,
+        119,
+        0
+      ],
+      [
+        289,
+        120,
+        0
+      ],
+      [
+        121,
+        290,
+        122
+      ],
+      [
+        292,
+        123,
+        0
+      ],
+      [
+        293,
+        124,
+        0
+      ],
+      [
+        125,
+        294,
+        126
+      ],
+      [
+        296,
+        127,
+        0
+      ],
+      [
+        297,
+        128,
+        0
+      ],
+      [
+        129,
+        298,
+        130
+      ],
+      [
+        300,
+        131,
+        0
+      ],
+      [
+        301,
+        132,
+        0
+      ],
+      [
+        133,
+        302,
+        134
+      ],
+      [
+        304,
+        135,
+        0
+      ],
+      [
+        305,
+        136,
+        0
+      ],
+      [
+        137,
+        306,
+        138
+      ],
+      [
+        308,
+        139,
+        0
+      ],
+      [
+        309,
+        140,
+        0
+      ],
+      [
+        141,
+        310,
+        142
+      ],
+      [
+        312,
+        143,
+        0
+      ],
+      [
+        313,
+        144,
+        0
+      ],
+      [
+        145,
+        314,
+        146
+      ],
+      [
+        316,
+        147,
+        0
+      ],
+      [
+        317,
+        148,
+        0
+      ],
+      [
+        149,
+        318,
+        150
+      ],
+      [
+        320,
+        151,
+        0
+      ],
+      [
+        321,
+        152,
+        0
+      ],
+      [
+        153,
+        322,
+        154
+      ],
+      [
+        324,
+        155,
+        0
+      ],
+      [
+        325,
+        156,
+        0
+      ],
+      [
+        157,
+        326,
+        158
+      ],
+      [
+        328,
+        159,
+        0
+      ],
+      [
+        329,
+        160,
+        0
+      ],
+      [
+        161,
+        330,
+        162
+      ],
+      [
+        332,
+        163,
+        0
+      ],
+      [
+        333,
+        164,
+        0
+      ],
+      [
+        165,
+        334,
+        166
+      ],
+      [
+        336,
+        167,
+        0
+      ],
+      [
+        337,
+        168,
+        0
+      ],
+      [
+        338,
+        169,
+        0
+      ]
+    ],
+    "counts": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      3,
+      2,
+      2,
+      2
+    ],
+    "final_indices": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1
+    ],
+    "admitted_plane_major_slot_order": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        171
+      ],
+      [
+        3,
+        172
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        6,
+        175
+      ],
+      [
+        7,
+        176
+      ],
+      [
+        8,
+        9,
+        177
+      ],
+      [
+        10,
+        179
+      ],
+      [
+        11,
+        180
+      ],
+      [
+        12,
+        13,
+        181
+      ],
+      [
+        14,
+        183
+      ],
+      [
+        15,
+        184
+      ],
+      [
+        16,
+        17,
+        185
+      ],
+      [
+        18,
+        187
+      ],
+      [
+        19,
+        188
+      ],
+      [
+        20,
+        21,
+        189
+      ],
+      [
+        22,
+        191
+      ],
+      [
+        23,
+        192
+      ],
+      [
+        24,
+        25,
+        193
+      ],
+      [
+        26,
+        195
+      ],
+      [
+        27,
+        196
+      ],
+      [
+        28,
+        29,
+        197
+      ],
+      [
+        30,
+        199
+      ],
+      [
+        31,
+        200
+      ],
+      [
+        32,
+        33,
+        201
+      ],
+      [
+        34,
+        203
+      ],
+      [
+        35,
+        204
+      ],
+      [
+        36,
+        37,
+        205
+      ],
+      [
+        38,
+        207
+      ],
+      [
+        39,
+        208
+      ],
+      [
+        40,
+        41,
+        209
+      ],
+      [
+        42,
+        211
+      ],
+      [
+        43,
+        212
+      ],
+      [
+        44,
+        45,
+        213
+      ],
+      [
+        46,
+        215
+      ],
+      [
+        47,
+        216
+      ],
+      [
+        48,
+        49,
+        217
+      ],
+      [
+        50,
+        219
+      ],
+      [
+        51,
+        220
+      ],
+      [
+        52,
+        53,
+        221
+      ],
+      [
+        54,
+        223
+      ],
+      [
+        55,
+        224
+      ],
+      [
+        56,
+        57,
+        225
+      ],
+      [
+        58,
+        227
+      ],
+      [
+        59,
+        228
+      ],
+      [
+        60,
+        61,
+        229
+      ],
+      [
+        62,
+        231
+      ],
+      [
+        63,
+        232
+      ],
+      [
+        64,
+        65,
+        233
+      ],
+      [
+        66,
+        235
+      ],
+      [
+        67,
+        236
+      ],
+      [
+        68,
+        69,
+        237
+      ],
+      [
+        70,
+        239
+      ],
+      [
+        71,
+        240
+      ],
+      [
+        72,
+        73,
+        241
+      ],
+      [
+        74,
+        243
+      ],
+      [
+        75,
+        244
+      ],
+      [
+        76,
+        77,
+        245
+      ],
+      [
+        78,
+        247
+      ],
+      [
+        79,
+        248
+      ],
+      [
+        80,
+        81,
+        249
+      ],
+      [
+        82,
+        251
+      ],
+      [
+        83,
+        252
+      ],
+      [
+        84,
+        253
+      ],
+      [
+        85,
+        86
+      ],
+      [
+        87,
+        256
+      ],
+      [
+        88,
+        257
+      ],
+      [
+        89,
+        90
+      ],
+      [
+        91,
+        260
+      ],
+      [
+        92,
+        261
+      ],
+      [
+        93,
+        94,
+        262
+      ],
+      [
+        95,
+        264
+      ],
+      [
+        96,
+        265
+      ],
+      [
+        97,
+        98,
+        266
+      ],
+      [
+        99,
+        268
+      ],
+      [
+        100,
+        269
+      ],
+      [
+        101,
+        102,
+        270
+      ],
+      [
+        103,
+        272
+      ],
+      [
+        104,
+        273
+      ],
+      [
+        105,
+        106,
+        274
+      ],
+      [
+        107,
+        276
+      ],
+      [
+        108,
+        277
+      ],
+      [
+        109,
+        110,
+        278
+      ],
+      [
+        111,
+        280
+      ],
+      [
+        112,
+        281
+      ],
+      [
+        113,
+        114,
+        282
+      ],
+      [
+        115,
+        284
+      ],
+      [
+        116,
+        285
+      ],
+      [
+        117,
+        118,
+        286
+      ],
+      [
+        119,
+        288
+      ],
+      [
+        120,
+        289
+      ],
+      [
+        121,
+        122,
+        290
+      ],
+      [
+        123,
+        292
+      ],
+      [
+        124,
+        293
+      ],
+      [
+        125,
+        126,
+        294
+      ],
+      [
+        127,
+        296
+      ],
+      [
+        128,
+        297
+      ],
+      [
+        129,
+        130,
+        298
+      ],
+      [
+        131,
+        300
+      ],
+      [
+        132,
+        301
+      ],
+      [
+        133,
+        134,
+        302
+      ],
+      [
+        135,
+        304
+      ],
+      [
+        136,
+        305
+      ],
+      [
+        137,
+        138,
+        306
+      ],
+      [
+        139,
+        308
+      ],
+      [
+        140,
+        309
+      ],
+      [
+        141,
+        142,
+        310
+      ],
+      [
+        143,
+        312
+      ],
+      [
+        144,
+        313
+      ],
+      [
+        145,
+        146,
+        314
+      ],
+      [
+        147,
+        316
+      ],
+      [
+        148,
+        317
+      ],
+      [
+        149,
+        150,
+        318
+      ],
+      [
+        151,
+        320
+      ],
+      [
+        152,
+        321
+      ],
+      [
+        153,
+        154,
+        322
+      ],
+      [
+        155,
+        324
+      ],
+      [
+        156,
+        325
+      ],
+      [
+        157,
+        158,
+        326
+      ],
+      [
+        159,
+        328
+      ],
+      [
+        160,
+        329
+      ],
+      [
+        161,
+        162,
+        330
+      ],
+      [
+        163,
+        332
+      ],
+      [
+        164,
+        333
+      ],
+      [
+        165,
+        166,
+        334
+      ],
+      [
+        167,
+        336
+      ],
+      [
+        168,
+        337
+      ],
+      [
+        169,
+        338
+      ]
+    ]
+  },
+  "reset_contract": {
+    "counter_state_present": false,
+    "required_reset_us": 0.0,
+    "timed_total_formula": "main_us + fixup_us + required_reset_us"
+  },
+  "correctness": {
+    "all_partials_ascending": {
+      "finite": true,
+      "gpu_cpu_fold_bit_exact": true,
+      "written_slots_finite": true,
+      "untouched_slots_nan": true,
+      "reference_max_abs": 0.00067138671875,
+      "reference_mean_abs": 2.1467494661919773e-05,
+      "reference_max_rel": 0.4920634925365448,
+      "reference_failing_count": 0,
+      "reference_passed": true,
+      "written_partial_sha256": "924ee3a0166f770e03ce7e3f8ea35356da1f3c04370075cd5965a94921a58155",
+      "full_partial_sha256": "14d509484f4db97f1196aa958632d77e1e12abfe06797a79b21b08c2cf1ae3d8",
+      "pre_fix_output_sha256": "d19f20ec1e9731826755438d83552704116eae74dcb81cb398f93bbd83e344c9",
+      "final_output_sha256": "51ab501f46be3f395263a7655bd204c2397d385496eb3f1d440a3c3e4ef11205"
+    },
+    "llama_standalone_ascending": {
+      "finite": true,
+      "gpu_cpu_fold_bit_exact": true,
+      "written_slots_finite": true,
+      "untouched_slots_nan": true,
+      "reference_max_abs": 0.00067138671875,
+      "reference_mean_abs": 2.1467494661919773e-05,
+      "reference_max_rel": 0.4920634925365448,
+      "reference_failing_count": 0,
+      "reference_passed": true,
+      "written_partial_sha256": "c9f17b4daef9409e1a84d3f7ba9d716bff526afea542785f241ed80927d7796c",
+      "full_partial_sha256": "2451ea84d5f99cde3bae27f2cdbad774c3fee193f68dc615932fec33d5386498",
+      "pre_fix_output_sha256": "6f730b09954fac59e5a01fb5dda003f077a0dd98c8706db0635175031a38a186",
+      "final_output_sha256": "51ab501f46be3f395263a7655bd204c2397d385496eb3f1d440a3c3e4ef11205"
+    },
+    "llama_standalone_nonfinal_first": {
+      "finite": true,
+      "gpu_cpu_fold_bit_exact": true,
+      "written_slots_finite": true,
+      "untouched_slots_nan": true,
+      "reference_max_abs": 0.00067138671875,
+      "reference_mean_abs": 2.1467494661919773e-05,
+      "reference_max_rel": 0.4920634925365448,
+      "reference_failing_count": 0,
+      "reference_passed": true,
+      "written_partial_sha256": "c9f17b4daef9409e1a84d3f7ba9d716bff526afea542785f241ed80927d7796c",
+      "full_partial_sha256": "2451ea84d5f99cde3bae27f2cdbad774c3fee193f68dc615932fec33d5386498",
+      "pre_fix_output_sha256": "6f730b09954fac59e5a01fb5dda003f077a0dd98c8706db0635175031a38a186",
+      "final_output_sha256": "51ab501f46be3f395263a7655bd204c2397d385496eb3f1d440a3c3e4ef11205"
+    }
+  },
+  "candidate_anchor_diagnostics": {
+    "llama_standalone_ascending": {
+      "predecessor_partials_anchor_bit_exact": true,
+      "direct_final_anchor_bit_exact": true,
+      "final_output_anchor_bit_exact": true
+    },
+    "llama_standalone_nonfinal_first": {
+      "predecessor_partials_anchor_bit_exact": true,
+      "direct_final_anchor_bit_exact": true,
+      "final_output_anchor_bit_exact": true
+    }
+  },
+  "reference": {
+    "kind": "compiler_wide_direct",
+    "result": {
+      "shape": {
+        "M": 512,
+        "N": 4096,
+        "K": 12288
+      },
+      "identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+      "geometry": {
+        "tile": [
+          128,
+          128,
+          64
+        ],
+        "waves": [
+          2,
+          4
+        ],
+        "threads": 256,
+        "global_size": [
+          32,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          4
+        ],
+        "ctas": 128
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 2097152,
+        "max_abs": 0.001220703125,
+        "mean_abs": 3.766872760024853e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/wide/wide_direct.cubin",
+          "sass": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/wide/wide_direct.sass",
+          "returncode": 0,
+          "imma": 64,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 214,
+            "stack_bytes": 0,
+            "shared_bytes": 21504,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          500.192,
+          459.328,
+          458.784,
+          458.272,
+          457.952,
+          458.08,
+          458.272,
+          457.28,
+          457.824,
+          457.76,
+          458.272,
+          458.112,
+          458.08,
+          458.368,
+          458.144,
+          457.728,
+          458.048,
+          457.76,
+          457.76,
+          457.6,
+          457.76,
+          457.376,
+          457.536,
+          457.44,
+          457.152,
+          457.12,
+          456.96,
+          457.152,
+          457.12,
+          456.96,
+          457.056
+        ],
+        "min_us": 456.96,
+        "median_us": 457.76,
+        "max_us": 500.192
+      },
+      "passed": true
+    }
+  },
+  "structure": {
+    "all_partials_ascending": {
+      "wmma": 256,
+      "barriers": 4,
+      "ranges": [
+        1498,
+        1499
+      ],
+      "parameter_store_counts": {
+        "0": 64
+      },
+      "terminal_store_count": 64
+    },
+    "llama_standalone_ascending": {
+      "wmma": 256,
+      "barriers": 4,
+      "ranges": [
+        1498,
+        1499
+      ],
+      "parameter_store_counts": {
+        "0": 64,
+        "3": 64
+      },
+      "terminal_store_count": 128
+    },
+    "llama_standalone_nonfinal_first": {
+      "wmma": 256,
+      "barriers": 4,
+      "ranges": [
+        1498,
+        1499
+      ],
+      "parameter_store_counts": {
+        "0": 64,
+        "3": 64
+      },
+      "terminal_store_count": 128
+    }
+  },
+  "compiler": {
+    "all_partials_ascending": {
+      "main": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cu",
+        "source_bytes": 177839,
+        "source_sha256": "40cca7e5d0b11d37c7df5843206eaf0a27cbb128dd556f879f7b4f43ace324d3",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin",
+        "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+        "render_ms": 8380.361454095691,
+        "compile_ms": 283.80982857197523,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin",
+          "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+          "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+          "instruction_total": 5136,
+          "families": {
+            "BAR": 4,
+            "BRA": 4,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2": 69,
+            "I2F": 8,
+            "I2FP": 1024,
+            "IADD": 72,
+            "IADD3": 3,
+            "IDP": 1,
+            "IMAD": 25,
+            "IMMA": 256,
+            "ISETP": 1,
+            "LDC": 4,
+            "LDCU": 1,
+            "LDG": 109,
+            "LDS": 176,
+            "LDSM": 32,
+            "LEA": 42,
+            "LOP3": 211,
+            "MOV": 115,
+            "NOP": 8,
+            "PLOP3": 1,
+            "PRMT": 77,
+            "S2R": 8,
+            "S2UR": 3,
+            "SHF": 67,
+            "STG": 64,
+            "STS": 73,
+            "UIADD3": 13,
+            "UIMAD": 12,
+            "UISETP": 2,
+            "ULEA": 3,
+            "ULOP3": 1,
+            "UMOV": 7,
+            "UPLOP3": 4,
+            "USEL": 2,
+            "USHF": 3,
+            "UVIMNMX": 2
+          },
+          "opcodes": {
+            "BAR.SYNC.DEFER_BLOCKING": 4,
+            "BRA": 2,
+            "BRA.U": 2,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F.F16.F32": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2.F32": 69,
+            "I2F.S16": 4,
+            "I2F.S8": 4,
+            "I2FP.F32.S32": 1024,
+            "IADD": 41,
+            "IADD.64": 31,
+            "IADD3": 3,
+            "IDP.2A.LO.U16.U8": 1,
+            "IMAD": 17,
+            "IMAD.WIDE": 7,
+            "IMAD.WIDE.U32": 1,
+            "IMMA.16816.S8.S8": 256,
+            "ISETP.LT.U32.AND": 1,
+            "LDC": 1,
+            "LDC.64": 3,
+            "LDCU.64": 1,
+            "LDG.E": 36,
+            "LDG.E.U16": 73,
+            "LDS": 136,
+            "LDS.128": 36,
+            "LDS.64": 4,
+            "LDSM.16.M88.2": 32,
+            "LEA": 42,
+            "LOP3.LUT": 211,
+            "MOV": 115,
+            "NOP": 8,
+            "PLOP3.LUT": 1,
+            "PRMT": 77,
+            "S2R": 8,
+            "S2UR": 3,
+            "SHF.L.U32": 21,
+            "SHF.R.S32.HI": 4,
+            "SHF.R.U32.HI": 42,
+            "STG.E": 64,
+            "STS": 73,
+            "UIADD3": 13,
+            "UIMAD": 9,
+            "UIMAD.WIDE.U32": 3,
+            "UISETP.GE.AND": 1,
+            "UISETP.NE.U32.AND": 1,
+            "ULEA": 2,
+            "ULEA.HI": 1,
+            "ULOP3.LUT": 1,
+            "UMOV": 7,
+            "UPLOP3.LUT": 4,
+            "USEL": 2,
+            "USHF.R.U32.HI": 3,
+            "UVIMNMX.S32": 2
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 0,
+            "shared_static_bytes": 1024,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.resources.txt"
+        }
+      },
+      "fixup": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/fixup_all_partials_ascending.cu",
+        "source_bytes": 25261,
+        "source_sha256": "232cdd9fd88d51326419983712f08fdf2962f75fec77119a3faf14bfc7d582a4",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/fixup_all_partials_ascending.cubin",
+        "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+        "render_ms": 207.27500738576055,
+        "compile_ms": 12.481069657951593,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/fixup_all_partials_ascending.cubin",
+          "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+          "symbol": "nv_q6_ordered_fixup_all_partials",
+          "instruction_total": 672,
+          "families": {
+            "BRA": 10,
+            "CS2R": 121,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 3,
+            "IADD": 2,
+            "IMAD": 8,
+            "ISETP": 8,
+            "LDC": 5,
+            "LDCU": 1,
+            "LDG": 196,
+            "LDL": 4,
+            "LEA": 1,
+            "LOP3": 8,
+            "MOV": 7,
+            "NOP": 15,
+            "S2R": 4,
+            "SEL": 5,
+            "SHF": 9,
+            "STG": 64,
+            "STL": 8
+          },
+          "opcodes": {
+            "BRA": 10,
+            "CS2R": 121,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 3,
+            "IADD": 2,
+            "IMAD.WIDE": 6,
+            "IMAD.WIDE.U32": 2,
+            "ISETP.GE.AND": 3,
+            "ISETP.GT.AND": 5,
+            "LDC": 1,
+            "LDC.64": 4,
+            "LDCU.64": 1,
+            "LDG.E": 196,
+            "LDL.LU": 4,
+            "LEA": 1,
+            "LOP3.LUT": 8,
+            "MOV": 7,
+            "NOP": 15,
+            "S2R": 4,
+            "SEL": 5,
+            "SHF.L.U32": 8,
+            "SHF.R.U32.HI": 1,
+            "STG.E": 64,
+            "STL": 8
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 16,
+            "shared_static_bytes": 0,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 4,
+              "STL": 8,
+              "pcs": [
+                "0xd0",
+                "0xe0",
+                "0xf0",
+                "0x100",
+                "0x990",
+                "0x9a0",
+                "0x9b0",
+                "0x9c0",
+                "0x17d0",
+                "0x17e0",
+                "0x17f0",
+                "0x1800"
+              ],
+              "stack_offsets": {
+                "0x0": 3,
+                "0x4": 3,
+                "0x8": 3,
+                "0xc": 3
+              }
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/sass/fixup_all_partials_ascending-483de2ee3eed3597.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/sass/fixup_all_partials_ascending-483de2ee3eed3597.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/sass/fixup_all_partials_ascending-483de2ee3eed3597.resources.txt"
+        }
+      }
+    },
+    "llama_standalone_ascending": {
+      "main": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/main_llama_standalone_ascending.cu",
+        "source_bytes": 182875,
+        "source_sha256": "100f78ba1a08d1eab4f9beb00f1a3fabbcbe75a608698ee0fddb397c7bde1246",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/main_llama_standalone_ascending.cubin",
+        "cubin_sha256": "1f348eb29ab5d4d3442901af3970bab12b6cbdb69c4f352afc8182083f98c1a6",
+        "render_ms": 8605.749672744423,
+        "compile_ms": 276.411899831146,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/main_llama_standalone_ascending.cubin",
+          "cubin_sha256": "1f348eb29ab5d4d3442901af3970bab12b6cbdb69c4f352afc8182083f98c1a6",
+          "symbol": "nv_q6_llama_standalone_ascending",
+          "instruction_total": 5224,
+          "families": {
+            "BAR": 4,
+            "BRA": 6,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2": 69,
+            "I2F": 8,
+            "I2FP": 1024,
+            "IADD": 73,
+            "IADD3": 3,
+            "IDP": 1,
+            "IMAD": 26,
+            "IMMA": 256,
+            "ISETP": 1,
+            "LDC": 5,
+            "LDCU": 1,
+            "LDG": 109,
+            "LDS": 176,
+            "LDSM": 32,
+            "LEA": 45,
+            "LOP3": 214,
+            "MOV": 122,
+            "NOP": 9,
+            "PLOP3": 1,
+            "PRMT": 77,
+            "S2R": 8,
+            "S2UR": 3,
+            "SHF": 70,
+            "STG": 128,
+            "STS": 73,
+            "UIADD3": 14,
+            "UIMAD": 12,
+            "UISETP": 3,
+            "ULEA": 3,
+            "ULOP3": 1,
+            "UMOV": 7,
+            "UPLOP3": 4,
+            "USEL": 2,
+            "USHF": 3,
+            "UVIMNMX": 2
+          },
+          "opcodes": {
+            "BAR.SYNC.DEFER_BLOCKING": 4,
+            "BRA": 3,
+            "BRA.U": 3,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F.F16.F32": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2.F32": 69,
+            "I2F.S16": 4,
+            "I2F.S8": 4,
+            "I2FP.F32.S32": 1024,
+            "IADD": 42,
+            "IADD.64": 31,
+            "IADD3": 3,
+            "IDP.2A.LO.U16.U8": 1,
+            "IMAD": 17,
+            "IMAD.WIDE": 7,
+            "IMAD.WIDE.U32": 2,
+            "IMMA.16816.S8.S8": 256,
+            "ISETP.LT.U32.AND": 1,
+            "LDC": 1,
+            "LDC.64": 4,
+            "LDCU.64": 1,
+            "LDG.E": 36,
+            "LDG.E.U16": 73,
+            "LDS": 136,
+            "LDS.128": 36,
+            "LDS.64": 4,
+            "LDSM.16.M88.2": 32,
+            "LEA": 44,
+            "LEA.HI": 1,
+            "LOP3.LUT": 214,
+            "MOV": 122,
+            "NOP": 9,
+            "PLOP3.LUT": 1,
+            "PRMT": 77,
+            "S2R": 8,
+            "S2UR": 3,
+            "SHF.L.U32": 23,
+            "SHF.R.S32.HI": 4,
+            "SHF.R.U32.HI": 43,
+            "STG.E": 128,
+            "STS": 73,
+            "UIADD3": 14,
+            "UIMAD": 9,
+            "UIMAD.WIDE.U32": 3,
+            "UISETP.GE.AND": 1,
+            "UISETP.NE.U32.AND": 2,
+            "ULEA": 2,
+            "ULEA.HI": 1,
+            "ULOP3.LUT": 1,
+            "UMOV": 7,
+            "UPLOP3.LUT": 4,
+            "USEL": 2,
+            "USHF.R.U32.HI": 3,
+            "UVIMNMX.S32": 2
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 0,
+            "shared_static_bytes": 1024,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/sass/main_llama_standalone_ascending-1f348eb29ab5d4d3.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/sass/main_llama_standalone_ascending-1f348eb29ab5d4d3.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_ascending/sass/main_llama_standalone_ascending-1f348eb29ab5d4d3.resources.txt"
+        }
+      },
+      "fixup": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/fixup_llama_standalone_ascending.cu",
+        "source_bytes": 37201,
+        "source_sha256": "ee8046c12acbc5deaa69f86438637e5603d0102335c0f7f4ae23dedd064ff6cc",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/fixup_llama_standalone_ascending.cubin",
+        "cubin_sha256": "9d2f425e8072cc2b42b20c477ca251ae2166b25f45de86bbb3b0aecdb1b07358",
+        "render_ms": 254.52979188412428,
+        "compile_ms": 15.337987802922726,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/fixup_llama_standalone_ascending.cubin",
+          "cubin_sha256": "9d2f425e8072cc2b42b20c477ca251ae2166b25f45de86bbb3b0aecdb1b07358",
+          "symbol": "nv_q6_ordered_fixup_direct_final",
+          "instruction_total": 864,
+          "families": {
+            "BRA": 5,
+            "CS2R": 125,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 2,
+            "IADD": 3,
+            "IMAD": 8,
+            "ISETP": 12,
+            "LDC": 7,
+            "LDCU": 1,
+            "LDG": 389,
+            "LDL": 5,
+            "LEA": 1,
+            "LOP3": 9,
+            "MOV": 4,
+            "NOP": 13,
+            "S2R": 4,
+            "SEL": 3,
+            "SHF": 11,
+            "STG": 64,
+            "STL": 5
+          },
+          "opcodes": {
+            "BRA": 5,
+            "CS2R": 125,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 2,
+            "IADD": 3,
+            "IMAD.WIDE": 5,
+            "IMAD.WIDE.U32": 3,
+            "ISETP.EQ.U32.AND": 3,
+            "ISETP.GE.AND": 3,
+            "ISETP.GT.AND": 3,
+            "ISETP.GT.XOR": 3,
+            "LDC": 1,
+            "LDC.64": 6,
+            "LDCU.64": 1,
+            "LDG.E": 389,
+            "LDL.LU": 5,
+            "LEA": 1,
+            "LOP3.LUT": 9,
+            "MOV": 4,
+            "NOP": 13,
+            "S2R": 4,
+            "SEL": 3,
+            "SHF.L.U32": 9,
+            "SHF.R.U32.HI": 2,
+            "STG.E": 64,
+            "STL": 5
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 24,
+            "shared_static_bytes": 0,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 5,
+              "STL": 5,
+              "pcs": [
+                "0x1580",
+                "0x1590",
+                "0x15a0",
+                "0x15b0",
+                "0x15c0",
+                "0x23c0",
+                "0x23d0",
+                "0x23e0",
+                "0x2810",
+                "0x2820"
+              ],
+              "stack_offsets": {
+                "0x0": 2,
+                "0x4": 2,
+                "0x8": 2,
+                "0xc": 2,
+                "0x10": 2
+              }
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/sass/fixup_llama_standalone_ascending-9d2f425e8072cc2b.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/sass/fixup_llama_standalone_ascending-9d2f425e8072cc2b.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_ascending/sass/fixup_llama_standalone_ascending-9d2f425e8072cc2b.resources.txt"
+        }
+      }
+    },
+    "llama_standalone_nonfinal_first": {
+      "main": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/main_llama_standalone_nonfinal_first.cu",
+        "source_bytes": 189385,
+        "source_sha256": "d4c7b2465de3731d6dbf3f36db2e7e94dd3c5ddd1ce51aa3c6f73570b204f176",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/main_llama_standalone_nonfinal_first.cubin",
+        "cubin_sha256": "681a10d51bbb260a259135d357ee46fa0ea2ba900b310068aa0839cc776baebe",
+        "render_ms": 10436.84694217518,
+        "compile_ms": 278.3676739782095,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/main_llama_standalone_nonfinal_first.cubin",
+          "cubin_sha256": "681a10d51bbb260a259135d357ee46fa0ea2ba900b310068aa0839cc776baebe",
+          "symbol": "nv_q6_llama_standalone_nonfinal_first",
+          "instruction_total": 5576,
+          "families": {
+            "BAR": 4,
+            "BRA": 6,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2": 69,
+            "I2F": 8,
+            "I2FP": 1024,
+            "IADD": 140,
+            "IADD3": 1,
+            "IDP": 1,
+            "IMAD": 89,
+            "IMMA": 256,
+            "ISETP": 1,
+            "LDC": 5,
+            "LDCU": 1,
+            "LDG": 109,
+            "LDS": 176,
+            "LDSM": 32,
+            "LEA": 102,
+            "LOP3": 314,
+            "MOV": 118,
+            "NOP": 10,
+            "PLOP3": 1,
+            "PRMT": 77,
+            "S2R": 7,
+            "S2UR": 4,
+            "SHF": 130,
+            "STG": 128,
+            "STS": 73,
+            "UIADD3": 17,
+            "UIMAD": 13,
+            "UISETP": 6,
+            "ULEA": 3,
+            "ULOP3": 1,
+            "UMOV": 7,
+            "UPLOP3": 2,
+            "USEL": 4,
+            "USHF": 5,
+            "UVIMNMX": 3
+          },
+          "opcodes": {
+            "BAR.SYNC.DEFER_BLOCKING": 4,
+            "BRA": 3,
+            "BRA.U": 3,
+            "CS2R": 52,
+            "EXIT": 1,
+            "F2F.F16.F32": 8,
+            "FADD": 1024,
+            "FMUL": 1544,
+            "HADD2.F32": 69,
+            "I2F.S16": 4,
+            "I2F.S8": 4,
+            "I2FP.F32.S32": 1024,
+            "IADD": 109,
+            "IADD.64": 31,
+            "IADD3": 1,
+            "IDP.2A.LO.U16.U8": 1,
+            "IMAD": 17,
+            "IMAD.WIDE": 7,
+            "IMAD.WIDE.U32": 65,
+            "IMMA.16816.S8.S8": 256,
+            "ISETP.LT.U32.AND": 1,
+            "LDC": 1,
+            "LDC.64": 4,
+            "LDCU.64": 1,
+            "LDG.E": 36,
+            "LDG.E.U16": 73,
+            "LDS": 136,
+            "LDS.128": 36,
+            "LDS.64": 4,
+            "LDSM.16.M88.2": 32,
+            "LEA": 101,
+            "LEA.HI": 1,
+            "LOP3.LUT": 314,
+            "MOV": 118,
+            "NOP": 10,
+            "PLOP3.LUT": 1,
+            "PRMT": 77,
+            "S2R": 7,
+            "S2UR": 4,
+            "SHF.L.U32": 21,
+            "SHF.R.S32.HI": 4,
+            "SHF.R.U32.HI": 105,
+            "STG.E": 128,
+            "STS": 73,
+            "UIADD3": 17,
+            "UIMAD": 10,
+            "UIMAD.WIDE.U32": 3,
+            "UISETP.GE.AND": 1,
+            "UISETP.GE.U32.AND": 1,
+            "UISETP.GT.AND": 2,
+            "UISETP.NE.U32.AND": 2,
+            "ULEA": 2,
+            "ULEA.HI": 1,
+            "ULOP3.LUT": 1,
+            "UMOV": 7,
+            "UPLOP3.LUT": 2,
+            "USEL": 4,
+            "USHF.L.U32": 2,
+            "USHF.R.U32.HI": 3,
+            "UVIMNMX.S32": 3
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 0,
+            "shared_static_bytes": 1024,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/sass/main_llama_standalone_nonfinal_first-681a10d51bbb260a.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/sass/main_llama_standalone_nonfinal_first-681a10d51bbb260a.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_llama_standalone_nonfinal_first/sass/main_llama_standalone_nonfinal_first-681a10d51bbb260a.resources.txt"
+        }
+      },
+      "fixup": {
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/fixup_llama_standalone_nonfinal_first.cu",
+        "source_bytes": 37201,
+        "source_sha256": "ee8046c12acbc5deaa69f86438637e5603d0102335c0f7f4ae23dedd064ff6cc",
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/fixup_llama_standalone_nonfinal_first.cubin",
+        "cubin_sha256": "9d2f425e8072cc2b42b20c477ca251ae2166b25f45de86bbb3b0aecdb1b07358",
+        "render_ms": 0.1647421158850193,
+        "compile_ms": 15.325888991355896,
+        "sass": {
+          "schema": "tinygrad.nv_q6_sass_census.v1",
+          "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/fixup_llama_standalone_nonfinal_first.cubin",
+          "cubin_sha256": "9d2f425e8072cc2b42b20c477ca251ae2166b25f45de86bbb3b0aecdb1b07358",
+          "symbol": "nv_q6_ordered_fixup_direct_final",
+          "instruction_total": 864,
+          "families": {
+            "BRA": 5,
+            "CS2R": 125,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 2,
+            "IADD": 3,
+            "IMAD": 8,
+            "ISETP": 12,
+            "LDC": 7,
+            "LDCU": 1,
+            "LDG": 389,
+            "LDL": 5,
+            "LEA": 1,
+            "LOP3": 9,
+            "MOV": 4,
+            "NOP": 13,
+            "S2R": 4,
+            "SEL": 3,
+            "SHF": 11,
+            "STG": 64,
+            "STL": 5
+          },
+          "opcodes": {
+            "BRA": 5,
+            "CS2R": 125,
+            "EXIT": 1,
+            "FADD": 192,
+            "HFMA2": 2,
+            "IADD": 3,
+            "IMAD.WIDE": 5,
+            "IMAD.WIDE.U32": 3,
+            "ISETP.EQ.U32.AND": 3,
+            "ISETP.GE.AND": 3,
+            "ISETP.GT.AND": 3,
+            "ISETP.GT.XOR": 3,
+            "LDC": 1,
+            "LDC.64": 6,
+            "LDCU.64": 1,
+            "LDG.E": 389,
+            "LDL.LU": 5,
+            "LEA": 1,
+            "LOP3.LUT": 9,
+            "MOV": 4,
+            "NOP": 13,
+            "S2R": 4,
+            "SEL": 3,
+            "SHF.L.U32": 9,
+            "SHF.R.U32.HI": 2,
+            "STG.E": 64,
+            "STL": 5
+          },
+          "resources": {
+            "registers": 255,
+            "stack_bytes": 24,
+            "shared_static_bytes": 0,
+            "local_static_bytes": 0
+          },
+          "spill_regions": {
+            "pre_mma": {
+              "LDL": 5,
+              "STL": 5,
+              "pcs": [
+                "0x1580",
+                "0x1590",
+                "0x15a0",
+                "0x15b0",
+                "0x15c0",
+                "0x23c0",
+                "0x23d0",
+                "0x23e0",
+                "0x2810",
+                "0x2820"
+              ],
+              "stack_offsets": {
+                "0x0": 2,
+                "0x4": 2,
+                "0x8": 2,
+                "0xc": 2,
+                "0x10": 2
+              }
+            },
+            "mma_span": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            },
+            "post_mma": {
+              "LDL": 0,
+              "STL": 0,
+              "pcs": [],
+              "stack_offsets": {}
+            }
+          },
+          "notes": [
+            "Static instruction census only; these are not hardware performance counters.",
+            "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+          ]
+        },
+        "sass_artifacts": {
+          "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/sass/fixup_llama_standalone_nonfinal_first-9d2f425e8072cc2b.sass.json",
+          "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/sass/fixup_llama_standalone_nonfinal_first-9d2f425e8072cc2b.nvdisasm",
+          "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_llama_standalone_nonfinal_first/sass/fixup_llama_standalone_nonfinal_first-9d2f425e8072cc2b.resources.txt"
+        }
+      }
+    }
+  },
+  "resources": {
+    "all_partials_ascending": {
+      "main": {
+        "instruction_total": 5136,
+        "registers": 255,
+        "stack_bytes": 0,
+        "shared_static_bytes": 1024,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 256,
+          "LDSM": 32,
+          "LDG": 109,
+          "STG": 64,
+          "STS": 73,
+          "BAR": 4,
+          "LDL": 0,
+          "STL": 0,
+          "FADD": 1024,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      },
+      "fixup": {
+        "instruction_total": 672,
+        "registers": 255,
+        "stack_bytes": 16,
+        "shared_static_bytes": 0,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 0,
+          "LDSM": 0,
+          "LDG": 196,
+          "STG": 64,
+          "STS": 0,
+          "BAR": 0,
+          "LDL": 4,
+          "STL": 8,
+          "FADD": 192,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      }
+    },
+    "llama_standalone_ascending": {
+      "main": {
+        "instruction_total": 5224,
+        "registers": 255,
+        "stack_bytes": 0,
+        "shared_static_bytes": 1024,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 256,
+          "LDSM": 32,
+          "LDG": 109,
+          "STG": 128,
+          "STS": 73,
+          "BAR": 4,
+          "LDL": 0,
+          "STL": 0,
+          "FADD": 1024,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      },
+      "fixup": {
+        "instruction_total": 864,
+        "registers": 255,
+        "stack_bytes": 24,
+        "shared_static_bytes": 0,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 0,
+          "LDSM": 0,
+          "LDG": 389,
+          "STG": 64,
+          "STS": 0,
+          "BAR": 0,
+          "LDL": 5,
+          "STL": 5,
+          "FADD": 192,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      }
+    },
+    "llama_standalone_nonfinal_first": {
+      "main": {
+        "instruction_total": 5576,
+        "registers": 255,
+        "stack_bytes": 0,
+        "shared_static_bytes": 1024,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 256,
+          "LDSM": 32,
+          "LDG": 109,
+          "STG": 128,
+          "STS": 73,
+          "BAR": 4,
+          "LDL": 0,
+          "STL": 0,
+          "FADD": 1024,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      },
+      "fixup": {
+        "instruction_total": 864,
+        "registers": 255,
+        "stack_bytes": 24,
+        "shared_static_bytes": 0,
+        "local_static_bytes": 0,
+        "families": {
+          "IMMA": 0,
+          "LDSM": 0,
+          "LDG": 389,
+          "STG": 64,
+          "STS": 0,
+          "BAR": 0,
+          "LDL": 5,
+          "STL": 5,
+          "FADD": 192,
+          "FFMA": 0,
+          "ATOM": 0,
+          "MEMBAR": 0
+        }
+      }
+    }
+  },
+  "timing": {
+    "all_partials_ascending": {
+      "main": {
+        "r9": {
+          "samples_us": [
+            232.448,
+            232.128,
+            230.72,
+            230.848,
+            230.208,
+            230.912,
+            229.28,
+            231.232,
+            231.68
+          ],
+          "min_us": 229.28,
+          "median_us": 230.912,
+          "max_us": 232.448
+        },
+        "r31": {
+          "samples_us": [
+            232.448,
+            232.128,
+            230.72,
+            230.848,
+            230.208,
+            230.912,
+            229.28,
+            231.232,
+            231.68,
+            231.232,
+            232.0,
+            232.096,
+            231.648,
+            231.552,
+            232.672,
+            232.544,
+            231.104,
+            232.0,
+            231.392,
+            230.624,
+            231.104,
+            230.72,
+            229.536,
+            233.248,
+            229.76,
+            231.584,
+            230.944,
+            230.72,
+            229.44,
+            229.6,
+            232.032
+          ],
+          "min_us": 229.28,
+          "median_us": 231.232,
+          "max_us": 233.248
+        }
+      },
+      "fixup": {
+        "r9": {
+          "samples_us": [
+            24.864,
+            25.216,
+            24.864,
+            25.152,
+            25.152,
+            25.344,
+            24.832,
+            25.312,
+            25.056
+          ],
+          "min_us": 24.832,
+          "median_us": 25.152,
+          "max_us": 25.344
+        },
+        "r31": {
+          "samples_us": [
+            24.864,
+            25.216,
+            24.864,
+            25.152,
+            25.152,
+            25.344,
+            24.832,
+            25.312,
+            25.056,
+            24.768,
+            24.704,
+            25.216,
+            24.928,
+            25.056,
+            25.248,
+            25.312,
+            24.896,
+            25.12,
+            25.088,
+            25.056,
+            25.056,
+            25.088,
+            24.672,
+            25.344,
+            24.864,
+            25.312,
+            24.864,
+            25.12,
+            24.704,
+            24.992,
+            24.736
+          ],
+          "min_us": 24.672,
+          "median_us": 25.056,
+          "max_us": 25.344
+        }
+      },
+      "reset": {
+        "r9": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        },
+        "r31": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        }
+      },
+      "total": {
+        "r9": {
+          "samples_us": [
+            257.312,
+            257.344,
+            255.584,
+            256.0,
+            255.36,
+            256.25600000000003,
+            254.112,
+            256.544,
+            256.736
+          ],
+          "min_us": 254.112,
+          "median_us": 256.25600000000003,
+          "max_us": 257.344
+        },
+        "r31": {
+          "samples_us": [
+            257.312,
+            257.344,
+            255.584,
+            256.0,
+            255.36,
+            256.25600000000003,
+            254.112,
+            256.544,
+            256.736,
+            256.0,
+            256.704,
+            257.312,
+            256.576,
+            256.608,
+            257.92,
+            257.856,
+            256.0,
+            257.12,
+            256.48,
+            255.68,
+            256.16,
+            255.808,
+            254.208,
+            258.592,
+            254.624,
+            256.896,
+            255.808,
+            255.84,
+            254.144,
+            254.59199999999998,
+            256.76800000000003
+          ],
+          "min_us": 254.112,
+          "median_us": 256.25600000000003,
+          "max_us": 258.592
+        }
+      }
+    },
+    "llama_standalone_ascending": {
+      "main": {
+        "r9": {
+          "samples_us": [
+            231.296,
+            229.536,
+            230.624,
+            230.912,
+            230.624,
+            230.4,
+            230.336,
+            230.976,
+            231.584
+          ],
+          "min_us": 229.536,
+          "median_us": 230.624,
+          "max_us": 231.584
+        },
+        "r31": {
+          "samples_us": [
+            231.296,
+            229.536,
+            230.624,
+            230.912,
+            230.624,
+            230.4,
+            230.336,
+            230.976,
+            231.584,
+            231.456,
+            232.448,
+            230.528,
+            232.352,
+            231.648,
+            231.872,
+            231.328,
+            231.136,
+            229.408,
+            230.816,
+            229.76,
+            232.256,
+            230.08,
+            232.576,
+            229.728,
+            232.0,
+            229.824,
+            231.744,
+            231.424,
+            230.592,
+            230.048,
+            230.784
+          ],
+          "min_us": 229.408,
+          "median_us": 230.912,
+          "max_us": 232.576
+        }
+      },
+      "fixup": {
+        "r9": {
+          "samples_us": [
+            29.92,
+            29.696,
+            29.824,
+            29.952,
+            29.696,
+            29.6,
+            29.888,
+            29.888,
+            29.92
+          ],
+          "min_us": 29.6,
+          "median_us": 29.888,
+          "max_us": 29.952
+        },
+        "r31": {
+          "samples_us": [
+            29.92,
+            29.696,
+            29.824,
+            29.952,
+            29.696,
+            29.6,
+            29.888,
+            29.888,
+            29.92,
+            29.952,
+            29.792,
+            29.632,
+            29.6,
+            29.888,
+            30.208,
+            29.664,
+            30.176,
+            29.632,
+            29.952,
+            30.144,
+            29.76,
+            30.08,
+            30.464,
+            29.632,
+            29.632,
+            29.952,
+            29.92,
+            29.696,
+            29.664,
+            29.824,
+            30.016
+          ],
+          "min_us": 29.6,
+          "median_us": 29.888,
+          "max_us": 30.464
+        }
+      },
+      "reset": {
+        "r9": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        },
+        "r31": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        }
+      },
+      "total": {
+        "r9": {
+          "samples_us": [
+            261.216,
+            259.232,
+            260.448,
+            260.86400000000003,
+            260.32,
+            260.0,
+            260.224,
+            260.864,
+            261.504
+          ],
+          "min_us": 259.232,
+          "median_us": 260.448,
+          "max_us": 261.504
+        },
+        "r31": {
+          "samples_us": [
+            261.216,
+            259.232,
+            260.448,
+            260.86400000000003,
+            260.32,
+            260.0,
+            260.224,
+            260.864,
+            261.504,
+            261.408,
+            262.24,
+            260.15999999999997,
+            261.952,
+            261.536,
+            262.08000000000004,
+            260.992,
+            261.312,
+            259.03999999999996,
+            260.76800000000003,
+            259.904,
+            262.016,
+            260.16,
+            263.03999999999996,
+            259.36,
+            261.632,
+            259.776,
+            261.664,
+            261.12,
+            260.25600000000003,
+            259.872,
+            260.8
+          ],
+          "min_us": 259.03999999999996,
+          "median_us": 260.864,
+          "max_us": 263.03999999999996
+        }
+      }
+    },
+    "llama_standalone_nonfinal_first": {
+      "main": {
+        "r9": {
+          "samples_us": [
+            233.152,
+            232.64,
+            231.264,
+            231.744,
+            232.448,
+            231.264,
+            232.256,
+            231.552,
+            231.2
+          ],
+          "min_us": 231.2,
+          "median_us": 231.744,
+          "max_us": 233.152
+        },
+        "r31": {
+          "samples_us": [
+            233.152,
+            232.64,
+            231.264,
+            231.744,
+            232.448,
+            231.264,
+            232.256,
+            231.552,
+            231.2,
+            232.8,
+            232.32,
+            231.808,
+            233.44,
+            232.256,
+            231.872,
+            232.768,
+            232.512,
+            231.328,
+            231.136,
+            230.688,
+            231.2,
+            231.68,
+            233.632,
+            231.84,
+            231.872,
+            232.544,
+            231.52,
+            231.904,
+            232.864,
+            233.28,
+            231.776
+          ],
+          "min_us": 230.688,
+          "median_us": 231.872,
+          "max_us": 233.632
+        }
+      },
+      "fixup": {
+        "r9": {
+          "samples_us": [
+            29.248,
+            29.28,
+            29.28,
+            29.12,
+            29.024,
+            29.152,
+            29.408,
+            29.248,
+            29.344
+          ],
+          "min_us": 29.024,
+          "median_us": 29.248,
+          "max_us": 29.408
+        },
+        "r31": {
+          "samples_us": [
+            29.248,
+            29.28,
+            29.28,
+            29.12,
+            29.024,
+            29.152,
+            29.408,
+            29.248,
+            29.344,
+            29.888,
+            29.536,
+            29.056,
+            29.472,
+            29.728,
+            29.248,
+            29.888,
+            29.44,
+            29.408,
+            29.184,
+            29.376,
+            29.728,
+            29.344,
+            29.28,
+            29.28,
+            29.216,
+            29.472,
+            29.12,
+            29.344,
+            29.152,
+            29.792,
+            29.28
+          ],
+          "min_us": 29.024,
+          "median_us": 29.28,
+          "max_us": 29.888
+        }
+      },
+      "reset": {
+        "r9": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        },
+        "r31": {
+          "samples_us": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "min_us": 0.0,
+          "median_us": 0.0,
+          "max_us": 0.0
+        }
+      },
+      "total": {
+        "r9": {
+          "samples_us": [
+            262.4,
+            261.91999999999996,
+            260.544,
+            260.864,
+            261.472,
+            260.416,
+            261.664,
+            260.8,
+            260.544
+          ],
+          "min_us": 260.416,
+          "median_us": 260.864,
+          "max_us": 262.4
+        },
+        "r31": {
+          "samples_us": [
+            262.4,
+            261.91999999999996,
+            260.544,
+            260.864,
+            261.472,
+            260.416,
+            261.664,
+            260.8,
+            260.544,
+            262.688,
+            261.856,
+            260.864,
+            262.912,
+            261.984,
+            261.12,
+            262.656,
+            261.952,
+            260.736,
+            260.32,
+            260.06399999999996,
+            260.928,
+            261.024,
+            262.91200000000003,
+            261.12,
+            261.088,
+            262.016,
+            260.64,
+            261.248,
+            262.016,
+            263.072,
+            261.05600000000004
+          ],
+          "min_us": 260.06399999999996,
+          "median_us": 261.12,
+          "max_us": 263.072
+        }
+      }
+    }
+  },
+  "paired": {
+    "llama_ascending_minus_all_partials": {
+      "r9": {
+        "samples_us": [
+          3.9039999999999964,
+          1.8880000000000337,
+          4.863999999999976,
+          4.864000000000033,
+          4.9599999999999795,
+          3.7439999999999714,
+          6.111999999999995,
+          4.319999999999993,
+          4.768000000000029
+        ],
+        "min_us": 1.8880000000000337,
+        "median_us": 4.768000000000029,
+        "max_us": 6.111999999999995
+      },
+      "r31": {
+        "samples_us": [
+          3.9039999999999964,
+          1.8880000000000337,
+          4.863999999999976,
+          4.864000000000033,
+          4.9599999999999795,
+          3.7439999999999714,
+          6.111999999999995,
+          4.319999999999993,
+          4.768000000000029,
+          5.4080000000000155,
+          5.536000000000001,
+          2.8479999999999563,
+          5.375999999999976,
+          4.927999999999997,
+          4.160000000000025,
+          3.136000000000024,
+          5.312000000000012,
+          1.919999999999959,
+          4.288000000000011,
+          4.2239999999999895,
+          5.8559999999999945,
+          4.352000000000032,
+          8.831999999999965,
+          0.7680000000000291,
+          7.00800000000001,
+          2.8799999999999955,
+          5.8559999999999945,
+          5.280000000000001,
+          6.112000000000023,
+          5.28000000000003,
+          4.031999999999982
+        ],
+        "min_us": 0.7680000000000291,
+        "median_us": 4.863999999999976,
+        "max_us": 8.831999999999965
+      },
+      "paired_mad_us": 0.7039999999999509,
+      "candidate_wins": 0,
+      "pairs": 31
+    },
+    "nonfinal_first_minus_ascending_standalone": {
+      "r9": {
+        "samples_us": [
+          1.183999999999969,
+          2.6879999999999313,
+          0.09600000000000364,
+          -5.684341886080802e-14,
+          1.1519999999999868,
+          0.4159999999999968,
+          1.4399999999999977,
+          -0.06399999999996453,
+          -0.9600000000000364
+        ],
+        "min_us": -0.9600000000000364,
+        "median_us": 0.4159999999999968,
+        "max_us": 2.6879999999999313
+      },
+      "r31": {
+        "samples_us": [
+          1.183999999999969,
+          2.6879999999999313,
+          0.09600000000000364,
+          -5.684341886080802e-14,
+          1.1519999999999868,
+          0.4159999999999968,
+          1.4399999999999977,
+          -0.06399999999996453,
+          -0.9600000000000364,
+          1.2799999999999727,
+          -0.38400000000001455,
+          0.7040000000000077,
+          0.9599999999999795,
+          0.4479999999999791,
+          -0.9600000000000364,
+          1.6639999999999873,
+          0.6399999999999864,
+          1.6960000000000264,
+          -0.4480000000000359,
+          0.15999999999996817,
+          -1.0880000000000223,
+          0.8639999999999759,
+          -0.12799999999992906,
+          1.759999999999991,
+          -0.5439999999999827,
+          2.240000000000009,
+          -1.024000000000001,
+          0.1279999999999859,
+          1.759999999999991,
+          3.1999999999999886,
+          0.25600000000002865
+        ],
+        "min_us": -1.0880000000000223,
+        "median_us": 0.4479999999999791,
+        "max_us": 3.1999999999999886
+      },
+      "paired_mad_us": 0.8319999999999936,
+      "candidate_wins": 10,
+      "pairs": 31
+    }
+  },
+  "comparison_verdicts": {
+    "llama_ascending_minus_all_partials": {
+      "candidate": "llama_standalone_ascending",
+      "anchor": "all_partials_ascending",
+      "verdict": "REJECT_CANDIDATE",
+      "correctness_passed": true,
+      "materiality_threshold_us": 3.0,
+      "required_wins": 24
+    },
+    "nonfinal_first_minus_ascending_standalone": {
+      "candidate": "llama_standalone_nonfinal_first",
+      "anchor": "llama_standalone_ascending",
+      "verdict": "RETAIN_CONTROL_NO_MATERIAL_WIN",
+      "correctness_passed": true,
+      "materiality_threshold_us": 3.0,
+      "required_wins": 24
+    }
+  },
+  "launch_orders": [
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending",
+      "all_partials_ascending"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_ascending",
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending",
+      "all_partials_ascending"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_ascending",
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending",
+      "all_partials_ascending"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_ascending",
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending",
+      "all_partials_ascending"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_ascending",
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "all_partials_ascending",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending",
+      "all_partials_ascending"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first",
+      "llama_standalone_ascending"
+    ],
+    [
+      "llama_standalone_ascending",
+      "all_partials_ascending",
+      "llama_standalone_nonfinal_first"
+    ],
+    [
+      "all_partials_ascending",
+      "llama_standalone_ascending",
+      "llama_standalone_nonfinal_first"
+    ]
+  ],
+  "segment_order_confound": {
+    "intentional_arm": "llama_standalone_nonfinal_first",
+    "isolated_comparison": "nonfinal-first standalone versus ascending standalone"
+  },
+  "baselines": {
+    "llama_main_us": 201.216,
+    "llama_fixup_us": 8.64,
+    "llama_total_us": 209.856
+  },
+  "gpu_lock": {
+    "mode": "outer_flock_required",
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "acquired": true
+  },
+  "progress_unsafe_spin_implemented": false,
+  "correctness_passed": true,
+  "verdict": "QUALIFIED_REDUCTION_SEQUENCE"
+}

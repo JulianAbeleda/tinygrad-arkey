@@ -1,0 +1,131 @@
+{
+  "schema": "tinygrad.nv_q6_llama_panel1_ordering_mechanism_audit.v1",
+  "date": "2026-08-31",
+  "status": "complete_read_only",
+  "artifacts": {
+    "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "source": {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+      "sha256": "6d153a9d6f293a4ff5f11e7886a48bf765b21d74075d73b2097a2b2a9149de6f"
+    },
+    "cubin": {
+      "path": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+      "sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_"
+    },
+    "sass": {
+      "path": "docs/task_workflow/evidence/nv-q6-q8-panel1-binary-liveness-audit-20260831/llama.nvdisasm",
+      "sha256": "c97e22ee7b3fa81c7322eb52f07111f6c7aef3b7b1391c4f559ccf675e9a4802"
+    },
+    "q6_ptx": null,
+    "ptx_limitation": "Only CMake compiler-identification PTX files exist; no PTX for the audited Q6 function is available."
+  },
+  "source_mechanism": {
+    "traits_lines": "mmq.cuh:3374-3380",
+    "process_tile_lines": "mmq.cuh:3447-3521",
+    "loop_line": 3485,
+    "panel0_copy_line": 3493,
+    "phase0_vec_dot_line": 3499,
+    "panel1_copy_line": 3509,
+    "phase1_vec_dot_line": 3515,
+    "direct_call_lines": "mmq.cuh:3710-3713",
+    "partial_call_lines": "mmq.cuh:3779-3782",
+    "panel1_base_formula": "y + ncols_y * ((kb0 * qk / ne_block) * sz + sz)",
+    "panel1_address_formula": "panel1_base + l",
+    "address_inputs": ["y", "ncols_y", "kb0", "qk", "ne_block", "sz", "lane-derived l"],
+    "phase0_arithmetic_inputs": [],
+    "explicit_value_dependency_on_phase0": false,
+    "explicit_lexical_effect_boundary": true
+  },
+  "bodies": {
+    "direct": {
+      "extent": "0x0d80..0xeb50",
+      "initial_publication_barrier_pc": "0x3840",
+      "address_instructions": [
+        {"pc": "0x80b0", "sass": "LEA R4, P0, R64, R248, 0x2"},
+        {"pc": "0x80c0", "sass": "LEA.HI.X R5, R64, R247, R65, 0x2, P0"}
+      ],
+      "base_register": "R4.64",
+      "ldg_range": "0x80e0..0x8290",
+      "overwrite_barrier_pc": "0x8620",
+      "sts_range": "0x86e0..0x8870",
+      "publication_barrier_pc": "0x8890",
+      "instructions_first_ldg_to_overwrite_barrier": 83,
+      "tail_imma": 6,
+      "tail_scalar_lds": 9,
+      "pairs": [
+        [0,"0x80e0","R49","0x86e0",96],[1,"0x8100","R51","0x8770",103],[2,"0x8120","R52","0x8780",102],
+        [3,"0x8150","R53","0x8790",100],[4,"0x8160","R54","0x87a0",100],[5,"0x8170","R55","0x87b0",100],
+        [6,"0x8180","R64","0x87c0",100],[7,"0x81b0","R65","0x87d0",98],[8,"0x81e0","R177","0x87e0",96],
+        [9,"0x8210","R178","0x87f0",94],[10,"0x8220","R179","0x8800",94],[11,"0x8230","R47","0x8810",94],
+        [12,"0x8240","R50","0x8820",94],[13,"0x8250","R45","0x8830",94],[14,"0x8260","R46","0x8840",94],
+        [15,"0x8270","R44","0x8850",94],[16,"0x8280","R40","0x8860",94],[17,"0x8290","R42","0x8870",94]
+      ]
+    },
+    "partial": {
+      "extent": "0x12880..0x20780",
+      "initial_publication_barrier_pc": "0x15480",
+      "address_instructions": [
+        {"pc": "0x19cd0", "sass": "LEA R4, P0, R138, R144, 0x2"},
+        {"pc": "0x19ce0", "sass": "LEA.HI.X R5, R138, R145, R139, 0x2, P0"}
+      ],
+      "base_register": "R4.64",
+      "ldg_range": "0x19d00..0x19e20",
+      "overwrite_barrier_pc": "0x1a230",
+      "sts_range": "0x1a2f0..0x1a470",
+      "publication_barrier_pc": "0x1a4d0",
+      "instructions_first_ldg_to_overwrite_barrier": 82,
+      "tail_imma": 7,
+      "tail_scalar_lds": 8,
+      "pairs": [
+        [0,"0x19d70","R51","0x1a3a0",99],[1,"0x19d00","R55","0x1a2f0",95],[2,"0x19d60","R59","0x1a380",98],
+        [3,"0x19d80","R96","0x1a3c0",100],[4,"0x19d90","R97","0x1a3e0",101],[5,"0x19da0","R98","0x1a3f0",101],
+        [6,"0x19db0","R99","0x1a400",101],[7,"0x19dc0","R100","0x1a410",101],[8,"0x19dd0","R101","0x1a420",101],
+        [9,"0x19de0","R102","0x1a430",101],[10,"0x19df0","R103","0x1a440",101],[11,"0x19d20","R46","0x1a300",94],
+        [12,"0x19d30","R47","0x1a330",96],[13,"0x19d40","R44","0x1a340",96],[14,"0x19d50","R45","0x1a360",97],
+        [15,"0x19e00","R50","0x1a450",101],[16,"0x19e10","R48","0x1a460",101],[17,"0x19e20","R49","0x1a470",101]
+      ]
+    }
+  },
+  "liveness": {
+    "pairs_total": 36,
+    "zero_intervening_register_occurrences": 36,
+    "zero_intervening_redefinitions": 36,
+    "sts_is_death": 36,
+    "direct_ldsm_or_imma_uses": 0,
+    "role": "global_to_shared_transport_only"
+  },
+  "classification": [
+    {"mechanism":"explicit accumulator/value dependency orders LDG","verdict":"disproven"},
+    {"mechanism":"explicit shared-memory/control boundary introduces panel1","verdict":"proven"},
+    {"mechanism":"compiler splits copy and schedules LDG before boundary","verdict":"proven"},
+    {"mechanism":"physical template boundary supplies source placement","verdict":"proven_source_structure_causal_strength_unknown"},
+    {"mechanism":"short lifetime permits register reuse","verdict":"proven"},
+    {"mechanism":"register pressure determines exact placement","verdict":"inferred_not_proven"},
+    {"mechanism":"exact 82/83 instruction lead chosen by known heuristic","verdict":"unknown"}
+  ],
+  "gate9_contrast": {
+    "llama_address_graph": "small affine graph independent of phase0 arithmetic",
+    "gate9_address_graph": "INDEX structurally carried STRICT_AFTER dependency on live phase0 arithmetic DAG",
+    "direct_failure_stack": "initial symbolic -> simplify_valid -> valid.backward_slice -> UOp.toposort",
+    "define_reg_repair_failure_stack": "initial symbolic -> _commutative_key -> norm(u.tuplize)",
+    "repair_timeout_s": 240,
+    "candidate_sass_emitted": false
+  },
+  "minimal_design_implication": {
+    "principle": "ordering dependency must be semantically live but structurally opaque to value-expression recursion",
+    "representation": "store token_ref-to-producer as a scheduler/effect side edge; exclude producer DAG from INDEX validity, hashing, tuplize, range simplification, and address canonicalization",
+    "sharing": "one ordered base materialization feeds all 18 constant-offset loads",
+    "late_order": "producer -> ordered base materialization -> LDG -> STS",
+    "backend_failure_policy": "reject if the edge cannot be preserved",
+    "forbidden_effects": ["BAR", "MEMBAR", "extra global traffic", "extra shared traffic", "local memory", "spills"],
+    "prerequisite_test": "large arithmetic DAG plus one strict ordered base must compile within a fixed scaling bound and prove the final SASS order before Q6 integration"
+  },
+  "unknown": [
+    "CUDA front-end/NVVM versus ptxas ownership of the split/hoist",
+    "exact scheduling cost model",
+    "whether register pressure was decisive",
+    "dynamic latency overlap and scoreboard stalls",
+    "exact C-variable mapping of every LEA input register without PTX/debug metadata"
+  ]
+}

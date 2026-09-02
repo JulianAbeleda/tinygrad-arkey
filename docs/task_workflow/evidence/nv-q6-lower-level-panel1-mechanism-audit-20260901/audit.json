@@ -1,0 +1,193 @@
+{
+  "schema": "nv-q6-lower-level-panel1-mechanism-audit/v1",
+  "date": "2026-09-01",
+  "mode": "read-only",
+  "status": "real_q6_held_pending_synthetic_release",
+  "artifacts": {
+    "llama_source": {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+      "commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+      "sha256": "6d153a9d6f293a4ff5f11e7886a48bf765b21d74075d73b2097a2b2a9149de6f"
+    },
+    "llama_cubin": {
+      "path": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+      "sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_"
+    },
+    "llama_disassembly": {
+      "path": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-q8-panel1-binary-liveness-audit-20260831/llama.nvdisasm",
+      "sha256": "c97e22ee7b3fa81c7322eb52f07111f6c7aef3b7b1391c4f559ccf675e9a4802",
+      "nvdisasm_version": "12.8.55"
+    },
+    "gate12_source": {
+      "path": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-region-copy-panel1-gate12-20260831/fresh-artifacts/candidate/candidate.cu",
+      "sha256": "206ebe0ea6214fccfa6c389c19e6b4e6f1d9e0fcc38557495552710555e90017"
+    },
+    "gate12_cubin": {
+      "path": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-region-copy-panel1-gate12-20260831/fresh-artifacts/candidate/candidate.cubin",
+      "sha256": "dbecf56c280a10016ea73c4406d68dcb094c22691dc6e235b216c2e831347a24",
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_region_copy_q8_panel1_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0"
+    },
+    "admitted_main_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "admitted_fixup_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514"
+  },
+  "intermediates": {
+    "llama_ptx_present": false,
+    "llama_nvvm_present": false,
+    "gate12_ptx_present": false,
+    "gate12_nvvm_present": false,
+    "fatbin_section_present": false,
+    "cuobjdump_dump_ptx_empty": true,
+    "nv_info_language": "PTX",
+    "interpretation": "PTX was the ptxas input language, but no PTX or NVVM program is recoverable from either final cubin"
+  },
+  "toolchains": {
+    "common_embedded_ptxas": "13.2.86",
+    "common_build_string": "cuda_13.2.r13.2/compiler.37953736_0",
+    "llama_embedded_arch": "sm_120a",
+    "llama_available_local_options": ["-O3", "-DNDEBUG", "-std=c++17", "compute_120a", "sm_120a", "-use_fast_math", "-extended-lambda", "-compress-mode=size"],
+    "llama_exact_producer_command_known": false,
+    "gate12_frontend": "NVRTC direct cubin",
+    "gate12_options": ["--gpu-architecture=sm_120", "CUDA include path", "--minimal"],
+    "explicit_maxrregcount_found": false
+  },
+  "source_mechanism": {
+    "llama": {
+      "copy_form": "ordinary CUDA C++ tile_y[l] = by0[l] between two __syncthreads calls",
+      "q8_type": "const int *__restrict__",
+      "copy_function": "static __device__ __forceinline__ template",
+      "kernel_launch_bounds": [256, 1],
+      "inline_ptx_at_copy": false,
+      "cuda_load_intrinsic_at_copy": false,
+      "volatile": false,
+      "explicit_cache_operator": false,
+      "register_constraint": false,
+      "separate_copy_symbol": false
+    },
+    "gate12": {
+      "copy_form": "18 ordinary direct global-to-shared assignments between existing barriers",
+      "q8_type": "unsigned int *",
+      "kernel_launch_bounds": [256],
+      "inline_ptx_at_copy": false,
+      "volatile": false,
+      "explicit_cache_operator": false,
+      "named_panel_load_temporaries": 0,
+      "separate_copy_symbol": false
+    }
+  },
+  "elf": {
+    "common_flags": "0x6007802",
+    "llama": {"text_bytes_hex": "0x21c80", "registers": 255, "maxreg_attribute": 255, "frame_bytes": 72, "min_stack_bytes": 72, "static_shared_bytes": 1024, "max_threads": [256, 1, 1], "barrier_attribute": 1},
+    "gate12": {"text_bytes_hex": "0x14300", "registers": 255, "maxreg_attribute": 255, "frame_bytes": 32, "min_stack_bytes": 32, "static_shared_bytes": 1024, "max_threads": [256, 1, 1], "barrier_attribute": 1, "ldl": 8, "stl": 8}
+  },
+  "sass": {
+    "llama_direct": {
+      "address_defs": [{"pc": "0x80b0", "instruction": "LEA R4,P0,R64,R248,0x2"}, {"pc": "0x80c0", "instruction": "LEA.HI.X R5,R64,R247,R65,0x2,P0"}],
+      "address_operand": "R4.64",
+      "descriptor": "UR8",
+      "opcode": "LDG.E.CONSTANT",
+      "base_reuse": [{"register": "R4", "pc": "0x8410", "opcode": "IMMA"}, {"register": "R5", "pc": "0x8490", "opcode": "IMAD"}],
+      "overwrite_barrier_pc": "0x8620",
+      "publication_barrier_pc": "0x8890",
+      "first_load_to_first_store_ordinal_span": 96,
+      "per_value_span_range": [94, 103],
+      "tail_imma": 6,
+      "tail_lds": 9,
+      "pairs": [
+        [0,"0x80e0","R49","0x86e0","0x86f0","MOV"],[1,"0x8100","R51","0x8770","0x92d0","IMMA"],[2,"0x8120","R52","0x8780","0x89b0","LDS"],[3,"0x8150","R53","0x8790","0x9940","IMMA"],[4,"0x8160","R54","0x87a0","0x9940","IMMA"],[5,"0x8170","R55","0x87b0","0x9940","IMMA"],[6,"0x8180","R64","0x87c0","0x8f80","IMMA"],[7,"0x81b0","R65","0x87d0","0x8f80","IMMA"],[8,"0x81e0","R177","0x87e0","0x8a80","MOV"],[9,"0x8210","R178","0x87f0","0x8a60","MOV"],[10,"0x8220","R179","0x8800","0x97c0","FFMA"],[11,"0x8230","R47","0x8810","0x8910","IMMA"],[12,"0x8240","R50","0x8820","0x92d0","IMMA"],[13,"0x8250","R45","0x8830","0x8910","IMMA"],[14,"0x8260","R46","0x8840","0x8910","IMMA"],[15,"0x8270","R44","0x8850","0x8910","IMMA"],[16,"0x8280","R40","0x8860","0x89c0","IMMA"],[17,"0x8290","R42","0x8870","0x89c0","IMMA"]
+      ],
+      "pair_fields": ["logical_index","load_pc","transport_register","store_pc","first_post_store_reuse_pc","first_post_store_reuse_opcode"],
+      "intervening_transport_uses": 0
+    },
+    "llama_partial": {
+      "address_defs": [{"pc": "0x19cd0", "instruction": "LEA R4,..."}, {"pc": "0x19ce0", "instruction": "LEA.HI.X R5,..."}],
+      "address_operand": "R4.64",
+      "descriptor": "UR8",
+      "opcode": "LDG.E.CONSTANT",
+      "r4_reuse_pc": "0x19fe0",
+      "overwrite_barrier_pc": "0x1a230",
+      "publication_barrier_pc": "0x1a4d0",
+      "first_load_to_first_store_ordinal_span": 95,
+      "per_value_span_range": [94, 101],
+      "tail_imma": 7,
+      "tail_lds": 8,
+      "pairs": [
+        [0,"0x19d70","R51","0x1a3a0","0x1a620","IMMA"],[1,"0x19d00","R55","0x1a2f0","0x1a310","MOV"],[2,"0x19d60","R59","0x1a380","0x1a3b0","MOV"],[3,"0x19d80","R96","0x1a3c0","0x1ac60","IMMA"],[4,"0x19d90","R97","0x1a3e0","0x1ac60","IMMA"],[5,"0x19da0","R98","0x1a3f0","0x1ac60","IMMA"],[6,"0x19db0","R99","0x1a400","0x1ac60","IMMA"],[7,"0x19dc0","R100","0x1a410","0x1a600","MOV"],[8,"0x19dd0","R101","0x1a420","0x1ae20","IMMA"],[9,"0x19de0","R102","0x1a430","0x1ae20","IMMA"],[10,"0x19df0","R103","0x1a440","0x1ae20","IMMA"],[11,"0x19d20","R46","0x1a300","0x1a390","IMMA"],[12,"0x19d30","R47","0x1a330","0x1a390","IMMA"],[13,"0x19d40","R44","0x1a340","0x1a390","IMMA"],[14,"0x19d50","R45","0x1a360","0x1a390","IMMA"],[15,"0x19e00","R50","0x1a450","0x1a620","IMMA"],[16,"0x19e10","R48","0x1a460","0x1a620","IMMA"],[17,"0x19e20","R49","0x1a470","0x1a620","IMMA"]
+      ],
+      "pair_fields": ["logical_index","load_pc","transport_register","store_pc","first_post_store_reuse_pc","first_post_store_reuse_opcode"],
+      "intervening_transport_uses": 0
+    },
+    "gate12": {
+      "address_defs": [{"pc": "0x1830", "instruction": "LDC.64 R50,c[0][0x390]"}, {"pc": "0x1a50", "instruction": "IMAD.WIDE R50,R238,0x4,R50"}],
+      "address_operand": "R50.64",
+      "descriptor": "UR14",
+      "opcode": "LDG.E",
+      "offset_range": ["0x4800", "0x8c00"],
+      "offset_step_hex": "0x400",
+      "base_reuse": [{"register": "R50", "pc": "0x9aa0", "opcode": "FMUL"}, {"register": "R51", "pc": "0x9c50", "opcode": "FMUL"}],
+      "overwrite_barrier_pc": "0x9820",
+      "publication_barrier_pc": "0xa930",
+      "first_load_to_first_store_ordinal_span": 251,
+      "pairs": [
+        [0,"0x4800","0x9830","R126","0xa7e0","0xb080","LDSM"],[1,"0x4c00","0x9840","R127","0xa800","0x12780","I2FP"],[2,"0x5000","0x9850","R128","0xa820","0xb0b0","LDSM"],[3,"0x5400","0x9860","R129","0xa830","0x124d0","MOV"],[4,"0x5800","0x9870","R130","0xa840","0xb170","LDSM"],[5,"0x5c00","0x9880","R131","0xa850","0x12ca0","I2FP"],[6,"0x6000","0x9890","R141","0xa860","0x10590","FADD"],[7,"0x6400","0x98a0","R142","0xa870","0x105a0","FADD"],[8,"0x6800","0x98b0","R145","0xa880","0x12690","MOV"],[9,"0x6c00","0x98c0","R146","0xa890","0xb0d0","LDS.64"],[10,"0x7000","0x98d0","R147","0xa8a0","0xc8d0","HADD2"],[11,"0x7400","0x98e0","R148","0xa8b0","0xbbd0","HADD2"],[12,"0x7800","0x98f0","R149","0xa8c0","0xc230","HADD2"],[13,"0x7c00","0x9900","R150","0xa8d0","0xbb80","HADD2"],[14,"0x8000","0x9910","R117","0xa8e0","0x10ec0","I2FP"],[15,"0x8400","0x9920","R118","0xa8f0","0x111c0","I2FP"],[16,"0x8800","0x9930","R119","0xa900","0x11340","I2FP"],[17,"0x8c00","0x9940","R124","0xa910","0xb050","LDSM"]
+      ],
+      "pair_fields": ["logical_index","address_byte_offset","load_pc","transport_register","store_pc","first_post_store_reuse_pc","first_post_store_reuse_opcode"],
+      "intervening_transport_uses": 0
+    }
+  },
+  "classification": {
+    "proven": [
+      "llama has no copy-local inline PTX/intrinsic/volatile/cache operator/register constraint",
+      "llama copy template is forceinline and has no separate binary symbol",
+      "llama Q8 argument is const restrict; Gate12 Q8 argument is mutable unqualified",
+      "llama loads are pre-barrier LDG.E.CONSTANT; Gate12 loads are post-barrier LDG.E",
+      "all listed transport registers have zero intervening uses before STS",
+      "PTX and NVVM payloads are unavailable"
+    ],
+    "inferred": [
+      "const restrict may permit alias-safe global-load hoisting across the shared barrier",
+      "launch_bounds(256,1), sm_120a, frontend choice, and full register pressure may influence the schedule",
+      "llama's shorter address-base live range likely lowers pressure"
+    ],
+    "unknown": [
+      "which compiler axis is necessary or sufficient",
+      "whether LDG.E.CONSTANT is a cause or another consequence of alias analysis",
+      "the exact llama PTX/NVVM and producing nvcc command",
+      "any CUDA C guarantee of physical register allocation or SASS span"
+    ]
+  },
+  "mechanism_ranking": [
+    {"rank": 1, "mechanism": "none_source_attribute_matrix", "verdict": "recommended", "reason": "matches llama source and isolates proven differences"},
+    {"rank": 2, "mechanism": "inline_ptx_load_constraint", "verdict": "synthetic_fallback_only", "reason": "mechanically supported by current CUDA renderer but absent from llama and does not control ptxas allocation"},
+    {"rank": 3, "mechanism": "renderer_ptx_load_store_region", "verdict": "not_yet_supported_for_real_q6", "reason": "overconstrains overlap and needs stronger address-space and uniqueness gates"},
+    {"rank": 4, "mechanism": "separate_device_noinline_body", "verdict": "ruled_out", "reason": "contradicted by llama source/symbol evidence and risks call ABI/frame growth"}
+  ],
+  "synthetic_2x2": {
+    "lanes": {
+      "A": ["mutable pointer", "launch_bounds(256)", "sm_120"],
+      "B": ["const restrict pointer", "launch_bounds(256)", "sm_120"],
+      "C": ["mutable pointer", "launch_bounds(256,1)", "sm_120a"],
+      "D": ["const restrict pointer", "launch_bounds(256,1)", "sm_120a"]
+    },
+    "hard_gates": ["18 classified LDG and 18 classified STS", "all loads pre-overwrite-barrier and stores post-barrier", "first LDG to first STS span <=160", "no added BAR/MEMBAR/ATOM/CALL/RET/LOP3 or traffic", "frame/local/LDL/STL all zero", "no register increase versus A", "uint32 exactness", "repeat cubin SHA deterministic"],
+    "causal_limit": "the combined launch/architecture axis must be split later if it is the only positive axis"
+  },
+  "held_real_q6_plan": {
+    "implementation_file": "/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_q6_oracle_broad_cta.py",
+    "renderer_file": "/home/ubuntu/tinygrad-arkey/tinygrad/renderer/cstyle.py",
+    "compiler_file": "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/support/compiler_cuda.py",
+    "binding": ["qualify only immutable data2 as const unsigned int *__restrict__", "emit launch_bounds(256,1) only for isolated candidate if selected", "target sm_120a only for isolated candidate if selected", "retain 18 direct panel1 assignments and existing barriers"],
+    "source_gates": ["default rebuild equals admitted main SHA", "fixup SHA unchanged", "no store to data2", "zero named panel-load temporaries", "18 direct assignments", "no new barrier"],
+    "sass_gates": {"panel_ldg": 18, "panel_sts": 18, "span_max": 160, "IMMA": 256, "LDSM": 32, "LDS": 176, "LDG": 109, "STS": 73, "STG": 64, "BAR": 4, "instruction_max": 5144, "register_max": 255, "frame": 0, "local": 0, "LDL": 0, "STL": 0, "forbidden": ["added LOP3", "MEMBAR", "ATOM", "CALL", "RET"]},
+    "arithmetic_census": [1024, 1544, 1024, 0],
+    "correctness": ["trusted exactness", "partial uint32 identity", "final uint32 identity", "CPU/GPU fixup identity"],
+    "timing": {"baseline_us": 256.256, "pairs": 31, "required_wins": 24, "required_main_improvement_us": 3.0, "required_total_improvement_us": 3.0, "lock": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock"},
+    "repair_budget": 0,
+    "release_condition": "compiler synthetic selects an eligible lane; otherwise no real-Q6 compile"
+  },
+  "limitations": [
+    "No source line information or preserved IR proves a pass-level source-to-PC mapping; the copy windows are identified by unique 18-load/18-store binary dataflow and frozen prior liveness evidence.",
+    "The local llama compile commands are not proven to have produced the extracted cubin.",
+    "The disassembler version differs from the producing ptxas version; PCs and opcodes are final-binary facts, while producer optimization intent is not recoverable."
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "schema": "tinygrad.nv_q6_sass_census.v1",
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-partial-layout-microgate18-20260901/fixup_scatter_layout/fixup_scatter_layout.cubin",
+  "cubin_sha256": "ab74d83055b31093a100ca830cd53b75736b27524503b8966a7c6e6909dddc40",
+  "symbol": "fixup_scatter_layout",
+  "instruction_total": 72,
+  "families": {
+    "BRA": 2,
+    "EXIT": 1,
+    "FADD": 3,
+    "HFMA2": 1,
+    "IADD": 5,
+    "IMAD": 13,
+    "ISETP": 3,
+    "LDC": 5,
+    "LDCU": 1,
+    "LDG": 7,
+    "LEA": 2,
+    "LOP3": 5,
+    "NOP": 15,
+    "S2R": 3,
+    "SHF": 2,
+    "STG": 1,
+    "UIADD3": 1,
+    "UISETP": 1,
+    "UMOV": 1
+  },
+  "opcodes": {
+    "BRA": 1,
+    "BRA.U": 1,
+    "EXIT": 1,
+    "FADD": 3,
+    "HFMA2": 1,
+    "IADD": 2,
+    "IADD.64": 3,
+    "IMAD": 3,
+    "IMAD.SHL.U32": 4,
+    "IMAD.WIDE": 4,
+    "IMAD.WIDE.U32": 2,
+    "ISETP.GE.AND": 3,
+    "LDC": 1,
+    "LDC.64": 4,
+    "LDCU.64": 1,
+    "LDG.E": 7,
+    "LEA": 2,
+    "LOP3.LUT": 5,
+    "NOP": 15,
+    "S2R": 3,
+    "SHF.L.U32": 2,
+    "STG.E": 1,
+    "UIADD3": 1,
+    "UISETP.NE.U32.AND": 1,
+    "UMOV": 1
+  },
+  "resources": {
+    "registers": 20,
+    "stack_bytes": 0,
+    "shared_static_bytes": 0,
+    "local_static_bytes": 0
+  },
+  "spill_regions": {
+    "pre_mma": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    },
+    "mma_span": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    },
+    "post_mma": {
+      "LDL": 0,
+      "STL": 0,
+      "pcs": [],
+      "stack_offsets": {}
+    }
+  },
+  "notes": [
+    "Static instruction census only; these are not hardware performance counters.",
+    "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+  ]
+}

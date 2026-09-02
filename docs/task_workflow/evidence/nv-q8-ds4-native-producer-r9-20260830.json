@@ -1,0 +1,123 @@
+{
+  "benchmark": {
+    "k": 4096,
+    "launch": {
+      "llama_producer_global": [
+        512,
+        8,
+        1
+      ],
+      "llama_producer_local": [
+        128,
+        1,
+        1
+      ],
+      "native_pack_global": [
+        1179648,
+        1,
+        1
+      ]
+    },
+    "llama": {
+      "producer": {
+        "max_ms": 1.165412,
+        "median_ms": 0.785682,
+        "min_ms": 0.754703,
+        "samples_ms": [
+          1.165412,
+          0.81103,
+          0.785682,
+          0.767858,
+          0.764562,
+          0.96063,
+          0.89701,
+          0.754703,
+          0.758671
+        ]
+      }
+    },
+    "native": {
+      "combined": {
+        "max_ms": 7.87423,
+        "median_ms": 6.840563,
+        "min_ms": 6.75347,
+        "samples_ms": [
+          7.211277,
+          6.782244,
+          7.87423,
+          6.761204,
+          7.110549,
+          7.257414,
+          6.75347,
+          6.799966,
+          6.840563
+        ]
+      },
+      "metadata": {
+        "max_ms": 4.785293,
+        "median_ms": 4.250781,
+        "min_ms": 4.203534,
+        "samples_ms": [
+          4.785293,
+          4.253177,
+          4.203534,
+          4.356971,
+          4.21745,
+          4.215025,
+          4.209564,
+          4.322135,
+          4.250781
+        ]
+      },
+      "pack": {
+        "max_ms": 2.739771,
+        "median_ms": 2.601393,
+        "min_ms": 2.56275,
+        "samples_ms": [
+          2.739771,
+          2.650524,
+          2.565966,
+          2.56275,
+          2.65843,
+          2.581405,
+          2.601393,
+          2.598177,
+          2.708834
+        ]
+      }
+    },
+    "resources": {
+      "llama": null,
+      "native": null
+    },
+    "rounds": 9,
+    "rows": 512
+  },
+  "cases": [
+    {
+      "bytes": 4608,
+      "exact": true,
+      "first_mismatch": null,
+      "k": 4096,
+      "mismatch_bytes": 0,
+      "mismatch_records": 0,
+      "rows": 1
+    },
+    {
+      "bytes": 2359296,
+      "cpu_llama_mismatch_bytes": 0,
+      "exact": true,
+      "first_mismatch": null,
+      "k": 4096,
+      "llama_exact": true,
+      "llama_mismatch_bytes": 0,
+      "metadata_native_cpu": 0,
+      "mismatch_bytes": 0,
+      "mismatch_records": 0,
+      "q_native_cpu": 0,
+      "rows": 512
+    }
+  ],
+  "schema": "nv_q8_ds4_native_producer_gate/v1",
+  "status": "PASS"
+}
