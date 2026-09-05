@@ -71,7 +71,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
           partial+"    }\n")
   return prefix+owner_loop+math+stores+"  }\n}\n"
 
-def active_fixup_source(*, max_contributors:int=3) -> str:
+def active_fixup_source(*, max_contributors:int=2) -> str:
   if max_contributors < 2: raise ValueError("fixup requires at least two contributors")
   decl=','.join(f"s{i}=map[{max_contributors}*tile+{i}]" for i in range(max_contributors))
   adds=''.join(f"+(s{i}>=0?partials[s{i}*16384+z]:0)" for i in range(1,max_contributors))
