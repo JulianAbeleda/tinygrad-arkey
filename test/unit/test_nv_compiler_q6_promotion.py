@@ -114,3 +114,19 @@ def test_q4_down_streamk_input_abi_orders_words_before_record():
   validate_streamk_inputs(words,record)
   with pytest.raises(ValueError,match="sizes mismatch"):
     validate_streamk_inputs(record,words)
+
+def test_streamk_launch_preserves_canonical_argument_order():
+  from extra.llm_research.prefill.nv_compiler_q4k_down_pp512_binding import _streamk_main
+  from tinygrad.codegen.opt.packed_weight import PackedWeightTransform, Q8ActivationRecordTransform
+  words=Tensor.empty(PackedWeightTransform("Q4_K",4096,12288).packed_bytes//4,dtype=dtypes.uint32,device="CPU")
+  record=Tensor.empty(Q8ActivationRecordTransform(512,12288).storage_units,dtype=dtypes.uint32,device="CPU")
+  partial, ids, main = object(), object(), object()
+  class Output:
+    def uop_program(self, *args, fxn):
+      assert args == (partial, ids, words, record)
+      assert fxn() is main
+      return (self, *args)
+  out=Output()
+  assert _streamk_main(SimpleNamespace(main_program=main),out,partial,ids,words,record)[0] is out
+  with pytest.raises(ValueError,match="sizes mismatch"):
+    _streamk_main(SimpleNamespace(main_program=main),out,partial,ids,record,words)

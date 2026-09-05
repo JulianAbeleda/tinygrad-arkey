@@ -20,7 +20,7 @@ from extra.llm_research.prefill.nv_q8_k12288_source import source_k12288_record
 M,N,K,TILE_K=512,4096,12288,64
 PROJECTIONS_PER_MODEL=18
 RECORD_U32=(M*K+2*M*(K//32)*4)//4
-WORDS_U32=(N*(K//256)*36)//4
+WORDS_U32=PackedWeightTransform("Q4_K",N,K).packed_bytes//4
 
 def validate_streamk_inputs(words:Tensor, record:Tensor) -> None:
   """Fail closed on the transformed stream ABI: WORDS precedes RECORD."""
