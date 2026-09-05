@@ -7,6 +7,8 @@ existing packed tensor-core candidate body.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from tinygrad.codegen.opt.stream_k import StreamKSchedule
+from tinygrad.codegen.opt.persistent_accumulator import owner_segments
 from typing import Any
 
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -279,6 +281,20 @@ def q6_down_candidate_context() -> StreamKCandidateContext:
 def q4_down_candidate_context() -> StreamKCandidateContext:
   """Construct the closed, default-off Q4-down Stream-K context."""
   return StreamKCandidateContext(Q4_DOWN_STREAMK)
+
+def q4_down_fixup_map() -> tuple[tuple[int, ...], tuple[int, ...]]:
+  """Return ordered partial slots and active tiles from the canonical scheduler."""
+  g=Q4_DOWN_STREAMK
+  schedule=StreamKSchedule(g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners,8)
+  rows=[[] for _ in range(g.output_tiles)]
+  seen=set()
+  for owner in range(g.owners):
+    for seg in owner_segments(schedule,owner):
+      if not seg.direct and (seg.owner,seg.output_tile) not in seen:
+        rows[seg.output_tile].append(seg.partial_slot); seen.add((seg.owner,seg.output_tile))
+  rows=tuple(tuple(sorted(x,reverse=True)) for x in rows)
+  if any(len(x)>3 for x in rows): raise ValueError("Q4 down fixup exceeds three contributors")
+  return tuple(x for x in rows if x), tuple(i for i,x in enumerate(rows) if x)
 
 
 def emit_fixup_descriptor(context: StreamKCandidateContext) -> dict[str, Any]:

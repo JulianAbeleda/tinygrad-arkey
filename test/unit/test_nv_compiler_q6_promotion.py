@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import tinygrad.llm.model as model
 import pytest
 from extra.llm_research.prefill.nv_compiler_q6k_model_arm import _ordinary_prefill_jit, _captured_program_calls
-from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_candidate_context
+from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_candidate_context, q4_down_fixup_map
 from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
 
 
@@ -85,6 +85,9 @@ def test_q4_down_streamk_context_uses_wide_down_geometry():
   assert (g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners)==(512,4096,12288,128,128,64,170)
   assert g.output_tiles==128 and g.work_units==24576
   assert ctx.validate().partial_slots==340
+  rows,active=q4_down_fixup_map()
+  assert len(rows)==128 and len(active)==128 and {len(x) for x in rows}=={2,3}
+  assert sum(len(x) for x in rows)==290 and max(max(x) for x in rows)<340
 
 def test_q4_streamk_transform_accepts_down_emitted_abi_and_rejects_wrong_k():
   src='''extern "C" __global__ void __launch_bounds__(256) r(float* data0_2097152, unsigned int* data1_1966080, unsigned int* data2_7077888) {
