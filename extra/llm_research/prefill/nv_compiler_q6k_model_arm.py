@@ -52,7 +52,7 @@ def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
   return model.prefill_v2_jits.get((start_pos, greedy)) or (model.prefill_v2_greedy_jit if greedy else model.prefill_v2_jit) \
     if getattr(model.config, "prefill_v2", False) else (model.prefill_greedy_jit if greedy else model.prefill_jit)
 
-def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3, logits_path=""):
+def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3, logits_path="", diagnostics=True):
   """Run the normal model entrypoint and census its selected production graph."""
   from tinygrad import Tensor
   first = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(first); first_np=first.numpy().copy()
@@ -69,7 +69,7 @@ def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3, 
   jit = _ordinary_prefill_jit(model, 0, True)
   calls = _captured_program_calls(jit)
   diagnostic={"status":"NOT_RUN"}
-  if getattr(model.config, "prefill_v2", False):
+  if diagnostics and getattr(model.config, "prefill_v2", False):
     from tinygrad import TinyJit
     key=(0,True); original=model.prefill_v2_jits.get(key)
     try:
@@ -165,7 +165,7 @@ def main() -> None:
   ap.add_argument("--model",default=MODEL);ap.add_argument("--max-context",type=int,default=4608)
   ap.add_argument("--warmups",type=int,default=3);ap.add_argument("--rounds",type=int,default=9)
   ap.add_argument("--roles",default="ffn_down")
-  ap.add_argument("--structural-only",action="store_true")
+  ap.add_argument("--structural-only",action="store_true"); ap.add_argument("--skip-logits",action="store_true")
   ap.add_argument("--out",required=True);ap.add_argument("--logits-npz",default="");ap.add_argument("--boundary-probe-out",default="")
   ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="")
@@ -216,7 +216,7 @@ def main() -> None:
   model,_=load_model_and_tokenizer(args.model,args.max_context,seed=20260617)
   if args.arm == "ordinary":
     chunk=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
-    _ordinary_census(model, chunk, Tensor([0.0]), args.out, rounds=args.rounds, warmups=args.warmups, logits_path=args.logits_npz)
+    _ordinary_census(model, chunk, Tensor([0.0]), args.out, rounds=args.rounds, warmups=args.warmups, logits_path=args.logits_npz, diagnostics=not args.skip_logits)
     return
   _set_buffer_observer_phase("asset_prepare")
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate_capture=gate_asset.new_capture()
