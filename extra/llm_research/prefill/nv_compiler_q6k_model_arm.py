@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, pathlib, statistics, time
 from collections import Counter
 import numpy as np
+from tinygrad.uop.ops import Ops
 
 from tinygrad import Device, Tensor, TinyJit
 _buffer_observer_state = {"phase":"startup", "sample":None, "arm":os.environ.get("NV_Q6DOWN_OBSERVER_ARM"),
@@ -30,6 +31,37 @@ SOURCE_AUTHORITY = ("tinygrad/llm/model.py", "tinygrad/codegen/opt/packed_weight
   "tinygrad/codegen/opt/kernel_lds.py", "tinygrad/codegen/opt/postrange.py",
   "extra/llm_research/prefill/nv_compiler_q6k_pp512_binding.py",
   "extra/llm_research/prefill/nv_compiler_q6k_model_arm.py")
+
+def _captured_program_calls(jit):
+  """Extract PROGRAM calls from an actually selected TinyJit graph."""
+  if jit is None or getattr(jit, "captured", None) is None: return []
+  return [u for u in jit.captured.linear.toposort() if u.op is Ops.CALL and u.src and u.src[0].op is Ops.PROGRAM]
+
+def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
+  return model.prefill_v2_jits.get((start_pos, greedy)) or model.prefill_v2_jit
+
+def _ordinary_census(model, tokens, temperature, out_path):
+  """Run the normal model entrypoint and census its selected production graph."""
+  from tinygrad import Tensor
+  first = model(tokens, 0, temperature, use_flash=False, greedy=True)
+  Tensor.realize(first)
+  replay = model(tokens, 0, temperature, use_flash=False, greedy=True)
+  Tensor.realize(replay)
+  jit = _ordinary_prefill_jit(model, 0, True)
+  calls = _captured_program_calls(jit)
+  rows=[]
+  for block in model.blk:
+    for name in ("attn_q","attn_k","attn_v","attn_output","ffn_gate","ffn_up","ffn_down"):
+      lin=getattr(block,name,None)
+      if lin is not None: rows.append({"role":name,"overlay":getattr(lin,"_pf16_w",None) is not None,
+        "strategy":str(getattr(lin,"_prefill_selected_strategy",None)),"shape":list(getattr(lin,"weight",None).shape)})
+  payload={"schema":"tinygrad.nv_ordinary_prefill_census.v1","status":"OBSERVED" if calls and int(first.numpy().reshape(-1)[0])==int(replay.numpy().reshape(-1)[0]) else "FAIL",
+    "policy":{"prefill_policy":str(getattr(model.config,"prefill_policy",None)),"prefill_memory_plan":getattr(model.config,"prefill_memory_plan",None),
+      "prefill_concrete_kv":bool(getattr(model.config,"prefill_concrete_kv",False))},
+    "replay":{"finite":bool(np.isfinite(first.numpy()).all()),"same_token":bool(np.array_equal(first.numpy(),replay.numpy()))},
+    "overlay_roles":rows,"program_names":dict(Counter(_call_name(c) for c in calls)),"program_count":len(calls)}
+  _write(out_path,payload)
+  return payload
 
 
 def _write(path:str, payload:dict) -> None:
@@ -83,7 +115,7 @@ def _runner_boundary_observations(calls, *, phase:str) -> dict:
 
 
 def main() -> None:
-  ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True)
+  ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare","ordinary"),required=True)
   ap.add_argument("--model",default=MODEL);ap.add_argument("--max-context",type=int,default=4608)
   ap.add_argument("--warmups",type=int,default=3);ap.add_argument("--rounds",type=int,default=9)
   ap.add_argument("--roles",default="ffn_down")
@@ -119,11 +151,11 @@ def main() -> None:
     if not passed:raise SystemExit(1)
     return
 
-  if os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" \
-      or os.environ.get("NV_Q4_IMMA_PP512") is not None:
+  if args.arm != "ordinary" and (os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" \
+      or os.environ.get("NV_Q4_IMMA_PP512") is not None):
     raise SystemExit("both arms require compiler gate/up+K and no raw binding")
   q6_env=os.environ.get("NV_COMPILER_Q6_IMMA_PP512")
-  if (args.arm=="candidate" and q6_env not in (None,"1")) or (args.arm=="control" and q6_env!="0"):
+  if args.arm != "ordinary" and ((args.arm=="candidate" and q6_env not in (None,"1")) or (args.arm=="control" and q6_env!="0")):
     raise SystemExit("candidate uses the promoted Q6 default (or env=1); control requires Q6 env=0")
   active_roles=frozenset(args.roles.split(","))
   if not active_roles or not active_roles.issubset({"attn_v","ffn_down"}):raise SystemExit("roles must be attn_v and/or ffn_down")
@@ -136,6 +168,10 @@ def main() -> None:
   from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import binding_for as k_binding_for
   _set_buffer_observer_phase("model_load")
   model,_=load_model_and_tokenizer(args.model,args.max_context,seed=20260617)
+  if args.arm == "ordinary":
+    chunk=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
+    _ordinary_census(model, chunk, Tensor([0.0]), args.out)
+    return
   _set_buffer_observer_phase("asset_prepare")
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate_capture=gate_asset.new_capture()
   k_asset=k_binding_for("NV");k_asset.prepare_records(36);k_asset.install_warmstart(model);k_capture=k_asset.new_capture()

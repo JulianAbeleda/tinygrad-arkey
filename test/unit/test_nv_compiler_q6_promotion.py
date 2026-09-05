@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import tinygrad.llm.model as model
+from extra.llm_research.prefill.nv_compiler_q6k_model_arm import _ordinary_prefill_jit, _captured_program_calls
 
 
 def _env(values):
@@ -52,3 +53,9 @@ def test_compiler_k_lease_is_closed_off_nv_and_on_llama_override(monkeypatch):
   monkeypatch.setattr(model, "getenv", _env({"NV_LLAMA_PACKED_Q4K_PP512":1}))
   monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="NV"))
   assert not model._nv_compiler_q4_imma_k_pp512_enabled(config)
+
+def test_ordinary_census_selects_concrete_capture():
+  class J: pass
+  m=J(); m.prefill_v2_jits={(0,True):"concrete"}; m.prefill_v2_jit="fallback"
+  assert _ordinary_prefill_jit(m,0,True) == "concrete"
+  assert _ordinary_prefill_jit(m,1,True) == "fallback"
