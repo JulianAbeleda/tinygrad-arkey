@@ -37,6 +37,17 @@ def _captured_program_calls(jit):
   if jit is None or getattr(jit, "captured", None) is None: return []
   return [u for u in jit.captured.linear.toposort() if u.op is Ops.CALL and u.src and u.src[0].op is Ops.PROGRAM]
 
+def _projection_identity_counts(calls):
+  out=Counter()
+  for call in calls:
+    try:
+      ctx=call.src[0].src[0].arg.candidate_context
+      ident=ctx.canonical_identity
+      geom=(tuple(call.src[0].arg.global_size),tuple(call.src[0].arg.local_size))
+      out[(ident,geom)] += 1
+    except (AttributeError,IndexError): pass
+  return out
+
 def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
   return model.prefill_v2_jits.get((start_pos, greedy)) or (model.prefill_v2_greedy_jit if greedy else model.prefill_v2_jit) \
     if getattr(model.config, "prefill_v2", False) else (model.prefill_greedy_jit if greedy else model.prefill_jit)
@@ -68,14 +79,16 @@ def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3, 
       dmid=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*dmid)
       d1=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*d1)
       d1_np=tuple(x.numpy().copy() for x in d1)
-      dnames=Counter(_call_name(c) for c in _captured_program_calls(model.prefill_v2_jits[key]))
+      dcalls=_captured_program_calls(model.prefill_v2_jits[key])
+      dnames=Counter(_call_name(c) for c in dcalls)
       projection_names={n:int(v) for n,v in dnames.items() if any(x in n for x in ("q8_","q6_","nv_q6","prefill_wmma"))}
       ordinary_names=Counter(_call_name(c) for c in calls)
       diagnostic={"status":"OBSERVED","same_token":bool(np.array_equal(d0_np[0],d1_np[0])),
         "finite_logits":bool(np.isfinite(d1_np[1]).all()),"same_logits_exact":bool(np.array_equal(d0_np[1],d1_np[1])),
         "max_abs_replay":float(np.max(np.abs(d0_np[1]-d1_np[1]))),
         "program_count":len(_captured_program_calls(model.prefill_v2_jits[key])),"token":int(d1_np[0].reshape(-1)[0]),
-        "projection_programs_match":all(ordinary_names.get(n)==v for n,v in projection_names.items()),
+        "projection_programs_match":_projection_identity_counts(calls)==_projection_identity_counts(dcalls),
+        "projection_identity_count":len(_projection_identity_counts(calls)),
         "projection_program_names":projection_names}
       if logits_path: np.savez(logits_path, token=np.int64(d1_np[0].reshape(-1)[0]), logits=d1_np[1])
     finally:
