@@ -177,8 +177,10 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
   return captures[jit]
 
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
-  """Separate default-off lease for the exact Q4_K K projection population."""
-  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and _nv_compiler_q4_imma_pp512_qualified(config)
+  """Generated K lease follows the selected compiler gate/up route only."""
+  explicit = _nv_q4_imma_pp512_mode()
+  selected = explicit == "compiler" or (explicit is None and Device.DEFAULT == "NV")
+  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
@@ -1711,7 +1713,7 @@ class Transformer:
       # gate/up parameters directly.  Keeping their unused fp16 overlays would
       # violate the representation contract and needlessly retain ~7 GiB on
       # Qwen3-8B.  Every non-exact role/shape preserves the normal overlay.
-      if getenv("NV_COMPILER_Q4_IMMA_PP512", 0) and _nv_compiler_q4_imma_pp512_qualified(self.config) and isinstance(lin, Q4KPrimitiveLinear) and \
+      if _nv_q4_production_mode(self.config) == "compiler" and isinstance(lin, Q4KPrimitiveLinear) and \
           getattr(lin, "_prefill_graph_role", None) == "ffn_gate_up" and \
           (self.config.prefill_ubatch, out_f, in_f) == (512, 12288, 4096):
         continue
