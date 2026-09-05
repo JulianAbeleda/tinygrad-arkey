@@ -1842,7 +1842,7 @@ class Transformer:
         return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, sampled),
                                                     Transformer._bound_position_var_vals(start_pos))
     _logits = self.logits(tokens, start_pos)
-    logits = _logits if _logits.shape[1] == 1 else _logits[:, -1, :]
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
     native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
     _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
     sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
