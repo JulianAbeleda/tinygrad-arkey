@@ -41,14 +41,40 @@ def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
   return model.prefill_v2_jits.get((start_pos, greedy)) or (model.prefill_v2_greedy_jit if greedy else model.prefill_v2_jit) \
     if getattr(model.config, "prefill_v2", False) else (model.prefill_greedy_jit if greedy else model.prefill_jit)
 
-def _ordinary_census(model, tokens, temperature, out_path):
+def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3):
   """Run the normal model entrypoint and census its selected production graph."""
   from tinygrad import Tensor
   first = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(first); first_np=first.numpy().copy()
   model(tokens, 0, temperature, use_flash=False, greedy=True).realize()
   replay = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(replay); replay_np=replay.numpy().copy()
+  from tinygrad import Device
+  for _ in range(warmups):
+    out=model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(out)
+  samples=[]
+  for _ in range(rounds):
+    Device[Device.DEFAULT].synchronize(); started=time.perf_counter_ns()
+    out=model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(out)
+    Device[Device.DEFAULT].synchronize(); samples.append((time.perf_counter_ns()-started)/1e6)
   jit = _ordinary_prefill_jit(model, 0, True)
   calls = _captured_program_calls(jit)
+  diagnostic={"status":"NOT_RUN"}
+  if getattr(model.config, "prefill_v2", False):
+    from tinygrad import TinyJit
+    key=(0,True); original=model.prefill_v2_jits.get(key)
+    try:
+      model.prefill_v2_jits[key]=TinyJit(model.forward_greedy_with_logits)
+      d0=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*d0)
+      d0_np=tuple(x.numpy().copy() for x in d0)
+      dmid=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*dmid)
+      d1=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*d1)
+      d1_np=tuple(x.numpy().copy() for x in d1)
+      diagnostic={"status":"OBSERVED","same_token":bool(np.array_equal(d0_np[0],d1_np[0])),
+        "finite_logits":bool(np.isfinite(d1_np[1]).all()),"same_logits_exact":bool(np.array_equal(d0_np[1],d1_np[1])),
+        "max_abs_replay":float(np.max(np.abs(d0_np[1]-d1_np[1]))),
+        "program_count":len(_captured_program_calls(model.prefill_v2_jits[key]))}
+    finally:
+      if original is None: model.prefill_v2_jits.pop(key,None)
+      else: model.prefill_v2_jits[key]=original
   rows=[]
   for block in model.blk:
     for name in ("attn_q","attn_k","attn_v","attn_output","ffn_gate","ffn_up","ffn_down"):
@@ -59,7 +85,8 @@ def _ordinary_census(model, tokens, temperature, out_path):
     "policy":{"prefill_policy":str(getattr(model.config,"prefill_policy",None)),"prefill_memory_plan":getattr(model.config,"prefill_memory_plan",None),
       "prefill_concrete_kv":bool(getattr(model.config,"prefill_concrete_kv",False))},
     "replay":{"token_finite":bool(np.isfinite(first_np).all() and np.isfinite(replay_np).all()),"same_token":bool(np.array_equal(first_np,replay_np)),"logits":"not_returned_by_greedy_entrypoint"},
-    "overlay_roles":rows,"program_names":dict(Counter(_call_name(c) for c in calls)),"program_count":len(calls)}
+    "overlay_roles":rows,"program_names":dict(Counter(_call_name(c) for c in calls)),"program_count":len(calls),"diagnostic_logits":diagnostic,
+    "wall":{"rounds":rounds,"warmups":warmups,"samples_ms":samples,"min_ms":min(samples),"median_ms":float(np.median(samples))}}
   _write(out_path,payload)
   return payload
 
@@ -170,7 +197,7 @@ def main() -> None:
   model,_=load_model_and_tokenizer(args.model,args.max_context,seed=20260617)
   if args.arm == "ordinary":
     chunk=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
-    _ordinary_census(model, chunk, Tensor([0.0]), args.out)
+    _ordinary_census(model, chunk, Tensor([0.0]), args.out, rounds=args.rounds, warmups=args.warmups)
     return
   _set_buffer_observer_phase("asset_prepare")
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate_capture=gate_asset.new_capture()
