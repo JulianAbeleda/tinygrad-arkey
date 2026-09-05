@@ -71,12 +71,16 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
           partial+"    }\n")
   return prefix+owner_loop+math+stores+"  }\n}\n"
 
-def active_fixup_source() -> str:
-  return r'''extern "C" __global__ void q4k_imma_fixup_active(float *out,const float *partials,const int *map,const int *active,int M,int N) {
-    int tile=active[blockIdx.x],s0=map[2*tile],s1=map[2*tile+1],nb=(tile%(N/128))*128,mb=(tile/(N/128))*128;
-    for (int z=threadIdx.x;z<16384;z+=256) { int r=z/128,c=z%128;
-      out[(mb+r)*N+nb+c]=partials[s0*16384+z]+(s1>=0?partials[s1*16384+z]:0); }
-  }'''
+def active_fixup_source(*, max_contributors:int=3) -> str:
+  if max_contributors < 2: raise ValueError("fixup requires at least two contributors")
+  decl=','.join(f"s{i}=map[{max_contributors}*tile+{i}]" for i in range(max_contributors))
+  adds=''.join(f"+(s{i}>=0?partials[s{i}*16384+z]:0)" for i in range(1,max_contributors))
+  return f'''extern "C" __global__ void q4k_imma_fixup_active(float *out,const float *partials,const int *map,const int *active,int M,int N) {{
+    int tile=active[blockIdx.x],{decl},nb=(tile%(N/128))*128,mb=(tile/(N/128))*128;
+    if(s0<0)return;
+    for (int z=threadIdx.x;z<16384;z+=256) {{ int r=z/128,c=z%128;
+      out[(mb+r)*N+nb+c]=partials[s0*16384+z]{adds}; }}
+  }}'''
 
 __all__=["BOUNDARY_QUANTUM","K_BLOCKS","OWNERS","OUTPUT_TILES","PARTIAL_SLOTS","TILE_ELEMENTS",
          "TILES_N","WORK_UNITS","active_fixup_source","transform_compiler_q4k_to_streamk"]

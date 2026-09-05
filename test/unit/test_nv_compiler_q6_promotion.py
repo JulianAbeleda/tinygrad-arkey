@@ -4,7 +4,7 @@ import tinygrad.llm.model as model
 import pytest
 from extra.llm_research.prefill.nv_compiler_q6k_model_arm import _ordinary_prefill_jit, _captured_program_calls
 from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_candidate_context
-from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk
+from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
 
 
 def _env(values):
@@ -100,3 +100,5 @@ def test_q4_streamk_transform_accepts_down_emitted_abi_and_rejects_wrong_k():
   assert "q4_down_streamk" in out and "Ridx0 = k_begin; Ridx0 < k_end" in out and "partials+(slot*16384)" in out
   with pytest.raises(ValueError,match="K loop"):
     transform_compiler_q4k_to_streamk(src,tiles_n=32,k_blocks=64,output_stride=4096)
+  fix=active_fixup_source(max_contributors=3)
+  assert "map[3*tile+2]" in fix and "s2>=0" in fix
