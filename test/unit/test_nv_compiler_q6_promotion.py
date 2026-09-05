@@ -4,6 +4,7 @@ import tinygrad.llm.model as model
 import pytest
 from extra.llm_research.prefill.nv_compiler_q6k_model_arm import _ordinary_prefill_jit, _captured_program_calls
 from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_candidate_context
+from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk
 
 
 def _env(values):
@@ -84,3 +85,18 @@ def test_q4_down_streamk_context_uses_wide_down_geometry():
   assert (g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners)==(512,4096,12288,128,128,64,170)
   assert g.output_tiles==128 and g.work_units==24576
   assert ctx.validate().partial_slots==340
+
+def test_q4_streamk_transform_accepts_down_emitted_abi_and_rejects_wrong_k():
+  src='''extern "C" __global__ void __launch_bounds__(256) r(float* data0_2097152, unsigned int* data1_1966080, unsigned int* data2_7077888) {
+  int gidx0 = blockIdx.x; /* 32 */
+  int gidx1 = blockIdx.y; /* 4 */
+  float buf0[64];
+  (*(buf0+0)) = 0.0f;
+  for (int Ridx0 = 0; Ridx0 < 192; Ridx0++) { (*(buf0+1)) = 0.0f; }
+  int alu242 = 0;
+  *((float2*)((data0_2097152+alu242))) = make_float2((*(buf0+0)),(*(buf0+32)));
+}'''
+  out=transform_compiler_q4k_to_streamk(src,tiles_n=32,k_blocks=192,output_stride=4096,kernel_name="q4_down_streamk")
+  assert "q4_down_streamk" in out and "Ridx0 = k_begin; Ridx0 < k_end" in out and "partials+(slot*16384)" in out
+  with pytest.raises(ValueError,match="K loop"):
+    transform_compiler_q4k_to_streamk(src,tiles_n=32,k_blocks=64,output_stride=4096)
