@@ -38,15 +38,15 @@ def _captured_program_calls(jit):
   return [u for u in jit.captured.linear.toposort() if u.op is Ops.CALL and u.src and u.src[0].op is Ops.PROGRAM]
 
 def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
-  return model.prefill_v2_jits.get((start_pos, greedy)) or model.prefill_v2_jit
+  return model.prefill_v2_jits.get((start_pos, greedy)) or (model.prefill_v2_greedy_jit if greedy else model.prefill_v2_jit) \
+    if getattr(model.config, "prefill_v2", False) else (model.prefill_greedy_jit if greedy else model.prefill_jit)
 
 def _ordinary_census(model, tokens, temperature, out_path):
   """Run the normal model entrypoint and census its selected production graph."""
   from tinygrad import Tensor
-  first = model(tokens, 0, temperature, use_flash=False, greedy=True)
-  Tensor.realize(first)
-  replay = model(tokens, 0, temperature, use_flash=False, greedy=True)
-  Tensor.realize(replay)
+  first = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(first); first_np=first.numpy().copy()
+  model(tokens, 0, temperature, use_flash=False, greedy=True).realize()
+  replay = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(replay); replay_np=replay.numpy().copy()
   jit = _ordinary_prefill_jit(model, 0, True)
   calls = _captured_program_calls(jit)
   rows=[]
@@ -55,10 +55,10 @@ def _ordinary_census(model, tokens, temperature, out_path):
       lin=getattr(block,name,None)
       if lin is not None: rows.append({"role":name,"overlay":getattr(lin,"_pf16_w",None) is not None,
         "strategy":str(getattr(lin,"_prefill_selected_strategy",None)),"shape":list(getattr(lin,"weight",None).shape)})
-  payload={"schema":"tinygrad.nv_ordinary_prefill_census.v1","status":"OBSERVED" if calls and int(first.numpy().reshape(-1)[0])==int(replay.numpy().reshape(-1)[0]) else "FAIL",
+  payload={"schema":"tinygrad.nv_ordinary_prefill_census.v1","status":"OBSERVED" if calls and int(first_np.reshape(-1)[0])==int(replay_np.reshape(-1)[0]) else "FAIL",
     "policy":{"prefill_policy":str(getattr(model.config,"prefill_policy",None)),"prefill_memory_plan":getattr(model.config,"prefill_memory_plan",None),
       "prefill_concrete_kv":bool(getattr(model.config,"prefill_concrete_kv",False))},
-    "replay":{"finite":bool(np.isfinite(first.numpy()).all()),"same_token":bool(np.array_equal(first.numpy(),replay.numpy()))},
+    "replay":{"token_finite":bool(np.isfinite(first_np).all() and np.isfinite(replay_np).all()),"same_token":bool(np.array_equal(first_np,replay_np)),"logits":"not_returned_by_greedy_entrypoint"},
     "overlay_roles":rows,"program_names":dict(Counter(_call_name(c) for c in calls)),"program_count":len(calls)}
   _write(out_path,payload)
   return payload

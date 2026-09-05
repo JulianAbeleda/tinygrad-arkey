@@ -56,6 +56,6 @@ def test_compiler_k_lease_is_closed_off_nv_and_on_llama_override(monkeypatch):
 
 def test_ordinary_census_selects_concrete_capture():
   class J: pass
-  m=J(); m.prefill_v2_jits={(0,True):"concrete"}; m.prefill_v2_jit="fallback"
+  m=J(); m.config=SimpleNamespace(prefill_v2=True); m.prefill_v2_jits={(0,True):"concrete"}; m.prefill_v2_greedy_jit="fallback"
   assert _ordinary_prefill_jit(m,0,True) == "concrete"
   assert _ordinary_prefill_jit(m,1,True) == "fallback"
