@@ -235,6 +235,10 @@ class MappedLogicalRange:
 
 Q4_STREAMK = StreamKGeometry("q4", 512, 12288, 4096, 128, 128, 64)
 Q6_DOWN_STREAMK = StreamKGeometry("q6_down", 512, 4096, 12288, 64, 32, 64)
+# Q4_K down uses the wide compiler tile and the same 170-owner K64 work
+# partition.  This is metadata for the future graph-owned provider; it does
+# not enable a route by itself.
+Q4_DOWN_STREAMK = StreamKGeometry("q4_down", 512, 4096, 12288, 128, 128, 64)
 
 
 @dataclass(frozen=True)
@@ -271,6 +275,10 @@ class StreamKCandidateContext:
 def q6_down_candidate_context() -> StreamKCandidateContext:
   """Construct the closed, default-off Q6-down research context."""
   return StreamKCandidateContext(Q6_DOWN_STREAMK)
+
+def q4_down_candidate_context() -> StreamKCandidateContext:
+  """Construct the closed, default-off Q4-down Stream-K context."""
+  return StreamKCandidateContext(Q4_DOWN_STREAMK)
 
 
 def emit_fixup_descriptor(context: StreamKCandidateContext) -> dict[str, Any]:

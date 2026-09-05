@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import tinygrad.llm.model as model
 import pytest
 from extra.llm_research.prefill.nv_compiler_q6k_model_arm import _ordinary_prefill_jit, _captured_program_calls
+from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_candidate_context
 
 
 def _env(values):
@@ -77,3 +78,9 @@ def test_ordinary_census_selects_concrete_capture():
   m=J(); m.config=SimpleNamespace(prefill_v2=True); m.prefill_v2_jits={(0,True):"concrete"}; m.prefill_v2_greedy_jit="fallback"
   assert _ordinary_prefill_jit(m,0,True) == "concrete"
   assert _ordinary_prefill_jit(m,1,True) == "fallback"
+
+def test_q4_down_streamk_context_uses_wide_down_geometry():
+  ctx=q4_down_candidate_context(); g=ctx.schedule
+  assert (g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners)==(512,4096,12288,128,128,64,170)
+  assert g.output_tiles==128 and g.work_units==24576
+  assert ctx.validate().partial_slots==340
