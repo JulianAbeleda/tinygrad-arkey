@@ -47,6 +47,8 @@ def test_compiler_k_lease_is_closed_off_nv_and_on_llama_override(monkeypatch):
   monkeypatch.setattr(model, "getenv", _env({}))
   monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="CPU"))
   assert not model._nv_compiler_q4_imma_k_pp512_enabled(config)
+  monkeypatch.setattr(model, "getenv", _env({"NV_COMPILER_Q4_IMMA_PP512":1}))
+  assert not model._nv_compiler_q4_imma_k_pp512_enabled(config)
   monkeypatch.setattr(model, "getenv", _env({"NV_LLAMA_PACKED_Q4K_PP512":1}))
   monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="NV"))
   assert not model._nv_compiler_q4_imma_k_pp512_enabled(config)

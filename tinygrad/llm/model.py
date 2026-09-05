@@ -179,7 +179,7 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   """Generated K lease follows the selected compiler gate/up route only."""
   explicit = _nv_q4_imma_pp512_mode()
-  selected = explicit == "compiler" or (explicit is None and Device.DEFAULT == "NV")
+  selected = Device.DEFAULT == "NV" and (explicit == "compiler" or explicit is None)
   return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
@@ -786,18 +786,18 @@ class FFNBlock:
             _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
         if not (_mode == "llama" and _nv_llama_packed_gate_up_epilogue_enabled(self.config)):
           h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
-        if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
+        if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and hasattr(self, "_nv_compiler_q6_imma_pp512_binding") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
           # The ordinary overlay route casts this post-SiLU product before
           # GEMM. Preserve that exact boundary for the native fp16 producer.
           down_input = h.reshape(512, 12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill, prefill_activation,
             self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
               model_family="qwen3_8b", role="ffn_down").reshape(x.shape[:-1]+(4096,)))
-        if _nv_llama_packed_q6k_down_enabled(self.config) and isinstance(self.ffn_down,Q6KPrimitiveLinear):
+        if _nv_llama_packed_q6k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q6k_down_pp512_binding") and isinstance(self.ffn_down,Q6KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(
             down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
-        if _nv_llama_packed_q4k_down_enabled(self.config) and isinstance(self.ffn_down,Q4KPrimitiveLinear):
+        if _nv_llama_packed_q4k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q4k_down_pp512_binding.project(
             down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
@@ -1962,11 +1962,11 @@ class Transformer:
     if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
       from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
       _nv_compiler_o_binding=compiler_o_binding_for("NV"); _nv_compiler_o_binding.prepare(len(self.blk))
-    if is_prefill_v2 and (_nv_llama_full_packed_pp512_enabled(self.config) or getenv("NV_LLAMA_PACKED_QKV_PP512",0)):
+    if is_prefill_v2 and (_nv_q4_production_mode(self.config) == "llama" or getenv("NV_LLAMA_PACKED_QKV_PP512",0)):
       if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed QKV requires exact Qwen3-8B pp512 topology")
       from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as qkv_binding_for
       _nv_qkv_binding=qkv_binding_for("NV")
-    if is_prefill_v2 and (_nv_llama_full_packed_pp512_enabled(self.config) or getenv("NV_LLAMA_PACKED_O_PP512",0)):
+    if is_prefill_v2 and (_nv_q4_production_mode(self.config) == "llama" or getenv("NV_LLAMA_PACKED_O_PP512",0)):
       if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed O requires exact Qwen3-8B pp512 topology")
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as o_binding_for
       _nv_o_binding=o_binding_for("NV"); _nv_o_binding.prepare_records(len(self.blk))
