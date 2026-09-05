@@ -15,7 +15,7 @@ def test_implicit_llama_consumers_follow_projection_stack(monkeypatch, override)
     n_heads=32, n_kv_heads=8, head_dim=128, num_experts=0)
   monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="NV"))
   monkeypatch.setattr(model, "getenv", _env({}))
-  assert not model._nv_llama_prefill_role_enabled(config, override)
+  assert model._nv_llama_prefill_role_enabled(config, override)
   monkeypatch.setattr(model, "getenv", _env({"NV_COMPILER_Q4_IMMA_K_PP512":0}))
   assert model._nv_llama_prefill_role_enabled(config, override)
   monkeypatch.setattr(model, "getenv", _env({override:1}))
@@ -49,6 +49,8 @@ def test_ordinary_qualified_mode_selects_generated_stack(monkeypatch):
     n_heads=32, n_kv_heads=8, head_dim=128, num_experts=0)
   monkeypatch.setattr(model, "getenv", _env({}))
   monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="NV"))
+  assert model._nv_q4_production_mode(config) == "llama"
+  monkeypatch.setattr(model, "getenv", _env({"NV_COMPILER_Q4_IMMA_PP512":1,"NV_COMPILER_Q4_IMMA_K_PP512":1}))
   assert model._nv_q4_production_mode(config) == "compiler"
 
 def test_q6_rollback_keeps_llama_down_lease(monkeypatch):

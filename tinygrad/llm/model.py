@@ -183,8 +183,8 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   """Generated K lease follows the selected compiler gate/up route only."""
   explicit = _nv_q4_imma_pp512_mode()
-  selected = Device.DEFAULT == "NV" and (explicit == "compiler" or explicit is None)
-  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
+  selected = Device.DEFAULT == "NV" and explicit == "compiler"
+  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 0)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
