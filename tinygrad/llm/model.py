@@ -146,6 +146,10 @@ def _nv_qkv_packed_capture(model,jit,binding):
   if jit not in captures: captures[jit]=binding.new_capture()
   return captures[jit]
 
+def _nv_llama_prefill_role_enabled(config, override:str) -> bool:
+  """Implicit llama consumers must follow the same stack as packed projections."""
+  return Device.DEFAULT == "NV" and bool(getenv(override, int(_nv_q4_production_mode(config) == "llama")))
+
 def _nv_llama_packed_o_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_o_pp512_captures",None)
   if captures is None: captures=model._nv_llama_packed_o_pp512_captures={}
@@ -167,8 +171,8 @@ def _nv_llama_packed_q6k_down_capture(model,jit,binding):
   return captures[jit]
 
 def _nv_llama_packed_q4k_down_enabled(config)->bool:
-  return (_nv_llama_full_packed_pp512_enabled(config) or
-          (bool(getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config)))
+  return ((_nv_q4_production_mode(config) == "llama") or
+          (bool(getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0)) and _nv_compiler_q4_imma_pp512_qualified(config)))
 
 def _nv_llama_packed_q4k_down_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_q4k_down_pp512_captures",None)
@@ -1259,7 +1263,7 @@ class TransformerBlock(FFNBlock):
     # uses it because its wrapped write slot is not a logical context length.
     _o_q8 = None
     _o_q8_fine = False
-    if getenv("NV_LLAMA_FATTN_MMA_PP512", getenv("NV_LLAMA_FULL_PACKED_PP512", 1)) and Device.DEFAULT == "NV" and _ring_freqs is None and not _ring_full and \
+    if _nv_llama_prefill_role_enabled(self.config, "NV_LLAMA_FATTN_MMA_PP512") and _ring_freqs is None and not _ring_full and \
        not self.config.kv_quant and isinstance(start_pos, int) and start_pos == 0 and isinstance(B, int) and B == 1 and \
        isinstance(T, int) and T == 512 and self.config.n_heads == 32 and self.config.n_kv_heads == 8 and \
        self.config.head_dim == 128 and mask is not None:
@@ -1774,7 +1778,7 @@ class Transformer:
     with role_metadata("rms_norm"):
       x = _prefill_semantic(_prefill, prefill_scratch,
         _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
-    if _prefill and getenv("NV_LLAMA_Q6_VOCAB_PP512",getenv("NV_LLAMA_FULL_PACKED_PP512",1)) and Device.DEFAULT=="NV" and tuple(x.shape)==(1,512,4096) and \
+    if _prefill and _nv_llama_prefill_role_enabled(self.config,"NV_LLAMA_Q6_VOCAB_PP512") and tuple(x.shape)==(1,512,4096) and \
        self.config.vocab_size==151936 and isinstance(self.output,Q6KPrimitiveLinear):
       from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for
       logits=binding_for("NV").project(x[0,-1].cast(dtypes.float32).contiguous(),self.output.prefill_packed_weight())
