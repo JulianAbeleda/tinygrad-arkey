@@ -21,7 +21,7 @@ class StreamKDownAsset:
   def producer(self): return self.base.producer
 
 @cache
-def _streamk_asset(device):
+def _streamk_asset(device, unroll=None):
   from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
   from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_fixup_map
   from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
@@ -29,7 +29,7 @@ def _streamk_asset(device):
   base = _asset_for(device)
   sources = [u.arg for u in base.main_program.src if u.op is Ops.SOURCE]
   if len(sources) != 1: raise ValueError("Q4 down asset must retain one compiler source")
-  source = transform_compiler_q4k_to_streamk(sources[0], tiles_n=32, k_blocks=192, output_stride=N, kernel_name="q4_down_streamk")
+  source = transform_compiler_q4k_to_streamk(sources[0], unroll=unroll, tiles_n=32, k_blocks=192, output_stride=N, kernel_name="q4_down_streamk")
   fixup_source = active_fixup_source(max_contributors=3)
   compiler = NVRTCCompiler(Device[device].arch, ptx=False, cache_key="q4_down_graph_streamk_v1")
   def program(name, text, grid, block, outs, ins, vals=()):
@@ -88,7 +88,8 @@ class DownCapture:
     self.cursor+=1
     return _project(self.asset,x,words,**kw)
 
-def binding_for(device="NV", *, variant="wide"):
+def binding_for(device="NV", *, variant="wide", streamk_unroll=None):
   if variant not in ("wide", "streamk"): raise ValueError(f"unknown Q4 down variant {variant}")
-  return _streamk_asset(device) if variant == "streamk" else _asset_for(device)
-def capture_for(device="NV", *, variant="wide"): return DownCapture(binding_for(device, variant=variant))
+  if streamk_unroll not in (None,1,2,4,8): raise ValueError("streamk_unroll must be one of 1,2,4,8")
+  return _streamk_asset(device, streamk_unroll) if variant == "streamk" else _asset_for(device)
+def capture_for(device="NV", *, variant="wide", streamk_unroll=None): return DownCapture(binding_for(device, variant=variant, streamk_unroll=streamk_unroll))
