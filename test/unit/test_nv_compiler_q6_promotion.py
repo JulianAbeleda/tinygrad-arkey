@@ -26,3 +26,17 @@ def test_generated_q6_down_has_explicit_rollback_and_preempts_llama(monkeypatch)
   monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q6_IMMA_PP512":1}))
   assert model._nv_compiler_q6_imma_role_enabled(config,"ffn_down")
   assert not model._nv_llama_packed_q6k_down_enabled(config)
+
+def test_ordinary_qualified_mode_selects_generated_stack(monkeypatch):
+  config=SimpleNamespace(prefill_ubatch=512, num_blocks=36, dim=4096, hidden_dim=12288,
+    n_heads=32, n_kv_heads=8, head_dim=128, num_experts=0)
+  monkeypatch.setattr(model, "getenv", _env({}))
+  monkeypatch.setattr(model, "Device", SimpleNamespace(DEFAULT="NV"))
+  assert model._nv_q4_production_mode(config) == "compiler"
+
+def test_q6_rollback_keeps_llama_down_lease(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_compiler_q4_imma_k_pp512_enabled",lambda _:True)
+  monkeypatch.setattr(model,"_nv_llama_full_packed_pp512_enabled",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q6_IMMA_PP512":0}))
+  assert model._nv_llama_packed_q6k_down_enabled(config)

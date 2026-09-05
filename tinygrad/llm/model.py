@@ -125,6 +125,21 @@ def _nv_llama_full_packed_pp512_enabled(config) -> bool:
   # arise accidentally. Research epilogues remain independently default-off.
   return bool(getenv("NV_LLAMA_FULL_PACKED_PP512", 1)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config)
 
+def _nv_q4_production_mode(config) -> str|None:
+  """Select independent production leases after explicit research overrides.
+
+  The generated gate/up+K arm is the ordinary qualified NV pp512 route.  The
+  llama packed arm remains an explicit rollback and is also used for any
+  unqualified shape/device.  This keeps route ownership per role while
+  retaining the old environment knobs for experiments.
+  """
+  explicit = _nv_q4_imma_pp512_mode()
+  if explicit is not None: return explicit
+  if Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) \
+      and _nv_compiler_q4_imma_k_pp512_enabled(config):
+    return "compiler"
+  return "llama" if _nv_llama_full_packed_pp512_enabled(config) else None
+
 def _nv_qkv_packed_capture(model,jit,binding):
   captures=getattr(model,"_nv_qkv_packed_pp512_captures",None)
   if captures is None: captures=model._nv_qkv_packed_pp512_captures={}
@@ -143,7 +158,7 @@ def _nv_llama_packed_q6k_down_enabled(config)->bool:
   # is the explicit rollback to the existing llama route.
   return (not _nv_compiler_q6_imma_role_enabled(config, "ffn_down") and
           (_nv_llama_full_packed_pp512_enabled(config) or
-          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_q4_imma_pp512_mode()=="llama" and _nv_compiler_q4_imma_pp512_qualified(config))))
+          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_compiler_q4_imma_pp512_qualified(config))))
 
 def _nv_llama_packed_q6k_down_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_q6k_down_pp512_captures",None)
@@ -163,7 +178,7 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
 
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   """Separate default-off lease for the exact Q4_K K projection population."""
-  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
+  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
@@ -746,7 +761,7 @@ class FFNBlock:
       # gate/up lifecycle. The finalized native programs participate in the
       # ordinary TinyJit graph; every miss preserves the corrected fp16
       # fallback unchanged.
-      if (_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode()))) is not None and (_mode not in ("compiler","llama","gate_only") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
+      if (_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else _nv_q4_production_mode(self.config))) is not None and (_mode not in ("compiler","llama","gate_only") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
           and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear) \
           and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear) and x.device == "NV" \
           and x.numel() == 512*4096:
@@ -1953,7 +1968,7 @@ class Transformer:
       if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed O requires exact Qwen3-8B pp512 topology")
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as o_binding_for
       _nv_o_binding=o_binding_for("NV"); _nv_o_binding.prepare_records(len(self.blk))
-    if is_prefill_v2 and (nv_q4_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else ("llama" if _nv_llama_full_packed_pp512_enabled(self.config) else _nv_q4_imma_pp512_mode()))) is not None:
+    if is_prefill_v2 and (nv_q4_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else _nv_q4_production_mode(self.config))) is not None:
       if nv_q4_mode in ("compiler","llama") and not _nv_compiler_q4_imma_pp512_qualified(self.config):
         raise RuntimeError("NV packed Q4 IMMA pp512 routes only admit the exact dense Qwen3-8B topology")
       if nv_q4_mode in ("compiler", "gate_only"):
@@ -1982,8 +1997,8 @@ class Transformer:
         _nv_binding.prepare_outputs(len(self.blk)*2)
         _nv_binding.begin_trace()
         for block in self.blk: block._nv_q4_imma_pp512_binding = _nv_binding
-    if is_prefill_v2 and getenv("NV_COMPILER_Q4_IMMA_K_PP512",0):
-      if _nv_q4_imma_pp512_mode() != "compiler" or not _nv_compiler_q4_imma_k_pp512_enabled(self.config):
+    if is_prefill_v2 and _nv_compiler_q4_imma_k_pp512_enabled(self.config):
+      if _nv_q4_production_mode(self.config) != "compiler" or not _nv_compiler_q4_imma_k_pp512_enabled(self.config):
         raise RuntimeError("NV compiler Q4 K pp512 route requires the exact compiler gate/up Qwen3-8B arm")
       from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import binding_for as k_binding_for
       _nv_compiler_k_binding = k_binding_for("NV")
@@ -1998,7 +2013,7 @@ class Transformer:
       from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
       _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
     if is_prefill_v2 and _nv_compiler_q6_imma_pp512_enabled(self.config):
-      if _nv_q4_imma_pp512_mode() != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
+      if _nv_q4_production_mode(self.config) != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
         raise RuntimeError("NV compiler Q6 V/down pp512 route requires the exact compiler gate/up+K Qwen3-8B arm")
       from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
       _nv_compiler_q6_binding = q6_binding_for("NV")
