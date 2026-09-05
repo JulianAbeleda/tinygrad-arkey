@@ -39,8 +39,11 @@ class DownAsset:
     wt,at=PackedWeightTransform("Q4_K",N,K),Q8ActivationRecordTransform(M,K)
     wp,ap=Q4KInt8FragmentProvider(wt),Q8Int8FragmentProvider(at)
     acc=Q4KQ8GroupAccumulatorContract(wp,ap)
-    stride=TILE_K+(TILE_K//16)*4
-    geom=KernelTileGeometry((64,32,TILE_K),(2,2),128,32,(KernelLDSWindow("A",0,64*stride,stride),KernelLDSWindow("B",64*stride,96*stride,stride)))
+    # Match the proven wide Q4 compiler tile: 128x128 output, eight warps,
+    # with the down-specific K=12288/N=4096 dimensions.
+    stride=80
+    geom=KernelTileGeometry((128,128,TILE_K),(2,4),256,32,
+      (KernelLDSWindow("A",0,128*stride,stride),KernelLDSWindow("B",128*stride,256*stride,stride)))
     ident=hashlib.sha256(repr(("ffn_down",geom,wp.identity,ap.identity,acc.abi)).encode()).hexdigest()
     key=warmstart_key({M,N},K,wt.storage_dtype); context=type("DownContext",(),{"schema_version":"boltbeam.full_kernel_candidate.v1","canonical_identity":ident,"geometry":geom,"packed_weight":wt,"packed_fragment_provider":wp,"packed_activation":at,"packed_activation_provider":ap,"group_accumulator":acc})()
     # Reuse the proven compact-record ABI, specializing both the input row
@@ -48,7 +51,7 @@ class DownAsset:
     # Use the independently qualified K=12288 producer source.  The former
     # string-specialized copy drifted from the saved-Z gate's ABI/rounding.
     record_src=source_k12288_record()
-    lib=NVRTCCompiler(dev.arch,ptx=False,cache_key="nv_q8_compact_record_fp16_down_k12288_v3").compile(record_src)
+    lib=NVRTCCompiler(dev.arch,ptx=False,cache_key="nv_q8_compact_record_fp16_down_k12288_v4").compile(record_src)
     prod=native_nv_program("q8_compact_record_fp16_k12288",lib,global_size=(M,24,1),local_size=(128,1,1),globals=(0,1),outs=(1,),ins=(0,))
     opts,ctxs={key:(Opt(OptOps.TC,0,(-1,2,1)),)},{key:context}
     from tinygrad.codegen import to_program_cache
