@@ -20,6 +20,14 @@ from extra.llm_research.prefill.nv_q8_k12288_source import source_k12288_record
 M,N,K,TILE_K=512,4096,12288,64
 PROJECTIONS_PER_MODEL=18
 RECORD_U32=(M*K+2*M*(K//32)*4)//4
+WORDS_U32=(N*(K//256)*36)//4
+
+def validate_streamk_inputs(words:Tensor, record:Tensor) -> None:
+  """Fail closed on the transformed stream ABI: WORDS precedes RECORD."""
+  if words.dtype != dtypes.uint32 or record.dtype != dtypes.uint32:
+    raise ValueError("Q4 down Stream-K requires uint32 words and record")
+  if words.numel() != WORDS_U32 or record.numel() != RECORD_U32:
+    raise ValueError(f"Q4 down Stream-K ABI sizes mismatch: words={words.numel()} record={record.numel()}")
 
 def supports(*,model_family,role,weight_type,m,n,k,device,ggml_type=12):
   return model_family=="qwen3_8b" and role=="ffn_down" and weight_type=="Q4_K" and ggml_type==12 and (m,n,k)==(M,N,K) and device=="NV"
