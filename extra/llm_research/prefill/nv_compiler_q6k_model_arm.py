@@ -41,7 +41,7 @@ def _ordinary_prefill_jit(model, start_pos:int, greedy:bool):
   return model.prefill_v2_jits.get((start_pos, greedy)) or (model.prefill_v2_greedy_jit if greedy else model.prefill_v2_jit) \
     if getattr(model.config, "prefill_v2", False) else (model.prefill_greedy_jit if greedy else model.prefill_jit)
 
-def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3):
+def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3, logits_path=""):
   """Run the normal model entrypoint and census its selected production graph."""
   from tinygrad import Tensor
   first = model(tokens, 0, temperature, use_flash=False, greedy=True); Tensor.realize(first); first_np=first.numpy().copy()
@@ -68,10 +68,16 @@ def _ordinary_census(model, tokens, temperature, out_path, rounds=9, warmups=3):
       dmid=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*dmid)
       d1=model(tokens,0,temperature,use_flash=False,greedy=True); Tensor.realize(*d1)
       d1_np=tuple(x.numpy().copy() for x in d1)
+      dnames=Counter(_call_name(c) for c in _captured_program_calls(model.prefill_v2_jits[key]))
+      projection_names={n:int(v) for n,v in dnames.items() if any(x in n for x in ("q8_","q6_","nv_q6","prefill_wmma"))}
+      ordinary_names=Counter(_call_name(c) for c in calls)
       diagnostic={"status":"OBSERVED","same_token":bool(np.array_equal(d0_np[0],d1_np[0])),
         "finite_logits":bool(np.isfinite(d1_np[1]).all()),"same_logits_exact":bool(np.array_equal(d0_np[1],d1_np[1])),
         "max_abs_replay":float(np.max(np.abs(d0_np[1]-d1_np[1]))),
-        "program_count":len(_captured_program_calls(model.prefill_v2_jits[key]))}
+        "program_count":len(_captured_program_calls(model.prefill_v2_jits[key])),"token":int(d1_np[0].reshape(-1)[0]),
+        "projection_programs_match":all(ordinary_names.get(n)==v for n,v in projection_names.items()),
+        "projection_program_names":projection_names}
+      if logits_path: np.savez(logits_path, token=np.int64(d1_np[0].reshape(-1)[0]), logits=d1_np[1])
     finally:
       if original is None: model.prefill_v2_jits.pop(key,None)
       else: model.prefill_v2_jits[key]=original
@@ -197,7 +203,7 @@ def main() -> None:
   model,_=load_model_and_tokenizer(args.model,args.max_context,seed=20260617)
   if args.arm == "ordinary":
     chunk=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
-    _ordinary_census(model, chunk, Tensor([0.0]), args.out, rounds=args.rounds, warmups=args.warmups)
+    _ordinary_census(model, chunk, Tensor([0.0]), args.out, rounds=args.rounds, warmups=args.warmups, logits_path=args.logits_npz)
     return
   _set_buffer_observer_phase("asset_prepare")
   gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model);gate_capture=gate_asset.new_capture()
