@@ -12,11 +12,11 @@ observer was installed; the retained captured-linear census is the authority.
 The census contains 155 launches with semantic role metadata. The remaining
 263 generic launches retain exact program identity and geometry.
 `program-ownership-audit.json` reconciles all 418 launches and 29 unique
-PROGRAM hashes. None has the `native_nv_program` source marker used by every
-llama packed binding, so the selected decode graph contains no llama packed
-cubin. The audit calls the other programs `tinygrad_rendered_source`; that is a
-transport classification and does not assert that every ordinary scheduler
-kernel has machine-search provenance.
+PROGRAM hashes. None has the `native_nv_program` source marker used by the
+known llama packed bindings, so none of those recognized bindings appears.
+The audit keeps every nonmarker source as `unknown_source_transport`: marker
+absence alone does not prove arbitrary source provenance or close the full
+no-llama-cubin gate.
 
 The endpoint bracket used fresh processes and one GPU job at a time. tinygrad
 ran three repetitions of 40 production `generate` tokens: 238.458, 238.785,

@@ -36,15 +36,15 @@ def audit(census:dict) -> dict:
                    "launch_count":len(occurrences), "source_sha256":first["source_sha256"],
                    "binary_sha256":first["binary_sha256"], "global_size":first["global_size"],
                    "local_size":first["local_size"], "transport_provenance":
-                   "native_precompiled_cubin" if native_precompiled else "tinygrad_rendered_source"})
+                   "native_precompiled_cubin" if native_precompiled else "unknown_source_transport"})
   native = [row for row in rows if row["transport_provenance"] == "native_precompiled_cubin"]
   return {"schema":SCHEMA, "selected_jits":capture.get("selected_jits", []),
           "program_launches":sum(row["launch_count"] for row in rows), "unique_programs":len(rows),
           "native_precompiled_unique_programs":len(native), "native_precompiled_programs":native,
-          "no_native_precompiled_cubin_in_selected_graph":not native,
-          "interpretation":("The selected decode graph contains no native_nv_program transport marker. This excludes the "
-                            "llama packed cubin bindings, which use native_nv_program. tinygrad-rendered-source is a transport "
-                            "classification; it does not assert machine-search provenance for ordinary scheduler kernels."),
+          "no_known_native_precompiled_marker_in_selected_graph":not native,
+          "interpretation":("The selected decode graph contains no recognized native_nv_program transport marker. The known "
+                            "llama packed bindings use native_nv_program, so none of those recognized bindings appears. An "
+                            "unmatched source hash remains unknown and absence of the marker is not universal positive provenance."),
           "programs":sorted(rows, key=lambda row:(row["jit_owner"], row["program_name"], row["program_hash"]))}
 
 
@@ -53,7 +53,7 @@ def main() -> int:
   args=ap.parse_args(); result=audit(json.loads(args.census.read_text()))
   args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
   print(json.dumps({key:result[key] for key in ("program_launches","unique_programs","native_precompiled_unique_programs",
-                                                "no_native_precompiled_cubin_in_selected_graph")},sort_keys=True))
+                                                "no_known_native_precompiled_marker_in_selected_graph")},sort_keys=True))
   return 0
 
 
