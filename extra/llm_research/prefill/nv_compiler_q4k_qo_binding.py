@@ -143,7 +143,7 @@ class CompilerQ4StreamKCapture:
     sources=[u.arg for u in plain.src if u.op is Ops.SOURCE]
     if len(sources)!=1: raise ValueError("plain Q/O must retain one compiler source")
     unroll=int(os.environ.get("NV_COMPILER_Q4_STREAMK_UNROLL", "8"))
-    if unroll not in (1,2,4,8,16,32): raise ValueError("NV_COMPILER_Q4_STREAMK_UNROLL must be 1, 2, 4, 8, 16, or 32")
+    if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported NV_COMPILER_Q4_STREAMK_UNROLL")
     kernel_name="q4_qo_streamk_n4096" if n==4096 else "q4_qo_streamk"
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
       output_stride=n,kernel_name=kernel_name)
