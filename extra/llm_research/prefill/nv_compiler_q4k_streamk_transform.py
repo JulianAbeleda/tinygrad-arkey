@@ -77,9 +77,8 @@ def active_fixup_source(*, max_contributors:int=2, sliced:bool=False) -> str:
   adds=''.join(f"+(s{i}>=0?partials[s{i}*16384+z]:0)" for i in range(1,max_contributors))
   zdecl="int tile=active[blockIdx.x],z=threadIdx.x;" if not sliced else "int tile=active[blockIdx.x],z=blockIdx.y*4096+threadIdx.x;"
   loop="z<16384;z+=256" if not sliced else "z<((blockIdx.y+1)*4096);z+=128"
-  grid="(128,1,1)" if not sliced else "(128,4,1)"
   return f'''extern "C" __global__ void q4k_imma_fixup_active(float *out,const float *partials,const int *map,const int *active,int M,int N) {{
-    {zdecl} {decl},nb=(tile%(N/128))*128,mb=(tile/(N/128))*128;
+    {zdecl} int {decl},nb=(tile%(N/128))*128,mb=(tile/(N/128))*128;
     if(s0<0)return;
     for (;{loop}) {{ int r=z/128,c=z%128;
       out[(mb+r)*N+nb+c]=partials[s0*16384+z]{adds}; }}
