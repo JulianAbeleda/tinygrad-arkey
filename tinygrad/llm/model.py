@@ -128,10 +128,8 @@ def _nv_llama_full_packed_pp512_enabled(config) -> bool:
 def _nv_q4_production_mode(config) -> str|None:
   """Select independent production leases after explicit research overrides.
 
-  The generated gate/up+K arm is the ordinary qualified NV pp512 route.  The
-  llama packed arm remains an explicit rollback and is also used for any
-  unqualified shape/device.  This keeps route ownership per role while
-  retaining the old environment knobs for experiments.
+  The llama packed stack remains the ordinary exact-shape NV default.
+  Explicit compiler gate/up or K leases select the generated research stack.
   """
   explicit = _nv_q4_imma_pp512_mode()
   if explicit is not None: return explicit

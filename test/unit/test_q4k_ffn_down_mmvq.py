@@ -523,6 +523,9 @@ def test_vocab_prefill_selector_rejects_unqualified_arch_and_conflicting_leases(
   config.prefill_ubatch=256
   assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
   config.prefill_ubatch=512
+  config.vocab_size=32768
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  config.vocab_size=151936
   monkeypatch.setenv("NV_LLAMA_Q6_VOCAB_PP512","1")
   with pytest.raises(RuntimeError,match="conflict"):
     model_module._nv_compiler_q6_vocab_pp512_enabled(config)
