@@ -81,6 +81,7 @@ def q6k_vocab_four_warp_call(admission: object, linear: Any, x: Tensor) -> Tenso
   if tuple(x.shape) != (1,1,K) or x.dtype != dtypes.float32: return None
   storage=getattr(linear,"q6k_storage",None)
   if storage is None or getattr(linear,"out_features",None)!=ROWS or getattr(linear,"in_features",None)!=K or getattr(linear,"bias",None) is not None: return None
+  if getattr(storage,"halfs",None) is None or storage.halfs.device != "NV" or storage.halfs.dtype != dtypes.uint16 or storage.halfs.numel() != ROWS*(K//256)*105: return None
   from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
   from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_research_program
   program=KernelProgram("decode_q6k_vocab_four_warp_fp16","q6k_vocab_four_warp_fp16",KernelProgramProvenance.RESEARCH_ONLY,emit_q6k_v_four_warp_fp16_direct(rows=ROWS),OutputSpec((ROWS,),dtypes.float32))

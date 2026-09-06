@@ -484,3 +484,9 @@ def test_vocab_admission_dtype_flag():
 def test_vocab_four_warp_admission_type():
   from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission
   assert Q6KVocabFourWarpAdmission().candidate_id == "nv_vocab_four_warp_fp16"
+
+def test_vocab_four_warp_rejects_undersized_storage():
+  from types import SimpleNamespace
+  from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission, q6k_vocab_four_warp_call
+  linear=SimpleNamespace(q6k_storage=SimpleNamespace(halfs=SimpleNamespace(device='NV',dtype=dtypes.uint16,numel=lambda: 1)),out_features=151936,in_features=4096,bias=None)
+  assert q6k_vocab_four_warp_call(Q6KVocabFourWarpAdmission(),linear,Tensor.zeros(1,1,4096,dtype=dtypes.float32,device='NV')) is None
