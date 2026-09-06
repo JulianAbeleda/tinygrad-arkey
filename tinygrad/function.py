@@ -34,6 +34,8 @@ def _maybe_add_to_ctx(ctx, x:UOp):
   # A PROGRAM output AFTER is its dependency edge, not an already-computed
   # implicit input.  Follow the declared write ABI rather than source/binary
   # spelling: compiler-owned and finalized PROGRAMs have the same contract.
+  has_param, has_buffer = _ancestor_kinds(x, Ops.PARAM, Ops.BUFFER)
+  if has_param: return None
   for after in x.toposort():
     if after.op is not Ops.AFTER or not after.src: continue
     try: output = after.src[0].buf_uop
@@ -45,7 +47,6 @@ def _maybe_add_to_ctx(ctx, x:UOp):
         try:
           if call.src[slot+1].buf_uop is output: return None
         except RuntimeError: pass
-  has_param, has_buffer = _ancestor_kinds(x, Ops.PARAM, Ops.BUFFER)
   return add_to_ctx(ctx, x) if not has_param and has_buffer else None
 
 def _computed_program_inputs(uret:UOp, explicit:tuple[UOp, ...]) -> list[UOp]:
