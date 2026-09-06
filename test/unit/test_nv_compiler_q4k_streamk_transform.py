@@ -61,6 +61,20 @@ def test_shared_load_to_pack_can_stage_fragments_or_scales_independently():
   assert scales.index("signed char val33 =") < scales.index("signed_char16 cast17 =")
   assert scales.index("signed char val218 =") > scales.index("int4 wmma31 =")
 
+def test_interleaved_wmma_schedule_bounds_results_and_preserves_updates():
+  if not FIXTURE.exists(): return
+  original=transform_compiler_q4k_to_streamk(FIXTURE.read_text())
+  transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),interleave_wmma_updates=True)
+  assert transformed.count("int4 wmma")==32 and transformed.count("(*(buf0+")==original.count("(*(buf0+")
+  first=transformed.index("int4 wmma28 =")
+  last=transformed.index("(*(buf0+51)) =",first)
+  assert transformed.count("int4 wmma",first,last)==8
+  assert all(transformed.count(f"float cast{i} =")==1 for i in range(33,97))
+  for i in range(64):
+    needle=f"(*(buf0+{i})) ="
+    assert transformed[transformed.index(needle):transformed.index(needle)+len(original[original.index(needle):].splitlines()[0])] == \
+      original[original.index(needle):].splitlines()[0]
+
 
 def test_sliced_fixup_matches_same_partials_on_nv():
   import numpy as np

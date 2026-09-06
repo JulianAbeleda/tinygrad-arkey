@@ -20,7 +20,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
                                      k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
-                                     shared_load_to_pack:bool|str=False) -> str:
+                                     shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -90,6 +90,41 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
       return "".join(loads[x] for x in names)+m.group(0)
     math=pack_re.sub(stage_pack,math)
     if consumed!=set(loads): raise ValueError(f"shared load-to-pack left {len(set(loads)-consumed)} loads without a pack")
+  if interleave_wmma_updates:
+    # Compute eight IMMA results and their output-column scale values together.
+    # Each accumulator expression remains byte-for-byte unchanged, while 24
+    # unrelated int4 IMMA results no longer stay live.
+    wmma_re=re.compile(r"^    int4 (wmma\d+) = .*;$",re.M)
+    scale_re=re.compile(r"^    float (cast(?:3[3-9]|[4-8][0-9]|9[0-6])) = .*;$",re.M)
+    update_re=re.compile(r"^    \(\*\(buf0\+(\d+)\)\) = .*;$",re.M)
+    wmmas={m.group(1):m.group(0) for m in wmma_re.finditer(math)}
+    scales={m.group(1):m.group(0) for m in scale_re.finditer(math)}
+    updates={int(m.group(1)):m.group(0) for m in update_re.finditer(math)}
+    if len(wmmas)!=32 or len(scales)!=64 or set(updates)!=set(range(64)):
+      raise ValueError(f"interleaved IMMA schedule requires 32 wmmas, 64 scales, and 64 updates; got {len(wmmas)}, {len(scales)}, {len(updates)}")
+    insertion=min(m.start() for m in update_re.finditer(math))
+    marker="    /* INTERLEAVED_WMMA_UPDATES */\n"
+    math=math[:insertion]+marker+math[insertion:]
+    math=wmma_re.sub("",math); math=scale_re.sub("",math); math=update_re.sub("",math)
+    # Activation scales cast33..64 are reused across all four output-column
+    # groups, so materialize them once.  Each group then owns eight IMMA
+    # results and its eight weight scales without duplicating arithmetic.
+    groups=[*(scales[f"cast{i}"] for i in range(33,65))]; used_wmmas=set(); used_scales={f"cast{i}" for i in range(33,65)}
+    for col in range(0,16,4):
+      lines=[updates[c+16*i] for c in range(col,col+4) for i in range(4)]
+      wnames=[]; snames=[]
+      for line in lines:
+        wnames.extend(re.findall(r"\bwmma\d+\b",line)); snames.extend(x for x in re.findall(r"\bcast\d+\b",line) if x in scales)
+      wnames=list(dict.fromkeys(wnames)); snames=list(dict.fromkeys(snames))
+      local_scales=[x for x in snames if int(x[4:])>=65]
+      if len(wnames)!=8 or len(local_scales)!=8: raise ValueError("unexpected IMMA accumulator dependency group")
+      if any(x in used_wmmas for x in wnames) or any(x in used_scales for x in local_scales):
+        raise ValueError("interleaved IMMA declaration would be emitted more than once")
+      used_wmmas.update(wnames); used_scales.update(local_scales)
+      groups.extend([*(wmmas[x] for x in wnames),*(scales[x] for x in local_scales),*lines])
+    if used_wmmas!=set(wmmas) or used_scales!=set(scales): raise ValueError("interleaved IMMA schedule did not consume every declaration")
+    if math.count(marker)!=1: raise ValueError("interleaved IMMA insertion marker lost")
+    math=math.replace(marker,"\n".join(groups)+"\n",1)
   if double_buffer:
     shared="__shared__ __align__(16) signed char buf1[20480];"
     if source.count(shared)!=1: raise ValueError("double buffer requires the exact 20 KiB shared tile")
