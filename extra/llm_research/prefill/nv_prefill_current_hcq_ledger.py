@@ -1,8 +1,31 @@
 #!/usr/bin/env python3
-"""Current-route HCQ ledger adapter for the 18-role Q4-V composed graph."""
+"""Current-route HCQ ledger adapter for the pp512 composed graph."""
 import argparse, collections, json, pathlib
 from decimal import Decimal
-from nv_prefill_hcq_exact_accounting import _primary, _specialize_roles, _interval_partition
+from nv_prefill_hcq_exact_accounting import _primary, _interval_partition
+
+CURRENT_QO_ID = "4de2a30ea73fa03dcbfb788035f41c6b418acc34e4b0862840bb140170f1e72d"
+GATE_STREAMK_NAMES = ("q4_qo_streamk", "q4k_imma_fixup_active")
+Q6_DOWN_NAMES = (
+  "nv_q6_oracle_broad_cta_serial_q6_tile8_fragments_q6_phase_metadata_combined_publish_factor_da_oracle_publisher_fp32_legacy_ssa_vector_both_segments_in_cta_streamk_s0",
+  "nv_q6_destination_major_fixup",
+)
+
+def _specialize_current(rows:list[dict]) -> None:
+  counters=collections.Counter()
+  for row in rows:
+    name=row["name"]; ident=(row.get("metadata") or {}).get("canonical_identity")
+    if ident == CURRENT_QO_ID: primary,tag="qo","qo_main"
+    elif name in GATE_STREAMK_NAMES: primary,tag="gate_up",name
+    elif name in Q6_DOWN_NAMES: primary,tag="down",name
+    else: primary,tag=_primary(row)
+    if primary == "qo":
+      row["primary"]=row["role"]="q" if counters[tag]%2 == 0 else "o";counters[tag]+=1
+    elif primary == "gate_up":
+      row["primary"]=row["role"]="gate" if counters[tag]%2 == 0 else "up";counters[tag]+=1
+    else: row["primary"],row["role"]=primary,tag
+  expected={"qo_main":72,"q4_qo_streamk":72,"q4k_imma_fixup_active":72}
+  if any(counters[k] != v for k,v in expected.items()): raise ValueError(f"incomplete current dense role census: {dict(counters)}")
 
 def main():
   ap=argparse.ArgumentParser(); ap.add_argument('--profile',required=True); ap.add_argument('--out',required=True); a=ap.parse_args()
@@ -10,7 +33,7 @@ def main():
   if len(entries)%6: raise ValueError('profile is not six graph segments per invocation')
   groups=[entries[i:i+6] for i in range(0,len(entries),6)]
   rows=[{**e,'segment':s,'segment_index':i} for s,p in enumerate(groups[-1]) for i,e in enumerate(p['entries'])]
-  _specialize_roles(rows)
+  _specialize_current(rows)
   layer=0; seen_q=False
   for r in rows:
     if r['primary']=='q':
@@ -18,7 +41,7 @@ def main():
       seen_q=True
     r['layer']=layer if layer<36 else None
   counts=collections.Counter(r['primary'] for r in rows)
-  expected={'q':36,'k':36,'v':18,'o':36,'gate':36,'up':36,'down':36,'flash_score_reduction':36}
+  expected={'q':36,'k':36,'v':18,'o':36,'gate':72,'up':72,'down':54,'flash_score_reduction':36}
   if any(counts[k]!=v for k,v in expected.items()): raise ValueError(f'role census mismatch: {dict(counts)}')
   active=collections.defaultdict(Decimal)
   for r in rows: active[r['primary']]+=Decimal(str(r['duration']))
@@ -27,7 +50,7 @@ def main():
   payload={'schema':'tinygrad.nv_prefill_current_hcq_ledger.v1','selected_invocation':len(groups)-1,
     'available_invocations':len(groups),'segments':6,'launches':len(rows),'unknown_launches':unknown,
     'launch_counts':dict(sorted(counts.items())),'active_us':{k:str(v) for k,v in sorted(active.items())},
-    'timeline':timeline,'entries':rows,'classification_basis':'named historical HCQ classifier, current 18-role Q4-V population; layers anchored by Q'}
+    'timeline':timeline,'entries':rows,'classification_basis':'named historical HCQ classifier, current pp512 composed population; layers anchored by Q'}
   if unknown or sum(counts.values())!=len(rows): raise ValueError('classification closure failed')
   p=pathlib.Path(a.out);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n')
   print(json.dumps({'status':'PASS','launches':len(rows),'unknown_launches':unknown,'timeline':timeline},indent=2))
