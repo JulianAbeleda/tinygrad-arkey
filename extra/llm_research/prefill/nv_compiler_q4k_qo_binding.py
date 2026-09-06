@@ -32,6 +32,7 @@ class CompilerQOBinding:
   transform:object
   activation:object
   context:object
+  plain_context:object
   warmstart:dict
   warmstart_contexts:dict
   records:list[Tensor]
@@ -67,7 +68,7 @@ class CompilerQOBinding:
       return main,context
     q_program,q_context=compile_contract(False,"q")
     o_program,o_context=compile_contract(True,"o")
-    return cls(producer,o_program,q_program,wt,at,o_context,{}, {},[],[])
+    return cls(producer,o_program,q_program,wt,at,o_context,q_context,{}, {},[],[])
 
   @property
   def candidate_identity(self):return self.context.canonical_identity
@@ -104,10 +105,14 @@ class CompilerQOBinding:
     record,out=self.records[self.cursor],self.outputs[self.cursor];self.cursor+=1
     _,record=x.uop_program(record,fxn=lambda *_:self.producer)
     if role == "attn_q":
+      if residual is not None: raise ValueError("plain Q projection does not accept residual")
       out,record,words=out.uop_program(record,words,fxn=lambda *_:self.q_program)
     else:
-      if residual is None: raise ValueError("compiler Q/O O route requires residual")
-      out,record,words,residual=out.uop_program(record,words,residual,fxn=lambda *_:self.main_program)
+      if residual is None:
+        out,record,words=out.uop_program(record,words,fxn=lambda *_:self.q_program)
+      else:
+        if residual.shape != (M,N) or residual.dtype != dtypes.float32: raise ValueError("O residual must be float32 (512,4096)")
+        out,record,words,residual=out.uop_program(record,words,residual,fxn=lambda *_:self.main_program)
     return out.reshape(M,N)
 
 
