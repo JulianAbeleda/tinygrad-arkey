@@ -403,6 +403,7 @@ class _LiveF1Adapter:
 def main():
   ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True);ap.add_argument("--q4-v",action="store_true")
   ap.add_argument("--q6-v",action="store_true")
+  ap.add_argument("--q6-down",action="store_true")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
   ap.add_argument("--gate-q8-reuse",action="store_true")
@@ -434,10 +435,11 @@ def main():
 
   q6_env=os.environ.get("NV_COMPILER_Q6_IMMA_PP512")
   q6_roles={x.strip() for x in os.environ.get("NV_COMPILER_Q6_IMMA_PP512_ROLES","").split(",") if x.strip()}
+  requested_q6_roles=({"attn_v"} if args.q6_v else set()) | ({"ffn_down"} if args.q6_down else set())
   if os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" or \
-      os.environ.get("NV_Q4_IMMA_PP512") is not None or (args.q6_v and (q6_env!="1" or q6_roles!={"attn_v"})) or \
-      (not args.q6_v and q6_env != "0"):
-    raise SystemExit("combined arm requires compiler gate/up+K; use --q6-v with the exact attn_v role or set NV_COMPILER_Q6_IMMA_PP512=0")
+      os.environ.get("NV_Q4_IMMA_PP512") is not None or (requested_q6_roles and (q6_env!="1" or q6_roles!=requested_q6_roles)) or \
+      (not requested_q6_roles and q6_env != "0"):
+    raise SystemExit("combined arm requires compiler gate/up+K and an exact explicit Q6 role set, or NV_COMPILER_Q6_IMMA_PP512=0")
   if args.gate_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row):
     raise SystemExit("gate oracle requires the unpruned current-best candidate with both Q4 V and Q6 V")
   if args.down_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or args.gate_oracle):
@@ -491,9 +493,10 @@ def main():
   if args.arm=="candidate" and args.q4_v:
     v_asset=v_binding_for("NV");v_asset.prepare_records(18)
   q6_asset=q6val=None
-  if args.q6_v:
+  if requested_q6_roles:
     from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
-    q6_asset=q6_binding_for("NV");q6_asset.prepare_records(36);q6_asset.install_warmstart(model);q6val=_GraphOwnedQ6VCapture(q6_asset)
+    q6_asset=q6_binding_for("NV");q6_asset.prepare_records(36);q6_asset.install_warmstart(model)
+    q6val=_GraphOwnedQ6VCapture(q6_asset) if requested_q6_roles=={"attn_v"} else q6_asset.new_capture()
   k_asset=k_binding_for("NV");k_asset.prepare_records(36);k_asset.install_warmstart(model)
   # The matched control retains K's independently-qualified ordinary carrier.
   # Q/O composition changes its scheduling boundary, so the combined candidate
@@ -517,6 +520,8 @@ def main():
       if hasattr(block.attn_v,"_pf16_w"): delattr(block.attn_v,"_pf16_w")
     if args.q6_v and isinstance(block.attn_v,Q6KPrimitiveLinear) and hasattr(block.attn_v,"_pf16_w"):
       delattr(block.attn_v,"_pf16_w")
+    if args.q6_down and isinstance(block.ffn_down,Q6KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"):
+      delattr(block.ffn_down,"_pf16_w")
   qo=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
   if True:
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as qo_binding_for, RECORD_U32
@@ -534,7 +539,8 @@ def main():
               # Serialized V has no compiler candidate_context.  Use its
               # immutable manifest symbol so stage buffers remain observable.
               "v":None if vval is None else vval.asset.main_program.arg.name,
-              "q6_v":None if q6_asset is None else q6_asset.roles["attn_v"].candidate_identity,
+              "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].candidate_identity,
+              "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].candidate_identity,
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
               "qo":None if qo is None else qo.asset.plain_context.canonical_identity}
@@ -679,9 +685,10 @@ def main():
   down_weight_args=[_buf_uop(c.src[3]) for c in down_oracle_calls if len(c.src)>3]
   transforms={"gate_up":gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
               "v":None if vval is None else vval.transform,
-              "q6_v":None if q6_asset is None else q6_asset.roles["attn_v"].transform}
+              "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].transform,
+              "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].transform}
   weights=[]
-  for role in ("gate_up","k","qo","v","q6_v"):
+  for role in ("gate_up","k","qo","v","q6_v","q6_down"):
     if transforms[role] is not None:weights += [_weight_arg(c,transforms[role]) for c in mains[role]]
   if gate_oracle_calls:weights += [_weight_arg(c,gate.transform) for c in gate_oracle_calls]
   weights=[x for x in weights if x is not None]
@@ -691,6 +698,7 @@ def main():
   canonical={lin.prefill_packed_weight().uop.buf_uop for block in model.blk for lin in
     (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output) if isinstance(lin,Q4KPrimitiveLinear)}
   canonical.update(block.attn_v.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.attn_v,Q6KPrimitiveLinear))
+  canonical.update(block.ffn_down.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.ffn_down,Q6KPrimitiveLinear))
   admitted=[lin for block in model.blk for lin in (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output)]
   remaining=[lin for block in model.blk for lin in (block.attn_v,block.ffn_down)]
   # V is a separately captured role even though it shares the immutable
@@ -698,7 +706,8 @@ def main():
   # Serialized V is an immutable cubin asset, so its native ProgramInfo has
   # no compiler candidate_context.  Count it by the manifest-owned symbol.
   total_mains=sum(len(x) for x in mains.values())+len(v_calls)+len(gate_oracle_calls)
-  q8=names.get("q8_compact_record_fp16",0)+names.get("q8_compact_record_fp16_q6_attn_v",0)
+  q6_producer_names={} if q6_asset is None else {role:asset.producer.arg.name for role,asset in q6_asset.roles.items()}
+  q8=names.get("q8_compact_record_fp16",0)+sum(names.get(name,0) for role,name in q6_producer_names.items() if role in requested_q6_roles)
   census={"gate_up_main":len(mains["gate_up"]),"gate_oracle_main":len(gate_oracle_calls),"down_oracle_main":len(down_oracle_calls),
     "gate_epilogue_main":len(gate_epilogue_calls),
     "old_gate_silu_mul":names.get("E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",0),
@@ -706,7 +715,8 @@ def main():
     "down_oracle_weight_args":len(down_weight_args),"down_oracle_unique_weight_bases":len(set(down_weight_args)),
     "down_oracle_all_weights_overlay":bool(down_weight_args and all(w in down_overlay_bases for w in down_weight_args)),
     "k_main":len(mains["k"]),"qo_main":len(mains["qo"]),
-    "v_main":len(v_calls),"q6_v_main":len(mains["q6_v"]),"q6_v_producer":names.get("q8_compact_record_fp16_q6_attn_v",0),
+    "v_main":len(v_calls),"q6_v_main":len(mains["q6_v"]),"q6_v_producer":names.get(q6_producer_names.get("attn_v",""),0),
+    "q6_down_main":len(mains["q6_down"]),"q6_down_producer":names.get(q6_producer_names.get("ffn_down",""),0),
     "compiler_main_total":total_mains,"q8_producer_total":q8,"candidate_weight_args":len(weights),
     "unique_weight_bases":len(set(weights)),"all_weights_canonical":bool(weights and all(isinstance(x,str) or x in canonical for x in weights)),
     "admitted_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in admitted),
@@ -760,6 +770,12 @@ def main():
       census["down_oracle_main"]==36,census["down_oracle_weight_args"]==36,census["down_oracle_unique_weight_bases"]==36,
       census["down_oracle_all_weights_overlay"],census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,
       census["q6_v_main"]==18,census["q6_v_producer"]==18,census["compiler_main_total"]==216,
+      census["q8_producer_total"]==216,census["candidate_weight_args"]==216,census["unique_weight_bases"]==216,
+      census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==36,
+      census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+  elif args.arm=="candidate" and args.q4_v and args.q6_down and not args.q6_v:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
+      census["v_main"]==18,census["q6_down_main"]==18,census["q6_down_producer"]==18,census["compiler_main_total"]==216,
       census["q8_producer_total"]==216,census["candidate_weight_args"]==216,census["unique_weight_bases"]==216,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==36,
       census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
