@@ -56,7 +56,14 @@ def _selected_pair(model, before:dict[str, tuple[int, int]], diagnostic:bool=Fal
 
 
 def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tuple[dict, np.ndarray]:
+  from extra.llm_research.decode.decode_runtime_overhead import _decode_jits
   model = _model(arm, model_path, max_context)
+  # diagnostic_full_logits deliberately skips production's automatic prewarm.
+  # Mark that completed state so its separate diagnostic JIT selects the same
+  # active-horizon split as the steady production route under qualification.
+  model._flash_decode_active_horizon_prewarmed = True
+  pair_before = _pair_counts(model, diagnostic=True)
+  jit_before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0, diagnostic_full_logits=True)
   tokens, rows = [], []
   try:
@@ -69,12 +76,15 @@ def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tu
       if len(rows) < count: tokens.append(sampled); rows.append(array)
   finally: gen.close()
   stacked = np.stack(rows)
-  pair = _warmed_pair(model, diagnostic=True)
+  pair_name,pair = _selected_pair(model,pair_before,diagnostic=True)
+  used = [(name,jit) for name,jit in _decode_jits(model).items() if jit.cnt != jit_before.get(name)]
+  used_names = [name for name,_ in used]
   contract = pingpong_capture_contract(pair) if arm == "pingpong" and pair is not None else None
   argmax = [int(row.argmax(axis=-1).item()) for row in rows]
   return {"schema":"tinygrad.nv.feedback_pingpong_qualification.v1", "arm":arm, "mode":"logits", "callify_redirect":_redirect(), "tokens":tokens,
           "argmax_tokens":argmax, "sample_argmax_match":tokens == argmax,
           "shape":list(stacked.shape), "logits_sha256":hashlib.sha256(np.ascontiguousarray(stacked).view(np.uint8)).hexdigest(),
+          "selector_state":"active_horizon_prewarm_completed", "selected_pair":pair_name, "selected_jits":used_names,
           "route_still_promoted":bool(getattr(model, "_decode_feedback_pingpong_promoted", False)), "contract":contract}, stacked
 
 
