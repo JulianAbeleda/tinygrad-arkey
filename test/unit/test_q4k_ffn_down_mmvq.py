@@ -475,3 +475,8 @@ def test_fp16_geometry_checked_in_record_promotes_only_nv_target():
   assert decode_q4k_ffn_down_fp16_geometry_promoted(("NV", "sm_120"))
   assert not decode_q4k_ffn_down_fp16_geometry_promoted(("AMD", "gfx1100"))
   assert not decode_q4k_ffn_down_fp16_geometry_promoted((None, None))
+
+def test_vocab_admission_dtype_flag():
+  from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabManyRowAdmission
+  assert not Q6KVocabManyRowAdmission().preserve_input_dtype
+  assert Q6KVocabManyRowAdmission(preserve_input_dtype=True).preserve_input_dtype

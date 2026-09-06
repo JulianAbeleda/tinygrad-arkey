@@ -23,6 +23,7 @@ class Q6KVocabManyRowAdmission:
   """Explicit harness lease; normal model construction never creates this."""
   candidate_id: str = "nv_vocab_manyrow_q8_q6"
   target: str = "NV:sm_120"
+  preserve_input_dtype: bool = False
 
   def __post_init__(self):
     if not isinstance(self.candidate_id, str) or not self.candidate_id:
@@ -55,9 +56,10 @@ def q6k_vocab_manyrow_call(admission: object, linear: Any, x: Tensor) -> Tensor 
   if storage is None or getattr(linear, "out_features", None) != ROWS or getattr(linear, "in_features", None) != K:
     return None
   if getattr(linear, "bias", None) is not None: return None
-  source = x.reshape(K).cast(dtypes.float16).contiguous()
+  if admission.preserve_input_dtype and x.dtype not in (dtypes.float16, dtypes.float32): return None
+  source = x.reshape(K).contiguous() if admission.preserve_input_dtype else x.reshape(K).cast(dtypes.float16).contiguous()
   provider = KernelProgram("nv_vocab_manyrow", "q8_provider", KernelProgramProvenance.RESEARCH_ONLY,
-    emit_q8_provider(dtypes.float16, k=K), output_spec=OutputSpec((Q8_WORDS,), dtypes.uint32))
+    emit_q8_provider(source.dtype, k=K), output_spec=OutputSpec((Q8_WORDS,), dtypes.uint32))
   packet = execute_research_program(Tensor.empty((Q8_WORDS,), dtype=dtypes.uint32, device=x.device), source, program=provider)
   q8 = _unpack_q8_packet(packet)
   spec = q6k_spec_for_role(ROWS, K, role="lm_head", parts=1, row_tile=2, use_coop=True,
