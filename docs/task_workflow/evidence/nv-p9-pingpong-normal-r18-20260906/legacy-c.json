@@ -1,0 +1,118 @@
+{
+  "arm": "legacy",
+  "callify_redirect": 0,
+  "contract": null,
+  "gpu_state_scope": "immediately_before_and_after_timed_decode_window",
+  "gpu_states": [
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "140.74",
+        "power.draw.instant": "445.13",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "81.64",
+        "power.draw.instant": "73.75",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "45",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "127.40",
+        "power.draw.instant": "374.47",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "90.51",
+        "power.draw.instant": "203.21",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "42",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "118.59",
+        "power.draw.instant": "386.65",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "87.16",
+        "power.draw.instant": "201.92",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "42",
+        "temperature.memory": "N/A"
+      }
+    }
+  ],
+  "median_ms": 4.188350175,
+  "mode": "timing",
+  "request_scoped_prewarm": true,
+  "samples_ms": [
+    4.188350175,
+    4.1867035,
+    4.234783125
+  ],
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_pairs": [
+    null,
+    null,
+    null
+  ],
+  "token_hashes": [
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  ],
+  "tokens_identical": true
+}

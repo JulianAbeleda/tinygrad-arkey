@@ -1,0 +1,10 @@
+{
+  "all_token_hashes_identical": true,
+  "candidate_latency_delta_pct": -2.8996440935666556,
+  "candidate_throughput_delta_pct": 2.9862342588741653,
+  "legacy_a_median_ms": 4.18329535,
+  "legacy_c_median_ms": 4.188350175,
+  "mean_control_medians_ms": 4.1858227625,
+  "pingpong_b_median_ms": 4.0644488,
+  "schema": "tinygrad.nv.feedback_pingpong_ordinary_aba.v1"
+}

@@ -1,0 +1,135 @@
+{
+  "arm": "pingpong",
+  "callify_redirect": 0,
+  "contract": {
+    "admitted": true,
+    "program_counts": [
+      4,
+      4
+    ],
+    "reason": "distinct_fixed_returns_and_read_only_inputs",
+    "return_device": "NV",
+    "return_dtype": "dtypes.int",
+    "return_shape": [
+      1,
+      1
+    ],
+    "written_input_shadows": [
+      0,
+      0
+    ]
+  },
+  "gpu_state_scope": "immediately_before_and_after_timed_decode_window",
+  "gpu_states": [
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "102.38",
+        "power.draw.instant": "409.17",
+        "pstate": "P0",
+        "temperature.gpu": "50",
+        "temperature.gpu.tlimit": "39",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "86.24",
+        "power.draw.instant": "166.63",
+        "pstate": "P0",
+        "temperature.gpu": "44",
+        "temperature.gpu.tlimit": "46",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "128.84",
+        "power.draw.instant": "456.96",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "38",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "86.55",
+        "power.draw.instant": "157.03",
+        "pstate": "P0",
+        "temperature.gpu": "43",
+        "temperature.gpu.tlimit": "44",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "112.29",
+        "power.draw.instant": "454.63",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "39",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "81.22",
+        "power.draw.instant": "142.93",
+        "pstate": "P0",
+        "temperature.gpu": "43",
+        "temperature.gpu.tlimit": "42",
+        "temperature.memory": "N/A"
+      }
+    }
+  ],
+  "median_ms": 4.0644488,
+  "mode": "timing",
+  "request_scoped_prewarm": true,
+  "samples_ms": [
+    4.05537075,
+    4.0644488,
+    4.06890645
+  ],
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_pairs": [
+    "rollout_greedy_pingpong_jits_flash_s6",
+    "rollout_greedy_pingpong_jits_flash_s6",
+    "rollout_greedy_pingpong_jits_flash_s6"
+  ],
+  "token_hashes": [
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  ],
+  "tokens_identical": true
+}
