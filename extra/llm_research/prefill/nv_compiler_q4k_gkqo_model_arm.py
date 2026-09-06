@@ -408,6 +408,7 @@ def main():
   ap.add_argument("--q6-down",action="store_true")
   ap.add_argument("--q4-down-streamk",action="store_true")
   ap.add_argument("--gate-streamk",action="store_true")
+  ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
   ap.add_argument("--gate-q8-reuse",action="store_true")
@@ -551,7 +552,8 @@ def main():
     # its typed contract.  The composed graph invokes only that opaque PROGRAM, so adding
     # Q/O's shape key to the ambient model warmstart table would incorrectly claim unrelated
     # 512x4096x4096 ordinary matmuls (the exact composition collision this arm must avoid).
-    qo=_GraphOwnedQOCapture(qo_binding_for("NV"),RECORD_U32)
+    qo_asset=qo_binding_for("NV",variant="streamk" if args.qo_streamk else "wide")
+    qo=qo_asset.new_capture() if args.qo_streamk else _GraphOwnedQOCapture(qo_asset,RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
   identities={"gate_up":gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
@@ -566,7 +568,7 @@ def main():
               "q4_down":None if q4_down_asset is None else q4_down_asset.candidate_identity,
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
-              "qo":None if qo is None else qo.asset.plain_context.canonical_identity}
+              "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.plain_context.canonical_identity}
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
@@ -698,6 +700,7 @@ def main():
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
+  if args.qo_streamk: mains["qo"]=[c for c in calls if _call_name(c)=="q4_qo_streamk_n4096"]
   if q4_down_asset is not None: mains["q4_down"]=[c for c in calls if _call_name(c)==q4_down_asset.main_program.arg.name]
   # K and serialized V intentionally share the generated kernel symbol.  K
   # retains compiler candidate_context; the remaining exact-symbol calls are V.
@@ -751,6 +754,7 @@ def main():
     "admitted_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in admitted),
     "remaining_v_down_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in remaining),
     "weight_copy_kernels":0 if weights and all(isinstance(x,str) or x in canonical for x in weights) else -1,
+    "active_fixups":names.get("q4k_imma_fixup_active",0),
     "old_fixups":names.get("q4k_imma_fixup",0),"q6_old_fixups":names.get("q6k_imma_fixup",0),"partial_workspace_bytes":0}
   census["gate_q8_record_allocations"]=stage_census.get("gate_up_records",{}).get("unique_allocations",0)
   replay={"finite":bool(np.isfinite(a1[1]).all()),"same_token":a0[0]==a1[0],
@@ -816,6 +820,7 @@ def main():
       census["q4_down_main"]==18,census["q4_down_producer"]==18,census["compiler_main_total"]==234,
       census["q8_producer_total"]==234,census["candidate_weight_args"]==234,census["unique_weight_bases"]==234,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==18,
+      census["active_fixups"]==(162 if args.qo_streamk else 90),
       census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.arm=="candidate" and args.q4_v and args.q6_down and not args.q6_v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,

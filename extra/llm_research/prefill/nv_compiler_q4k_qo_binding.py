@@ -136,7 +136,7 @@ class CompilerQ4StreamKCapture:
   @classmethod
   def compile(cls, dev, base, *, n=4096, pair_q8_reuse=False):
     if n not in (4096,12288): raise ValueError("unsupported Q4 Stream-K shape")
-    population,roles=(36,("attn_q","attn_output")) if n==4096 else (72,("ffn_gate","ffn_up"))
+    population,roles=(72,("attn_q","attn_output")) if n==4096 else (72,("ffn_gate","ffn_up"))
     from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
     from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_fixup_map
     plain=base.q_program if n==4096 else base.main_program
@@ -144,8 +144,9 @@ class CompilerQ4StreamKCapture:
     if len(sources)!=1: raise ValueError("plain Q/O must retain one compiler source")
     unroll=int(os.environ.get("NV_COMPILER_Q4_STREAMK_UNROLL", "8"))
     if unroll not in (1,2,4,8,16,32): raise ValueError("NV_COMPILER_Q4_STREAMK_UNROLL must be 1, 2, 4, 8, 16, or 32")
+    kernel_name="q4_qo_streamk_n4096" if n==4096 else "q4_qo_streamk"
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
-      output_stride=n,kernel_name="q4_qo_streamk")
+      output_stride=n,kernel_name=kernel_name)
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)
     rows,active=q4_down_fixup_map(k=K,n=n)
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
@@ -155,7 +156,7 @@ class CompilerQ4StreamKCapture:
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)
       return p.replace(src=tuple(u.replace(arg=source) if u.op is Ops.SOURCE else u for u in p.src))
-    main=program("q4_qo_streamk",source,(170,1,1),(32,2,4),(0,1,2,3,4),(0,1,2),(3,4))
+    main=program(kernel_name,source,(170,1,1),(32,2,4),(0,1,2,3,4),(0,1,2),(3,4))
     fix=program("q4k_imma_fixup_active",fixup_source,(len(active),4,1),(128,1,1),(0,1,2,3),(0,),(1,2,3),(M,n))
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
@@ -179,7 +180,7 @@ class CompilerQ4StreamKCapture:
         or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=self.n*(K//256)*36):
       raise ValueError("unsupported Q/O Stream-K input contract")
     if residual is not None: raise ValueError("Stream-K Q/O research arm is projection-only")
-    if self.cursor>=self.population: raise ValueError("Q/O Stream-K capture exceeds 36 projections")
+    if self.cursor>=self.population: raise ValueError("Q4 Stream-K capture exceeds its admitted projection population")
     expected_role=self.roles[self.cursor%2]
     if self.pair_q8_reuse and role!=expected_role: raise ValueError("Q8 reuse requires ordered gate/up projection pairs")
     if not self.pair_q8_reuse or self.cursor%2==0:
