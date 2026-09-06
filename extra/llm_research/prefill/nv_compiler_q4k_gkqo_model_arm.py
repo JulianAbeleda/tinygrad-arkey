@@ -304,8 +304,10 @@ def _graph_stage_buffers(jit,identities):
         role=next((native_role for native_role in ("v","gate_up","gate_oracle","down_oracle","gate_epilogue")
           if getattr(call.arg,"name",None)==identities.get(native_role)),None)
       if role is None:continue
-      if call.arg.outs!=(0,) or call.arg.ins!=(1,2):raise RuntimeError(f"unexpected {role} captured ABI")
-      stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[1])
+      if call.arg.outs==(0,) and call.arg.ins in ((1,2),(1,2,3)): record_index=1
+      elif call.arg.outs==(0,1,2) and call.arg.ins==(3,4): record_index=4
+      else: raise RuntimeError(f"unexpected {role} captured ABI outs={call.arg.outs} ins={call.arg.ins}")
+      stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
   return stages
 
 
