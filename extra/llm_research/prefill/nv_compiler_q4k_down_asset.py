@@ -43,14 +43,15 @@ class DownAsset:
   producer: object; main_program: object; transform: object; activation: object; candidate_identity: str
   warmstart: object; warmstart_contexts: object
   @classmethod
-  def compile(cls,dev):
+  def compile(cls,dev, *, tile_k=TILE_K):
+    if tile_k not in (64,256): raise ValueError("down tile_k must be 64 or 256")
     wt,at=PackedWeightTransform("Q4_K",N,K),Q8ActivationRecordTransform(M,K)
     wp,ap=Q4KInt8FragmentProvider(wt),Q8Int8FragmentProvider(at)
     acc=Q4KQ8GroupAccumulatorContract(wp,ap)
     # Match the proven wide Q4 compiler tile: 128x128 output, eight warps,
     # with the down-specific K=12288/N=4096 dimensions.
-    stride=80
-    geom=KernelTileGeometry((128,128,TILE_K),(2,4),256,32,
+    stride=tile_k+(tile_k//16)*4
+    geom=KernelTileGeometry((128,128,tile_k),(2,4),256,32,
       (KernelLDSWindow("A",0,128*stride,stride),KernelLDSWindow("B",128*stride,256*stride,stride)))
     ident=hashlib.sha256(repr(("ffn_down",geom,wp.identity,ap.identity,acc.abi)).encode()).hexdigest()
     key=warmstart_key({M,N},K,wt.storage_dtype); context=type("DownContext",(),{"schema_version":"boltbeam.full_kernel_candidate.v1","canonical_identity":ident,"geometry":geom,"packed_weight":wt,"packed_fragment_provider":wp,"packed_activation":at,"packed_activation_provider":ap,"group_accumulator":acc})()
@@ -66,13 +67,14 @@ class DownAsset:
     rp=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device="NV").realize(); wpb=Tensor.empty(wt.packed_bytes//4,dtype=dtypes.uint32,device="NV").realize()
     with warmstart_candidate_state(opts,ctxs): _ac(rp,at).matmul(_wc(wpb,wt).transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
     ms=[p for p in to_program_cache.values() if p.op is Ops.PROGRAM and p.src and getattr(p.src[0].arg,"candidate_context",None) is not None and p.src[0].arg.candidate_context.canonical_identity==ident]
-    if len(set(ms))!=1: raise RuntimeError(f"expected one down tileK64 PROGRAM, found {len(set(ms))}")
+    if len(set(ms))!=1: raise RuntimeError(f"expected one down tileK{tile_k} PROGRAM, found {len(set(ms))}")
     p=ms[0]; main=p.replace(src=(UOp(Ops.SINK,arg=p.src[0].arg),p.src[1],UOp(Ops.LINEAR),*p.src[3:]))
     if main.arg.outs!=(0,) or main.arg.ins!=(1,2): raise RuntimeError(f"unexpected down ABI {main.arg}")
     return cls(prod,main,wt,at,ident,MappingProxyType(opts),MappingProxyType(ctxs))
 
 _CACHE={}
-def binding_for(device="NV"):
+def binding_for(device="NV", *, tile_k=TILE_K):
   if device!="NV": raise ValueError("Q4 down asset is NV-only")
-  if device not in _CACHE: _CACHE[device]=DownAsset.compile(Device[device])
-  return _CACHE[device]
+  key=(device,tile_k)
+  if key not in _CACHE: _CACHE[key]=DownAsset.compile(Device[device],tile_k=tile_k)
+  return _CACHE[key]
