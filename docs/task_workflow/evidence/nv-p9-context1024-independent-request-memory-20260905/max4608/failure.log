@@ -1,0 +1,106 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 522, in alloc
+    try: return self._alloc(size, options if options is not None else self.default_buffer_spec)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 451, in _alloc
+    return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 619, in alloc
+    mem_handle = self.rm_alloc(self.dev.nvdevice, alloc_func, alloc_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 523, in rm_alloc
+    if made.status == nv_gpu.NV_ERR_NO_MEMORY: raise MemoryError(f"rm_alloc returned {get_error_str(made.status)}")
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: rm_alloc returned 81: NV_ERR_NO_MEMORY
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 550, in alloc
+    try: return super().alloc(size, options)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 523, in alloc
+    except (RuntimeError, MemoryError) as e: raise MemoryError(f"Allocation of {size_to_str(size)} failed on {self.dev.device}. "
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: Allocation of 20.89 MB failed on NV. Used: 30.17 GB
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 522, in alloc
+    try: return self._alloc(size, options if options is not None else self.default_buffer_spec)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 451, in _alloc
+    return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 619, in alloc
+    mem_handle = self.rm_alloc(self.dev.nvdevice, alloc_func, alloc_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 523, in rm_alloc
+    if made.status == nv_gpu.NV_ERR_NO_MEMORY: raise MemoryError(f"rm_alloc returned {get_error_str(made.status)}")
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: rm_alloc returned 81: NV_ERR_NO_MEMORY
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 422, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 322, in main
+    w_elapsed, per_token, generated, prelude, gpu_before, gpu_after = _measure_w(
+                                                                      ^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 226, in _measure_w
+    gen, prelude = _prefill(model, prompt, chunk_size, nmeas+1 if request_scoped_prewarm else None)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 145, in _prefill
+    first = int(next(gen))
+                ^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py", line 2938, in generate
+    out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py", line 2115, in __call__
+    return jit(tokens, start_pos, temperature)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/jit.py", line 668, in __call__
+    ret = self.captured(input_buf_uops, var_vals)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/jit.py", line 571, in __call__
+    try: run_linear(self.linear, var_vals, input_uops=concrete, jit=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 267, in run_linear
+    for call in linear.src: pm_exec.rewrite(call, ctx)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 2837, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 224, in exec_graph
+    rt = get_graph_runtime(ast, ctx.input_uops)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 123, in get_graph_runtime
+    graph_cache[ast] = runtime = Device[ast.device if isinstance(ast.device, str) else ast.device[0]].graph(ast, input_uops=input_uops)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/graph/hcq.py", line 109, in __init__
+    super().__init__(*args, **kwargs)
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/jit.py", line 451, in __init__
+    self.calls.append((dev_idx, call.src[0], [b.ensure_allocated() for b in bufs], device_vars))
+                                              ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 142, in ensure_allocated
+    def ensure_allocated(self) -> Buffer: return self.allocate() if not self.is_initialized() else self
+                                                 ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 152, in allocate
+    self._base.ensure_allocated()
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 142, in ensure_allocated
+    def ensure_allocated(self) -> Buffer: return self.allocate() if not self.is_initialized() else self
+                                                 ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 157, in allocate
+    self._bufs[self.device] = opaque if opaque is not None else self.allocator.alloc(self.nbytes, self.options)
+                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 553, in alloc
+    return super().alloc(size, options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 523, in alloc
+    except (RuntimeError, MemoryError) as e: raise MemoryError(f"Allocation of {size_to_str(size)} failed on {self.dev.device}. "
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: Allocation of 20.89 MB failed on NV. Used: 30.17 GB
