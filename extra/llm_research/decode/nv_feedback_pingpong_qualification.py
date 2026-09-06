@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Closed-default native decode qualification for two-capture token feedback.
 
-Run each arm in a fresh process.  ``logits`` is the semantic gate, ``census``
+Run each arm in a fresh ordinary-model process. ``logits`` is the semantic gate, ``census``
 proves equal in-graph program count plus the alias/lifetime contract, and
 ``timing`` is only for a GPU-authorized reverse A/B/A after both gates pass.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse, contextlib, hashlib, io, json, pathlib, re, statistics, time
 import numpy as np
 
-from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _load, _prompt
+from extra.llm_research.decode.nv_predispatch_full_logits_qualification import DEFAULT_MODEL, _prompt
 from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
 
 
@@ -19,7 +19,8 @@ GRAPH_TM_RE = re.compile(r"^\*\*\* NV\s+\d+\s+batched\s+(\d+)\s+arg\s+\d+.*?tm\s
 
 
 def _model(arm:str, model_path:str, max_context:int):
-  model = _load(model_path, max_context)
+  from tinygrad.llm.model import Transformer
+  model = Transformer.from_gguf(model_path, max_context)[0]
   model._decode_direct_greedy_promoted = arm in ("greedy", "pingpong")
   model._decode_feedback_pingpong_promoted = arm == "pingpong"
   return model
