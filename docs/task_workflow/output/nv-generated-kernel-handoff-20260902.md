@@ -355,6 +355,17 @@ against both controls.  `NV_COMPILER_Q4_DOWN_STREAMK=0` restores the FP16
 fallback.  Evidence is retained in
 `docs/task_workflow/evidence/nv-prefill-current234-q4down-streamk-20260906`.
 
+The last 18 Q6-V overlays are also promoted in the explicit compiler stack.
+A current234/current252/current234 bracket measured 54.936/53.302/55.001 ms
+medians, a 1.666 ms or 3.031% reduction.  The current252 route selects 252
+projection mains/producers, uses 252 canonical weight bases, and leaves zero
+V/down FP16 overlays.  It passes 20/20 exact recurrent replay and the full-logit
+tolerance.  The matching HCQ ledger measures V service falling from 4.688 to
+2.518 ms.  Setting `NV_COMPILER_Q6_IMMA_PP512_ROLES=ffn_down` restores the
+current234 route.  Evidence is retained in
+`docs/task_workflow/evidence/nv-prefill-current252-q6v-20260906` and
+`docs/task_workflow/evidence/nv-prefill-current252-hcq-20260906`.
+
 ### Decode
 
 The bounded normal decode route now has generated ownership proof, exact logits
