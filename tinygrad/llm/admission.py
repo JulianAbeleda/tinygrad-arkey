@@ -147,12 +147,11 @@ def prefill_concrete_kv_auto_decision(workload_reuse:bool, prefill_v2_on:bool) -
   # default execution mode for every prefill-v2 chunk, not an opt-in: a symbolic start_pos (the
   # `v_start_pos.bind(sp)` continuation-chunk fallback) never satisfies that isinstance check, so
   # every chunk past the first would otherwise take the slow SDPA path regardless of `workload_reuse`.
-  # Each per-start_pos jit still compiles lazily on first use (~5s) and is cached on the model instance
-  # for its lifetime (see model.py's `prefill_v2_jits.setdefault`), so only the first request to touch a
-  # given chunk offset pays the tax; `workload_reuse` (unused here) separately gates EAGER precompile-at-load
-  # (model.py's `precompile_concrete_prefill_jits`) for callers who want that tax paid up front instead.
+  # The concrete-KV route is independent of graph residency. A caller that declares `workload_reuse`
+  # admits per-start-position TinyJit capture and its precompile-at-load cost; the ordinary no-reuse
+  # policy executes the same concrete kernels eagerly so an unbudgeted capture cannot become persistent.
   if not prefill_v2_on: return (False, "selected prefill representation is off -> concrete-KV moot")
-  return (True, "prefill-v2 concrete-KV attention is the default execution path; per-start_pos jits compile lazily and cache")
+  return (True, "prefill-v2 concrete-KV attention is the default execution path; graph reuse follows the workload policy")
 
 def prefill_v2_validate_ubatch(ubatch:int) -> None:
   if ubatch not in _CONCRETE_PREFILL_VALIDATED_M:

@@ -99,3 +99,24 @@ def test_measure_w_gpu_state_brackets_only_timed_decode_window(monkeypatch):
   _, _, tokens, prelude, before, after = mod._measure_w(object(), Dev(), [1], 1, 2, capture_gpu_state=True)
   assert events == ["reset", "prefill", "sync", "state", "token", "token", "state", "close"]
   assert tokens == [7, 7] and prelude == 3 and before["point"] == "before" and after["point"] == "after"
+
+
+def test_concrete_prefill_jit_reuse_follows_workload_policy():
+  from types import SimpleNamespace
+  from tinygrad.llm.model import Transformer
+
+  model = object.__new__(Transformer)
+  model.config = SimpleNamespace(prefill_workload_reuse=False)
+  model.prefill_v2_jits = {}
+  model.forward = lambda *args: None
+  model.forward_greedy = lambda *args: None
+  eager = model._concrete_prefill_jit(0, False)
+  eager.cnt = 1
+  assert model._concrete_prefill_jit(0, False) is eager
+  assert eager.cnt == 0
+
+  model.config.prefill_workload_reuse = True
+  reusable = model._concrete_prefill_jit(512, False)
+  reusable.cnt = 1
+  assert model._concrete_prefill_jit(512, False) is reusable
+  assert reusable.cnt == 1

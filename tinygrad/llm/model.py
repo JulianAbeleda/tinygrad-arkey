@@ -1950,6 +1950,11 @@ class Transformer:
     from tinygrad.helpers import Context
     with Context(NV_FLASH_LOAD_SCHEDULE=1, JIT_BATCH_SIZE=33): yield
 
+  def _concrete_prefill_jit(self, start_pos:int, greedy:bool) -> TinyJit:
+    jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
+    if not self.config.prefill_workload_reuse and jit.cnt: jit.reset()
+    return jit
+
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
                ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None,
                flash_split_count:int|None=None) -> Tensor:
@@ -2042,7 +2047,12 @@ class Transformer:
       return _rjit(tokens, start_pos, temperature, ring_freqs)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
-      jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
+      jit = self._concrete_prefill_jit(start_pos, greedy)
+      # A caller that did not admit workload reuse did not budget the much larger
+      # second-use capture peak. Keep the concrete-KV fast path, but execute its
+      # compiled kernels eagerly on every independent use instead of letting
+      # TinyJit transition from cnt=1 into capture. Explicit reuse policies retain
+      # the existing precompile/capture behavior.
     else:
       pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
       greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_pingpong_jits_flash,
@@ -2758,12 +2768,10 @@ class Transformer:
       # Build after memory-plan realization so packed-only models cannot match unrelated kernels
       # through an empty-dtype shape key.
       model._pf16_warmstart = model._build_prefill_v2_warmstart()
-    # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision),
-    # so per-start_pos jits compile LAZILY on first use by default (cached on the model instance
-    # thereafter, model.py's `prefill_v2_jits.setdefault` at __call__) -- a cold prompt pays the
-    # ~5s/new-chunk-offset tax inline once, not ceil(max_context/ubatch)*~5s at every load. Only callers
-    # who explicitly declare workload reuse (prefill_workload_reuse, still off by default -- nothing
-    # currently sets it) pay that bounded precompile-at-load cost up front so every generation is warm.
+    # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision).
+    # Callers that explicitly declare workload reuse admit the per-start-position TinyJit residency and
+    # pay its bounded precompile-at-load cost. The ordinary no-reuse policy keeps the same concrete-KV
+    # kernels eager, avoiding an unbudgeted second-use capture peak.
     if config.prefill_v2 and config.prefill_concrete_kv and config.prefill_workload_reuse:
       model.precompile_concrete_prefill_jits()
     return model, kv
