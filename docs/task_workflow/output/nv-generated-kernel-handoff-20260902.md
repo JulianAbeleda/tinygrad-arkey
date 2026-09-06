@@ -250,11 +250,15 @@ The selected graph contains 29 unique PROGRAMs.  Retained SOURCE freshly
 recompiles to the captured cubin for 23 with NVRTC 13.2 at sm_120.  The other
 six generic E/r binaries differ under the fresh toolchain but match their exact
 SOURCE keys in the production `compile_nv_sm_120` cache, so all 29 have positive
-current SOURCE-to-binary transport.  There are zero recognized native-precompiled
-markers, but this does not prove generator/registry lineage or universal absence
-of an unknown native route.  Replicated same-protocol endpoint comparison,
-positive generator lineage, and route-level localization of the remaining
-latency gap are the next P9 gates.
+current SOURCE-to-binary transport.  A fresh post-fix context-512 census records typed construction provenance at
+the two PROGRAM construction boundaries. All 29 unique selected programs carry
+the exact `tinygrad.renderer.cuda.CUDARenderer`/`NV` origin; none is unknown or
+native-precompiled. Combined with the SOURCE-key and cubin audit above, this
+positively closes construction ownership and current source transport for the
+selected graph. The six cache-bound binaries remain non-reproducible under the
+fresh compiler, and generic semantic-role coverage remains incomplete.
+Replicated same-protocol endpoint comparison and route-level localization of the
+remaining latency gap are the next P9 gates.
 
 Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
 feedback ping-pong remain closed by default.  The substrate was introduced as
