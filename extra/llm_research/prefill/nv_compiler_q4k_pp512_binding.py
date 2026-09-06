@@ -281,7 +281,7 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
     key=(device,variant,producer_arithmetic)
-    if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(Device[device],binding_for(device,producer_arithmetic=producer_arithmetic),n=N,producer_arithmetic=producer_arithmetic)
+    if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(Device[device],binding_for(device,producer_arithmetic=producer_arithmetic),n=N)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
   key=(device,producer_arithmetic)

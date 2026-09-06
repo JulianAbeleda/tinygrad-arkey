@@ -74,7 +74,7 @@ def main():
   def snapshot(outputs): return np.stack([x.numpy().copy() for x in outputs])
   for _ in range(3): run(generated,inputs[0]); run(llama,inputs[0])
   expected_calls=expected
-  expected=[(candidate.producer,expected_calls),(candidate.q_program if a.role!='gateup' else candidate.asset.main_program,expected_calls)]
+  expected=[(candidate.producer,expected_calls),(candidate.q_program if a.role!='gateup' else candidate.main_program,expected_calls)]
   if a.variant=='streamk': expected.append((candidate.fixup_program,expected_calls))
   cc=census(generated,expected)
   lc=census(llama,[(p,expected_calls if a.role=='gateup' else 36) for p in oracle_programs])
