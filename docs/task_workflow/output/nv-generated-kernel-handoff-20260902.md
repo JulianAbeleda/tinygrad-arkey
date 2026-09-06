@@ -315,10 +315,11 @@ over their complete lifecycle, and proven in the full model.
 
 ### Prefill
 
-Q6 FFN-down is fully qualified.  Generated gate/up and K implementations exist,
-but the remaining
-Q4 down population, both V populations, Q/O, complete attention lifecycle,
-ordinary generated selection, and context/depth coverage remain.
+The exact pp512 compiler route now selects 216 generated projection roles:
+72 gate/up, 72 Q/O, 36 K, 18 Q6 FFN-down, and 18 Q4-V.  This count is a
+composition census, not a claim that all 216 kernels have llama parity.  The
+remaining projection overlays are 18 Q4 FFN-down and 18 Q6-V roles, plus the
+complete attention lifecycle and context/depth qualification.
 
 The low-perturbation HCQ census prerequisite is complete: 1,467 of 1,467 calls
 are classified with zero unknowns and 0.578% observer overhead.  Its device-time
@@ -327,6 +328,19 @@ Q/O, 5.406 ms to V, 3.341 ms to Flash, and the remainder to vocab, K, norms,
 activation, and support.  The next work is new kernel performance, especially
 gate/up scheduling and the unqualified Q4-down/V populations, rather than a new
 census prerequisite.
+
+The first optimization selected from that ledger is now promoted inside the
+explicit compiler pp512 mode.  Gate/up uses the generated 170-owner Stream-K
+main and deterministic fixup by default, with
+`NV_COMPILER_Q4_GATE_STREAMK=0` as a rollback.  A fresh
+wide/Stream-K/wide bracket measured median full-model prefill latencies of
+61.894/59.525/61.930 ms, a 2.387 ms or 3.856% reduction against the mean control
+median.  Both routes replayed token 198 for 20/20 recurrent cycles; the
+candidate and control full logits selected the same token and satisfied
+`rtol=0.02, atol=0.5`.  The candidate remains roughly 21-24 ms slower than the
+retained 35-38 ms llama endpoint range, so this closes one material component
+rather than overall prefill parity.  Evidence is retained in
+`docs/task_workflow/evidence/nv-prefill-current216-streamk-promotion-20260906`.
 
 ### Decode
 
