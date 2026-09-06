@@ -71,15 +71,18 @@ def _activation_carrier(record:Tensor, transform:Q8ActivationRecordTransform) ->
     .reshape(transform.rows, transform.k).bitcast(dtypes.float16).cast(dtypes.int8)
 
 
-def _record_source() -> str:
+def _record_source(arithmetic="legacy") -> str:
+  from extra.llm_research.prefill.nv_q8_compact_producer_gate import SRC_FP16_LLAMA
+  source = SRC_FP16_LLAMA if arithmetic == "llama" else SRC_FP16
+  if arithmetic not in ("legacy", "llama"): raise ValueError("unsupported producer arithmetic")
   old = ("void q8_compact_fp16(const half* __restrict__ x, signed char* __restrict__ q,\n"
          " float* __restrict__ scales,float* __restrict__ sums) {")
   new = ("void q8_compact_record_fp16(const half* __restrict__ x, unsigned int* __restrict__ record) {\n"
          f" signed char* __restrict__ q=(signed char*)record;\n"
          f" float* __restrict__ scales=(float*)(q+{M*K});\n"
          f" float* __restrict__ sums=scales+{M*(K//32)};")
-  if old not in SRC_FP16: raise RuntimeError("Q8 producer source ABI changed")
-  return SRC_FP16.replace(old, new)
+  if old not in source: raise RuntimeError("Q8 producer source ABI changed")
+  return source.replace(old, new)
 
 
 def _research_unroll_program(program:UOp, dev) -> UOp:
@@ -112,7 +115,7 @@ class CompilerPP512Binding:
   warmstart: Mapping
   warmstart_contexts: Mapping
   @classmethod
-  def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False) -> "CompilerPP512Binding":
+  def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False, producer_arithmetic="legacy") -> "CompilerPP512Binding":
     config.validate()
     wt = PackedWeightTransform("Q4_K", N, K)
     at = TileMajorQ8ActivationRecordTransform(M, K) if compact_q8 else Q8ActivationRecordTransform(M, K)
@@ -126,7 +129,7 @@ class CompilerPP512Binding:
     identity = hashlib.sha256(repr(("compact_q8" if compact_q8 else "flat_q8", config, geometry, wp.identity, ap.identity, accum.abi)).encode()).hexdigest()
     context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum)
     key = warmstart_key({M, N}, K, wt.storage_dtype)
-    lib = NVRTCCompiler(dev.arch, ptx=False, cache_key="nv_q8_compact_record_fp16_v1").compile(_record_source())
+    lib = NVRTCCompiler(dev.arch, ptx=False, cache_key=f"nv_q8_compact_record_fp16_{producer_arithmetic}_v1").compile(_record_source(producer_arithmetic))
     producer = native_nv_program("q8_compact_record_fp16", lib, global_size=(M, 8, 1), local_size=(128, 1, 1),
                                  globals=(0, 1), outs=(1,), ins=(0,))
     warmstart, warmstart_contexts = {key:(Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key:context}
@@ -273,13 +276,14 @@ def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_fami
     return out.reshape(M, N)
 
 
-def binding_for(device:str="NV", *, variant="wide"):
+def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"):
   if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
-    key=(device,variant)
-    if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(Device[device],binding_for(device),n=N)
+    key=(device,variant,producer_arithmetic)
+    if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(Device[device],binding_for(device,producer_arithmetic=producer_arithmetic),n=N,producer_arithmetic=producer_arithmetic)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
-  if device not in _BINDINGS: _BINDINGS[device] = CompilerPP512Binding.compile(Device[device])
-  return _BINDINGS[device]
+  key=(device,producer_arithmetic)
+  if key not in _BINDINGS: _BINDINGS[key] = CompilerPP512Binding.compile(Device[device],producer_arithmetic=producer_arithmetic)
+  return _BINDINGS[key]
