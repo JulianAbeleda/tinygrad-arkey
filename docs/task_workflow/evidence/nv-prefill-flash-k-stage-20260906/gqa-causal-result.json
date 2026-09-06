@@ -1,0 +1,24 @@
+{
+  "candidate": "four GQA query heads per CTA plus causal tile skipping",
+  "correctness": {
+    "allclose_sdpa": true,
+    "finite": true,
+    "max_abs_sdpa": 0.001953125,
+    "max_abs_llama_oracle": 0.0011930465698242188
+  },
+  "decision": "REJECT_AND_REVERT",
+  "isolated_device_us_approx": 94.0,
+  "model": {
+    "active_fixups": 90,
+    "all_weights_canonical": true,
+    "compiler_main_total": 252,
+    "median_ms": 49.677997,
+    "min_ms": 49.388112,
+    "replay_cycles_exact": 5,
+    "samples_ms": [49.952824, 49.388112, 49.677997, 49.46655, 49.42384, 49.586155, 49.712151, 49.783235, 49.750164],
+    "token": 198,
+    "weight_copy_kernels": 0
+  },
+  "promoted_k_stage_control_median_ms": 49.490628,
+  "schema": "tinygrad.nv_prefill_flash_gqa_causal_result.v1"
+}
