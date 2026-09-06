@@ -183,6 +183,11 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
   if jit not in captures:captures[jit]=binding.new_capture()
   return captures[jit]
 
+def _nv_compiler_q4k_down_enabled(config)->bool:
+  """Generated Q4 FFN-down Stream-K lease inside the exact compiler pp512 arm."""
+  return bool(getenv("NV_COMPILER_Q4_DOWN_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   """Generated K lease follows the selected compiler gate/up route only."""
   explicit = _nv_q4_imma_pp512_mode()
@@ -818,6 +823,10 @@ class FFNBlock:
         if _nv_llama_packed_q4k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q4k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+        if _nv_compiler_q4k_down_enabled(self.config) and hasattr(self, "_nv_compiler_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill,prefill_activation,self._nv_compiler_q4k_down_pp512_binding.project(
             down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
         _down_in = h.reshape(x.shape[:-1]+(12288,))
         _down_out = _pf16(self.ffn_down, _down_in).contiguous()
@@ -1986,7 +1995,7 @@ class Transformer:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
       block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
-    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
+    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
     if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
       from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
       _nv_compiler_o_binding=compiler_o_binding_for("NV"); _nv_compiler_o_binding.prepare(len(self.blk))
@@ -2047,6 +2056,10 @@ class Transformer:
       if not _nv_llama_packed_q4k_down_enabled(self.config):raise RuntimeError("llama Q4 down requires the exact llama Q4 gate/up Qwen3-8B arm")
       from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
       _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
+    if is_prefill_v2 and _nv_compiler_q4k_down_enabled(self.config):
+      from extra.llm_research.prefill.nv_compiler_q4k_down_pp512_binding import capture_for as q4_down_capture_for
+      _nv_compiler_q4_down_binding=q4_down_capture_for("NV",variant="streamk",streamk_unroll=8)
+      _nv_compiler_q4_down_binding.prepare_records(18)
     if is_prefill_v2 and _nv_compiler_q6_imma_pp512_enabled(self.config):
       if _nv_q4_production_mode(self.config) != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
         raise RuntimeError("NV compiler Q6 V/down pp512 route requires the exact compiler gate/up+K Qwen3-8B arm")
@@ -2115,6 +2128,11 @@ class Transformer:
     if _nv_llama_q4_down_binding is not None:
       q4_down_capture=_nv_llama_packed_q4k_down_capture(self,jit,_nv_llama_q4_down_binding);q4_down_capture.begin_trace()
       for block in self.blk:block._nv_llama_packed_q4k_down_pp512_binding=q4_down_capture
+    if _nv_compiler_q4_down_binding is not None:
+      q4_down_capture=_nv_compiler_q4_down_binding;q4_down_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q4k_down_pp512_binding=q4_down_capture
+        if isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"): delattr(block.ffn_down,"_pf16_w")
     if _nv_compiler_k_binding is not None:
       k_capture = _nv_compiler_q4_imma_k_capture(self,jit,_nv_compiler_k_binding)
       k_capture.begin_trace()

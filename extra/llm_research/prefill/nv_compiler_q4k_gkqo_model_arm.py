@@ -324,6 +324,7 @@ def _capture(model,qo,chunk,temp,candidate):
   gate,kval=model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture
   vval=getattr(model, "_nv_compiler_q4_imma_v_pp512_binding", None)
   q6val=getattr(model, "_nv_compiler_q6_imma_pp512_binding", None)
+  q4down=getattr(model, "_nv_compiler_q4k_down_pp512_binding", None)
   _configure(model,gate)
   for block in model.blk:block._nv_compiler_q4_imma_k_pp512_binding=kval
   role_by_id={}
@@ -343,6 +344,7 @@ def _capture(model,qo,chunk,temp,candidate):
       gate.begin_trace();kval.begin_trace()
       if candidate and vval is not None:vval.begin_trace()
       if q6val is not None:q6val.begin_trace()
+      if q4down is not None:q4down.begin_trace()
       if qo is not None:qo.begin_trace()
       _call_and_sync(run,chunk,temp)
   if run.captured is None:raise RuntimeError("combined gate/up+K+Q/O arm did not capture")
@@ -404,6 +406,7 @@ def main():
   ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True);ap.add_argument("--q4-v",action="store_true")
   ap.add_argument("--q6-v",action="store_true")
   ap.add_argument("--q6-down",action="store_true")
+  ap.add_argument("--q4-down-streamk",action="store_true")
   ap.add_argument("--gate-streamk",action="store_true")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
@@ -437,6 +440,10 @@ def main():
   q6_env=os.environ.get("NV_COMPILER_Q6_IMMA_PP512")
   q6_roles={x.strip() for x in os.environ.get("NV_COMPILER_Q6_IMMA_PP512_ROLES","").split(",") if x.strip()}
   requested_q6_roles=({"attn_v"} if args.q6_v else set()) | ({"ffn_down"} if args.q6_down else set())
+  if args.q4_down_streamk and (args.arm!="candidate" or not args.q4_v or not args.q6_down or not args.gate_streamk):
+    raise SystemExit("Q4 down Stream-K requires the current216 Stream-K candidate")
+  if bool(int(os.environ.get("NV_COMPILER_Q4_DOWN_STREAMK","0"))) != args.q4_down_streamk:
+    raise SystemExit("Q4 down Stream-K flag must match NV_COMPILER_Q4_DOWN_STREAMK")
   if os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" or \
       os.environ.get("NV_Q4_IMMA_PP512") is not None or (requested_q6_roles and (q6_env!="1" or q6_roles!=requested_q6_roles)) or \
       (not requested_q6_roles and q6_env != "0"):
@@ -501,6 +508,11 @@ def main():
     from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
     q6_asset=q6_binding_for("NV");q6_asset.prepare_records(36);q6_asset.install_warmstart(model)
     q6val=_GraphOwnedQ6VCapture(q6_asset) if requested_q6_roles=={"attn_v"} else q6_asset.new_capture()
+  q4_down_asset=q4_down_capture=None
+  if args.q4_down_streamk:
+    from extra.llm_research.prefill.nv_compiler_q4k_down_pp512_binding import binding_for as q4_down_binding_for, DownCapture
+    q4_down_asset=q4_down_binding_for("NV",variant="streamk",streamk_unroll=8)
+    q4_down_capture=DownCapture(q4_down_asset);q4_down_capture.prepare_records(18)
   k_asset=k_binding_for("NV");k_asset.prepare_records(36);k_asset.install_warmstart(model)
   # The matched control retains K's independently-qualified ordinary carrier.
   # Q/O composition changes its scheduling boundary, so the combined candidate
@@ -512,10 +524,12 @@ def main():
   vval=_GraphOwnedVCapture(v_asset,K_RECORD_U32) if args.arm=="candidate" and args.q4_v else None
   model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture=gate,kval
   model._nv_compiler_q6_imma_pp512_binding=q6val
+  model._nv_compiler_q4k_down_pp512_binding=q4_down_capture
   model._nv_compiler_q4_imma_v_pp512_binding=vval
   model._nv_compiler_q4_imma_v_pp512_enabled=(args.arm=="candidate" and args.q4_v)
   for bi,block in enumerate(model.blk):
     block._nv_compiler_q6_imma_pp512_binding=q6val
+    block._nv_compiler_q4k_down_pp512_binding=q4_down_capture
     block._nv_compiler_q4_imma_v_pp512_binding=vval
     block._nv_compiler_q4_imma_v_pp512_enabled=(args.arm=="candidate" and args.q4_v)
     # Only the 18 GGML type-12 V projections are replaced; type-14 V stays
@@ -525,6 +539,8 @@ def main():
     if args.q6_v and isinstance(block.attn_v,Q6KPrimitiveLinear) and hasattr(block.attn_v,"_pf16_w"):
       delattr(block.attn_v,"_pf16_w")
     if args.q6_down and isinstance(block.ffn_down,Q6KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"):
+      delattr(block.ffn_down,"_pf16_w")
+    if args.q4_down_streamk and isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"):
       delattr(block.ffn_down,"_pf16_w")
   qo=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
   if True:
@@ -545,6 +561,7 @@ def main():
               "v":None if vval is None else vval.asset.main_program.arg.name,
               "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].candidate_identity,
               "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].candidate_identity,
+              "q4_down":None if q4_down_asset is None else q4_down_asset.candidate_identity,
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
               "qo":None if qo is None else qo.asset.plain_context.canonical_identity}
@@ -679,6 +696,7 @@ def main():
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
+  if q4_down_asset is not None: mains["q4_down"]=[c for c in calls if _call_name(c)==q4_down_asset.main_program.arg.name]
   # K and serialized V intentionally share the generated kernel symbol.  K
   # retains compiler candidate_context; the remaining exact-symbol calls are V.
   v_name = None if vval is None else vval.asset.main_program.arg.name
@@ -691,9 +709,10 @@ def main():
   transforms={"gate_up":gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
               "v":None if vval is None else vval.transform,
               "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].transform,
-              "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].transform}
+              "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].transform,
+              "q4_down":None if q4_down_asset is None else q4_down_asset.base.transform}
   weights=[]
-  for role in ("gate_up","k","qo","v","q6_v","q6_down"):
+  for role in ("gate_up","k","qo","v","q6_v","q6_down","q4_down"):
     if transforms[role] is not None:weights += [_weight_arg(c,transforms[role]) for c in mains[role]]
   if gate_oracle_calls:weights += [_weight_arg(c,gate.transform) for c in gate_oracle_calls]
   weights=[x for x in weights if x is not None]
@@ -704,6 +723,7 @@ def main():
     (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output) if isinstance(lin,Q4KPrimitiveLinear)}
   canonical.update(block.attn_v.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.attn_v,Q6KPrimitiveLinear))
   canonical.update(block.ffn_down.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.ffn_down,Q6KPrimitiveLinear))
+  canonical.update(block.ffn_down.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.ffn_down,Q4KPrimitiveLinear))
   admitted=[lin for block in model.blk for lin in (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output)]
   remaining=[lin for block in model.blk for lin in (block.attn_v,block.ffn_down)]
   # V is a separately captured role even though it shares the immutable
@@ -713,6 +733,7 @@ def main():
   total_mains=sum(len(x) for x in mains.values())+len(v_calls)+len(gate_oracle_calls)
   q6_producer_names={} if q6_asset is None else {role:asset.producer.arg.name for role,asset in q6_asset.roles.items()}
   q8=names.get("q8_compact_record_fp16",0)+sum(names.get(name,0) for role,name in q6_producer_names.items() if role in requested_q6_roles)
+  if q4_down_asset is not None: q8 += names.get(q4_down_asset.producer.arg.name,0)
   census={"gate_up_main":len(mains["gate_up"]),"gate_oracle_main":len(gate_oracle_calls),"down_oracle_main":len(down_oracle_calls),
     "gate_epilogue_main":len(gate_epilogue_calls),
     "old_gate_silu_mul":names.get("E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",0),
@@ -722,6 +743,7 @@ def main():
     "k_main":len(mains["k"]),"qo_main":len(mains["qo"]),
     "v_main":len(v_calls),"q6_v_main":len(mains["q6_v"]),"q6_v_producer":names.get(q6_producer_names.get("attn_v",""),0),
     "q6_down_main":len(mains["q6_down"]),"q6_down_producer":names.get(q6_producer_names.get("ffn_down",""),0),
+    "q4_down_main":len(mains["q4_down"]),"q4_down_producer":names.get("q8_compact_record_fp16_k12288",0),
     "compiler_main_total":total_mains,"q8_producer_total":q8,"candidate_weight_args":len(weights),
     "unique_weight_bases":len(set(weights)),"all_weights_canonical":bool(weights and all(isinstance(x,str) or x in canonical for x in weights)),
     "admitted_fp16_overlays":sum(getattr(x,"_pf16_w",None) is not None for x in admitted),
@@ -777,6 +799,13 @@ def main():
       census["q6_v_main"]==18,census["q6_v_producer"]==18,census["compiler_main_total"]==216,
       census["q8_producer_total"]==216,census["candidate_weight_args"]==216,census["unique_weight_bases"]==216,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==36,
+      census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+  elif args.q4_down_streamk:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
+      census["v_main"]==18,census["q6_down_main"]==18,census["q6_down_producer"]==18,
+      census["q4_down_main"]==18,census["q4_down_producer"]==18,census["compiler_main_total"]==234,
+      census["q8_producer_total"]==234,census["candidate_weight_args"]==234,census["unique_weight_bases"]==234,
+      census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==18,
       census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.arm=="candidate" and args.q4_v and args.q6_down and not args.q6_v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,

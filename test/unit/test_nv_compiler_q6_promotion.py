@@ -65,6 +65,18 @@ def test_compiler_gate_streamk_defaults_on_with_explicit_rollback(monkeypatch):
   assert model._nv_compiler_q4_gate_streamk_enabled(config)
   monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_STREAMK":0}))
   assert not model._nv_compiler_q4_gate_streamk_enabled(config)
+
+def test_compiler_q4_down_streamk_is_explicit_and_compiler_bounded(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_q4_production_mode",lambda _:"compiler")
+  monkeypatch.setattr(model,"_nv_compiler_q4_imma_pp512_qualified",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert model._nv_compiler_q4k_down_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_DOWN_STREAMK":0}))
+  assert not model._nv_compiler_q4k_down_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  monkeypatch.setattr(model,"_nv_q4_production_mode",lambda _:"llama")
+  assert not model._nv_compiler_q4k_down_enabled(config)
   monkeypatch.setattr(model,"_nv_q4_imma_pp512_mode",lambda:"llama")
   monkeypatch.setattr(model,"getenv",_env({}))
   assert not model._nv_compiler_q4_gate_streamk_enabled(config)
