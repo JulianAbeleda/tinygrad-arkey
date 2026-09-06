@@ -1,0 +1,80 @@
+{
+  "commit": "c13da6ade",
+  "rows": [
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "89.94",
+        "power.draw.instant": "76.08",
+        "pstate": "P0",
+        "temperature.gpu": "50",
+        "temperature.gpu.tlimit": "40",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "74.54",
+        "power.draw.instant": "74.52",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "41",
+        "temperature.memory": "N/A"
+      },
+      "elapsed_s": 204.66880679130554,
+      "first": 34208,
+      "global_after": 19711028320,
+      "global_before": 19005016896,
+      "request": 1,
+      "started": 1788671064.2175627,
+      "status": "success"
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "90.43",
+        "power.draw.instant": "76.22",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "39",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "89.15",
+        "power.draw.instant": "76.47",
+        "pstate": "P0",
+        "temperature.gpu": "50",
+        "temperature.gpu.tlimit": "40",
+        "temperature.memory": "N/A"
+      },
+      "elapsed_s": 28.532763719558716,
+      "first": 34208,
+      "global_after": 19711046756,
+      "global_before": 19711028320,
+      "request": 2,
+      "started": 1788671268.9106634,
+      "status": "success"
+    }
+  ],
+  "schema": "nv-p9-patched-two-request.v1"
+}
