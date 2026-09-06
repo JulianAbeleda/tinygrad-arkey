@@ -1,87 +1,100 @@
 #!/usr/bin/env python3
-"""Captured 72-real-weight Q/O proxy for compiler-owned Q4_K/Q8 IMMA."""
-from __future__ import annotations
-
-import argparse, json, pathlib, statistics, time
+"""Live, paired Q/O lifecycle gate over canonical GGUF weights, one role per process."""
+import argparse, collections, hashlib, json, pathlib, statistics, time
 import numpy as np
-
 from tinygrad import Device, Tensor, TinyJit, dtypes
-from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.codegen.opt.postrange import warmstart_candidate_state, warmstart_key
-from tinygrad.uop.ops import Ops, UOp
-from extra.llm_research.prefill.nv_compiler_q4k_production_gate import _activation_carrier, _weight_carrier
-from extra.llm_research.prefill.nv_compiler_q4k_qo_gate import M,N,K,_context,_record
+from tinygrad.uop.ops import Ops
+from extra.llm_research.layout import read_metadata, packed_u32_slice
+from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for
 
 
-def _call_count(linear:UOp) -> int:
-  total=0
-  for call in linear.src:
-    program=call.src[0]
-    total += _call_count(program.src[0]) if program.op is Ops.CUSTOM_FUNCTION and program.arg=="graph" else 1
-  return total
+def program_key(p):
+  binaries = [u.arg for u in p.src if u.op is Ops.BINARY]
+  if len(binaries) != 1: raise ValueError('expected one retained binary')
+  return (p.arg.name, hashlib.sha256(binaries[0]).hexdigest(), tuple(p.arg.global_size), tuple(p.arg.local_size),
+          tuple(p.arg.globals), tuple(p.arg.outs), tuple(p.arg.ins), tuple(v.arg[1] for v in p.arg.vars), tuple(p.arg.aux))
+
+
+def census(jit, expected):
+  programs = [u.src[0] for u in jit.captured.linear.toposort() if u.op is Ops.CALL and u.src and u.src[0].op is Ops.PROGRAM]
+  actual = collections.Counter(program_key(p) for p in programs)
+  wanted = collections.Counter()
+  for p, count in expected: wanted[program_key(p)] += count
+  return {'exact': actual == wanted, 'calls': len(programs),
+          'programs': [{'identity': list(key), 'count': count} for key,count in actual.items()]}
 
 
 def main():
-  ap=argparse.ArgumentParser();ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
-  ap.add_argument("--rounds",type=int,default=9);ap.add_argument("--out",required=True);args=ap.parse_args()
-  from tinygrad.llm.generate import load_model_and_tokenizer
-  model,_=load_model_and_tokenizer(args.model,4608,seed=20260617)
-  linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
-  weights=[p.prefill_packed_weight().contiguous().realize() for p in linears]
-  expected_words=N*(K//256)*36
-  if len(weights)!=72 or any(w.dtype!=dtypes.uint32 or w.numel()!=expected_words for w in weights):
-    raise RuntimeError("proxy requires 72 canonical Qwen3-8B Q/O Q4_K buffers")
-  if any(getattr(p,"_pf16_w",None) is None for p in linears):raise RuntimeError("current FP16 comparator overlays unavailable")
-
-  q8_np,scales_np,_,record_np=_record();record=Tensor(record_np,device="NV").contiguous().realize()
-  # Reconstruct exactly representable fp16 values from the compact packet for
-  # the matched resident-FP16 service comparator.
-  x_np=(q8_np.astype(np.float32)*np.repeat(scales_np,32,axis=1)).astype(np.float16)
-  x=Tensor(x_np,device="NV").contiguous().realize()
-  wt,at,identity,context=_context();key=warmstart_key({M,N},K,wt.storage_dtype)
-
+  ap=argparse.ArgumentParser()
+  ap.add_argument('--model',default='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf')
+  ap.add_argument('--role',choices=('q','o'),required=True)
+  ap.add_argument('--rounds',type=int,default=31)
+  ap.add_argument('--out',required=True)
+  a=ap.parse_args()
+  if a.rounds < 1: raise ValueError('rounds must be positive')
+  role='attn_q' if a.role=='q' else 'attn_output'
+  path=pathlib.Path(a.model); md=read_metadata(path)
+  infos=[i for i in md.infos if i.name.endswith('.'+role+'.weight')]
+  if len(infos)!=36 or any(i.typ!=12 or tuple(reversed(i.dims))!=(4096,4096) for i in infos):
+    raise ValueError('expected exactly 36 Q4_K weights with shape (4096,4096)')
+  weights=[packed_u32_slice(path,md,i,device='NV').contiguous().realize() for i in infos]
+  weight_ids=[w.uop.buf_uop for w in weights]
+  candidate=binding_for('NV'); candidate.prepare(36)
+  if a.role=='q':
+    from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as llama_binding
+    oracle=llama_binding('NV').new_capture()
+    oracle_programs=[oracle.asset.ds4,oracle.asset.q4_q_main,oracle.asset.q4_q_fix]
+  else:
+    from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as llama_binding
+    oracle=llama_binding('NV').new_capture()
+    oracle_programs=[oracle.asset.producer,oracle.asset.main,oracle.asset.fixup]
+  rng=np.random.default_rng(3)
+  x_np=rng.standard_normal((512,4096)).astype(np.float16)
+  inputs=[Tensor(v,device='NV').realize() for v in (x_np,(x_np*.7).astype(np.float16))]
   @TinyJit
-  def packed_batch(record_arg:Tensor):
-    return tuple(_activation_carrier(record_arg,at).matmul(_weight_carrier(words,wt).transpose(),dtype=dtypes.int)
-      .cast(dtypes.float).contiguous().realize() for words in weights)
-
+  def generated(x):
+    candidate.begin_trace()
+    return tuple(candidate.project(x,w,model_family='qwen3_8b',role=role) for w in weights)
   @TinyJit
-  def fp16_batch(x_arg:Tensor):
-    return tuple(x_arg.matmul(p._pf16_w.transpose()).contiguous().realize() for p in linears)
+  def llama(x):
+    oracle.begin_trace()
+    return tuple(oracle.project_q(x,w) if a.role=='q' else
+                 oracle.project(x,w,model_family='qwen3_8b',role=role) for w in weights)
+  def run(jit,x):
+    outputs=jit(x); Tensor.realize(*outputs); Device['NV'].synchronize(); return outputs
+  def snapshot(outputs): return np.stack([x.numpy().copy() for x in outputs])
+  for _ in range(3): run(generated,inputs[0]); run(llama,inputs[0])
+  cc=census(generated,[(candidate.producer,36),(candidate.q_program,36)])
+  lc=census(llama,[(p,36) for p in oracle_programs])
+  # Correctness snapshots are deliberately outside the timing window.
+  pairs=[]; first_outputs=[]
+  for x in inputs:
+    got=snapshot(run(generated,x)); ref=snapshot(run(llama,x))
+    pairs.append({'finite':bool(np.isfinite(got).all() and np.isfinite(ref).all()),
+                  'allclose':bool(np.allclose(got,ref,rtol=.02,atol=.5)),
+                  'max_abs':float(np.max(np.abs(got-ref)))})
+    first_outputs.append((got[0].copy(),ref[0].copy()))
+  distinct=all(not np.array_equal(first_outputs[0][i],first_outputs[1][i]) for i in (0,1))
+  stable=all(w.uop.buf_uop is old for w,old in zip(weights,weight_ids))
+  samples={'candidate':[],'llama':[]}; orders=[]
+  for iteration in range(a.rounds):
+    order=('candidate','llama') if iteration%2==0 else ('llama','candidate'); orders.append(order)
+    for name in order:
+      Device['NV'].synchronize(); start=time.perf_counter_ns()
+      run(generated if name=='candidate' else llama,inputs[0])
+      samples[name].append((time.perf_counter_ns()-start)/1e6)
+  passed=all(p['finite'] and p['allclose'] for p in pairs) and distinct and stable and cc['exact'] and lc['exact']
+  result={'schema':'tinygrad.nv.qo.live.v2','status':('PASS_DIRECT' if a.rounds>=31 else 'PASS_SMOKE') if passed else 'FAIL',
+          'role':role,'scope':'isolated projection lifecycle; QKV shared producer and O residual are excluded',
+          'weights':[{'name':i.name,'ggml_type':i.typ,'shape':list(reversed(i.dims))} for i in infos],
+          'fixture':{'kind':'synthetic normal','seed':3,'sha256':hashlib.sha256(x_np.tobytes()).hexdigest()},
+          'canonical_buffers_stable':stable,'candidate_census':cc,'llama_census':lc,'correctness':pairs,'distinct':distinct,
+          'timing_ms':{'samples':samples,'orders':orders,'rounds':a.rounds,
+                       'candidate_median':statistics.median(samples['candidate']),'llama_median':statistics.median(samples['llama'])}}
+  out=pathlib.Path(a.out); out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(result,indent=2)+'\n')
+  print(json.dumps({k:result[k] for k in ('status','role','correctness','distinct')}),flush=True)
+  print(json.dumps({'candidate_ms':result['timing_ms']['candidate_median'],'llama_ms':result['timing_ms']['llama_median'],
+                    'candidate_census':cc['exact'],'llama_census':lc['exact']}),flush=True)
+  if not passed: raise SystemExit(1)
 
-  def bench(jit,arg,ctx=None):
-    samples=[]
-    manager=warmstart_candidate_state({key:(Opt(OptOps.TC,0,(-1,2,1)),)},{key:context}) if ctx else \
-      warmstart_candidate_state(model._pf16_warmstart or {},{})
-    with manager:
-      for iteration in range(args.rounds+3):
-        Device["NV"].synchronize();started=time.perf_counter_ns();outputs=jit(arg);Device["NV"].synchronize()
-        if iteration>=3:samples.append((time.perf_counter_ns()-started)/1e6)
-    return outputs,samples
-
-  packed,packed_times=bench(packed_batch,record,True)
-  fp16,fp16_times=bench(fp16_batch,x,False)
-  sample_indices=np.asarray([0,127,128,16383,M*N-1]); picks=(0,35,71)
-  before=[packed[i].numpy().reshape(-1)[sample_indices].copy() for i in picks]
-  with warmstart_candidate_state({key:(Opt(OptOps.TC,0,(-1,2,1)),)},{key:context}):packed=packed_batch(record)
-  Device["NV"].synchronize();after=[packed[i].numpy().reshape(-1)[sample_indices] for i in picks]
-  replay_exact=all(np.array_equal(a,b) for a,b in zip(before,after))
-  sample_distinct=all(not np.array_equal(after[i],after[j]) for i in range(3) for j in range(i+1,3))
-  packed_calls=_call_count(packed_batch.captured.linear) if packed_batch.captured is not None else 0
-  fp16_calls=_call_count(fp16_batch.captured.linear) if fp16_batch.captured is not None else 0
-  pmin,fmin=min(packed_times),min(fp16_times);pper=pmin*1000/72;fper=fmin*1000/72
-  rec={"schema":"tinygrad.nv_compiler_q4k_qo_72real_proxy.v1","shape":{"M":M,"N":N,"K":K,"tile_k":64},
-    "roles":{"q":36,"o":36},"real_weight_buffers":len(weights),"identity":identity,
-    "captured_calls":{"packed":packed_calls,"fp16":fp16_calls},"sample_replay_exact":replay_exact,
-    "sample_distinct_real_weights":sample_distinct,"sample_finite":bool(all(np.isfinite(v).all() for v in after)),
-    "timing":{"packed_r9_ms":packed_times,"packed_min_ms":pmin,"packed_median_ms":statistics.median(packed_times),
-      "packed_per_call_us":pper,"fp16_r9_ms":fp16_times,"fp16_min_ms":fmin,"fp16_median_ms":statistics.median(fp16_times),
-      "fp16_per_call_us":fper,"packed_over_fp16":pmin/fmin,"llama_estimate_per_call_us":61.5,
-      "packed_over_llama_estimate":pper/61.5},
-    "representation":{"expanded_global_packed_weight":False,"partial_workspace_bytes":0,"fixup_calls":0}}
-  rec["passed"]=bool(replay_exact and sample_distinct and rec["sample_finite"] and packed_calls==fp16_calls==72 and pmin<=fmin)
-  path=pathlib.Path(args.out);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(rec,indent=2)+"\n")
-  print(json.dumps(rec,sort_keys=True));
-  if not rec["passed"]:raise SystemExit(1)
-
-if __name__=="__main__":main()
+if __name__=='__main__': main()
