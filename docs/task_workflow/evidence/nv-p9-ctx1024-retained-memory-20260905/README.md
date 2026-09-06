@@ -11,9 +11,9 @@ written-input-shadow ownership is exactly one four-byte allocation after the
 three warm tokens, ruling out the alias firewall as the material memory owner.
 
 The concrete prefill-v2 JITs at offsets 0 and 512 are each `cnt=1` and remain
-uncaptured after the first request. On the second independent request they
-enter TinyJit's capture branch; both observed ctx1024 failures occur while
-constructing/replaying that prefill graph near 30.1 GiB. This identifies the
-second-use per-offset prefill-v2 capture as the trigger. A production fix still
-needs target-neutral memory admission and must preserve the selected packed
-kernels and alias safety.
+uncaptured after the first request. This originally made second-use capture a
+hypothesis for the independent-request failure. Follow-up diagnostics that
+cleared the uncaptured wrappers, and separately cleared both those wrappers and
+the captured rollout graph, still failed during the next eager prefill near
+30 GiB. The trigger claim is therefore withdrawn; see the 20260906 follow-up
+checkpoint for the narrower retained-allocation findings.
