@@ -79,12 +79,13 @@ def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tu
 
 
 def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
+  from extra.llm_research.decode.decode_runtime_overhead import _decode_jits
   model = _model(arm, model_path, max_context)
   gen = model.generate(_prompt(model_path, depth), chunk_size=32, temperature=0.0)
   try:
     next(gen)
     for _ in range(6): next(gen)
-    capture = io.StringIO(); before = _pair_counts(model)
+    capture = io.StringIO(); before = _pair_counts(model); jit_before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
     with contextlib.redirect_stdout(capture):
       from tinygrad.helpers import Context
       with Context(DEBUG=2): token = int(next(gen))
@@ -97,9 +98,13 @@ def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
       graph_rows.append((int(match.group(1)), float(match.group(2))*(1000 if match.group(3)=="ms" else 1)))
   pair_name,pair = _selected_pair(model,before)
   contract = pingpong_capture_contract(pair) if arm == "pingpong" and pair is not None else None
+  used = [(name,jit) for name,jit in _decode_jits(model).items() if jit.cnt != jit_before.get(name)]
+  used_name,used_jit = used[0] if len(used) == 1 else (None,None)
+  shadows = len(used_jit.captured._written_input_shadows) if used_jit is not None and used_jit.captured is not None else None
   return {"schema":"tinygrad.nv.feedback_pingpong_qualification.v1", "arm":arm, "mode":"census", "callify_redirect":_redirect(), "token":token,
           "program_count":len(rows)+sum(x[0] for x in graph_rows), "graph_group_sizes":[x[0] for x in graph_rows],
           "kernel_us":sum(x[1] for x in rows)+sum(x[1] for x in graph_rows), "selected_pair":pair_name, "contract":contract,
+          "selected_jit":used_name, "selected_jit_written_input_shadows":shadows,
           "route_still_promoted":bool(getattr(model, "_decode_feedback_pingpong_promoted", False)),
           "program_names":[x[0] for x in rows], "raw_debug":capture.getvalue().splitlines()[-20:]}
 
