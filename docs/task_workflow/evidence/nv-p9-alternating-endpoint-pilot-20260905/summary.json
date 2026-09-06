@@ -1,0 +1,53 @@
+{
+  "decode_tokens": 40,
+  "depth": 512,
+  "limitations": [
+    "ordered R3 pilot",
+    "different prompt and generated-token protocols across harnesses",
+    "llama state snapshots are process boundaries",
+    "tinygrad state snapshots are request boundaries from pre-window-state harness revision",
+    "clocks were observed but not locked"
+  ],
+  "llama_a": {
+    "median_ms_per_token": 4.06074145,
+    "median_tok_s": 246.2604458602012,
+    "raw_total_ns": [
+      166548300,
+      162429658,
+      162015389
+    ]
+  },
+  "llama_c": {
+    "median_ms_per_token": 4.0662516,
+    "median_tok_s": 245.9267399980857,
+    "raw_total_ns": [
+      166278219,
+      162650064,
+      162647488
+    ]
+  },
+  "llama_endpoint_median_mean_ms_per_token": 4.063496525,
+  "qualification": false,
+  "repetitions_per_arm": 3,
+  "schema": "nv-p9-alternating-endpoint-pilot-v1",
+  "sequence": [
+    "llama-a",
+    "tinygrad-b",
+    "llama-c"
+  ],
+  "tinygrad_b": {
+    "generated_reps_identical": true,
+    "median_ms_per_token": 4.220618648832897,
+    "median_tok_s": 236.9320905778882,
+    "raw_total_s": [
+      0.16811726104060654,
+      0.16891076594765764,
+      0.16882474595331587
+    ],
+    "token_sha256": "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  },
+  "tinygrad_vs_llama_endpoint_mean": {
+    "latency_pct": 3.8666730207895794,
+    "throughput_pct": -3.7227273275766137
+  }
+}
