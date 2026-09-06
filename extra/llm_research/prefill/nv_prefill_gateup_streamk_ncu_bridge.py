@@ -54,7 +54,8 @@ def main()->int:
     check(cuda.cuModuleLoadData(ctypes.byref(main_module),main_blob)); check(cuda.cuModuleLoadData(ctypes.byref(fix_module),fix_blob))
     check(cuda.cuModuleGetFunction(ctypes.byref(main_function),main_module,main_symbol.encode()))
     check(cuda.cuModuleGetFunction(ctypes.byref(fix_function),fix_module,fix_symbol.encode()))
-    hosts=(output,partials,partial_ids,record,words,slots,active_np)
+    # Match CompilerQ4StreamKCapture.project exactly: out, partial, ids, words, record.
+    hosts=(output,partials,partial_ids,words,record,slots,active_np)
     for host in hosts:
       ptr=cuda.CUdeviceptr(); check(cuda.cuMemAlloc_v2(ctypes.byref(ptr),host.nbytes)); _copy_htod(ptr,host); bufs.append(ptr)
     main_params=(ctypes.c_void_p*5)(*[ctypes.cast(ctypes.pointer(bufs[i]),ctypes.c_void_p) for i in range(5)])
@@ -74,7 +75,7 @@ def main()->int:
       elapsed=ctypes.c_float(); check(cuda.cuEventElapsedTime(ctypes.byref(elapsed),begin,end)); samples.append(float(elapsed.value)*1000)
       check(cuda.cuEventDestroy_v2(begin)); check(cuda.cuEventDestroy_v2(end))
     output_after=np.empty_like(output); words_after=np.empty_like(words); record_after=np.empty_like(record); ids_after=np.empty_like(partial_ids)
-    _copy_dtoh(output_after,bufs[0]); _copy_dtoh(words_after,bufs[4]); _copy_dtoh(record_after,bufs[3]); _copy_dtoh(ids_after,bufs[2]); check(cuda.cuStreamSynchronize(stream))
+    _copy_dtoh(output_after,bufs[0]); _copy_dtoh(words_after,bufs[3]); _copy_dtoh(record_after,bufs[4]); _copy_dtoh(ids_after,bufs[2]); check(cuda.cuStreamSynchronize(stream))
   finally:
     if stream: cuda.cuStreamDestroy_v2(stream)
     for ptr in bufs: cuda.cuMemFree_v2(ptr)

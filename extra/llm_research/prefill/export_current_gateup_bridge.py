@@ -16,9 +16,10 @@ def main():
     if len(source)!=1 or len(binary)!=1: raise ValueError("PROGRAM must retain one SOURCE and BINARY")
     (args.directory/f"{label}.cu").write_text(source[0])
     (args.directory/f"{label}.cubin").write_bytes(binary[0])
+    abi={key:getattr(program.arg,key) for key in ("outs","ins","globals")}
+    abi["vals"]=program.arg.vals({})
     manifest["programs"][label]={"name":program.arg.name,"source_sha256":hashlib.sha256(source[0].encode()).hexdigest(),
-      "binary_sha256":hashlib.sha256(binary[0]).hexdigest(),"outs":program.arg.outs,"ins":program.arg.ins,
-      "globals":program.arg.globals,"vals":program.arg.vals}
+      "binary_sha256":hashlib.sha256(binary[0]).hexdigest(),**{key:list(value) for key,value in abi.items()}}
   (args.directory/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
   print(json.dumps(manifest,indent=2))
 

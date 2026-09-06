@@ -153,3 +153,30 @@ omitted component, with unchanged projection identities. Known remaining
 uncertainty: how the fresh 11.9270575 ms cross-runtime difference divides
 between actual execution, layout/producer/fixup work, and command boundaries.
 No body-only culprit or parity ETA is established.
+
+## Resumed gate/up common-boundary result
+
+The exporter and standalone replay are now qualified. The exporter records the
+resolved `ProgramInfo.vals({})` ABI, and the replay follows the selected main's
+exact buffer order: output, partial workspace, partial IDs, packed weight words,
+then activation record. The earlier illegal-memory result came from swapping
+the last two inputs in the diagnostic bridge; it did not implicate the runtime
+kernel.
+
+The corrected 31-sample replay is finite, writes all 6,291,456 outputs and all
+340 partial IDs, preserves both read-only inputs, and produces hash
+`aea4eb4471b50b0699e7f2568e6a0f0701e3438dc31b19a82b196d259cdcaa55`.
+Control main plus active fixup measures 271.616012 us median; the register-safe
+interleave arm measures 271.167994 us with the same output hash. This isolated
+flat result agrees with its sub-threshold full-model bracket. At 72 roles the
+control projects to 19.556353 ms, close to the 19.348799 ms same-runtime
+lifecycle measurement, so the bridge represents the selected service closely.
+
+Current NCU collection is blocked by `ERR_NVGPUCTRPERM`. Retained matched NCU
+evidence remains usable for direction: llama's main was 219.200 us versus the
+older generated main's 409.312 us, with identical useful IMMA count and lower
+generated issue/tensor duty. The current Stream-K replay substantially improves
+that old generated body, but its roughly 271 us main-plus-fixup remains above
+the reference class. Gate/up therefore remains a demonstrated body-service
+target; the interleave, shared-load, fragment-lifetime and double-buffer variants
+already measured do not close it.
