@@ -33,7 +33,22 @@ better through the qualified context bands up to 4096 tokens.
 
 ## Execution DAG
 
-### M0: exact role-delta ledger
+### M0: corpus authority and integration map
+
+Inventory every retained winning generated primitive before designing another
+kernel. Join the BoltBeam authority ledger, target-promotion policies, emitter
+bindings, production resolvers, selected graph call sites, and current runtime
+census by route and role. Classify each route separately as reproducible,
+promoted, statically reachable, and observed at runtime. Historical performance
+evidence remains valid only for its exact shape, ABI, graph, and measurement
+protocol.
+
+Exit gate: every claimed winner has one explicit disposition: already selected,
+compatible but disconnected, closed by policy, superseded by correctness or
+performance evidence, or incompatible with the current ABI. No new substrate
+work begins for a role with a compatible disconnected winner.
+
+### M1: restore compatible winners and build the exact role-delta ledger
 
 Build one fresh-process route comparator that can independently choose native or
 generated implementations for gate/up, Q, K, V by quant type, O, down by quant
@@ -41,11 +56,15 @@ type, Flash, vocabulary, and support epilogues without changing the graph API.
 Every arm must use the same prompt, output contract, warmup, synchronization,
 and R9 protocol. Record PROGRAM construction provenance and source transport.
 
-Exit gate: single-role substitutions plus the all-generated arm reconcile the
-ordinary-native-to-current252 difference within control drift. No unassigned
-bucket may be called kernel or lifecycle debt.
+First attach each compatible disconnected winner at the existing production
+choke point and rerun its primitive, population, replay, and matched wall gates.
+Only after those restorations, reconcile the native-to-generated difference.
 
-### M1: common generated packed-tile substrate
+Exit gate: restored winners and single-role substitutions plus the all-generated
+arm reconcile the ordinary-native-to-current-generated difference within
+control drift. No unassigned bucket may be called kernel or lifecycle debt.
+
+### M2: missing generated packed-tile substrate
 
 Implement a compiler-owned packed Q4/Q6 tensor-core tile contract rather than
 continuing textual scalar schedule toggles. The contract must express:
@@ -65,9 +84,9 @@ Exit gate: one real gate/up role is full-output correct, uses canonical packed
 weights, has no copy/expansion, has no local spill, and beats the current
 271.616012 us complete main/fixup boundary in two independent interleaved runs.
 
-### M2: dense prefill roles
+### M3: dense prefill roles
 
-Apply M1 in measured-debt order from M0. Each role advances through one role,
+Apply M2 in measured-debt order from M1. Each role advances through one role,
 full population, full model, and rollback brackets. Gate/up currently has a
 known 5.194457 ms population deficit. Existing Q4-down and Q6-V measurements
 remain inputs, but are re-run through the common comparator before promotion.
@@ -75,7 +94,7 @@ remain inputs, but are re-run through the common comparator before promotion.
 Exit gate: all 252 projections are generated and the generated dense-region
 wall is no slower than the native dense-region control beyond measured noise.
 
-### M3: generated attention and support lifecycle
+### M4: generated attention and support lifecycle
 
 Replace the native prefill Flash binary with a generated kernel using the exact
 36-call logical contract. First close the remaining support semantic census by
@@ -86,7 +105,7 @@ Exit gate: zero native-precompiled PROGRAMs, zero unresolved support intervals,
 full logits within `rtol=0.02, atol=0.5`, token 198, stable recurrent replay,
 and generated pp512 median no slower than fresh llama.
 
-### M4: ordinary selection and ownership
+### M5: ordinary selection and ownership
 
 Replace the monolithic native/generated switch with qualified per-role leases.
 Generated routes become ordinary only after their population and model gates
@@ -96,7 +115,7 @@ captures, buffer non-aliasing, and failure on unsupported shape/device.
 Exit gate: a clean process with no research enable variables selects only
 generated programs and reproduces the qualified pp512 result.
 
-### M5: decode closure
+### M6: decode closure
 
 Repeat the promoted generated d512 bracket independently, measure cold compile,
 first request, and steady replay separately, and run matched llama/tinygrad/llama
@@ -106,7 +125,7 @@ program ownership and token/logit checks wherever prompts are shared.
 Exit gate: parity or better at every qualified band, no native program, bounded
 memory, no shadow captures, and an explicit rollback.
 
-### M6: prefill context/depth closure and final promotion
+### M7: prefill context/depth closure and final promotion
 
 Measure generated prefill at 128, 256, 512, 1024, 2048, and 4096 where memory
 permits, and at layers 1, 6, 12, 18, 24, 30, and 36. Introduce measured geometry
@@ -131,6 +150,10 @@ evidence. Only then is the campaign complete.
 
 ## Immediate work
 
-M0 is active. Extend the current model harness into a per-role mixed comparator,
-measure native, generated, and single-family substitutions, and reconcile the
-15.855968 ms replacement delta. M1 begins with the largest reconciled body debt.
+M0 is active. Generate the static corpus integration inventory, verify it against
+the live program census, then attach the first compatible winner that is absent
+from the selected graph. The initial static audit identifies the exact Q6
+prefill stream-K down route as authority/provider-owned but absent from
+production references; validate its current ABI compatibility before changing
+dispatch. Build new substrate only after all compatible retained winners have
+been exhausted.
