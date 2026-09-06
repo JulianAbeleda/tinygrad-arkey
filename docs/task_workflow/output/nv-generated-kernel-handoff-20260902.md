@@ -243,9 +243,10 @@ second-use capture with about 13.166 GB of additional live allocations.  Commit
 `959809bec` keeps those concrete-KV kernels eager under the no-reuse policy;
 explicit workload reuse retains the existing capture/precompile behavior.
 
-P9 is not complete.  The controlled context-512 endpoint pilot remains about
+P9 is not complete.  The earlier controlled context-512 endpoint pilot was about
 3.87% slower in latency than the mean of its two bracketing llama endpoints and
-used different prompt/token protocols, so it is not a parity qualification.
+used different prompt/token protocols.  The promoted feedback route supersedes
+that latency result below, while the protocol limitation still applies.
 The selected graph contains 29 unique PROGRAMs.  Retained SOURCE freshly
 recompiles to the captured cubin for 23 with NVRTC 13.2 at sm_120.  The other
 six generic E/r binaries differ under the fresh toolchain but match their exact
@@ -259,27 +260,17 @@ selected graph. The six cache-bound binaries remain non-reproducible under the
 fresh compiler, and generic semantic-role coverage remains incomplete.
 The feedback-shadow cost is now localized and the bounded two-capture ring is promoted at commit `e4b5fc2a6` for exact NV sm_120/Qwen3-8B requests with an explicit output horizon. Required context-band alias/capacity gates pass, and a fresh llama/tinygrad/llama R3 bracket measures promoted tinygrad within 0.113% latency of the mean llama controls at depth 512. Cross-runtime prompt/token protocols still differ, so this is endpoint latency parity rather than token correctness. Replication and cold-start accounting remain P9 follow-ups.
 
-A current same-prompt context-512 qualification finds the combined direct-greedy/two-capture feedback route bit-identical across eight full-logit rows and 2.83% lower steady latency in a fresh-process A/B/C bracket. Fresh ordinary-model request-scoped censuses also pass the exact split10/18/34 pair contracts at contexts 1024/2048/4096 with zero shadows and complete within the 32 GiB device. The exact exercised s6 pair passes the distinct-return/read-only-input contract with zero shadows. This is an ordered R3 gate only; other split bands, cold-start accounting, component isolation, and external parity remain open, so normal defaults stay closed.
+A current same-prompt context-512 qualification finds the combined direct-greedy/two-capture feedback route bit-identical across eight full-logit rows and 2.83% lower steady latency in a fresh-process A/B/C bracket. Fresh ordinary-model request-scoped censuses also pass the exact split10/18/34 pair contracts at contexts 1024/2048/4096 with zero shadows and complete within the 32 GiB device. The exact exercised s6 pair passes the distinct-return/read-only-input contract with zero shadows. Commit `e4b5fc2a6` promotes this bounded route only for the exact NV sm_120 dense Qwen3-8B topology when the caller supplies an output horizon; `TINYGRAD_DECODE_FEEDBACK_PINGPONG_DISABLE` is the rollback.
 
-Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
-feedback ping-pong remain closed by default.  The substrate was introduced as
-an explicit experiment in commit `a1a51c349`; the ordinary loader still assigns
-neither `_decode_direct_greedy_promoted` nor
-`_decode_feedback_pingpong_promoted`, and production reads both with a false
-default.  The retained d512 qualification proved exact full logits and argmax,
-distinct fixed return buffers, zero written-input shadows, and an 89--94
-us/token reverse-wall recovery.  d2048 and synthetic resident-zero-KV d4096
-also passed as depth non-regressions.  That record explicitly did not promote
-policy.
-
-Reconnect this candidate only through the normal load/route authority, then
-repeat current-composition full-logit and token checks, alias-contract and
-fallback checks for every selected horizon graph, fresh-process startup
-accounting (two captures multiply horizon prewarm cost), context coverage, and
-a replicated normal A/B/A wall bracket.  Until those gates pass, its historical
-roughly 2% endpoint opportunity is not booked against the current gap.  Source
-authority and measurements are in
-`docs/task_workflow/input/nv-decode-feedback-pingpong-record-20260805.md`.
+The fresh external llama/tinygrad/llama R3 bracket at depth 512 measures median
+latencies of 4.0640, 4.0773, and 4.0815 ms/token.  Promoted tinygrad is therefore
+0.113% slower than the mean llama controls, with identical tinygrad token hashes
+and no reported P-state throttling.  The 832 selected launches span 54 unique
+programs across the two slots; all have exact renderer construction provenance
+and positive SOURCE transport, with zero unknown or native programs.  Because
+the two runtimes use different prompt/token protocols, this establishes endpoint
+latency parity rather than cross-runtime token correctness.  Replication,
+cold-start accounting, and context-band endpoint performance remain open.
 
 ## Why this was not caught earlier
 
@@ -320,33 +311,38 @@ over their complete lifecycle, and proven in the full model.
 | Foundational substrate | 70-80% complete |
 | Kernel implementations | 45-60% complete |
 | Strictly qualified routes | 25-35% complete |
-| Complete decode and prefill goal | 40-50% complete |
+| Complete decode and prefill goal | milestone-based; no defensible percentage |
 
 ### Prefill
 
-Estimated 30-40% complete under the final standard.  Q6 FFN-down is fully
-qualified.  Generated gate/up and K implementations exist, but the remaining
+Q6 FFN-down is fully qualified.  Generated gate/up and K implementations exist,
+but the remaining
 Q4 down population, both V populations, Q/O, complete attention lifecycle,
 ordinary generated selection, and context/depth coverage remain.
 
+The low-perturbation HCQ census prerequisite is complete: 1,467 of 1,467 calls
+are classified with zero unknowns and 0.578% observer overhead.  Its device-time
+ledger attributes 19.076 ms to down, 25.832 ms to gate/up combined, 8.973 ms to
+Q/O, 5.406 ms to V, 3.341 ms to Flash, and the remainder to vocab, K, norms,
+activation, and support.  The next work is new kernel performance, especially
+gate/up scheduling and the unqualified Q4-down/V populations, rather than a new
+census prerequisite.
+
 ### Decode
 
-Estimated 55-70% implemented and 30-40% strictly qualified.  Most projection,
-fusion, KV, attention, normalization, vocab, and argmax building blocks exist.
-The remaining work is graph census, route-by-route ownership proof, removal of
-llama-backed selections, vocab/token lifecycle closure, context-band coverage,
-and a clean endpoint comparison.
+The bounded normal decode route now has generated ownership proof, exact logits
+gates, context coverage through 4096, and effective depth-512 endpoint parity.
+Remaining work is replication, cold-start accounting, and endpoint performance
+qualification across the context bands.
 
 ### Remaining milestones
 
 1. Make independently qualified generated role selection the ordinary path.
 2. Complete Q4 FFN-down and the Q4/Q6 attention-V populations.
 3. Requalify Q, K, O, and the complete prefill attention lifecycle.
-4. Census and reconnect the existing decode primitives.
-5. Close the vocab-to-token lifecycle.
-6. Prove that neither captured production graph contains a llama PROGRAM.
-7. Run context-length and layer-depth sweeps.
-8. Demonstrate reproducible end-to-end llama parity or a win for both decode
+4. Replicate decode parity and qualify its cold-start and context-band costs.
+5. Run prefill context-length and layer-depth sweeps after its route closes.
+6. Demonstrate reproducible end-to-end llama parity or a win for both decode
    and prefill.
 
 ### Schedule estimate
