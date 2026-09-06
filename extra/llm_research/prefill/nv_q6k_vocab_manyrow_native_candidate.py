@@ -31,7 +31,7 @@ def contract() -> dict:
     "integration": "not_model_integrated",
   }
 
-def run_live(model_path, activation_path, rounds):
+def run_live(model_path, activation_path, rounds, preserve_input_dtype=False):
   import collections, hashlib, statistics
   from types import SimpleNamespace
   import numpy as np
@@ -53,7 +53,7 @@ def run_live(model_path, activation_path, rounds):
   inputs=[Tensor(v,device="NV").realize() for v in (values,values*np.float32(.7))]
   @TinyJit
   def candidate(x):
-    logits=q6k_vocab_manyrow_call(Q6KVocabManyRowAdmission(),linear,x.reshape(1,1,K))
+    logits=q6k_vocab_manyrow_call(Q6KVocabManyRowAdmission(preserve_input_dtype=preserve_input_dtype),linear,x.reshape(1,1,K))
     if logits is None: raise RuntimeError("candidate admission failed")
     logits=logits.reshape(ROWS)
     return logits,logits.argmax()
@@ -87,7 +87,8 @@ def run_live(model_path, activation_path, rounds):
     "qualification":"observed lifecycle; not production promoted", "weight":{"name":info.name,"shape":[ROWS,K],"ggml_type":info.typ},
     "activation":{"path":str(activation_path),"sha256":hashlib.sha256(values.tobytes()).hexdigest(),"dtype":"float32"},
     "input_boundary":"candidate currently casts FP32 input to FP16; oracle consumes original FP32",
-    "correctness":checks,"census":{"candidate":observed(candidate),"llama":observed(llama)},
+    "correctness":checks,"input_boundary":"FP32 preserved" if preserve_input_dtype else "FP32 cast to FP16",
+    "preserve_input_dtype":preserve_input_dtype,"census":{"candidate":observed(candidate),"llama":observed(llama)},
     "timing_ms":{"rounds":rounds,"samples":samples,"orders":orders,
       "candidate_median":statistics.median(samples["candidate"]),"llama_median":statistics.median(samples["llama"]),
       "includes":"producer, intermediate unpack, vocabulary projection and argmax; host snapshots excluded"}}
@@ -99,9 +100,10 @@ def main() -> int:
   ap.add_argument("--fixture",action="store_true")
   ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
   ap.add_argument("--rounds",type=int,default=31)
+  ap.add_argument("--preserve-input-dtype",action="store_true")
   ap.add_argument("--activation",type=Path,default=Path("docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32"))
   a=ap.parse_args()
-  report=run_live(a.model,a.activation,a.rounds) if a.fixture else contract()
+  report=run_live(a.model,a.activation,a.rounds,a.preserve_input_dtype) if a.fixture else contract()
   payload=json.dumps(report,indent=2)+"\n"
   if a.out: a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(payload)
   else: print(payload,end="")
