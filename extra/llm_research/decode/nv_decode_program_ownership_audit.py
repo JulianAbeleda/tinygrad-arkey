@@ -11,13 +11,13 @@ def _native_marker_sha(name:str) -> str:
   return hashlib.sha256(f"// precompiled native cubin: {name}".encode()).hexdigest()
 
 
-def audit(census:dict, compiler=None) -> dict:
+def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
   capture = census.get("capture", {})
   source_texts = capture.get("source_text_by_sha256", {})
   by_jit = capture.get("program_evidence_by_jit", {})
   if not isinstance(by_jit, dict) or set(by_jit) != set(capture.get("selected_jits", ())):
     raise ValueError("program evidence must cover every selected JIT exactly")
-  rows, recompiled_by_source = [], {}
+  rows, recompiled_by_source, cached_by_source = [], {}, {}
   for jit_name, launches in by_jit.items():
     if len(launches) != capture.get("programs_by_jit", {}).get(jit_name):
       raise ValueError(f"PROGRAM launch census does not reconcile for {jit_name}")
@@ -34,33 +34,48 @@ def audit(census:dict, compiler=None) -> dict:
       if not stable: raise ValueError(f"PROGRAM hash has inconsistent identity or geometry: {program_hash}")
       native_precompiled = first["source_sha256"] == _native_marker_sha(first["program_name"])
       recompiled_sha = None
+      cached_sha = None
       if compiler is not None and first["source_sha256"] in source_texts:
         if hashlib.sha256(source_texts[first["source_sha256"]].encode()).hexdigest() != first["source_sha256"]:
           raise ValueError(f"retained SOURCE text does not match its SHA-256 key: {first['source_sha256']}")
         if first["source_sha256"] not in recompiled_by_source:
           recompiled_by_source[first["source_sha256"]] = hashlib.sha256(compiler.compile(source_texts[first["source_sha256"]])).hexdigest()
         recompiled_sha = recompiled_by_source[first["source_sha256"]]
+        if cached_lookup is not None:
+          if first["source_sha256"] not in cached_by_source:
+            cached = cached_lookup(source_texts[first["source_sha256"]])
+            cached_by_source[first["source_sha256"]] = hashlib.sha256(cached).hexdigest() if isinstance(cached, bytes) else None
+          cached_sha = cached_by_source[first["source_sha256"]]
       recompile_match = recompiled_sha == first["binary_sha256"] if recompiled_sha is not None else None
+      cache_match = cached_sha == first["binary_sha256"] if cached_sha is not None else None
       rows.append({"jit_owner":jit_name, "program_hash":program_hash, "program_name":first["program_name"],
                    "launch_count":len(occurrences), "source_sha256":first["source_sha256"],
                    "binary_sha256":first["binary_sha256"], "global_size":first["global_size"],
                    "local_size":first["local_size"], "recompiled_binary_sha256":recompiled_sha,
-                   "source_recompile_match":recompile_match, "transport_provenance":
+                   "source_recompile_match":recompile_match, "compiler_cached_binary_sha256":cached_sha,
+                   "source_compiler_cache_match":cache_match, "transport_provenance":
                    "native_precompiled_cubin" if native_precompiled else
                    "source_binary_recompiled_match" if recompile_match else
+                   "source_binary_compiler_cache_match" if cache_match else
                    "source_recompile_mismatch" if recompile_match is False else "unknown_source_transport"})
   native = [row for row in rows if row["transport_provenance"] == "native_precompiled_cubin"]
   recompiled = [row for row in rows if row["transport_provenance"] == "source_binary_recompiled_match"]
+  cached = [row for row in rows if row["transport_provenance"] == "source_binary_compiler_cache_match"]
   return {"schema":SCHEMA, "selected_jits":capture.get("selected_jits", []),
           "program_launches":sum(row["launch_count"] for row in rows), "unique_programs":len(rows),
           "native_precompiled_unique_programs":len(native), "native_precompiled_programs":native,
           "source_recompiled_unique_programs":len(recompiled),
           "all_unique_programs_source_recompiled":bool(rows) and len(recompiled) == len(rows),
+          "source_compiler_cache_matched_unique_programs":len(cached),
+          "all_unique_programs_source_transported":bool(rows) and len(recompiled) + len(cached) == len(rows),
           "no_known_native_precompiled_marker_in_selected_graph":not native,
           "interpretation":(("Every selected PROGRAM's retained SOURCE recompiles to its captured binary with the recorded compiler. "
                              "This positively proves SOURCE-to-binary transport, but generator/registry lineage requires a separate match. ")
                             if rows and len(recompiled) == len(rows) else
-                            "An unmatched or unrecompiled source remains unknown; marker absence is not universal positive provenance. ")+
+                            ("Every selected PROGRAM maps from its exact retained SOURCE to the captured binary through either a fresh recompile "
+                             "or the production compiler cache. Cache matches prove current source-keyed transport, not fresh toolchain reproducibility. "
+                             if rows and len(recompiled)+len(cached) == len(rows) else
+                             "An unmatched or unrecompiled source remains unknown; marker absence is not universal positive provenance. "))+
                            "The selected graph contains no recognized native_nv_program marker used by the known llama packed bindings.",
           "programs":sorted(rows, key=lambda row:(row["jit_owner"], row["program_name"], row["program_hash"]))}
 
@@ -72,13 +87,18 @@ def main() -> int:
   if args.recompile_arch:
     from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
     compiler=NVRTCCompiler(args.recompile_arch,ptx=False,cache_key="nv")
-  result=audit(json.loads(args.census.read_text()),compiler)
+  cached_lookup = None
+  if compiler is not None and compiler.cachekey is not None:
+    from tinygrad.helpers import diskcache_get
+    cached_lookup = lambda source: diskcache_get(compiler.cachekey, source)
+  result=audit(json.loads(args.census.read_text()),compiler,cached_lookup)
   if compiler is not None:
     from tinygrad.runtime.support.compiler_cuda import nvrtc
     import ctypes
     major,minor=ctypes.c_int(),ctypes.c_int(); nvrtc.nvrtcVersion(ctypes.byref(major),ctypes.byref(minor))
     result["recompiler"]={"class":type(compiler).__name__,"arch":compiler.arch,"ptx":compiler.ptx,
-                          "compile_options":compiler.compile_options,"nvrtc_version":[major.value,minor.value]}
+                          "compile_options":compiler.compile_options,"nvrtc_version":[major.value,minor.value],
+                          "compiler_cache_key":compiler.cachekey}
   args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
   print(json.dumps({key:result[key] for key in ("program_launches","unique_programs","native_precompiled_unique_programs",
                                                 "no_known_native_precompiled_marker_in_selected_graph")},sort_keys=True))

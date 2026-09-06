@@ -46,6 +46,22 @@ def test_source_recompile_mismatch_fails_closed():
   assert result["programs"][0]["transport_provenance"] == "source_recompile_mismatch"
 
 
+def test_source_keyed_compiler_cache_positively_proves_current_transport():
+  import hashlib
+  source="source"; captured=b"cached compiler binary"
+  row=_row("rendered",hashlib.sha256(source.encode()).hexdigest())
+  row["binary_sha256"]=hashlib.sha256(captured).hexdigest()
+  class Compiler:
+    def compile(self, actual): return b"fresh toolchain differs"
+  result=audit({"capture":{"selected_jits":["rollout"],"programs_by_jit":{"rollout":1},
+    "program_evidence_by_jit":{"rollout":[row]},"source_text_by_sha256":{row["source_sha256"]:source}}},
+    Compiler(),lambda actual: captured if actual == source else None)
+  assert not result["all_unique_programs_source_recompiled"]
+  assert result["all_unique_programs_source_transported"]
+  assert result["source_compiler_cache_matched_unique_programs"] == 1
+  assert result["programs"][0]["transport_provenance"] == "source_binary_compiler_cache_match"
+
+
 def test_tampered_source_table_is_rejected_before_compile():
   import pytest
   row=_row("rendered","ef"*32)

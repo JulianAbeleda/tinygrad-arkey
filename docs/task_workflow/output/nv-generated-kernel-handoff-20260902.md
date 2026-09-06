@@ -246,13 +246,15 @@ explicit workload reuse retains the existing capture/precompile behavior.
 P9 is not complete.  The controlled context-512 endpoint pilot remains about
 3.87% slower in latency than the mean of its two bracketing llama endpoints and
 used different prompt/token protocols, so it is not a parity qualification.
-The selected graph contains 29 unique PROGRAMs: retained SOURCE recompiles to
-the captured cubin for 23 with NVRTC 13.2 at sm_120; six generic E/r programs
-mismatch deterministically.  There are zero recognized native-precompiled
-markers, but marker absence and six unmatched transports do not prove universal
-generated ownership or renderer lineage.  Replicated same-protocol endpoint
-comparison, positive provenance for those six programs, and route-level
-localization of the remaining latency gap are the next P9 gates.
+The selected graph contains 29 unique PROGRAMs.  Retained SOURCE freshly
+recompiles to the captured cubin for 23 with NVRTC 13.2 at sm_120.  The other
+six generic E/r binaries differ under the fresh toolchain but match their exact
+SOURCE keys in the production `compile_nv_sm_120` cache, so all 29 have positive
+current SOURCE-to-binary transport.  There are zero recognized native-precompiled
+markers, but this does not prove generator/registry lineage or universal absence
+of an unknown native route.  Replicated same-protocol endpoint comparison,
+positive generator lineage, and route-level localization of the remaining
+latency gap are the next P9 gates.
 
 Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
 feedback ping-pong remain closed by default.  The substrate was introduced as

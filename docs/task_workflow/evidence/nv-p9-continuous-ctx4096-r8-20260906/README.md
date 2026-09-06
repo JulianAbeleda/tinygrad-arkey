@@ -11,7 +11,9 @@ no reported throttle reason. First prefill token is 34208. This is continuous
 coverage and does not replace an independent multi-request test.
 
 Offline NVRTC 13.2 recompilation at sm_120 exactly matches 23 of 29 unique
-retained SOURCE/cubin pairs. Six generic E/r programs mismatch deterministically.
-No recognized native-precompiled marker is present. This proves transport for
-the 23 matches; it does not prove generator lineage or universal absence of an
-unknown native transport.
+retained SOURCE/cubin pairs. Six generic E/r programs differ under the fresh
+toolchain, but each retained SOURCE maps exactly to its captured cubin through
+the production `compile_nv_sm_120` source-keyed cache. Thus all 29 have positive
+current SOURCE-to-binary transport: 23 freshly reproducible and six cache-bound.
+No recognized native-precompiled marker is present. This does not prove
+generator lineage or universal absence of an unknown native transport.
