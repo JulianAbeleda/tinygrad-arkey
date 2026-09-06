@@ -189,6 +189,11 @@ def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
   selected = Device.DEFAULT == "NV" and explicit == "compiler"
   return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 0)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
 
+def _nv_compiler_q4_gate_streamk_enabled(config) -> bool:
+  """Select the qualified generated gate/up Stream-K body inside the compiler pp512 arm."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_STREAMK", 1)) and _nv_q4_imma_pp512_mode() == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
 
@@ -2002,7 +2007,12 @@ class Transformer:
         from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for
       else:
         from extra.llm_research.prefill.nv_q4_imma_pp512_binding import binding_for
-      _nv_binding = binding_for("NV")
+      # The generated Stream-K gate/up route wins its current 216-role
+      # full-model bracket.  It remains bounded by the existing exact compiler
+      # pp512 admission; zero is the explicit rollback to the wide compiler body.
+      if nv_q4_mode == "compiler" and _nv_compiler_q4_gate_streamk_enabled(self.config):
+        _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama")
+      else: _nv_binding = binding_for("NV")
       if nv_q4_mode == "gate_only":
         _nv_gate_only_binding = _nv_binding
         _nv_gate_only_binding.prepare_records(len(self.blk))

@@ -301,7 +301,7 @@ def _graph_stage_buffers(jit,identities):
       ctx=getattr(call.arg,"candidate_context",None)
       role=by_identity.get(getattr(ctx,"canonical_identity",None))
       if role is None:
-        role=next((native_role for native_role in ("v","gate_oracle","down_oracle","gate_epilogue")
+        role=next((native_role for native_role in ("v","gate_up","gate_oracle","down_oracle","gate_epilogue")
           if getattr(call.arg,"name",None)==identities.get(native_role)),None)
       if role is None:continue
       if call.arg.outs!=(0,) or call.arg.ins!=(1,2):raise RuntimeError(f"unexpected {role} captured ABI")
@@ -404,6 +404,7 @@ def main():
   ap=argparse.ArgumentParser();ap.add_argument("--arm",choices=("candidate","control","compare"),required=True);ap.add_argument("--q4-v",action="store_true")
   ap.add_argument("--q6-v",action="store_true")
   ap.add_argument("--q6-down",action="store_true")
+  ap.add_argument("--gate-streamk",action="store_true")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
   ap.add_argument("--gate-q8-reuse",action="store_true")
@@ -477,10 +478,13 @@ def main():
   if args.prune_final_row:
     # Explicit terminal graph lease; control remains untouched.
     model.blk[-1]._final_row_prune_requested_row = 511
-  gate_asset=gate_binding_for("NV");gate_asset.prepare_records(72);gate_asset.install_warmstart(model)
+  gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
+                              producer_arithmetic="llama" if args.gate_streamk else "legacy")
+  gate_asset.prepare_records(72)
+  if not args.gate_streamk: gate_asset.install_warmstart(model)
   gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset
   gate_record_u32=(512*4096+2*512*(4096//32)*4)//4
-  gate=_PairedGateQ8Capture(gate_runtime_asset,gate_record_u32) if args.gate_q8_reuse else \
+  gate=gate_asset.new_capture() if args.gate_streamk else _PairedGateQ8Capture(gate_runtime_asset,gate_record_u32) if args.gate_q8_reuse else \
     _FusedGateEpilogueCapture(gate_runtime_asset,gate_record_u32,_gate_epilogue_program()) if args.gate_epilogue_fused else \
     gate_runtime_asset.new_capture()
   if args.gate_epilogue_fused:
@@ -532,7 +536,7 @@ def main():
     qo=_GraphOwnedQOCapture(qo_binding_for("NV"),RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
-  identities={"gate_up":gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
+  identities={"gate_up":gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
               "down_oracle":"nv_down_oracle_zero" if args.down_oracle else None,
               "gate_epilogue":"nv_gate_silu_mul_cast_fused" if args.gate_epilogue_fused else None,
               "k":kval.candidate_identity,
@@ -674,6 +678,7 @@ def main():
     _write(args.dump_service_inventory,{"schema":"tinygrad.nv_prefill_live_service.v1","rounds":args.service_rounds,
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
+  if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
   # K and serialized V intentionally share the generated kernel symbol.  K
   # retains compiler candidate_context; the remaining exact-symbol calls are V.
   v_name = None if vval is None else vval.asset.main_program.arg.name

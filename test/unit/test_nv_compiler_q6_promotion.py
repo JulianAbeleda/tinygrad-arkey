@@ -57,6 +57,18 @@ def test_ordinary_qualified_mode_selects_generated_stack(monkeypatch):
   monkeypatch.setattr(model, "getenv", _env({"NV_COMPILER_Q4_IMMA_PP512":1,"NV_COMPILER_Q4_IMMA_K_PP512":1}))
   assert model._nv_q4_production_mode(config) == "compiler"
 
+def test_compiler_gate_streamk_defaults_on_with_explicit_rollback(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_q4_imma_pp512_mode",lambda:"compiler")
+  monkeypatch.setattr(model,"_nv_compiler_q4_imma_pp512_qualified",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert model._nv_compiler_q4_gate_streamk_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_STREAMK":0}))
+  assert not model._nv_compiler_q4_gate_streamk_enabled(config)
+  monkeypatch.setattr(model,"_nv_q4_imma_pp512_mode",lambda:"llama")
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert not model._nv_compiler_q4_gate_streamk_enabled(config)
+
 def test_q6_rollback_keeps_llama_down_lease(monkeypatch):
   config=SimpleNamespace()
   monkeypatch.setattr(model,"_nv_compiler_q4_imma_k_pp512_enabled",lambda _:True)

@@ -125,6 +125,7 @@ class CompilerQ4StreamKCapture:
   slots: Tensor
   active: Tensor
   candidate_identity: str
+  transform: object
   cursor: int = 0
   n: int = 4096
   population: int = 36
@@ -157,11 +158,15 @@ class CompilerQ4StreamKCapture:
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
-    return cls(base.producer,main,fix,slots,active_tensor,identity,n=n,population=population,roles=roles)
+    return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,n=n,population=population,roles=roles)
 
   def prepare(self,count):
     if count!=self.population: raise ValueError("Q/O research capture has the wrong projection population")
   def prepare_records(self,count): self.prepare(count)
+  def install_warmstart(self,model):
+    # This route invokes its already-compiled main/fixup PROGRAMs directly.
+    # It does not claim an ordinary compiler schedule key.
+    del model
   @property
   def main_program(self): return self.q_program
   def begin_trace(self): self.cursor=0
