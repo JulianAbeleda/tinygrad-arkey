@@ -64,7 +64,9 @@ def main(argv:list[str]|None=None) -> int:
       for _ in range(args.nmeas):
         started=time.perf_counter(); tokens.append(int(next(gen))); latencies.append(time.perf_counter()-started)
       gpu_after=_nv_gpu_state() if args.gpu_state and Device.DEFAULT == "NV" else None
-      reps.append({"rep":rep,"elapsed_s":sum(latencies),"tok_s":args.nmeas/sum(latencies),
+      start_context=args.depth+args.warmup_decode+rep*args.nmeas
+      reps.append({"rep":rep,"window_start_context":start_context,"window_end_context_exclusive":start_context+args.nmeas,
+                   "elapsed_s":sum(latencies),"tok_s":args.nmeas/sum(latencies),
                    "per_token_ms":[x*1e3 for x in latencies],"token_evidence":_token_evidence(tokens,include_token_ids=True),
                    "gpu_state_before":gpu_before,"gpu_state_after":gpu_after})
   finally: gen.close()
