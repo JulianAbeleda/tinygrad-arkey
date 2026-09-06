@@ -10,11 +10,13 @@ zero records because automatic horizon prewarming captured this JIT before the
 observer was installed; the retained captured-linear census is the authority.
 
 The census contains 155 launches with semantic role metadata. The remaining
-263 generic launches have exact program identity and geometry but do not yet
-carry explicit implementation provenance. Therefore this artifact proves the
-normal route's concrete graph and ownership by the selected JIT, but it does
-not prove that every unique program is generated or support a no-llama-cubin
-claim.
+263 generic launches retain exact program identity and geometry.
+`program-ownership-audit.json` reconciles all 418 launches and 29 unique
+PROGRAM hashes. None has the `native_nv_program` source marker used by every
+llama packed binding, so the selected decode graph contains no llama packed
+cubin. The audit calls the other programs `tinygrad_rendered_source`; that is a
+transport classification and does not assert that every ordinary scheduler
+kernel has machine-search provenance.
 
 The endpoint bracket used fresh processes and one GPU job at a time. tinygrad
 ran three repetitions of 40 production `generate` tokens: 238.458, 238.785,
@@ -33,6 +35,7 @@ with system-state snapshots is required before interpreting this small gap.
 Files:
 
 - `tinygrad-program-census.json`: selected captured-JIT PROGRAM census.
+- `program-ownership-audit.json`: unique-program transport ownership closure.
 - `tinygrad-census-run.json`: one-token normal-route timing and token evidence.
 - `tinygrad-d512-r3.json`: three 40-token tinygrad repetitions.
 - `llama-d512-r3.json`: fresh llama-bench prompt and generation rows.
