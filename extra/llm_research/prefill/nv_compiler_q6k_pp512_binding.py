@@ -303,7 +303,7 @@ def _compile_role(dev, role:str, output_dtype=dtypes.float32, schedule:CompilerQ
   if len(set(matching)) != 1: raise RuntimeError(f"expected one compiler Q6 {role} PROGRAM, found {len(set(matching))}")
   compiled = matching[0]
   main_program = compiled.replace(src=(UOp(Ops.SINK, arg=compiled.src[0].arg), compiled.src[1], UOp(Ops.LINEAR), *compiled.src[3:]))
-  expected_global = (n//32, M//64, 1)
+  expected_global = (n//schedule.tile_n, M//schedule.tile_m, 1)
   if main_program.arg.outs != (0,) or main_program.arg.ins != (1, 2):
     raise RuntimeError(f"compiler Q6 {role} PROGRAM has unexpected ABI {main_program.arg}")
   persistent_global = (n//32, 1, 1)
@@ -344,6 +344,13 @@ class CompilerQ6PP512Binding:
     warmstart = {asset.warmstart_key:(Opt(OptOps.TC, schedule.tc_axis, (schedule.tc_select, schedule.tc_opt, schedule.use_tc)),) for asset in roles.values()}
     contexts = {asset.warmstart_key:asset.context for asset in roles.values()}
     return cls(MappingProxyType(roles), MappingProxyType(warmstart), MappingProxyType(contexts))
+
+  @classmethod
+  def compile_research_v_schedule(cls, dev, schedule:CompilerQ6ScheduleConfig) -> "CompilerQ6PP512Binding":
+    """Compile only the explicit attention-V research role for schedule sweeps."""
+    schedule.validate(M, *ROLE_SHAPES["attn_v"])
+    asset=_compile_role(dev, "attn_v", dtypes.float32, schedule)
+    return cls(MappingProxyType({"attn_v":asset}), MappingProxyType({asset.warmstart_key:(Opt(OptOps.TC,schedule.tc_axis,(schedule.tc_select,schedule.tc_opt,schedule.use_tc)),)}), MappingProxyType({asset.warmstart_key:asset.context}))
 
   @property
   def candidate_identities(self) -> Mapping[str,str]:
