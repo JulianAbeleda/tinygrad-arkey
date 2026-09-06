@@ -73,7 +73,7 @@ def main():
   def snapshot(outputs): return np.stack([x.numpy().copy() for x in outputs])
   for _ in range(3): run(generated,inputs[0]); run(llama,inputs[0])
   expected_calls=expected
-  expected=[(candidate.producer,expected_calls),(candidate.q_program if a.role!='gateup' else candidate.main_program,expected_calls)]
+  expected=[(candidate.producer,expected_calls),(candidate.q_program if a.role!='gateup' else candidate.asset.main_program,expected_calls)]
   if a.variant=='streamk': expected.append((candidate.fixup_program,expected_calls))
   cc=census(generated,expected)
   lc=census(llama,[(p,expected_calls if a.role=='gateup' else 36) for p in oracle_programs])
@@ -85,6 +85,9 @@ def main():
                   'allclose':bool(np.allclose(got,ref,rtol=.02,atol=.5)),
                   'max_abs':float(np.max(np.abs(got-ref)))})
     first_outputs.append((got[0].copy(),ref[0].copy()))
+  if a.role=='gateup':
+    for i,(wname,got,ref) in enumerate(zip([z.name for z in infos], snapshot(run(generated,inputs[0])), snapshot(run(llama,inputs[0])))):
+      dd=np.abs(got-ref); pairs[-1].setdefault('per_weight',[]).append({'name':wname,'max_abs':float(dd.max()),'bad':int(np.count_nonzero(~np.isclose(got,ref,rtol=.02,atol=.5)))})
   distinct=all(not np.array_equal(first_outputs[0][i],first_outputs[1][i]) for i in (0,1))
   stable=all(w.uop.buf_uop is old for w,old in zip(weights,weight_ids))
   samples={'candidate':[],'llama':[]}; orders=[]
