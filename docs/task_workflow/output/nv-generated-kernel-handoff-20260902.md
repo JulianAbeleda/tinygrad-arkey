@@ -366,6 +366,16 @@ current234 route.  Evidence is retained in
 `docs/task_workflow/evidence/nv-prefill-current252-q6v-20260906` and
 `docs/task_workflow/evidence/nv-prefill-current252-hcq-20260906`.
 
+The dominant gate/up Stream-K main now uses the qualified fragment load-to-use
+schedule by default.  It moves the existing `val0..val10` Q4 fragment loads
+after the Q8 metadata/data loads, without changing arithmetic, launch geometry,
+or the 20 KiB shared tile.  A matched current252 candidate/control bracket
+measured 52.833/53.315 ms medians, a 0.482 ms or 0.904% latency reduction; full
+logits were bit identical and both arms passed 20/20 exact recurrent replay.
+`NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=0` restores the prior load order.
+Evidence is retained in
+`docs/task_workflow/evidence/nv-prefill-current252-gate-fragment-ltu-20260906`.
+
 ### Decode
 
 The bounded normal decode route now has generated ownership proof, exact logits

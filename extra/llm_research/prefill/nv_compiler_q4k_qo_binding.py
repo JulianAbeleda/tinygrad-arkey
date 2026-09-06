@@ -146,7 +146,9 @@ class CompilerQ4StreamKCapture:
     if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported NV_COMPILER_Q4_STREAMK_UNROLL")
     kernel_name="q4_qo_streamk_n4096" if n==4096 else "q4_qo_streamk"
     double_buffer=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_DOUBLE_BUFFER", "0")))
-    fragment_load_to_use=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE", "0")))
+    # Qualified on the complete 72-role gate/up lifecycle.  Set to 0 for the
+    # prior compiler-emitted load order.
+    fragment_load_to_use=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE", "1")))
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
       output_stride=n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use)
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)

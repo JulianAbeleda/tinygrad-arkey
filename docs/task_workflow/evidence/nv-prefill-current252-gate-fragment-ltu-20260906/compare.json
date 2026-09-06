@@ -1,0 +1,16 @@
+{
+  "candidate_median_ms": 52.832851,
+  "candidate_over_control_speedup_percent": 0.9127370393091194,
+  "candidate_replay_exact_cycles": 20,
+  "candidate_shared_bytes": 20480,
+  "control_median_ms": 53.315076,
+  "control_shared_bytes": 20480,
+  "full_logits_bit_exact": true,
+  "latency_win_ms": 0.4822249999999997,
+  "latency_win_percent": 0.90448150163005,
+  "promotion": "default_on_inside_explicit_compiler_pp512",
+  "rollback": "NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=0",
+  "same_token": true,
+  "schema": "tinygrad.nv_prefill_current252_gate_fragment_ltu_compare.v1",
+  "status": "PASS"
+}
