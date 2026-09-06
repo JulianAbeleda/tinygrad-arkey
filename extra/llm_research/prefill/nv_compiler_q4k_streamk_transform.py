@@ -20,7 +20,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
                                      k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
-                                     shared_load_to_pack:bool=False) -> str:
+                                     shared_load_to_pack:bool|str=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -67,15 +67,24 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     # The emitted source declares every scalar shared load before packing any
     # fragment.  Place each single-use load immediately before its pack instead,
     # preserving the pack and all subsequent IMMA/FP32 arithmetic verbatim.
+    mode="all" if shared_load_to_pack is True else shared_load_to_pack
+    if mode not in ("all","fragments","scales"): raise ValueError(f"unsupported shared load-to-pack mode {mode!r}")
     load_re=re.compile(r"^    signed char (val(?:2[6-9]|[3-9][0-9]|[12][0-9]{2}|3[0-4][0-9]|345)) = \(\*\(buf1.*\);\n",re.M)
-    loads={m.group(1):m.group(0) for m in load_re.finditer(math)}
-    if len(loads)!=320: raise ValueError(f"shared load-to-pack requires exact val26..val345 set, found {len(loads)}")
-    math=load_re.sub("",math)
+    all_loads={m.group(1):m.group(0) for m in load_re.finditer(math)}
+    if len(all_loads)!=320: raise ValueError(f"shared load-to-pack requires exact val26..val345 set, found {len(all_loads)}")
     pack_re=re.compile(r"^    (?:signed_char(?:8|16)|float) cast(?:1[7-9]|[2-9][0-9]) = .*;$",re.M)
+    def selected_pack(line):
+      cast=int(re.search(r"cast(\d+)",line).group(1))
+      return mode=="all" or (mode=="fragments" and cast<=32) or (mode=="scales" and cast>=33)
+    selected={x for m in pack_re.finditer(math) if selected_pack(m.group(0)) for x in re.findall(r"\bval\d+\b",m.group(0)) if x in all_loads}
+    expected={"all":320,"fragments":192,"scales":128}[mode]
+    if len(selected)!=expected: raise ValueError(f"shared load-to-pack {mode} expected {expected} loads, found {len(selected)}")
+    loads={x:all_loads[x] for x in selected}
+    math=re.sub("|".join(re.escape(loads[x]) for x in sorted(loads)),"",math)
     consumed=set()
     def stage_pack(m):
       names=[x for x in re.findall(r"\bval\d+\b",m.group(0)) if x in loads]
-      if not names: return m.group(0)
+      if not names or not selected_pack(m.group(0)): return m.group(0)
       if any(x in consumed for x in names): raise ValueError("shared scalar load has multiple pack consumers")
       consumed.update(names)
       return "".join(loads[x] for x in names)+m.group(0)

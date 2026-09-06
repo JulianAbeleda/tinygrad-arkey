@@ -52,6 +52,15 @@ def test_shared_load_to_pack_stages_each_scalar_at_its_single_consumer():
     lines.index(next(x for x in lines if "signed_char8 cast24 =" in x))
   assert transformed.count("signed char val26 =")==1 and transformed.count("signed char val345 =")==1
 
+def test_shared_load_to_pack_can_stage_fragments_or_scales_independently():
+  if not FIXTURE.exists(): return
+  fragments=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),shared_load_to_pack="fragments")
+  scales=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),shared_load_to_pack="scales")
+  assert fragments.index("signed char val33 =") > fragments.index("__syncthreads();")
+  assert fragments.index("signed char val218 =") < fragments.index("signed_char16 cast17 =")
+  assert scales.index("signed char val33 =") < scales.index("signed_char16 cast17 =")
+  assert scales.index("signed char val218 =") > scales.index("int4 wmma31 =")
+
 
 def test_sliced_fixup_matches_same_partials_on_nv():
   import numpy as np
