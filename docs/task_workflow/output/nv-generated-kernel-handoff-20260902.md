@@ -260,7 +260,7 @@ fresh compiler, and generic semantic-role coverage remains incomplete.
 Replicated same-protocol endpoint comparison and route-level localization of the
 remaining latency gap are the next P9 gates.
 
-A current same-prompt context-512 qualification finds the combined direct-greedy/two-capture feedback route bit-identical across eight full-logit rows and 2.83% lower steady latency in a fresh-process A/B/C bracket. The exact exercised s6 pair passes the distinct-return/read-only-input contract with zero shadows. This is an ordered R3 gate only; other split bands, cold-start accounting, component isolation, and external parity remain open, so normal defaults stay closed.
+A current same-prompt context-512 qualification finds the combined direct-greedy/two-capture feedback route bit-identical across eight full-logit rows and 2.83% lower steady latency in a fresh-process A/B/C bracket. Fresh ordinary-model request-scoped censuses also pass the exact split10/18/34 pair contracts at contexts 1024/2048/4096 with zero shadows and complete within the 32 GiB device. The exact exercised s6 pair passes the distinct-return/read-only-input contract with zero shadows. This is an ordered R3 gate only; other split bands, cold-start accounting, component isolation, and external parity remain open, so normal defaults stay closed.
 
 Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
 feedback ping-pong remain closed by default.  The substrate was introduced as
