@@ -282,9 +282,10 @@ def q4_down_candidate_context() -> StreamKCandidateContext:
   """Construct the closed, default-off Q4-down Stream-K context."""
   return StreamKCandidateContext(Q4_DOWN_STREAMK)
 
-def q4_down_fixup_map() -> tuple[tuple[int, ...], tuple[int, ...]]:
+def q4_down_fixup_map(*, k:int=12288) -> tuple[tuple[int, ...], tuple[int, ...]]:
   """Return ordered partial slots and active tiles from the canonical scheduler."""
-  g=Q4_DOWN_STREAMK
+  if k not in (4096, 12288): raise ValueError("Q4 Stream-K map supports only K=4096 or K=12288")
+  g=StreamKSchedule(512,4096,k,128,128,64,170,8)
   schedule=StreamKSchedule(g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners,8)
   rows=[[] for _ in range(g.output_tiles)]
   seen=set()
@@ -294,7 +295,7 @@ def q4_down_fixup_map() -> tuple[tuple[int, ...], tuple[int, ...]]:
         rows[seg.output_tile].append(seg.partial_slot); seen.add((seg.owner,seg.output_tile))
   rows=tuple(tuple(sorted(x,reverse=True)) for x in rows)
   if any(len(x)>3 for x in rows): raise ValueError("Q4 down fixup exceeds three contributors")
-  return tuple(x for x in rows if x), tuple(i for i,x in enumerate(rows) if x)
+  return rows, tuple(i for i,x in enumerate(rows) if x)
 
 
 def emit_fixup_descriptor(context: StreamKCandidateContext) -> dict[str, Any]:
