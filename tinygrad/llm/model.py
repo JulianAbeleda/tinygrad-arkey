@@ -199,6 +199,9 @@ def _nv_compiler_q4_gate_streamk_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_GATE_STREAMK", 1)) and _nv_q4_imma_pp512_mode() == "compiler" and \
     _nv_compiler_q4_imma_pp512_qualified(config)
 
+def _nv_compiler_q4_gate_q8_reuse_enabled(config) -> bool:
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q8_REUSE", 0)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
 
@@ -2020,7 +2023,8 @@ class Transformer:
       # full-model bracket.  It remains bounded by the existing exact compiler
       # pp512 admission; zero is the explicit rollback to the wide compiler body.
       if nv_q4_mode == "compiler" and _nv_compiler_q4_gate_streamk_enabled(self.config):
-        _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama")
+        _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama",
+                                  pair_q8_reuse=_nv_compiler_q4_gate_q8_reuse_enabled(self.config))
       else: _nv_binding = binding_for("NV")
       if nv_q4_mode == "gate_only":
         _nv_gate_only_binding = _nv_binding

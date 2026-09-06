@@ -130,9 +130,11 @@ class CompilerQ4StreamKCapture:
   n: int = 4096
   population: int = 36
   roles: tuple[str,...] = ("attn_q","attn_output")
+  pair_q8_reuse: bool = False
+  pair_record: object = None
 
   @classmethod
-  def compile(cls, dev, base, *, n=4096):
+  def compile(cls, dev, base, *, n=4096, pair_q8_reuse=False):
     if n not in (4096,12288): raise ValueError("unsupported Q4 Stream-K shape")
     population,roles=(36,("attn_q","attn_output")) if n==4096 else (72,("ffn_gate","ffn_up"))
     from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
@@ -158,7 +160,8 @@ class CompilerQ4StreamKCapture:
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
-    return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,n=n,population=population,roles=roles)
+    return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,n=n,population=population,roles=roles,
+               pair_q8_reuse=pair_q8_reuse)
 
   def prepare(self,count):
     if count!=self.population: raise ValueError("Q/O research capture has the wrong projection population")
@@ -169,17 +172,24 @@ class CompilerQ4StreamKCapture:
     del model
   @property
   def main_program(self): return self.q_program
-  def begin_trace(self): self.cursor=0
-  def new_capture(self): return replace(self,cursor=0)
+  def begin_trace(self): self.cursor,self.pair_record=0,None
+  def new_capture(self): return replace(self,cursor=0,pair_record=None)
   def project(self,x,words,residual=None,*,model_family,role,weight_type="Q4_K"):
     if (model_family!="qwen3_8b" or role not in self.roles or weight_type!="Q4_K" or x.shape!=(M,K) or x.device!="NV"
         or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=self.n*(K//256)*36):
       raise ValueError("unsupported Q/O Stream-K input contract")
     if residual is not None: raise ValueError("Stream-K Q/O research arm is projection-only")
     if self.cursor>=self.population: raise ValueError("Q/O Stream-K capture exceeds 36 projections")
+    expected_role=self.roles[self.cursor%2]
+    if self.pair_q8_reuse and role!=expected_role: raise ValueError("Q8 reuse requires ordered gate/up projection pairs")
+    if not self.pair_q8_reuse or self.cursor%2==0:
+      record=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device=x.device)
+      _,record=x.uop_program(record,fxn=lambda *_:self.producer)
+      if self.pair_q8_reuse:self.pair_record=record
+    else:
+      if self.pair_record is None: raise RuntimeError("up projection has no preceding gate Q8 record")
+      record=self.pair_record
     self.cursor+=1
-    record=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device=x.device)
-    _,record=x.uop_program(record,fxn=lambda *_:self.producer)
     out=Tensor.empty(M*self.n,dtype=dtypes.float32,device=x.device)
     partial=Tensor.empty(340*128*128,dtype=dtypes.float32,device=x.device)
     ids=Tensor.empty(340,dtype=dtypes.int32,device=x.device)

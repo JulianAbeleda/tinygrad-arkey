@@ -452,8 +452,9 @@ def main():
     raise SystemExit("gate oracle requires the unpruned current-best candidate with both Q4 V and Q6 V")
   if args.down_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or args.gate_oracle):
     raise SystemExit("down oracle requires the unpruned current-best candidate and excludes another oracle")
-  if args.gate_q8_reuse and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or args.gate_oracle or args.down_oracle):
-    raise SystemExit("gate Q8 reuse requires the unpruned current-best candidate and excludes oracle arms")
+  if args.gate_q8_reuse and (args.arm!="candidate" or not args.q4_v or args.prune_final_row or args.gate_oracle or args.down_oracle or
+      (args.gate_streamk and not args.q4_down_streamk) or (not args.gate_streamk and not args.q6_v)):
+    raise SystemExit("gate Q8 reuse requires an unpruned complete candidate and excludes oracle arms")
   if args.gate_epilogue_fused and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or
       args.gate_oracle or args.down_oracle or args.gate_q8_reuse):
     raise SystemExit("fused gate epilogue requires the unpruned current-best candidate and an isolated arm")
@@ -486,7 +487,8 @@ def main():
     # Explicit terminal graph lease; control remains untouched.
     model.blk[-1]._final_row_prune_requested_row = 511
   gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
-                              producer_arithmetic="llama" if args.gate_streamk else "legacy")
+                              producer_arithmetic="llama" if args.gate_streamk else "legacy",
+                              pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk)
   gate_asset.prepare_records(72)
   if not args.gate_streamk: gate_asset.install_warmstart(model)
   gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset
@@ -776,6 +778,14 @@ def main():
       census["candidate_weight_args"]==216,census["unique_weight_bases"]==216,census["all_weights_canonical"],
       census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==36,
       census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+  elif args.gate_q8_reuse and args.q4_down_streamk:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
+      census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_down_main"]==18,
+      census["q6_down_producer"]==18,census["q4_down_main"]==18,census["q4_down_producer"]==18,
+      census["compiler_main_total"]==234,census["q8_producer_total"]==198,census["candidate_weight_args"]==234,
+      census["unique_weight_bases"]==234,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
+      census["remaining_v_down_fp16_overlays"]==18,census["weight_copy_kernels"]==0,census["old_fixups"]==0,
+      census["q6_old_fixups"]==0))
   elif args.gate_q8_reuse:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["down_oracle_main"]==0,census["gate_q8_record_allocations"]==36,census["k_main"]==36,

@@ -77,6 +77,16 @@ def test_compiler_q4_down_streamk_is_explicit_and_compiler_bounded(monkeypatch):
   monkeypatch.setattr(model,"getenv",_env({}))
   monkeypatch.setattr(model,"_nv_q4_production_mode",lambda _:"llama")
   assert not model._nv_compiler_q4k_down_enabled(config)
+
+def test_compiler_gate_q8_reuse_requires_streamk(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"getenv",_env({}))
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:True)
+  assert not model._nv_compiler_q4_gate_q8_reuse_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q8_REUSE":1}))
+  assert model._nv_compiler_q4_gate_q8_reuse_enabled(config)
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:False)
+  assert not model._nv_compiler_q4_gate_q8_reuse_enabled(config)
   monkeypatch.setattr(model,"_nv_q4_imma_pp512_mode",lambda:"llama")
   monkeypatch.setattr(model,"getenv",_env({}))
   assert not model._nv_compiler_q4_gate_streamk_enabled(config)

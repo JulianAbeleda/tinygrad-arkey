@@ -1,0 +1,23 @@
+{
+  "candidate_delta_ms": -0.15311700000000172,
+  "candidate_delta_percent": -0.2783646642731341,
+  "correctness": {
+    "candidate_status": "PASS",
+    "control_c_status": "PASS",
+    "replay_cycles_exact": 20,
+    "token": 198
+  },
+  "decision": "retain default-off; measured win is below prior 0.5 ms standalone threshold",
+  "medians_ms": {
+    "candidate_b": 54.852787,
+    "control_a": 54.935668,
+    "control_c": 55.07614,
+    "control_mean": 55.005904
+  },
+  "producer_count": {
+    "candidate": 198,
+    "control": 234
+  },
+  "schema": "tinygrad.nv_prefill_current234_gate_q8_reuse_compare.v1",
+  "status": "NO_GO_THRESHOLD"
+}
