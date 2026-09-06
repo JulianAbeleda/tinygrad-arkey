@@ -246,6 +246,12 @@ def _flash_jit_variant(split_count:int|None, default, s6, s64, live_variants:dic
   if split_count == 64: return s64
   return (live_variants or {}).get(split_count, default)
 
+def _decode_feedback_pingpong_admitted(config, target:tuple[str, str], native_argmax_threads:int, getenv_fn=getenv) -> bool:
+  return bool(target == ("NV", "sm_120") and native_argmax_threads and not config.ring and config.num_experts == 0 and
+              (config.num_blocks, config.dim, config.hidden_dim, config.n_heads, config.n_kv_heads, config.head_dim,
+               config.vocab_size, config.qk_norm) == (36, 4096, 12288, 32, 8, 128, 151936, 128) and
+              not getenv_fn("TINYGRAD_DECODE_FEEDBACK_PINGPONG_DISABLE", 0))
+
 def _flash_block_geometry(model, index:int, base:dict) -> dict:
   """Merge research block-local Flash geometry after the model-wide lease.
 
@@ -2555,6 +2561,14 @@ class Transformer:
     # a token-exact reps=9 reverse bracket recovered 56.386 us/token. The
     # environment switch is an explicit load-time rollback/control arm.
     model._decode_native_argmax_threads = decode_native_argmax_threads((_norm_cap.backend, _norm_cap.architecture))
+    # A two-capture feedback ring removes CapturedJit's recurrent-input shadow.
+    # Admission is exact to the model/target qualified across every required
+    # context band. generate additionally requires an explicit output horizon
+    # so only the request's selected pair is prewarmed.
+    _feedback_pingpong = _decode_feedback_pingpong_admitted(
+      config, (_norm_cap.backend, _norm_cap.architecture), model._decode_native_argmax_threads)
+    model._decode_direct_greedy_promoted = _feedback_pingpong
+    model._decode_feedback_pingpong_promoted = _feedback_pingpong
     # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
     # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
     # flags, which production decode normally leaves closed. When a promoted policy requires them
@@ -2841,7 +2855,7 @@ class Transformer:
                              if min(ctx,self.max_context-1) >= 511 and
                              _flash_decode_geometry_for_split({}, s)["token_bound"] <= self.max_context):
       if expected_output_tokens is not None and split_count not in required: continue
-      direct = bool(getattr(self, "_decode_direct_greedy_promoted", False))
+      direct = bool(getattr(self, "_decode_direct_greedy_promoted", False)) and expected_output_tokens is not None
       slots = (0, 1) if direct and getattr(self, "_decode_feedback_pingpong_promoted", False) else (None,)
       for slot in slots:
         for _ in range(3):
@@ -2905,6 +2919,10 @@ class Transformer:
     out, prompt_len, decode_feedback_phase = None, len(tokens), 0
     request_flash_split = _request_static_flash_split_count(prompt_len, expected_output_tokens, self.max_context)
     direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    # Two captures add meaningful cold construction and retained memory. The
+    # promoted route therefore requires a caller-provided output horizon so
+    # prewarm can build only the selected request band.
+    direct_greedy = direct_greedy and expected_output_tokens is not None
     host_argmax_mirror = direct_greedy and not diagnostic_full_logits and \
       bool(getattr(self, "_decode_native_argmax_threads", 0)) and not bool(getattr(self, "_decode_vocab_top1_lease", False)) and \
       bool(getenv("NV_ARGMAX_HOST_MIRROR", 0))
@@ -2997,7 +3015,7 @@ class Transformer:
         else:
           decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
                          (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
-          feedback_slot = (decode_feedback_phase & 1) if start_pos >= prompt_len and \
+          feedback_slot = (decode_feedback_phase & 1) if direct_greedy and start_pos >= prompt_len and \
             bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
           out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot,flash_split_count=_flash_split)
                  if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else

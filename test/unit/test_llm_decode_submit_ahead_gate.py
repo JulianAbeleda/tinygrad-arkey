@@ -11,6 +11,7 @@ single-sync pingpong route.
 from types import SimpleNamespace
 
 from tinygrad.llm.model import Transformer
+from tinygrad.llm.model import _decode_feedback_pingpong_admitted
 import tinygrad.llm.model as model_mod
 import tinygrad.llm.feedback_pingpong as fp_mod
 
@@ -74,3 +75,14 @@ def test_module_level_import_alias_is_consistent():
   import inspect
   src = inspect.getsource(Transformer._decode_submit_ahead_eligible)
   assert "from tinygrad.llm.feedback_pingpong import pingpong_capture_contract" in src
+
+
+def test_feedback_pingpong_admission_is_exact_and_has_rollback():
+  config=SimpleNamespace(ring=False, num_experts=0, num_blocks=36, dim=4096, hidden_dim=12288,
+    n_heads=32, n_kv_heads=8, head_dim=128, vocab_size=151936, qk_norm=128)
+  assert _decode_feedback_pingpong_admitted(config, ("NV", "sm_120"), 256, lambda *_:0)
+  assert not _decode_feedback_pingpong_admitted(config, ("NV", "sm_120"), 0, lambda *_:0)
+  assert not _decode_feedback_pingpong_admitted(config, ("NV", "sm_120"), 256, lambda *_:1)
+  for mutation in ({"ring":True}, {"num_experts":8}, {"num_blocks":35}, {"vocab_size":32000}):
+    assert not _decode_feedback_pingpong_admitted(SimpleNamespace(**(vars(config)|mutation)), ("NV", "sm_120"), 256, lambda *_:0)
+  assert not _decode_feedback_pingpong_admitted(config, ("CUDA", "sm_120"), 256, lambda *_:0)
