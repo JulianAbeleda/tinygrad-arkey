@@ -1,0 +1,3 @@
+# Q4-down Stream-K unroll8 profile
+
+The best unroll8 route was profiled with `PROFILE=1` and a unique HCQ JSONL path. The profile has 630 observations per program name across the short R31 harness. Mean active durations were: generated Q4 main 444.834 (profile units), generated fixup 50.237, generated Q8 producer 12.417; llama Q4 main 315.722, llama fixup 41.581, llama producer 12.000. These are overlapping active intervals and are not summed into wall time. The generated main is the dominant measured gap, about 1.41x the llama main in this profile. No body rewrite was made from this profile alone; arithmetic and weight layout remain unchanged.
