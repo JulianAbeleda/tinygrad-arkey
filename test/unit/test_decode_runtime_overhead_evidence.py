@@ -55,6 +55,7 @@ def test_captured_program_evidence_records_identity_geometry_and_order():
   assert [row["ordinal"] for row in rows] == [0, 1]
   assert all(row["program_name"] == "captured_test" and row["global_size"] == [7, 2, 1] for row in rows)
   assert len({row["source_sha256"] for row in rows}) == len({row["binary_sha256"] for row in rows}) == 1
+  assert all(row["source_text"] == "kernel source" for row in rows)
 
 
 def test_nv_gpu_state_requires_and_names_every_field(monkeypatch):

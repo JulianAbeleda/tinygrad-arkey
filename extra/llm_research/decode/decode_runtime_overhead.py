@@ -110,6 +110,7 @@ def _captured_program_evidence(jit) -> list[dict]:
                    "program_name":program.arg.name, "global_size":list(program.arg.global_size),
                    "local_size":list(program.arg.local_size) if program.arg.local_size is not None else None,
                    "source_sha256":hashlib.sha256(source.encode()).hexdigest() if source is not None else None,
+                   "source_text":source,
                    "binary_sha256":hashlib.sha256(binary).hexdigest() if binary is not None else None,
                    "semantic_identities":semantic, "workload_roles":list(dict.fromkeys(x["role"] for x in semantic))})
   return rows
@@ -192,9 +193,19 @@ def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:
 def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
   census, selected, count = _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)
   payload = census.to_dict()
+  program_evidence = {name:_captured_program_evidence(jit) for name,jit in selected.items()}
+  source_evidence = {}
+  for rows in program_evidence.values():
+    for row in rows:
+      source = row.pop("source_text")
+      if source is None: continue
+      source_sha = row["source_sha256"]
+      if source_sha in source_evidence and source_evidence[source_sha] != source:
+        raise RuntimeError(f"source SHA collision in captured PROGRAM census: {source_sha}")
+      source_evidence[source_sha] = source
   payload["capture"] = {"phase":"decode", "selected_jits":list(selected), "warmup_decode":count,
                         "programs_by_jit":{name:_captured_program_count(jit) for name,jit in selected.items()},
-                        "program_evidence_by_jit":{name:_captured_program_evidence(jit) for name,jit in selected.items()},
+                        "program_evidence_by_jit":program_evidence, "source_text_by_sha256":source_evidence,
                         "captured":True}
   return payload
 
