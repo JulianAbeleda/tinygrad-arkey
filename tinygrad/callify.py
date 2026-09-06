@@ -712,6 +712,7 @@ def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, .
   def param_slot(value:UOp) -> int|None:
     while value.op in transparent and len(value.src) == 1: value = value.src[0]
     return value.arg.slot if value.op is Ops.PARAM and isinstance(value.arg, ParamArg) else None
+  destinations=[]
   for user in nodes:
     if user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM and isinstance(user.src[0].arg, ProgramInfo):
       for idx in user.src[0].arg.outs:
@@ -722,8 +723,9 @@ def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, .
     elif user.op is Ops.STORE and user.src:
       # STORE destinations may carry INDEX/view nodes rather than a direct
       # PARAM. Any enclosing PARAM in that destination address is writable.
-      for value in _function_body_invocation_nodes((user.src[0],)):
-        if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
+      destinations.append(user.src[0])
+  for value in _function_body_invocation_nodes(tuple(destinations)):
+    if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
   _memo[srcs] = frozenset(writable)
   return _memo[srcs]
 
