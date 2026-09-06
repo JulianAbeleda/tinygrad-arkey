@@ -1,0 +1,10 @@
+{
+  "all_timing_token_hashes_identical": true,
+  "legacy_a_median_ms": 4.193921,
+  "legacy_c_median_ms": 4.193350675,
+  "mean_control_medians_ms": 4.1936358375,
+  "pingpong_b_median_ms": 4.075100425,
+  "pingpong_latency_delta_pct": -2.8265547389699885,
+  "pingpong_throughput_delta_pct": 2.908772794231207,
+  "schema": "tinygrad.nv.feedback_pingpong_aba_summary.v1"
+}

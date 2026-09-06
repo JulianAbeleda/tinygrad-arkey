@@ -1,0 +1,42 @@
+{
+  "arm": "pingpong",
+  "callify_redirect": 0,
+  "contract": {
+    "admitted": true,
+    "program_counts": [
+      4,
+      4
+    ],
+    "reason": "distinct_fixed_returns_and_read_only_inputs",
+    "return_device": "NV",
+    "return_dtype": "dtypes.int",
+    "return_shape": [
+      1,
+      1
+    ],
+    "written_input_shadows": [
+      0,
+      0
+    ]
+  },
+  "graph_group_sizes": [
+    33,
+    66,
+    132,
+    185
+  ],
+  "kernel_us": 3904.36,
+  "mode": "census",
+  "program_count": 416,
+  "program_names": [],
+  "raw_debug": [
+    "*** NV      3934 batched 33                                     arg  0 mem  19.19 GB tm    253.44us/     0.25ms (  15234 GFLOPS 1096|5782   GB/s) ",
+    "*** NV      3935 batched 66                                     arg  0 mem  19.19 GB tm    577.23us/     0.83ms (  18490 GFLOPS 1248|6795   GB/s) ",
+    "*** NV      3936 batched 132                                    arg  0 mem  19.19 GB tm   1149.71us/     1.98ms (  18641 GFLOPS 1231|6602   GB/s) ",
+    "*** NV      3937 batched 185                                    arg  0 mem  19.19 GB tm   1923.98us/     3.90ms (  19931 GFLOPS 1265|6772   GB/s) "
+  ],
+  "route_still_promoted": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_pair": "rollout_greedy_pingpong_jits_flash_s6",
+  "token": 38835
+}

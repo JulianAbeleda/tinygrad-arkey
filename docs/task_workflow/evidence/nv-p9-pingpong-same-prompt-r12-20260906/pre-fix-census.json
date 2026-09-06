@@ -1,0 +1,24 @@
+{
+  "arm": "pingpong",
+  "callify_redirect": 0,
+  "contract": null,
+  "graph_group_sizes": [
+    33,
+    66,
+    132,
+    185
+  ],
+  "kernel_us": 3901.12,
+  "mode": "census",
+  "program_count": 416,
+  "program_names": [],
+  "raw_debug": [
+    "*** NV      3934 batched 33                                     arg  0 mem  19.19 GB tm    246.91us/     0.25ms (  15636 GFLOPS 1125|5934   GB/s) ",
+    "*** NV      3935 batched 66                                     arg  0 mem  19.19 GB tm    581.73us/     0.83ms (  18347 GFLOPS 1239|6743   GB/s) ",
+    "*** NV      3936 batched 132                                    arg  0 mem  19.19 GB tm   1146.16us/     1.97ms (  18699 GFLOPS 1235|6622   GB/s) ",
+    "*** NV      3937 batched 185                                    arg  0 mem  19.19 GB tm   1926.32us/     3.90ms (  19907 GFLOPS 1263|6763   GB/s) "
+  ],
+  "route_still_promoted": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "token": 38835
+}

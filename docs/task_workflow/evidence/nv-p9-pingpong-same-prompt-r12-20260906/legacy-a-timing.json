@@ -1,0 +1,112 @@
+{
+  "arm": "legacy",
+  "callify_redirect": 0,
+  "contract": null,
+  "gpu_state_scope": "immediately_before_and_after_timed_decode_window",
+  "gpu_states": [
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2565",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "125.89",
+        "power.draw.instant": "448.29",
+        "pstate": "P0",
+        "temperature.gpu": "53",
+        "temperature.gpu.tlimit": "33",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2565",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "88.75",
+        "power.draw.instant": "76.02",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "162.38",
+        "power.draw.instant": "380.22",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "32",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "89.15",
+        "power.draw.instant": "207.01",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "122.24",
+        "power.draw.instant": "442.58",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "32",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "86.61",
+        "power.draw.instant": "142.65",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "36",
+        "temperature.memory": "N/A"
+      }
+    }
+  ],
+  "median_ms": 4.193921,
+  "mode": "timing",
+  "samples_ms": [
+    4.193921,
+    4.18454635,
+    4.20589875
+  ],
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "token_hashes": [
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  ],
+  "tokens_identical": true
+}
