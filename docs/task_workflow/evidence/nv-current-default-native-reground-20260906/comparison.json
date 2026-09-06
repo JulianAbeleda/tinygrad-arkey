@@ -1,0 +1,10 @@
+{
+  "schema": "tinygrad.nv_current_default_native_reground.v1",
+  "tinygrad_median_ms": 34.964065,
+  "fresh_llama_median_ms": 38.8192285,
+  "delta_ms": -3.8551635000000033,
+  "tinygrad_latency_advantage_percent": 9.931066765018278,
+  "boundary": "sequential cross-harness; same Qwen3-8B model and pp512, distinct prompt/token inspection",
+  "generated_stack_median_ms": 50.746286,
+  "generated_vs_native_delta_ms": 15.782221
+}

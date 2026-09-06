@@ -180,3 +180,19 @@ that old generated body, but its roughly 271 us main-plus-fixup remains above
 the reference class. Gate/up therefore remains a demonstrated body-service
 target; the interleave, shared-load, fragment-lifetime and double-buffer variants
 already measured do not close it.
+
+## Default native-route reground
+
+A fresh current-tree all-native tinygrad pp512 R9 measures 34.964065 ms median
+(34.451502 ms minimum), with exact repeated-activation replay, a distinct second
+activation, finite logits, and the expected packed Q4/Q6/Flash census. The same
+session's fresh llama reference is 38.8192285 ms median. On this sequential
+cross-harness boundary, ordinary tinygrad's promoted exact-shape native route is
+3.8551635 ms or 9.93% lower latency than llama. This establishes that the graph
+and token lifecycle can exceed parity on the current tree.
+
+The generated current252 route's 50.746286 ms median is therefore not evidence
+of a remaining generic lifecycle deficit. Its 15.782221 ms gap to the promoted
+native route is the cost of the compiler-generated replacement population. The
+remaining generated-route campaign must close per-role generated body service;
+it must not attribute this delta to the already-qualified default lifecycle.
