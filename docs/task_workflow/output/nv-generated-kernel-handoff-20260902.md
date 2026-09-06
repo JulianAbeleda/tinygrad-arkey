@@ -224,6 +224,36 @@ Next steps:
 Promotion bar: a reproducible batch-1 decode win or parity across the qualified
 context bands, with no llama cubin in the selected graph.
 
+#### 2026-09-06 P9 checkpoint
+
+Normal generated decode now has measured continuous coverage at every required
+context band: 128, 256, 512, 1024, 2048, and 4096.  The 2048 and 4096 endpoints
+select the 18- and 34-split live Flash graphs and measure 4.369 and 4.610
+ms/token respectively (three ten-token windows, P0, no reported throttling).
+Two fresh-process independent-request checks also pass twice at both 2048 and
+4096 with identical first tokens and only 10,244 and 18,436 bytes of post-request
+GlobalCounters growth.
+
+The long-context blocker was a real lifecycle bug.  The process-global nested
+precompile-resolution memo retained 2,509,417,476 bytes of invocation-bound
+LINEAR scratch/output buffers after a 1024-token request.  Commit `eaf25b1db`
+scopes that memo to one schedule walk.  Ordinary policy declares no prefill
+workload reuse, but the per-position prefill TinyJits nevertheless attempted a
+second-use capture with about 13.166 GB of additional live allocations.  Commit
+`959809bec` keeps those concrete-KV kernels eager under the no-reuse policy;
+explicit workload reuse retains the existing capture/precompile behavior.
+
+P9 is not complete.  The controlled context-512 endpoint pilot remains about
+3.87% slower in latency than the mean of its two bracketing llama endpoints and
+used different prompt/token protocols, so it is not a parity qualification.
+The selected graph contains 29 unique PROGRAMs: retained SOURCE recompiles to
+the captured cubin for 23 with NVRTC 13.2 at sm_120; six generic E/r programs
+mismatch deterministically.  There are zero recognized native-precompiled
+markers, but marker absence and six unmatched transports do not prove universal
+generated ownership or renderer lineage.  Replicated same-protocol endpoint
+comparison, positive provenance for those six programs, and route-level
+localization of the remaining latency gap are the next P9 gates.
+
 Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
 feedback ping-pong remain closed by default.  The substrate was introduced as
 an explicit experiment in commit `a1a51c349`; the ordinary loader still assigns
@@ -363,6 +393,8 @@ the required primitives and fused candidates already exist.
 
 #### Revised overall estimate
 
-- Likely: 3-5 continuous working days
-- With one additional compiler-level gap: 5-8 continuous working days
-- The previous 10-20 working-day estimate is not supported by demonstrated pace
+The dated day-range estimates above are no longer a defensible completion
+forecast.  Decode validation and bounded lifecycle fixes continue to land at an
+hour scale, but full prefill still needs new projection-kernel performance work
+and its duration cannot be inferred from commit count.  Report the next concrete
+milestone and its measured blocker rather than extrapolating a fixed finish date.
