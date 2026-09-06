@@ -153,6 +153,33 @@ def test_readonly_program_slot_analysis_reuses_only_live_completed_bodies(monkey
   assert root_ref() is None
 
 
+def test_writable_program_slot_analysis_reuses_only_live_completed_bodies(monkeypatch):
+  import tinygrad.callify as callify
+  callify._writable_function_param_cache.clear()
+  output = UOp.param(1, dtypes.int32, (8,), "CPU")
+  source = UOp.param(0, dtypes.int32, (8,), "CPU")
+  body, device = UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU")
+  read_write = UOp(Ops.PROGRAM, src=(body, device),
+    arg=ProgramInfo(globals=(0, 1), outs=(0, 1), ins=(1,)))
+  root = UOp.maketuple(output.after(read_write.call(output, source)))
+  original, walks = callify._function_body_invocation_nodes, []
+  monkeypatch.setattr(callify, "_function_body_invocation_nodes", lambda srcs:(walks.append(srcs) or original(srcs)))
+  assert callify._writable_function_param_slots(root.src) == frozenset({0, 1})
+  first_walks = len(walks)
+  assert callify._writable_function_param_slots(root.src) == frozenset({0, 1})
+  assert len(walks) == first_walks
+
+  readonly = read_write.replace(arg=ProgramInfo(globals=(0, 1), outs=(0,), ins=(1,)))
+  other_root = UOp.maketuple(output.after(readonly.call(output, source)))
+  assert callify._writable_function_param_slots(other_root.src) == frozenset({1})
+  assert len(walks) > first_walks
+
+  root_ref = weakref.ref(root)
+  del root
+  gc.collect()
+  assert root_ref() is None
+
+
 def test_canonical_model_parameter_program_inputs_are_zero_copy_and_fresh():
   provider = _TwoProjectionProgram()
 

@@ -708,10 +708,14 @@ def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[U
   _readonly_program_input_cache[root] = _memo[srcs]
   return _memo[srcs]
 
+_writable_function_param_cache:weakref.WeakKeyDictionary[UOp, frozenset[int]] = weakref.WeakKeyDictionary()
+
 def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
   """PARAM slots which may be written in this FUNCTION or a nested callee."""
   if _memo is None: _memo = {}
   if srcs in _memo: return _memo[srcs]
+  root = UOp.maketuple(*srcs)
+  if root in _writable_function_param_cache: return _writable_function_param_cache[root]
   _memo[srcs] = frozenset()
   nodes = _function_body_invocation_nodes(srcs)
   writable:set[int] = set()
@@ -734,6 +738,7 @@ def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, .
   for value in _function_body_invocation_nodes(tuple(destinations)):
     if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
   _memo[srcs] = frozenset(writable)
+  _writable_function_param_cache[root] = _memo[srcs]
   return _memo[srcs]
 
 def _exact_readonly_model_parameter_carrier(x:UOp) -> bool:
