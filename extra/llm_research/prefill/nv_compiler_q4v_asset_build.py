@@ -6,7 +6,10 @@ from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import CompilerK
 
 def main():
   ap=argparse.ArgumentParser(); ap.add_argument('--out',required=True); a=ap.parse_args()
-  b=CompilerKPP512Binding.compile(Device['NV'], 'attn_v')
+  # Q4-V has the admitted Q4_K K primitive geometry (M512,N1024,K4096).
+  # The serialized loader owns the V role lease; the isolated builder only
+  # extracts the role-independent compiler body and must not broaden K roles.
+  b=CompilerKPP512Binding.compile(Device['NV'])
   p=b.main_program; binary=next(u.arg for u in p.src if getattr(u,'op',None).name=='BINARY')
   out=pathlib.Path(a.out); out.mkdir(parents=True,exist_ok=True); (out/'program.cubin').write_bytes(binary)
   i=p.arg; m={'schema':'tinygrad.nv.q4v.asset.v1','identity':b.candidate_identity,'binary_sha256':hashlib.sha256(binary).hexdigest(),
