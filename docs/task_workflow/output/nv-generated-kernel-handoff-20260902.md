@@ -257,8 +257,7 @@ native-precompiled. Combined with the SOURCE-key and cubin audit above, this
 positively closes construction ownership and current source transport for the
 selected graph. The six cache-bound binaries remain non-reproducible under the
 fresh compiler, and generic semantic-role coverage remains incomplete.
-Replicated same-protocol endpoint comparison and route-level localization of the
-remaining latency gap are the next P9 gates.
+The feedback-shadow cost is now localized and the bounded two-capture ring is promoted at commit `e4b5fc2a6` for exact NV sm_120/Qwen3-8B requests with an explicit output horizon. Required context-band alias/capacity gates pass, and a fresh llama/tinygrad/llama R3 bracket measures promoted tinygrad within 0.113% latency of the mean llama controls at depth 512. Cross-runtime prompt/token protocols still differ, so this is endpoint latency parity rather than token correctness. Replication and cold-start accounting remain P9 follow-ups.
 
 A current same-prompt context-512 qualification finds the combined direct-greedy/two-capture feedback route bit-identical across eight full-logit rows and 2.83% lower steady latency in a fresh-process A/B/C bracket. Fresh ordinary-model request-scoped censuses also pass the exact split10/18/34 pair contracts at contexts 1024/2048/4096 with zero shadows and complete within the 32 GiB device. The exact exercised s6 pair passes the distinct-return/read-only-input contract with zero shadows. This is an ordered R3 gate only; other split bands, cold-start accounting, component isolation, and external parity remain open, so normal defaults stay closed.
 
