@@ -8,6 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ROOT / "tinygrad/llm/generated"
 LEDGER = GENERATED / "boltbeam-nv-sm120-kernel-authority.json"
+# Route IDs are intentionally absent from a few early research bindings. Keep
+# these aliases explicit until those bindings consume authority tickets.
+LEGACY_BINDINGS = {
+  "q6_ffn_down_streamk_destination.v1": ("tinygrad/llm/model.py", "extra/llm_research/prefill/nv_compiler_q6k_pp512_binding.py"),
+}
 
 
 def _sources(root: Path) -> dict[str, str]:
@@ -27,14 +32,16 @@ def inventory() -> dict:
     policy_readers = sorted(name for name, text in production.items() if policy_name and policy_name in text)
     production_refs = sorted(name for name, text in production.items() if route["route_id"] in text)
     research_refs = sorted(name for name, text in research.items() if route["route_id"] in text)
+    legacy_binding = list(LEGACY_BINDINGS.get(route["route_id"], ()))
     if policy_name and not promoted: status = "closed_policy"
     elif policy_name and policy_readers and production_refs: status = "selected_binding_present"
     elif policy_name and policy_readers: status = "policy_binding_present"
+    elif legacy_binding: status = "explicit_composition_legacy_binding"
     elif production_refs: status = "production_reference_only"
     else: status = "authority_only"
     rows.append({**route, "nv_sm120_promoted":promoted, "integration_status":status,
                  "policy_readers":policy_readers, "production_refs":production_refs,
-                 "research_refs":research_refs})
+                 "research_refs":research_refs, "legacy_binding":legacy_binding})
   counts = {}
   for row in rows: counts[row["integration_status"]] = counts.get(row["integration_status"], 0) + 1
   return {"schema":"tinygrad.nv_generated_corpus_inventory.v1", "target":authority["target"],
@@ -57,7 +64,7 @@ def markdown(report: dict) -> str:
   lines += [f"- `{key}`: {value}" for key,value in sorted(report["counts"].items())]
   lines += ["", "## Immediate integration conclusions", "",
             "- Prefill fused attention has exact authority, an NV-promoted policy, a production policy reader, and an authorized lowering call site.",
-            "- Prefill Q6 stream-K down has exact authority and provider emitters, but no production reference. It is the clearest orphaned winning route.",
+            "- Prefill Q6 stream-K down is installed in the explicit current252 composition through a legacy research-module binding. Its call path does not consume the route ID or an authority ticket, and ordinary selection does not choose current252.",
             "- Closed decode policies are reproducible corpus assets, but their empty target lists deliberately prevent ordinary selection.",
             "- The empty generated artifact catalog is a separate opt-in artifact interface. Populating it cannot by itself attach these route-bound kernels to the model graph.", ""]
   return "\n".join(lines)

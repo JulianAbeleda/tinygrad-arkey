@@ -40,19 +40,19 @@ Authority and ordinary selection are intentionally reported separately. Static r
 | decode | `decode_q4k_g3_generated` | exact | none | production_reference_only |
 | decode | `decode_q6k_coop_generated` | exact | none | production_reference_only |
 | decode | `decode_q4k_k_four_warp` | exact | none | production_reference_only |
-| prefill | `q6_ffn_down_streamk_destination.v1` | exact | none | authority_only |
+| prefill | `q6_ffn_down_streamk_destination.v1` | exact | none | explicit_composition_legacy_binding |
 
 ## Counts
 
-- `authority_only`: 1
 - `closed_policy`: 5
+- `explicit_composition_legacy_binding`: 1
 - `production_reference_only`: 3
 - `selected_binding_present`: 26
 
 ## Immediate integration conclusions
 
 - Prefill fused attention has exact authority, an NV-promoted policy, a production policy reader, and an authorized lowering call site.
-- Prefill Q6 stream-K down has exact authority and provider emitters, but no production reference. It is the clearest orphaned winning route.
+- Prefill Q6 stream-K down is installed in the explicit current252 composition through a legacy research-module binding. Its call path does not consume the route ID or an authority ticket, and ordinary selection does not choose current252.
 - Closed decode policies are reproducible corpus assets, but their empty target lists deliberately prevent ordinary selection.
 - The empty generated artifact catalog is a separate opt-in artifact interface. Populating it cannot by itself attach these route-bound kernels to the model graph.
 

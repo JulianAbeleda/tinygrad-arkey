@@ -152,8 +152,9 @@ evidence. Only then is the campaign complete.
 
 M0 is active. Generate the static corpus integration inventory, verify it against
 the live program census, then attach the first compatible winner that is absent
-from the selected graph. The initial static audit identifies the exact Q6
-prefill stream-K down route as authority/provider-owned but absent from
-production references; validate its current ABI compatibility before changing
-dispatch. Build new substrate only after all compatible retained winners have
-been exhausted.
+from the selected graph. The initial audit finds that Q6 prefill stream-K down
+already reaches the explicit current252 graph through a legacy research-module
+binding, but the call path does not consume its route authority and ordinary
+selection still chooses the native llama stack. Resolve these partial bindings
+across the corpus before changing dispatch. Build new substrate only after all
+compatible retained winners have been exhausted.
