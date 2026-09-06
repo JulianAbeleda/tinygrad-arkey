@@ -303,6 +303,9 @@ def _graph_stage_buffers(jit,identities):
       if role is None:
         role=next((native_role for native_role in ("v","gate_up","gate_oracle","down_oracle","gate_epilogue")
           if getattr(call.arg,"name",None)==identities.get(native_role)),None)
+      name=getattr(call.arg,"name",None)
+      if role is None and name=="q4_down_streamk": role="q4_down"
+      if role is None and isinstance(name,str) and name.startswith("nv_q6_oracle_broad_cta_"): role="q6_down"
       if role is None:continue
       if call.arg.outs==(0,) and call.arg.ins in ((1,2),(1,2,3)): record_index=1
       elif call.arg.outs==(0,1,2) and call.arg.ins==(3,4): record_index=4
@@ -774,6 +777,8 @@ def main():
     f"{gate_stage}_outputs":70 if args.prune_final_row else 72,"k_records":36,"k_outputs":36}
   if args.arm=="candidate" and args.q4_v: expected_stage.update({"v_records":18,"v_outputs":18})
   if args.q6_v: expected_stage.update({"q6_v_records":18,"q6_v_outputs":18})
+  if args.q4_down_streamk: expected_stage.update({"q4_down_records":18,"q4_down_outputs":18})
+  if "ffn_down" in requested_q6_roles: expected_stage.update({"q6_down_records":18,"q6_down_outputs":18})
   if args.down_oracle: expected_stage.update({"down_oracle_records":36,"down_oracle_outputs":36})
   if args.gate_epilogue_fused: expected_stage.update({"gate_epilogue_records":36,"gate_epilogue_outputs":36})
   if args.arm=="candidate":expected_stage.update({"qo_records":72,"qo_outputs":72})
