@@ -30,6 +30,7 @@ def main():
   ap.add_argument('--role',choices=('q','o','gateup'),required=True)
   ap.add_argument('--rounds',type=int,default=31)
   ap.add_argument('--variant',choices=('wide','streamk'),default='wide')
+  ap.add_argument('--producer-arithmetic',choices=('legacy','llama'),default='legacy')
   ap.add_argument('--out',required=True)
   a=ap.parse_args()
   if a.rounds < 1: raise ValueError('rounds must be positive')
@@ -43,7 +44,7 @@ def main():
   weight_ids=[w.uop.buf_uop for w in weights]
   if a.role=='gateup':
     from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for as gate_binding
-    candidate=gate_binding('NV',variant=a.variant).new_capture(); candidate.prepare_records(72)
+    candidate=gate_binding('NV',variant=a.variant,producer_arithmetic=a.producer_arithmetic).new_capture(); candidate.prepare_records(72)
   else:
     candidate=binding_for('NV',variant=a.variant).new_capture(); candidate.prepare(36)
   if a.role=='q':
