@@ -13,9 +13,12 @@ Q6_DOWN_NAMES = (
 
 def _specialize_current(rows:list[dict]) -> None:
   counters=collections.Counter()
+  previous_name=None
   for row in rows:
     name=row["name"]; ident=(row.get("metadata") or {}).get("canonical_identity")
     if ident == CURRENT_QO_ID: primary,tag="qo","qo_main"
+    elif name == "q4_down_streamk" or (name == "q4k_imma_fixup_active" and previous_name == "q4_down_streamk"):
+      primary,tag="down","q4_down_main" if name == "q4_down_streamk" else "q4_down_fixup"
     elif name in GATE_STREAMK_NAMES: primary,tag="gate_up",name
     elif name in Q6_DOWN_NAMES: primary,tag="down",name
     else: primary,tag=_primary(row)
@@ -24,7 +27,10 @@ def _specialize_current(rows:list[dict]) -> None:
     elif primary == "gate_up":
       row["primary"]=row["role"]="gate" if counters[tag]%2 == 0 else "up";counters[tag]+=1
     else: row["primary"],row["role"]=primary,tag
+    if tag in ("q4_down_main","q4_down_fixup"): counters[tag]+=1
+    previous_name=name
   expected={"qo_main":72,"q4_qo_streamk":72,"q4k_imma_fixup_active":72}
+  if counters["q4_down_main"] or counters["q4_down_fixup"]: expected.update({"q4_down_main":18,"q4_down_fixup":18})
   if any(counters[k] != v for k,v in expected.items()): raise ValueError(f"incomplete current dense role census: {dict(counters)}")
 
 def main():
@@ -41,7 +47,8 @@ def main():
       seen_q=True
     r['layer']=layer if layer<36 else None
   counts=collections.Counter(r['primary'] for r in rows)
-  expected={'q':36,'k':36,'v':18,'o':36,'gate':72,'up':72,'down':54,'flash_score_reduction':36}
+  q4_down=sum(r["name"]=="q4_down_streamk" for r in rows)
+  expected={'q':36,'k':36,'v':18,'o':36,'gate':72,'up':72,'down':72 if q4_down else 54,'flash_score_reduction':36}
   if any(counts[k]!=v for k,v in expected.items()): raise ValueError(f'role census mismatch: {dict(counts)}')
   active=collections.defaultdict(Decimal)
   for r in rows: active[r['primary']]+=Decimal(str(r['duration']))
