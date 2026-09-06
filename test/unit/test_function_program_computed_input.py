@@ -1,4 +1,5 @@
 """Generic ownership gate for computed inputs to opaque PROGRAM calls."""
+import gc, weakref
 import numpy as np
 
 from tinygrad import Tensor, TinyJit, dtypes
@@ -122,6 +123,34 @@ def test_readonly_program_slots_do_not_cross_nested_function_param_namespaces():
     arg=ProgramInfo(globals=(0, 1), outs=(0, 1), ins=(1,))).call(nested_output, nested_param))
   forwarding_rmw = UOp(Ops.FUNCTION, dtypes.void, (UOp.maketuple(nested_rmw), outer_source), CallInfo(precompile=True))
   assert _writable_function_param_slots((forwarding_rmw.gettuple(0),)) == frozenset({0})
+
+
+def test_readonly_program_slot_analysis_reuses_only_live_completed_bodies(monkeypatch):
+  import tinygrad.callify as callify
+  callify._readonly_program_input_cache.clear()
+  output = UOp.param(1, dtypes.int32, (8,), "CPU")
+  source = UOp.param(0, dtypes.int32, (8,), "CPU")
+  program = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU")),
+                arg=ProgramInfo(globals=(0, 1), outs=(0,), ins=(1,)))
+  root = UOp.maketuple(output.after(program.call(output, source)))
+  original, walks = callify._function_body_invocation_nodes, []
+  monkeypatch.setattr(callify, "_function_body_invocation_nodes", lambda srcs:(walks.append(srcs) or original(srcs)))
+  assert callify._readonly_program_input_param_slots(root.src) == frozenset({0})
+  first_walks = len(walks)
+  assert callify._readonly_program_input_param_slots(root.src) == frozenset({0})
+  assert len(walks) == first_walks
+
+  # A different immutable body root and PROGRAM ABI must be analyzed independently.
+  read_write = program.replace(arg=ProgramInfo(globals=(0, 1), outs=(0, 1), ins=(1,)))
+  other_root = UOp.maketuple(output.after(read_write.call(output, source)))
+  assert callify._readonly_program_input_param_slots(other_root.src) == frozenset()
+  assert len(walks) > first_walks
+
+  # Cache values contain only slot integers; the weak key does not retain a body root.
+  root_ref = weakref.ref(root)
+  del root
+  gc.collect()
+  assert root_ref() is None
 
 
 def test_canonical_model_parameter_program_inputs_are_zero_copy_and_fresh():

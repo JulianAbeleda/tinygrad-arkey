@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field, replace
+import weakref
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
 from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo, ProgramInfo,
                              bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
@@ -631,6 +632,8 @@ def _function_body_invocation_nodes(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
     stack.extend(x.src[1:] if opaque_program or nested_function else x.src)
   return tuple(seen)
 
+_readonly_program_input_cache:weakref.WeakKeyDictionary[UOp, frozenset[int]] = weakref.WeakKeyDictionary()
+
 def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
   """FUNCTION PARAM slots used exclusively as read-only opaque PROGRAM inputs.
 
@@ -640,6 +643,8 @@ def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[U
   """
   if _memo is None: _memo = {}
   if srcs in _memo: return _memo[srcs]
+  root = UOp.maketuple(*srcs)
+  if root in _readonly_program_input_cache: return _readonly_program_input_cache[root]
   # Break malformed/cyclic nesting fail-closed while recursively proving
   # ordinary forwarding through child FUNCTION invocation ABIs.
   _memo[srcs] = frozenset()
@@ -700,6 +705,7 @@ def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[U
         break
     if valid and program_reads: admitted.add(slot)
   _memo[srcs] = frozenset(admitted)
+  _readonly_program_input_cache[root] = _memo[srcs]
   return _memo[srcs]
 
 def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
