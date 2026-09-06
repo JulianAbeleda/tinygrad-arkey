@@ -123,3 +123,33 @@ must not be called pure arithmetic time. Separately resolve the 3.242016 ms
 support bucket by buffer roles and generated source before calling it copies,
 idle, or removable overhead. No new kernel design is justified by the naming
 of either bucket alone.
+
+## Paused handoff
+
+The vocabulary integration and evidence are committed at `eb8b171ce` and
+pushed. No GPU job is running. Resume with measurement, not a new kernel
+design. The user requests direct work without subagents.
+
+1. Export the current default gate/up main and fixup using
+   `extra/llm_research/prefill/export_current_gateup_bridge.py`, under the GPU
+   lock. Its initial attempt stopped before export because it used `fixup`
+   instead of the capture's `fixup_program` field. That field is corrected and
+   py_compile passes; the corrected exporter has **not** been executed yet.
+2. Check exported source/binary hashes and ABI against the selected route.
+   Run the existing `nv_prefill_gateup_streamk_ncu_bridge.py` with these exact
+   files. Its five-buffer construction is still unqualified: validate full
+   output/ownership and fixup arguments before interpreting any timing.
+3. Capture main/fixup active duration and counters using a common CUDA protocol.
+   Keep synthetic-Q8 microgate conditioning separate from production workload
+   conditioning. Do not subtract a hot isolated body from a full-population
+   HCQ interval and call the difference removable overhead.
+4. Resolve the support bucket from retained program sources and buffer roles.
+   Existing reference material is indexed above and in the gate diagnosis
+   index. Do not reopen rejected Flash, row-prune, or scalar schedule variants
+   without new evidence.
+
+Known result to preserve: 2.501940 ms whole-prefill gain from an existing
+omitted component, with unchanged projection identities. Known remaining
+uncertainty: how the fresh 11.9270575 ms cross-runtime difference divides
+between actual execution, layout/producer/fixup work, and command boundaries.
+No body-only culprit or parity ETA is established.
