@@ -146,9 +146,9 @@ class CompilerQ4StreamKCapture:
     if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported NV_COMPILER_Q4_STREAMK_UNROLL")
     kernel_name="q4_qo_streamk_n4096" if n==4096 else "q4_qo_streamk"
     double_buffer=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_DOUBLE_BUFFER", "0")))
-    # Qualified on the complete 72-role gate/up lifecycle.  Set to 0 for the
-    # prior compiler-emitted load order.
-    fragment_load_to_use=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE", "1")))
+    # Retained default-off: its full bracket did not clear the frozen 0.5 ms
+    # population investment threshold.
+    fragment_load_to_use=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE", "0")))
     shared_load_to_pack=os.environ.get("NV_COMPILER_Q4_STREAMK_SHARED_LOAD_TO_PACK", "0")
     if shared_load_to_pack=="0": shared_load_to_pack=False
     elif shared_load_to_pack=="1": shared_load_to_pack=True

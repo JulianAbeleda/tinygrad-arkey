@@ -366,13 +366,15 @@ current234 route.  Evidence is retained in
 `docs/task_workflow/evidence/nv-prefill-current252-q6v-20260906` and
 `docs/task_workflow/evidence/nv-prefill-current252-hcq-20260906`.
 
-The dominant gate/up Stream-K main now uses the qualified fragment load-to-use
-schedule by default.  It moves the existing `val0..val10` Q4 fragment loads
+The dominant gate/up Stream-K main retains a default-off fragment load-to-use
+schedule.  It moves the existing `val0..val10` Q4 fragment loads
 after the Q8 metadata/data loads, without changing arithmetic, launch geometry,
-or the 20 KiB shared tile.  A matched current252 candidate/control bracket
-measured 52.833/53.315 ms medians, a 0.482 ms or 0.904% latency reduction; full
-logits were bit identical and both arms passed 20/20 exact recurrent replay.
-`NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=0` restores the prior load order.
+or the 20 KiB shared tile.  The full control/candidate/control bracket measured
+52.980/52.833/53.315 ms medians: a 0.315 ms (0.592%) reduction against the mean
+control. Full logits were bit identical and both measured arms passed 20/20
+exact recurrent replay. This misses the frozen 0.5 ms population investment
+threshold in `nv-prefill-substrate-test-ledger-20260829.md`, so it is not
+promoted. Set `NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=1` to reproduce it.
 Evidence is retained in
 `docs/task_workflow/evidence/nv-prefill-current252-gate-fragment-ltu-20260906`.
 

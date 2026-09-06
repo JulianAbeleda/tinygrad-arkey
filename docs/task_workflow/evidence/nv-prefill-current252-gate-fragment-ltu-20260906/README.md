@@ -12,13 +12,16 @@ control.
 
 | arm | median ms | min ms |
 |---|---:|---:|
+| prior current252 control | 52.979670 | 52.961790 |
 | fragment load-to-use | 52.832851 | 52.809898 |
-| current252 schedule control | 53.315076 | 53.292195 |
+| closing current252 control | 53.315076 | 53.292195 |
 
-The candidate reduces median latency by 0.482225 ms, or 0.904% relative to the
-control median. It is enabled by default inside the explicit compiler pp512
-route. Set `NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=0` to restore the prior
-load order.
+The candidate reduces median latency by 0.314522 ms, or 0.592% relative to the
+mean of the two control medians. Even its 0.482225 ms reduction against the
+closing control misses the frozen 0.5 ms population investment threshold from
+`docs/task_workflow/output/nv-prefill-substrate-test-ledger-20260829.md`. It is
+retained default-off; set `NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=1` to
+reproduce it.
 
 The JSON files retain all nine raw timing samples and route census; the NPZ
 files retain the compared full logits and token. The `.log` files are local
