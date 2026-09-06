@@ -18,7 +18,8 @@ def _partial_store_block(direct_store_block:str, *, output_stride:int=12288, out
 
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      k_blocks:int=64, output_stride:int=12288,
-                                     kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False) -> str:
+                                     kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
+                                     double_buffer:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -50,6 +51,13 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported Stream-K outer-K unroll")
     math=math.replace(loop,f"#pragma unroll {unroll}\n  {loop}",1)
   math=math.replace(loop,"for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++) {",1)
+  if double_buffer:
+    shared="__shared__ __align__(16) signed char buf1[20480];"
+    if source.count(shared)!=1: raise ValueError("double buffer requires the exact 20 KiB shared tile")
+    source=source.replace(shared,"__shared__ __align__(16) signed char buf1[40960];",1)
+    if math.count("__syncthreads();")!=2: raise ValueError("double buffer requires exact recycle/publish barriers")
+    math=math.replace("__syncthreads();","",1)
+    math=math.replace("buf1+","buf1+((Ridx0&1)*20480)+")
   direct=source[store_start:function_end]
   partial=_partial_store_block(direct,output_stride=output_stride,output_arg=signature.group(3))
   prefix=source[:body_start]

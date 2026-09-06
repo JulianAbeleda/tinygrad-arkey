@@ -26,6 +26,14 @@ def test_transform_owns_qualified_unroll_choice():
   transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),unroll=8)
   assert "#pragma unroll 8\n  for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++)" in transformed
 
+def test_double_buffer_uses_parity_bank_and_keeps_publish_barrier():
+  if not FIXTURE.exists(): return
+  original=FIXTURE.read_text()
+  transformed=transform_compiler_q4k_to_streamk(original,double_buffer=True)
+  assert "signed char buf1[40960]" in transformed
+  assert transformed.count("__syncthreads();")==1
+  assert "buf1+((Ridx0&1)*20480)+" in transformed
+
 
 def test_sliced_fixup_matches_same_partials_on_nv():
   import numpy as np
