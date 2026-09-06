@@ -64,6 +64,7 @@ from contextvars import ContextVar
 from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.device import Device
+from tinygrad.helpers import getenv as _getenv
 from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
@@ -231,9 +232,11 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     spec_target = _attention_spec_target(q.device)
   except ValueError as e:
     raise NotImplementedError(f"custom_kernel_attention: {e}") from None
+  nv_k_stage = spec_target == "nv_sm120" and bool(_getenv("PREFILL_NV_K_STAGE", 1))
   spec = FlashPrefillAttentionSpec(Hq=Hq, Hkv=Hkv, Hd=Hd, q_tokens=T, kv_tokens=KV, causal=causal, scale=sc,
     valid_kv=ctx.kv_tokens, query_start=ctx.start_pos, output_block_base=ctx.output_block_base,
-    acc_blocks=None if ctx_full_default else ctx.acc_blocks, target=spec_target)
+    acc_blocks=None if ctx_full_default else ctx.acc_blocks, target=spec_target,
+    warps_per_cta=4 if nv_k_stage else 1)
   try:
     spec.validate()
   except ValueError as e:
@@ -247,7 +250,6 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   # fresh buffer, so materializing V as [Hkv][Hd][KV] instead of [Hkv][KV][Hd] costs one transposed
   # copy in place of a free reshape -- and turns the emitter's 128 2-byte V gathers per KV tile into
   # 16 b128 loads (see amd_attention_abi.expand_loop_fragment). Element count is identical.
-  from tinygrad.helpers import getenv as _getenv
   v_flat = (v.cast(dtypes.float16).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
             else v.cast(dtypes.float16).reshape(Hkv * KV * Hd))
   identity = (f"{spec.target}_q16_grid_hd128_loop_attention:role=attention_tile,"

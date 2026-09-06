@@ -95,14 +95,15 @@ class FlashPrefillAttentionSpec:
     existed -- `KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention")`.
     """
     self.validate()
-    from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+    from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention, nv_sm120_q16_grid_hd128_cooperative_attention
     from tinygrad.uop.ops import KernelInfo
     from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
     fragment_model = attention_fragment_model(self.target)
     ki = kernel_info if kernel_info is not None else KernelInfo(name=f"{self.target}_q16_grid_hd128_loop_attention")
 
     def fxn(out_ph: UOp, q_ph: UOp, k_ph: UOp, v_ph: UOp) -> UOp:
-      return amd_gfx1100_q16_grid_hd128_loop_attention(
+      builder = nv_sm120_q16_grid_hd128_cooperative_attention if self.target == "nv_sm120" and self.warps_per_cta == 4 else amd_gfx1100_q16_grid_hd128_loop_attention
+      return builder(
         q_ph, k_ph, v_ph, out_ph, q_tokens=self.q_tokens, q_heads=self.Hq,
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,

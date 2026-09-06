@@ -42,7 +42,11 @@ def lower_cooperative_tile_load(x:UOp) -> UOp:
   if x.op is not Ops.COOPERATIVE_TILE_LOAD or not isinstance(x.arg, CooperativeTileLoadSpec): raise ValueError("invalid cooperative tile load")
   x.arg.validate(); owner, tile_base = x.src
   if owner.op is not Ops.PARAM or not isinstance(owner.dtype, PtrDType) or owner.ptrdtype.base is not dtypes.half: raise ValueError("cooperative tile owner must be fp16 global PARAM")
-  thread=UOp.special(128, "lidx0"); tile_elements=16*128; shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(tile_elements*x.arg.slots,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi,x.arg.slots))
+  # stage_generation is part of the allocation identity. K and V may have the
+  # same shape, slot count, and phase ABI while remaining simultaneously live;
+  # collapsing their DEFINE_LOCAL nodes aliases the two tiles and lets V
+  # publication overwrite K before QK consumes it.
+  thread=UOp.special(128, "lidx0"); tile_elements=16*128; shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(tile_elements*x.arg.slots,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi,x.arg.slots,x.arg.stage_generation))
   pre=UOp(Ops.BARRIER,dtypes.void,(UOp.group(),),arg=("nv2a_pre_tile_barrier",x.arg.phase_abi)) if x.arg.pre_barrier else None
   stores=[]
   for i in range(16):
@@ -173,7 +177,7 @@ def expand_loop_fragment(x:UOp) -> UOp:
   hd = x.arg.grid.head_dim if x.arg.grid is not None else 128
   if shared_storage: grid_src=[]
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
-  if shared_storage: gbase=x.src[0].tag.slot_index*2048
+  if shared_storage: gbase=UOp.const(dtypes.weakint,0) if x.src[0].tag.slots == 1 else x.src[0].tag.slot_index*2048
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
@@ -217,14 +221,17 @@ def expand_loop_fragment(x:UOp) -> UOp:
     if role not in {"K", "V"}: raise ValueError("shared packed fragments currently require K/V role")
     if model is not None:
       lanes=model.fragment_lanes(role)
+      call_off=x.arg.call*model.tc.dims[0] if x.arg.call else 0
       if role == "K":
-        offs=tuple((model.operand_row(1,0,lane)*128 + block*16 + model.operand_k(1,i,lane)) for i in range(lanes))
+        row=model.operand_row(1,0,lane)+UOp.const(dtypes.weakint,call_off) if call_off else model.operand_row(1,0,lane)
+        offs=tuple((row*128 + block*16 + model.operand_k(1,i,lane)) for i in range(lanes))
       else:
-        offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + model.operand_row(1,0,lane)) for i in range(lanes))
+        row=model.operand_row(1,0,lane)+UOp.const(dtypes.weakint,call_off) if call_off else model.operand_row(1,0,lane)
+        offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + row) for i in range(lanes))
     else:
       offs=tuple(col*128 + block*16+i for i in range(16))
     return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),
-      tuple(shared_owner.index(off).load() for off in offs),
+      tuple(shared_owner.index(gbase+off).load() for off in offs),
       tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
   if model is not None:
     # Fragment-model path: per-element load addresses derive from the target's own operand lane
