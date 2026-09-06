@@ -261,6 +261,10 @@ def main(argv:list[str] | None=None) -> int:
   ap.add_argument("--chunk-size", type=int, default=int(os.environ.get("QK_CHUNK_SIZE", 32)))
   ap.add_argument("--graph-admission-out", default=None,
                   help="optional atomic tinygrad.graph_admission_census.v1 export from second SDPA rollout warmup")
+  ap.add_argument("--graph-census-dir", default=None,
+                  help="optional directory for one atomic captured PROGRAM census per completed checkpoint")
+  ap.add_argument("--checkpoint-dir", default=None,
+                  help="optional directory for one atomic measurement artifact per completed checkpoint")
   ap.add_argument("--skip-dispatch-diagnostic", action="store_true",
                   help="omit D so W is the final GPU interval for external system tracing")
   ap.add_argument("--request-scoped-prewarm", action="store_true",
@@ -281,6 +285,7 @@ def main(argv:list[str] | None=None) -> int:
 
   dev = Device[Device.DEFAULT]
   model, tokenizer = load_model_and_tokenizer(args.model, profile.max_context, seed=20260617)
+  identity = _model_identity(args.model)
   if args.single_graph_live_bands:
     model._decode_direct_greedy_promoted = False
     model._decode_feedback_pingpong_promoted = False
@@ -291,10 +296,13 @@ def main(argv:list[str] | None=None) -> int:
   graph_census = None
   for depth in profile.ckpts:
     prompt = _make_prompt(base_ids, depth)
-    if args.graph_admission_out is not None:
+    if args.graph_admission_out is not None or args.graph_census_dir is not None:
       if graph_census is not None: raise ValueError("--graph-admission-out requires exactly one checkpoint")
-      graph_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
-      graph_census["capture"]["fixed_depth"] = depth
+      depth_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
+      depth_census["capture"]["fixed_depth"] = depth
+      if args.graph_admission_out is not None: graph_census = depth_census
+      if args.graph_census_dir is not None:
+        _atomic_json(pathlib.Path(args.graph_census_dir).expanduser().resolve() / f"ctx-{depth}.json", depth_census)
     else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
     w_reps, d_reps = [], []
     measured_jits = {}
@@ -343,6 +351,11 @@ def main(argv:list[str] | None=None) -> int:
     row["flash"] = route_set == ["flash"]
     row["route"] = route_set[0] if len(route_set) == 1 else "mixed"
     rows.append(row)
+    if args.checkpoint_dir is not None:
+      checkpoint = {"schema":"tinygrad.decode_runtime_checkpoint.v1", "created_unix_ns":time.time_ns(),
+                    "model":identity, "device":{"tinygrad_device":Device.DEFAULT, "runtime_type":type(dev).__name__},
+                    "max_context":profile.max_context, "nmeas":profile.nmeas, "reps":args.reps, "row":row}
+      _atomic_json(pathlib.Path(args.checkpoint_dir).expanduser().resolve() / f"ctx-{depth}.json", checkpoint)
     # --skip-dispatch-diagnostic leaves D unmeasured; the progress line must survive that.
     d_text = f"{d_ms:6.2f}ms ({row['tok_s_D_diagnostic']:.2f} tok/s)" if d_ms is not None else "omitted"
     print(f"ctx {depth:5}: W {w_ms:6.2f}ms ({row['tok_s_W']:.2f} tok/s) | "
@@ -353,7 +366,6 @@ def main(argv:list[str] | None=None) -> int:
 
   valid_host = [row["host_sync_pct_of_wall"] for row in rows if row["host_sync_pct_of_wall"] is not None]
   median_host = statistics.median(valid_host) if valid_host else None
-  identity = _model_identity(args.model)
   metal_replay = None
   memory_facts = None
   if Device.DEFAULT == "METAL":
