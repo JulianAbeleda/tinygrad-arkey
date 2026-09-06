@@ -495,3 +495,34 @@ def test_compiler_vocab_selector_default_off():
   from tinygrad.llm.model import _nv_compiler_q6_vocab_pp512_enabled
   class C: vocab_size=151936; prefill_ubatch=1; num_blocks=36; dim=4096; hidden_dim=12288; n_heads=32; n_kv_heads=8; head_dim=128; num_experts=0
   assert not _nv_compiler_q6_vocab_pp512_enabled(C())
+
+
+def test_vocab_prefill_selector_rejects_unqualified_arch_and_conflicting_leases(monkeypatch):
+  import pytest
+  from types import SimpleNamespace
+  import tinygrad.llm.model as model_module
+  class FakeDevice:
+    DEFAULT="NV"
+    arch="sm_120"
+    def __getitem__(self, name): return SimpleNamespace(arch=self.arch)
+  device=FakeDevice()
+  import os
+  monkeypatch.setattr(model_module,"getenv",lambda key,default=0:int(os.environ.get(key,default)))
+  monkeypatch.setattr(model_module,"Device",device)
+  config=SimpleNamespace(prefill_ubatch=512,num_blocks=36,dim=4096,hidden_dim=12288,n_heads=32,
+                         n_kv_heads=8,head_dim=128,num_experts=0,vocab_size=151936)
+  monkeypatch.setenv("NV_COMPILER_Q6_VOCAB_PP512","1")
+  monkeypatch.setenv("NV_LLAMA_Q6_VOCAB_PP512","0")
+  assert model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  device.arch="sm_90"
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  device.arch="sm_120"
+  device.DEFAULT="CPU"
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  device.DEFAULT="NV"
+  config.prefill_ubatch=256
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  config.prefill_ubatch=512
+  monkeypatch.setenv("NV_LLAMA_Q6_VOCAB_PP512","1")
+  with pytest.raises(RuntimeError,match="conflict"):
+    model_module._nv_compiler_q6_vocab_pp512_enabled(config)
