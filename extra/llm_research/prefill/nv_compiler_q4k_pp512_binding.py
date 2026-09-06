@@ -129,8 +129,12 @@ class CompilerPP512Binding:
     identity = hashlib.sha256(repr(("compact_q8" if compact_q8 else "flat_q8", config, geometry, wp.identity, ap.identity, accum.abi)).encode()).hexdigest()
     context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum)
     key = warmstart_key({M, N}, K, wt.storage_dtype)
-    lib = NVRTCCompiler(dev.arch, ptx=False, cache_key=f"nv_q8_compact_record_fp16_{producer_arithmetic}_v1").compile(_record_source(producer_arithmetic))
-    producer = native_nv_program("q8_compact_record_fp16", lib, global_size=(M, 8, 1), local_size=(128, 1, 1),
+    if compact_q8:
+      from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import FP16_DS4_SOURCE
+      producer_source,producer_name=FP16_DS4_SOURCE,"q8_ds4_fp16_pp512"
+    else: producer_source,producer_name=_record_source(producer_arithmetic),"q8_compact_record_fp16"
+    lib = NVRTCCompiler(dev.arch, ptx=False, cache_key=f"nv_q8_record_fp16_{'tile' if compact_q8 else producer_arithmetic}_v2").compile(producer_source)
+    producer = native_nv_program(producer_name, lib, global_size=(M, 8, 1), local_size=(128, 1, 1),
                                  globals=(0, 1), outs=(1,), ins=(0,))
     warmstart, warmstart_contexts = {key:(Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key:context}
 
@@ -280,9 +284,13 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
   if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
-    key=(device,variant,producer_arithmetic,pair_q8_reuse)
+    # The tile-major record is the qualified gate/up conversion; zero restores
+    # the flat compact record without changing the generated main contract.
+    compact_q8=bool(int(os.environ.get("NV_COMPILER_Q4_GATE_TILE_Q8", "1")))
+    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8)
     if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(
-      Device[device],binding_for(device,producer_arithmetic=producer_arithmetic),n=N,pair_q8_reuse=pair_q8_reuse)
+      Device[device],CompilerPP512Binding.compile(Device[device],compact_q8=True,producer_arithmetic=producer_arithmetic)
+      if compact_q8 else binding_for(device,producer_arithmetic=producer_arithmetic),n=N,pair_q8_reuse=pair_q8_reuse)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
   key=(device,producer_arithmetic)

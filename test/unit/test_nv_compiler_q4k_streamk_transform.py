@@ -26,6 +26,13 @@ def test_transform_owns_qualified_unroll_choice():
   transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),unroll=8)
   assert "#pragma unroll 8\n  for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++)" in transformed
 
+def test_transform_accepts_renderer_renumbered_output_index():
+  if not FIXTURE.exists(): return
+  source=FIXTURE.read_text().replace("alu242", "alu246")
+  transformed=transform_compiler_q4k_to_streamk(source)
+  assert "int alu246 = ((alu5<<1)+(lidx2<<5)+(alu2*128)+(lidx1*8192));" in transformed
+  assert "partials+(slot*16384)+(alu246" in transformed
+
 def test_double_buffer_uses_parity_bank_and_keeps_publish_barrier():
   if not FIXTURE.exists(): return
   original=FIXTURE.read_text()

@@ -737,7 +737,8 @@ def main():
   # no compiler candidate_context.  Count it by the manifest-owned symbol.
   total_mains=sum(len(x) for x in mains.values())+len(v_calls)+len(gate_oracle_calls)
   q6_producer_names={} if q6_asset is None else {role:asset.producer.arg.name for role,asset in q6_asset.roles.items()}
-  q8=names.get("q8_compact_record_fp16",0)+sum(names.get(name,0) for role,name in q6_producer_names.items() if role in requested_q6_roles)
+  q8=names.get("q8_compact_record_fp16",0)+names.get("q8_ds4_fp16_pp512",0)+sum(
+    names.get(name,0) for role,name in q6_producer_names.items() if role in requested_q6_roles)
   if q4_down_asset is not None: q8 += names.get(q4_down_asset.producer.arg.name,0)
   census={"gate_up_main":len(mains["gate_up"]),"gate_oracle_main":len(gate_oracle_calls),"down_oracle_main":len(down_oracle_calls),
     "gate_epilogue_main":len(gate_epilogue_calls),

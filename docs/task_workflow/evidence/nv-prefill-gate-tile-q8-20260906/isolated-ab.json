@@ -1,0 +1,9 @@
+{
+  "allclose": true,
+  "flat_median_us": 521.882,
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "protocol": "same-process alternating host-synchronized generated main+fixup, 15 samples per arm",
+  "schema": "tinygrad.nv_prefill_gate_tile_q8_isolated_ab.v1",
+  "tile_major_median_us": 509.088
+}

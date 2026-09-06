@@ -126,6 +126,7 @@ class CompilerQ4StreamKCapture:
   active: Tensor
   candidate_identity: str
   transform: object
+  record_u32: int
   cursor: int = 0
   n: int = 4096
   population: int = 36
@@ -173,7 +174,7 @@ class CompilerQ4StreamKCapture:
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
-    return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,n=n,population=population,roles=roles,
+    return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,base.activation.storage_units,n=n,population=population,roles=roles,
                pair_q8_reuse=pair_q8_reuse)
 
   def prepare(self,count):
@@ -196,7 +197,7 @@ class CompilerQ4StreamKCapture:
     expected_role=self.roles[self.cursor%2]
     if self.pair_q8_reuse and role!=expected_role: raise ValueError("Q8 reuse requires ordered gate/up projection pairs")
     if not self.pair_q8_reuse or self.cursor%2==0:
-      record=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device=x.device)
+      record=Tensor.empty(self.record_u32,dtype=dtypes.uint32,device=x.device)
       _,record=x.uop_program(record,fxn=lambda *_:self.producer)
       if self.pair_q8_reuse:self.pair_record=record
     else:

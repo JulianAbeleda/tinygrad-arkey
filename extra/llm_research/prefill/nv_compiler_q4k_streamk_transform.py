@@ -6,14 +6,14 @@ OWNERS, OUTPUT_TILES, K_BLOCKS, TILES_N = 170, 384, 64, 96
 WORK_UNITS, BOUNDARY_QUANTUM = OUTPUT_TILES*K_BLOCKS, 8
 TILE_ELEMENTS, PARTIAL_SLOTS = 128*128, 2*OWNERS
 
-def _partial_store_block(direct_store_block:str, *, output_stride:int=12288, output_arg:str="data0_6291456") -> str:
+def _partial_store_block(direct_store_block:str, *, store_index:str="alu242", output_stride:int=12288, output_arg:str="data0_6291456") -> str:
   block=direct_store_block
-  block=re.sub(r"int alu242 = .*?;", "int alu242 = ((alu5<<1)+(lidx2<<5)+(alu2*128)+(lidx1*8192));", block, count=1)
+  block=re.sub(rf"int {re.escape(store_index)} = .*?;", f"int {store_index} = ((alu5<<1)+(lidx2<<5)+(alu2*128)+(lidx1*8192));", block, count=1)
   block=block.replace(output_arg+"+", "partials+(slot*16384)+")
-  for value in sorted({int(x) for x in re.findall(r"alu242\+(\d+)",block)},reverse=True):
+  for value in sorted({int(x) for x in re.findall(rf"{re.escape(store_index)}\+(\d+)",block)},reverse=True):
     row,column=divmod(value,output_stride)
     if column >= 128: raise ValueError(f"global output offset {value} escapes its 128-column tile")
-    block=block.replace(f"alu242+{value}",f"alu242+{row*128+column}")
+    block=block.replace(f"{store_index}+{value}",f"{store_index}+{row*128+column}")
   return block
 
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
@@ -41,8 +41,10 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   source=source.replace(f"  int gidx0 = blockIdx.x; /* {tiles_n} */\n  int gidx1 = blockIdx.y; /* 4 */\n",
                         "  int owner = blockIdx.x; /* 170 persistent owners */\n",1)
   body_start=source.find("  (*(buf0+0)) = 0.0f;")
-  store_start=source.find("  int alu242 = ",body_start)
-  if body_start < 0 or store_start < 0: raise ValueError("compiler Q4 body/store boundary not found")
+  store_matches=list(re.finditer(r"^  int (alu\d+) = ",source[body_start:],re.M)) if body_start >= 0 else []
+  if body_start < 0 or not store_matches: raise ValueError("compiler Q4 body/store boundary not found")
+  store_match=store_matches[-1]
+  store_start=body_start+store_match.start(); store_index=store_match.group(1)
   function_end=source.rfind("}")
   if function_end < store_start: raise ValueError("compiler Q4 function terminator not found")
   math=source[body_start:store_start]
@@ -133,7 +135,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     math=math.replace("__syncthreads();","",1)
     math=math.replace("buf1+","buf1+((Ridx0&1)*20480)+")
   direct=source[store_start:function_end]
-  partial=_partial_store_block(direct,output_stride=output_stride,output_arg=signature.group(3))
+  partial=_partial_store_block(direct,store_index=store_index,output_stride=output_stride,output_arg=signature.group(3))
   prefix=source[:body_start]
   work_units=tiles_n*(4)*k_blocks
   owner_loop=f"""  int owner_start = ((owner*{work_units}/{OWNERS})/{BOUNDARY_QUANTUM})*{BOUNDARY_QUANTUM};
