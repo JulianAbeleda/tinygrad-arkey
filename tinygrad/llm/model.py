@@ -150,6 +150,10 @@ def _nv_llama_prefill_role_enabled(config, override:str) -> bool:
   """Implicit llama consumers must follow the same stack as packed projections."""
   return Device.DEFAULT == "NV" and bool(getenv(override, int(_nv_q4_production_mode(config) == "llama")))
 
+def _nv_compiler_q6_vocab_pp512_enabled(config) -> bool:
+  if getenv("NV_COMPILER_Q6_VOCAB_PP512", 0) and getenv("NV_LLAMA_Q6_VOCAB_PP512", 0): raise RuntimeError("compiler and llama Q6 vocab leases conflict")
+  return bool(getenv("NV_COMPILER_Q6_VOCAB_PP512", 0)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and config.vocab_size == 151936
+
 def _nv_llama_packed_o_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_o_pp512_captures",None)
   if captures is None: captures=model._nv_llama_packed_o_pp512_captures={}
@@ -1778,6 +1782,11 @@ class Transformer:
     with role_metadata("rms_norm"):
       x = _prefill_semantic(_prefill, prefill_scratch,
         _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
+    if _prefill and _nv_compiler_q6_vocab_pp512_enabled(self.config) and tuple(x.shape)==(1,512,4096) and isinstance(self.output,Q6KPrimitiveLinear):
+      from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission, q6k_vocab_four_warp_call
+      logits=q6k_vocab_four_warp_call(Q6KVocabFourWarpAdmission(), self.output, x[:, -1:, :])
+      if logits is None: raise RuntimeError("compiler Q6 vocab admission failed")
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill,prefill_output,logits),_vv)
     if _prefill and _nv_llama_prefill_role_enabled(self.config,"NV_LLAMA_Q6_VOCAB_PP512") and tuple(x.shape)==(1,512,4096) and \
        self.config.vocab_size==151936 and isinstance(self.output,Q6KPrimitiveLinear):
       from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for

@@ -490,3 +490,8 @@ def test_vocab_four_warp_rejects_undersized_storage():
   from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission, q6k_vocab_four_warp_call
   linear=SimpleNamespace(q6k_storage=SimpleNamespace(halfs=SimpleNamespace(device='NV',dtype=dtypes.uint16,numel=lambda: 1)),out_features=151936,in_features=4096,bias=None)
   assert q6k_vocab_four_warp_call(Q6KVocabFourWarpAdmission(),linear,Tensor.zeros(1,1,4096,dtype=dtypes.float32,device='NV')) is None
+
+def test_compiler_vocab_selector_default_off():
+  from tinygrad.llm.model import _nv_compiler_q6_vocab_pp512_enabled
+  class C: vocab_size=151936; prefill_ubatch=1; num_blocks=36; dim=4096; hidden_dim=12288; n_heads=32; n_kv_heads=8; head_dim=128; num_experts=0
+  assert not _nv_compiler_q6_vocab_pp512_enabled(C())
