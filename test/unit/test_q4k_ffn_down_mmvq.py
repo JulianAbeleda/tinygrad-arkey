@@ -480,3 +480,7 @@ def test_vocab_admission_dtype_flag():
   from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabManyRowAdmission
   assert not Q6KVocabManyRowAdmission().preserve_input_dtype
   assert Q6KVocabManyRowAdmission(preserve_input_dtype=True).preserve_input_dtype
+
+def test_vocab_four_warp_admission_type():
+  from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission
+  assert Q6KVocabFourWarpAdmission().candidate_id == "nv_vocab_four_warp_fp16"

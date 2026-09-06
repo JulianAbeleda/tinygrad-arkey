@@ -70,4 +70,18 @@ def q6k_vocab_manyrow_call(admission: object, linear: Any, x: Tensor) -> Tensor 
     storage.halfs.to(x.device), q8, program=consumer)
   return out.reshape(1, 1, ROWS)
 
-__all__ = ["ROWS", "K", "Q8_GROUPS", "Q6KVocabManyRowAdmission", "q6k_vocab_manyrow_call"]
+__all__ = ["ROWS", "K", "Q8_GROUPS", "Q6KVocabManyRowAdmission", "q6k_vocab_manyrow_call", "Q6KVocabFourWarpAdmission", "q6k_vocab_four_warp_call"]
+
+@dataclass(frozen=True)
+class Q6KVocabFourWarpAdmission:
+  candidate_id: str = "nv_vocab_four_warp_fp16"
+
+def q6k_vocab_four_warp_call(admission: object, linear: Any, x: Tensor) -> Tensor | None:
+  if not isinstance(admission, Q6KVocabFourWarpAdmission) or str(x.device) != "NV": return None
+  if tuple(x.shape) != (1,1,K) or x.dtype != dtypes.float32: return None
+  storage=getattr(linear,"q6k_storage",None)
+  if storage is None or getattr(linear,"out_features",None)!=ROWS or getattr(linear,"in_features",None)!=K or getattr(linear,"bias",None) is not None: return None
+  from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+  from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_research_program
+  program=KernelProgram("decode_q6k_vocab_four_warp_fp16","q6k_vocab_four_warp_fp16",KernelProgramProvenance.RESEARCH_ONLY,emit_q6k_v_four_warp_fp16_direct(rows=ROWS),OutputSpec((ROWS,),dtypes.float32))
+  return execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device=x.device),storage.halfs.to(x.device),x.reshape(K).cast(dtypes.float16).contiguous(),program=program).reshape(1,1,ROWS)
