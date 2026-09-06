@@ -19,7 +19,7 @@ def _partial_store_block(direct_store_block:str, *, output_stride:int=12288, out
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
-                                     double_buffer:bool=False) -> str:
+                                     double_buffer:bool=False, fragment_load_to_use:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -51,6 +51,17 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported Stream-K outer-K unroll")
     math=math.replace(loop,f"#pragma unroll {unroll}\n  {loop}",1)
   math=math.replace(loop,"for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++) {",1)
+  if fragment_load_to_use:
+    # Keep the emitted loads and arithmetic intact, but shorten the lifetime of
+    # the Q4 fragment words by moving them after the Q8 metadata/data loads.
+    frag_start=math.find("    unsigned int val0 =")
+    frag_stop=math.find("    unsigned int val11 =",frag_start)
+    publish=math.find("    __syncthreads();",frag_stop)
+    if min(frag_start,frag_stop,publish)<0: raise ValueError("fragment load-to-use schedule markers not found")
+    fragment=math[frag_start:frag_stop]
+    if fragment.count("unsigned int val")!=11 or "int alu79 =" not in fragment:
+      raise ValueError("fragment load-to-use schedule requires exact val0..val10 group")
+    math=math[:frag_start]+math[frag_stop:publish]+fragment+math[publish:]
   if double_buffer:
     shared="__shared__ __align__(16) signed char buf1[20480];"
     if source.count(shared)!=1: raise ValueError("double buffer requires the exact 20 KiB shared tile")

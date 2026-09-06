@@ -146,13 +146,14 @@ class CompilerQ4StreamKCapture:
     if unroll not in (1,2,4,6,8,10,12,16,32): raise ValueError("unsupported NV_COMPILER_Q4_STREAMK_UNROLL")
     kernel_name="q4_qo_streamk_n4096" if n==4096 else "q4_qo_streamk"
     double_buffer=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_DOUBLE_BUFFER", "0")))
+    fragment_load_to_use=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE", "0")))
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
-      output_stride=n,kernel_name=kernel_name,double_buffer=double_buffer)
+      output_stride=n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use)
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)
     rows,active=q4_down_fixup_map(k=K,n=n)
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
       raise ValueError("Q4 Stream-K map must cover every tile")
-    compiler=NVRTCCompiler(dev.arch,ptx=False,cache_key=f"q4_qo_streamk_u{unroll}_d{int(double_buffer)}_v1")
+    compiler=NVRTCCompiler(dev.arch,ptx=False,cache_key=f"q4_qo_streamk_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_v1")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)

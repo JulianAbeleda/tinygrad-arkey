@@ -34,6 +34,14 @@ def test_double_buffer_uses_parity_bank_and_keeps_publish_barrier():
   assert transformed.count("__syncthreads();")==1
   assert "buf1+((Ridx0&1)*20480)+" in transformed
 
+def test_fragment_load_to_use_moves_exact_q4_group_after_q8_loads():
+  if not FIXTURE.exists(): return
+  transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),fragment_load_to_use=True)
+  assert transformed.index("unsigned int val23 =") < transformed.index("unsigned int val0 =")
+  assert transformed.index("uint4 val25 =") < transformed.index("unsigned int val0 =")
+  assert transformed.index("unsigned int val10 =") < transformed.index("__syncthreads();")
+  assert transformed.count("unsigned int val0 =")==1 and transformed.count("unsigned int val10 =")==1
+
 
 def test_sliced_fixup_matches_same_partials_on_nv():
   import numpy as np
