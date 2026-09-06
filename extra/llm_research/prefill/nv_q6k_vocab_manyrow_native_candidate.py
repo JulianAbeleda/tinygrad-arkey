@@ -31,51 +31,80 @@ def contract() -> dict:
     "integration": "not_model_integrated",
   }
 
-def main() -> int:
-  ap = argparse.ArgumentParser()
-  ap.add_argument("--out", type=Path)
-  ap.add_argument("--fixture", action="store_true")
-  ap.add_argument("--model", default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
-  a = ap.parse_args()
-  report = contract()
-  if a.fixture:
-    from tinygrad import Tensor, dtypes
-    from tinygrad.llm.generate import load_model_and_tokenizer
-    from tinygrad.llm.decode_routes import generated_q6k_vocab_logits
-    from tinygrad.helpers import getenv
-    try:
-      model, _ = load_model_and_tokenizer(a.model, 512, seed=20260829)
-    except Exception as e:
-      report["fixture"] = {"status": "blocked", "trace": f"{type(e).__name__}: {e}",
-                            "gpu_serialization": "flock -w 600 /tmp/gpu-bench.lock", "model": a.model}
-      payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
-      if a.out: a.out.write_text(payload)
-      else: print(payload, end="")
-      return 0
-    linear = model.output
-    if getattr(linear, "q6k_storage", None) is None:
-      raise RuntimeError("fixture trace: model.output has no canonical q6k_storage")
-    if getattr(linear, "route_role", "") != "lm_head": linear.route_role = "lm_head"
-    x = (Tensor.arange(K, dtype=dtypes.float32).to("NV").reshape(1, 1, K) / K).contiguous()
-    from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabManyRowAdmission, q6k_vocab_manyrow_call
-    admission = Q6KVocabManyRowAdmission()
-    control = generated_q6k_vocab_logits(linear, x)
-    candidate = q6k_vocab_manyrow_call(admission, linear, x)
-    if control is None or candidate is None: raise RuntimeError("fixture trace: generated or candidate call returned None")
-    t0=time.perf_counter(); cn=control.realize(); c_ms=(time.perf_counter()-t0)*1000
-    t0=time.perf_counter(); nn=candidate.realize(); n_ms=(time.perf_counter()-t0)*1000
-    c=cn.numpy(); n=nn.numpy(); delta=abs(c-n)
-    report.update({"fixture": {"model": a.model, "input": {"shape":[1,1,K],"seed":"arange(K)/K"},
-      "correctness": {"shape_equal": list(c.shape)==[1,1,ROWS], "finite_control": bool(__import__('numpy').isfinite(c).all()),
-                       "finite_candidate": bool(__import__('numpy').isfinite(n).all()), "max_abs_error": float(delta.max()),
-                       "argmax_control": int(c.reshape(-1).argmax()), "argmax_candidate": int(n.reshape(-1).argmax()),
-                       "allclose": bool(__import__('numpy').allclose(c,n,rtol=1e-3,atol=1e-2))},
-      "r9": {"control_ms": c_ms, "candidate_ms": n_ms, "samples": 1},
-      "census": {"control_programs": 1, "candidate_programs": 2, "candidate_one_owner": True},
-      "provenance": {"control":"tinygrad_generated", "candidate":"tinygrad_generated", "llama_programs":0, "evidence_cubins":0}}})
-  payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
-  if a.out: a.out.write_text(payload)
-  else: print(payload, end="")
-  return 0
+def run_live(model_path, activation_path, rounds):
+  import collections, hashlib, statistics
+  from types import SimpleNamespace
+  import numpy as np
+  from tinygrad import Tensor, Device, TinyJit
+  from tinygrad.uop.ops import Ops
+  from extra.llm_research.layout import read_metadata, packed_u16_slice
+  from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for
+  from extra.llm_research.prefill.nv_compiler_q4k_qo_72real_proxy import program_key
+  from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabManyRowAdmission, q6k_vocab_manyrow_call
+  if rounds<1: raise ValueError("rounds must be positive")
+  path=Path(model_path); md=read_metadata(path)
+  info=next(i for i in md.infos if i.name=="output.weight")
+  if info.typ!=14 or tuple(reversed(info.dims))!=(ROWS,K): raise ValueError("invalid canonical vocabulary weight")
+  weight=packed_u16_slice(path,md,info,device="NV").contiguous().realize()
+  linear=SimpleNamespace(q6k_storage=SimpleNamespace(halfs=weight),out_features=ROWS,in_features=K,bias=None)
+  oracle=binding_for("NV")
+  values=np.fromfile(activation_path,dtype=np.float32)
+  if values.shape!=(K,) or not np.isfinite(values).all(): raise ValueError("expected finite FP32 hidden row")
+  inputs=[Tensor(v,device="NV").realize() for v in (values,values*np.float32(.7))]
+  @TinyJit
+  def candidate(x):
+    logits=q6k_vocab_manyrow_call(Q6KVocabManyRowAdmission(),linear,x.reshape(1,1,K))
+    if logits is None: raise RuntimeError("candidate admission failed")
+    logits=logits.reshape(ROWS)
+    return logits,logits.argmax()
+  @TinyJit
+  def llama(x):
+    logits=oracle.project(x,weight)
+    return logits,logits.argmax()
+  def run(jit,x):
+    outputs=jit(x); Tensor.realize(*outputs); Device["NV"].synchronize(); return outputs
+  for _ in range(3): run(candidate,inputs[0]); run(llama,inputs[0])
+  checks=[]
+  for x in inputs:
+    c,ct=run(candidate,x); ca=c.numpy().copy(); token=int(ct.item())
+    l,lt=run(llama,x); la=l.numpy().copy(); ref_token=int(lt.item())
+    checks.append({"finite":bool(np.isfinite(ca).all() and np.isfinite(la).all()),
+      "allclose":bool(np.allclose(ca,la,rtol=.02,atol=.5)),"max_abs":float(np.max(np.abs(ca-la))),
+      "candidate_token":token,"llama_token":ref_token,"same_token":token==ref_token})
+  samples={"candidate":[],"llama":[]}; orders=[]
+  for i in range(rounds):
+    order=("candidate","llama") if i%2==0 else ("llama","candidate"); orders.append(order)
+    for name in order:
+      Device["NV"].synchronize(); start=time.perf_counter_ns()
+      run(candidate if name=="candidate" else llama,inputs[0])
+      samples[name].append((time.perf_counter_ns()-start)/1e6)
+  def observed(jit):
+    programs=[u.src[0] for u in jit.captured.linear.toposort() if u.op is Ops.CALL and u.src and u.src[0].op is Ops.PROGRAM]
+    counts=collections.Counter(program_key(p) for p in programs)
+    return [{"identity":list(key),"count":count} for key,count in counts.items()]
+  passed=all(c["finite"] and c["allclose"] and c["same_token"] for c in checks)
+  return {"schema":"tinygrad.nv.vocab.live.v1","status":"PASS_CORRECTNESS" if passed else "FAIL",
+    "qualification":"observed lifecycle; not production promoted", "weight":{"name":info.name,"shape":[ROWS,K],"ggml_type":info.typ},
+    "activation":{"path":str(activation_path),"sha256":hashlib.sha256(values.tobytes()).hexdigest(),"dtype":"float32"},
+    "input_boundary":"candidate currently casts FP32 input to FP16; oracle consumes original FP32",
+    "correctness":checks,"census":{"candidate":observed(candidate),"llama":observed(llama)},
+    "timing_ms":{"rounds":rounds,"samples":samples,"orders":orders,
+      "candidate_median":statistics.median(samples["candidate"]),"llama_median":statistics.median(samples["llama"]),
+      "includes":"producer, intermediate unpack, vocabulary projection and argmax; host snapshots excluded"}}
 
-if __name__ == "__main__": raise SystemExit(main())
+
+def main() -> int:
+  ap=argparse.ArgumentParser()
+  ap.add_argument("--out",type=Path)
+  ap.add_argument("--fixture",action="store_true")
+  ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+  ap.add_argument("--rounds",type=int,default=31)
+  ap.add_argument("--activation",type=Path,default=Path("docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32"))
+  a=ap.parse_args()
+  report=run_live(a.model,a.activation,a.rounds) if a.fixture else contract()
+  payload=json.dumps(report,indent=2)+"\n"
+  if a.out: a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(payload)
+  else: print(payload,end="")
+  return int(report.get("status")=="FAIL")
+
+if __name__=="__main__": raise SystemExit(main())
