@@ -55,7 +55,7 @@ def _selected_pair(model, before:dict[str, tuple[int, int]], diagnostic:bool=Fal
   return changed[0] if len(changed) == 1 else (None, None)
 
 
-def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tuple[dict, np.ndarray]:
+def logits(arm:str, model_path:str, depth:int, count:int, max_context:int, eager:bool=False) -> tuple[dict, np.ndarray]:
   from extra.llm_research.decode.decode_runtime_overhead import _decode_jits
   model = _model(arm, model_path, max_context)
   # diagnostic_full_logits deliberately skips production's automatic prewarm.
@@ -68,23 +68,29 @@ def logits(arm:str, model_path:str, depth:int, count:int, max_context:int) -> tu
   tokens, rows = [], []
   try:
     next(gen)  # prefill return intentionally has no comparable full-logit row
+    selected_names = set()
     for _ in range(max(count, 6)):
+      if eager:
+        for jit in _decode_jits(model).values(): jit.cnt = 0
+        step_before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
       token, row = next(gen)
+      if eager: selected_names.update(name for name,jit in _decode_jits(model).items() if jit.cnt != step_before.get(name))
       if row is None: continue
       array, sampled = row.numpy(), int(token)
       if not np.isfinite(array).all(): raise RuntimeError("non-finite full logits")
       if len(rows) < count: tokens.append(sampled); rows.append(array)
   finally: gen.close()
   stacked = np.stack(rows)
-  pair_name,pair = _selected_pair(model,pair_before,diagnostic=True)
+  pair_name,pair = _selected_pair(model,pair_before,diagnostic=True) if not eager else (None,None)
   used = [(name,jit) for name,jit in _decode_jits(model).items() if jit.cnt != jit_before.get(name)]
-  used_names = [name for name,_ in used]
+  used_names = sorted(selected_names) if eager else [name for name,_ in used]
   contract = pingpong_capture_contract(pair) if arm == "pingpong" and pair is not None else None
   argmax = [int(row.argmax(axis=-1).item()) for row in rows]
   return {"schema":"tinygrad.nv.feedback_pingpong_qualification.v1", "arm":arm, "mode":"logits", "callify_redirect":_redirect(), "tokens":tokens,
           "argmax_tokens":argmax, "sample_argmax_match":tokens == argmax,
           "shape":list(stacked.shape), "logits_sha256":hashlib.sha256(np.ascontiguousarray(stacked).view(np.uint8)).hexdigest(),
-          "selector_state":"active_horizon_prewarm_completed", "selected_pair":pair_name, "selected_jits":used_names,
+          "selector_state":"active_horizon_prewarm_completed", "execution":"eager_no_capture" if eager else "captured",
+          "selected_pair":pair_name, "selected_jits":used_names,
           "route_still_promoted":bool(getattr(model, "_decode_feedback_pingpong_promoted", False)), "contract":contract}, stacked
 
 
@@ -154,9 +160,10 @@ def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument("--arm", choices=("legacy","greedy","pingpong"), required=True)
   ap.add_argument("--mode", choices=("logits","census","timing"), required=True); ap.add_argument("--model", default=DEFAULT_MODEL)
   ap.add_argument("--gpu-state", action="store_true", help="record NV state immediately around each timed decode window")
+  ap.add_argument("--eager-logits", action="store_true", help="keep diagnostic decode eager to avoid duplicate-graph memory")
   ap.add_argument("--depth", type=int, default=512); ap.add_argument("--count", type=int, default=8); ap.add_argument("--reps", type=int, default=3)
   ap.add_argument("--max-context", type=int, default=1024); ap.add_argument("--out", type=pathlib.Path, required=True); args=ap.parse_args()
-  if args.mode == "logits": result,array=logits(args.arm,args.model,args.depth,args.count,args.max_context); np.savez_compressed(args.out.with_suffix(".npz"),logits=array)
+  if args.mode == "logits": result,array=logits(args.arm,args.model,args.depth,args.count,args.max_context,args.eager_logits); np.savez_compressed(args.out.with_suffix(".npz"),logits=array)
   elif args.mode == "census": result=census(args.arm,args.model,args.depth,args.max_context)
   else: result=timing(args.arm,args.model,args.depth,args.count,args.reps,args.max_context,args.gpu_state)
   args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True)); return 0
