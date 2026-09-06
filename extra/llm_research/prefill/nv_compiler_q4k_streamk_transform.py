@@ -18,7 +18,7 @@ def _partial_store_block(direct_store_block:str, *, output_stride:int=12288, out
 
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      k_blocks:int=64, output_stride:int=12288,
-                                     kernel_name:str="q4k_imma_stream") -> str:
+                                     kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -32,9 +32,10 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   out_name=kernel_name
   exported=f'extern "C" __global__ void __launch_bounds__(256) {out_name}('
   out_arg,w_arg,rec_arg=signature.group(3),signature.group(4),signature.group(5)
+  qual=" __restrict__" if restrict_pointers else ""
   source=source[:signature.start()]+exported+(
-    f"float* {out_arg}, float* partials, int* partial_ids, "
-    f"unsigned int* {rec_arg}, unsigned int* {w_arg}) {{")+source[signature.end():]
+    f"float*{qual} {out_arg}, float*{qual} partials, int*{qual} partial_ids, "
+    f"const unsigned int*{qual} {rec_arg}, const unsigned int*{qual} {w_arg}) {{")+source[signature.end():]
   source=source.replace(f"  int gidx0 = blockIdx.x; /* {tiles_n} */\n  int gidx1 = blockIdx.y; /* 4 */\n",
                         "  int owner = blockIdx.x; /* 170 persistent owners */\n",1)
   body_start=source.find("  (*(buf0+0)) = 0.0f;")
