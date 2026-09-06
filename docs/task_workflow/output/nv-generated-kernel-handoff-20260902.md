@@ -342,6 +342,19 @@ retained 35-38 ms llama endpoint range, so this closes one material component
 rather than overall prefill parity.  Evidence is retained in
 `docs/task_workflow/evidence/nv-prefill-current216-streamk-promotion-20260906`.
 
+The refreshed current-route HCQ ledger then isolated the largest remaining
+ungenerated population: 18 Q4 FFN-down FP16 overlays consumed 10.494 ms, while
+the 18 generated Q6 down roles consumed 4.423 ms.  The existing correct Q4
+down U8 Stream-K lifecycle was integrated and promoted within the same explicit
+compiler pp512 mode.  A fresh control/candidate/control bracket measured
+59.535/54.936/59.516 ms medians, a 4.590 ms or 7.711% candidate reduction.
+The candidate selects 234 generated projection mains/producers with 234
+canonical weight bases and leaves only 18 Q6-V FP16 overlays.  It replays token
+198 exactly for 20/20 cycles in every arm and passes the full-logit tolerance
+against both controls.  `NV_COMPILER_Q4_DOWN_STREAMK=0` restores the FP16
+fallback.  Evidence is retained in
+`docs/task_workflow/evidence/nv-prefill-current234-q4down-streamk-20260906`.
+
 ### Decode
 
 The bounded normal decode route now has generated ownership proof, exact logits

@@ -1,0 +1,2306 @@
+{
+  "diagnostic_logits": {
+    "status": "NOT_RUN"
+  },
+  "overlay_roles": [
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_q",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "attn_k",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_v",
+      "shape": [
+        1024,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": true,
+      "role": "attn_output",
+      "shape": [
+        4096,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_gate",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_up",
+      "shape": [
+        12288,
+        4096
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    },
+    {
+      "overlay": false,
+      "role": "ffn_down",
+      "shape": [
+        4096,
+        12288
+      ],
+      "strategy": "FULL_RESIDENT_OVERLAY"
+    }
+  ],
+  "policy": {
+    "prefill_concrete_kv": true,
+    "prefill_memory_plan": "{\"admitted_budget_bytes\":33881587712,\"base_peak_bytes\":5138821120,\"base_terms\":[{\"bytes\":5028970496,\"formula\":\"sum resident packed allocations\",\"lifetime\":\"persistent\",\"name\":\"packed_weights\",\"provenance\":\"selected GGUF tensor/file inventory\"},{\"bytes\":75497472,\"formula\":\"kv_bytes_per_token * admitted_context + scale_bytes\",\"lifetime\":\"persistent\",\"name\":\"kv_cache\",\"provenance\":\"transformer geometry and admitted context\"},{\"bytes\":33554432,\"formula\":\"prefill_bytes_per_token * admitted_context\",\"lifetime\":\"prefill_peak\",\"name\":\"prefill_activations\",\"provenance\":\"prefill workload geometry\"},{\"bytes\":798720,\"formula\":\"n_heads * live_split_s * (head_dim + 2) * sizeof(float32)\",\"lifetime\":\"prefill_peak\",\"name\":\"flash_scratch\",\"provenance\":\"decode/prefill attention geometry\"}],\"candidate_decisions\":[{\"candidate_id\":\"direct-packed-baseline\",\"estimated_peak_bytes\":5138821120,\"feasible\":true,\"memory_terms\":[],\"reasons\":[],\"strategy\":\"DIRECT_PACKED_FALLBACK\"},{\"candidate_id\":\"full-resident-overlay\",\"estimated_peak_bytes\":19030355968,\"feasible\":true,\"memory_terms\":[{\"bytes\":13891534848,\"formula\":\"sum covered tensor elements * sizeof(float16)\",\"lifetime\":\"persistent\",\"name\":\"dense_fp16_overlay\",\"provenance\":\"selected GGUF covered tensor inventory\"}],\"reasons\":[],\"strategy\":\"FULL_RESIDENT_OVERLAY\"}],\"decision\":\"FULL_RESIDENT_OVERLAY\",\"device\":{\"free_bytes\":34036776960,\"provenance\":\"nvidia-smi --query-gpu=memory.total,memory.used\",\"safety_reserve\":{\"bytes\":155189248,\"formula\":\"align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)\",\"lifetime\":\"safety_reserve\",\"name\":\"runtime_safety_reserve\",\"provenance\":\"nvidia-smi --query-gpu=memory.total,memory.used\"},\"scanned_budget\":{\"admitted_bytes\":33881587712,\"free_bytes\":34036776960,\"provenance\":{\"detail\":\"live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity\",\"source\":\"nvidia-smi --query-gpu=memory.total,memory.used\"},\"reserve_bytes\":155189248},\"total_bytes\":34190917632},\"feasible_candidate_ids\":[\"direct-packed-baseline\",\"full-resident-overlay\"],\"feasible_strategies\":[\"FULL_RESIDENT_OVERLAY\",\"DIRECT_PACKED_FALLBACK\"],\"override\":null,\"reasons\":[\"multiple candidates are feasible; performance selection is deferred to machine search\"],\"schema\":\"tinygrad.prefill_memory_plan.v1\"}",
+    "prefill_policy": "{'candidate_id': 'prefill_wmma_lds_dbuf_generated', 'graph_gemm': {'candidate_set': {'entries': [{'canonical_identity': '81b2583b95e4fcddb614036cfd9ab0abcbd8a245774be7c36dcc143e3bbdb945', 'payload': {'applicability': {'exact_shape': True, 'profiles': ['qwen3_8b_q4k_m_sm120'], 'roles': ['attn_kv'], 'targets': ['NV:sm_120:wave32']}, 'schedule': {'cooperative_load': {'a': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}, 'b': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}}, 'dependency_policy': {'barriers': ['before_fragment_load', 'after_wmma_before_slot_reuse'], 'waitcnt': {'lgkm': None, 'vm': None}}, 'epilogue': {'lane_mapping': 'wmma_accumulator_scalar_b16', 'vector_width': 1}, 'lane_ownership': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'lds': {'banks': 32, 'load_vector_width': 8, 'padding': 16, 'store_vector_width': 8, 'strides': {'a': 80, 'b': 80}, 'windows': {'a': [0, 10240], 'b': [10240, 20480]}}, 'numerical_mode': 'ieee_fp16_acc_fp32', 'pipeline': {'buffer_count': 2, 'epoch_graph': [{'barrier': 'before_fragment_load', 'consume': ['a', 'b'], 'epoch': 'body', 'produce': ['a', 'b'], 'slot': 0, 'wait': ['global', 'lds']}], 'stage_count': 1}, 'residency': {'preload': ['a', 'b'], 'resident': ['accumulator'], 'reuse': {'a': 4, 'b': 2}}, 'threads': 256, 'tile': {'k': 32, 'm': 128, 'n': 128}, 'waves': {'m': 4, 'n': 2}, 'wmma': {'accumulator_ownership': 'wmma_accum_wm_x_wn_8_vgprs', 'fragment_layout': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'instruction_family': 'wmma_f32_8x16x16_f16'}}, 'schema_version': 'boltbeam.full_kernel_candidate.v1', 'static_constraints': {'allow_spill': False, 'max_lds_bytes': 49152, 'max_vgpr_per_thread': 256}, 'workload': {'dtypes': {'a': 'fp16', 'accumulator': 'fp32', 'b': 'fp16', 'c': 'fp16'}, 'layout': {'a': 'row_major', 'b': 'transposed_row_major', 'c': 'row_major'}, 'profile': 'qwen3_8b_q4k_m_sm120', 'role': 'attn_kv', 'shape': {'k': 4096, 'm': 512, 'n': 1024}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}}}, {'canonical_identity': 'c45a763ae5c9670c8487face4b4e20a015b239ee60a2ad1520cde4ede6ef36c2', 'payload': {'applicability': {'exact_shape': True, 'profiles': ['qwen3_8b_q4k_m_sm120'], 'roles': ['attn_qo'], 'targets': ['NV:sm_120:wave32']}, 'schedule': {'cooperative_load': {'a': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}, 'b': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}}, 'dependency_policy': {'barriers': ['before_fragment_load', 'after_wmma_before_slot_reuse'], 'waitcnt': {'lgkm': None, 'vm': None}}, 'epilogue': {'lane_mapping': 'wmma_accumulator_scalar_b16', 'vector_width': 1}, 'lane_ownership': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'lds': {'banks': 32, 'load_vector_width': 8, 'padding': 16, 'store_vector_width': 8, 'strides': {'a': 80, 'b': 80}, 'windows': {'a': [0, 10240], 'b': [10240, 20480]}}, 'numerical_mode': 'ieee_fp16_acc_fp32', 'pipeline': {'buffer_count': 2, 'epoch_graph': [{'barrier': 'before_fragment_load', 'consume': ['a', 'b'], 'epoch': 'body', 'produce': ['a', 'b'], 'slot': 0, 'wait': ['global', 'lds']}], 'stage_count': 1}, 'residency': {'preload': ['a', 'b'], 'resident': ['accumulator'], 'reuse': {'a': 4, 'b': 2}}, 'threads': 256, 'tile': {'k': 32, 'm': 128, 'n': 128}, 'waves': {'m': 4, 'n': 2}, 'wmma': {'accumulator_ownership': 'wmma_accum_wm_x_wn_8_vgprs', 'fragment_layout': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'instruction_family': 'wmma_f32_8x16x16_f16'}}, 'schema_version': 'boltbeam.full_kernel_candidate.v1', 'static_constraints': {'allow_spill': False, 'max_lds_bytes': 49152, 'max_vgpr_per_thread': 256}, 'workload': {'dtypes': {'a': 'fp16', 'accumulator': 'fp32', 'b': 'fp16', 'c': 'fp16'}, 'layout': {'a': 'row_major', 'b': 'transposed_row_major', 'c': 'row_major'}, 'profile': 'qwen3_8b_q4k_m_sm120', 'role': 'attn_qo', 'shape': {'k': 4096, 'm': 512, 'n': 4096}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}}}, {'canonical_identity': '03896c56299ec804cdeeb477becc2a574b33e76d5e2cabc7c4dc86678b7b1e62', 'payload': {'applicability': {'exact_shape': True, 'profiles': ['qwen3_8b_q4k_m_sm120'], 'roles': ['ffn_down'], 'targets': ['NV:sm_120:wave32']}, 'schedule': {'cooperative_load': {'a': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}, 'b': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}}, 'dependency_policy': {'barriers': ['before_fragment_load', 'after_wmma_before_slot_reuse'], 'waitcnt': {'lgkm': None, 'vm': None}}, 'epilogue': {'lane_mapping': 'wmma_accumulator_scalar_b16', 'vector_width': 1}, 'lane_ownership': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'lds': {'banks': 32, 'load_vector_width': 8, 'padding': 16, 'store_vector_width': 8, 'strides': {'a': 80, 'b': 80}, 'windows': {'a': [0, 10240], 'b': [10240, 20480]}}, 'numerical_mode': 'ieee_fp16_acc_fp32', 'pipeline': {'buffer_count': 2, 'epoch_graph': [{'barrier': 'before_fragment_load', 'consume': ['a', 'b'], 'epoch': 'body', 'produce': ['a', 'b'], 'slot': 0, 'wait': ['global', 'lds']}], 'stage_count': 1}, 'residency': {'preload': ['a', 'b'], 'resident': ['accumulator'], 'reuse': {'a': 4, 'b': 2}}, 'threads': 256, 'tile': {'k': 32, 'm': 128, 'n': 128}, 'waves': {'m': 4, 'n': 2}, 'wmma': {'accumulator_ownership': 'wmma_accum_wm_x_wn_8_vgprs', 'fragment_layout': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'instruction_family': 'wmma_f32_8x16x16_f16'}}, 'schema_version': 'boltbeam.full_kernel_candidate.v1', 'static_constraints': {'allow_spill': False, 'max_lds_bytes': 49152, 'max_vgpr_per_thread': 256}, 'workload': {'dtypes': {'a': 'fp16', 'accumulator': 'fp32', 'b': 'fp16', 'c': 'fp16'}, 'layout': {'a': 'row_major', 'b': 'transposed_row_major', 'c': 'row_major'}, 'profile': 'qwen3_8b_q4k_m_sm120', 'role': 'ffn_down', 'shape': {'k': 12288, 'm': 512, 'n': 4096}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}}}, {'canonical_identity': 'fcc738029cd7357fe9574e421f2d0f8874aad12a8fdaa5f798e255c14013d558', 'payload': {'applicability': {'exact_shape': True, 'profiles': ['qwen3_8b_q4k_m_sm120'], 'roles': ['ffn_gate_up'], 'targets': ['NV:sm_120:wave32']}, 'schedule': {'cooperative_load': {'a': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}, 'b': {'alignment': 16, 'lane_mapping': 'cooperative_row_stride_64_b128', 'vector_width': 8}}, 'dependency_policy': {'barriers': ['before_fragment_load', 'after_wmma_before_slot_reuse'], 'waitcnt': {'lgkm': None, 'vm': None}}, 'epilogue': {'lane_mapping': 'wmma_accumulator_scalar_b16', 'vector_width': 1}, 'lane_ownership': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'lds': {'banks': 32, 'load_vector_width': 8, 'padding': 16, 'store_vector_width': 8, 'strides': {'a': 80, 'b': 80}, 'windows': {'a': [0, 10240], 'b': [10240, 20480]}}, 'numerical_mode': 'ieee_fp16_acc_fp32', 'pipeline': {'buffer_count': 2, 'epoch_graph': [{'barrier': 'before_fragment_load', 'consume': ['a', 'b'], 'epoch': 'body', 'produce': ['a', 'b'], 'slot': 0, 'wait': ['global', 'lds']}], 'stage_count': 1}, 'residency': {'preload': ['a', 'b'], 'resident': ['accumulator'], 'reuse': {'a': 4, 'b': 2}}, 'threads': 256, 'tile': {'k': 32, 'm': 128, 'n': 128}, 'waves': {'m': 4, 'n': 2}, 'wmma': {'accumulator_ownership': 'wmma_accum_wm_x_wn_8_vgprs', 'fragment_layout': 'cuda_mma_f32_8x16x16_f16_lds2_static', 'instruction_family': 'wmma_f32_8x16x16_f16'}}, 'schema_version': 'boltbeam.full_kernel_candidate.v1', 'static_constraints': {'allow_spill': False, 'max_lds_bytes': 49152, 'max_vgpr_per_thread': 256}, 'workload': {'dtypes': {'a': 'fp16', 'accumulator': 'fp32', 'b': 'fp16', 'c': 'fp16'}, 'layout': {'a': 'row_major', 'b': 'transposed_row_major', 'c': 'row_major'}, 'profile': 'qwen3_8b_q4k_m_sm120', 'role': 'ffn_gate_up', 'shape': {'k': 4096, 'm': 512, 'n': 12288}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}}}], 'schema': 'boltbeam.full_kernel_candidate_set.v1'}, 'candidate_set_identity': 'candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f', 'compile_artifacts': {}, 'policy_rows': [{'candidate_identity': '81b2583b95e4fcddb614036cfd9ab0abcbd8a245774be7c36dcc143e3bbdb945', 'candidate_set_identity': 'candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f', 'inventory_identity': '599eba4098acdfe12a478479e2215835fa8f7fed7d0bd70d7a8c47d86036baab', 'phase': 'prefill', 'quant': 'fp16', 'role': 'attn_kv', 'route_aliases': ['prefill_wmma_lds_dbuf_generated'], 'selected_route': 'prefill_wmma_lds_dbuf_generated', 'shape': {'k': 4096, 'm': 512, 'n': 1024}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}, {'candidate_identity': 'c45a763ae5c9670c8487face4b4e20a015b239ee60a2ad1520cde4ede6ef36c2', 'candidate_set_identity': 'candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f', 'inventory_identity': '599eba4098acdfe12a478479e2215835fa8f7fed7d0bd70d7a8c47d86036baab', 'phase': 'prefill', 'quant': 'fp16', 'role': 'attn_qo', 'route_aliases': ['prefill_wmma_lds_dbuf_generated'], 'selected_route': 'prefill_wmma_lds_dbuf_generated', 'shape': {'k': 4096, 'm': 512, 'n': 4096}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}, {'candidate_identity': '03896c56299ec804cdeeb477becc2a574b33e76d5e2cabc7c4dc86678b7b1e62', 'candidate_set_identity': 'candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f', 'inventory_identity': '599eba4098acdfe12a478479e2215835fa8f7fed7d0bd70d7a8c47d86036baab', 'phase': 'prefill', 'quant': 'fp16', 'role': 'ffn_down', 'route_aliases': ['prefill_wmma_lds_dbuf_generated'], 'selected_route': 'prefill_wmma_lds_dbuf_generated', 'shape': {'k': 12288, 'm': 512, 'n': 4096}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}, {'candidate_identity': 'fcc738029cd7357fe9574e421f2d0f8874aad12a8fdaa5f798e255c14013d558', 'candidate_set_identity': 'candidate_set:sha256:1b8ea95d50bb55962474721cf013a6c3a704038916856353c65281112a166c7f', 'inventory_identity': '599eba4098acdfe12a478479e2215835fa8f7fed7d0bd70d7a8c47d86036baab', 'phase': 'prefill', 'quant': 'fp16', 'role': 'ffn_gate_up', 'route_aliases': ['prefill_wmma_lds_dbuf_generated'], 'selected_route': 'prefill_wmma_lds_dbuf_generated', 'shape': {'k': 4096, 'm': 512, 'n': 12288}, 'target': {'arch': 'sm_120', 'backend': 'NV', 'wave_size': 32}}]}, 'inventory_identity': '599eba4098acdfe12a478479e2215835fa8f7fed7d0bd70d7a8c47d86036baab', 'measured': True, 'memory_plan': {'admitted_budget_bytes': 33881587712, 'base_peak_bytes': 5138821120, 'base_terms': [{'bytes': 5028970496, 'formula': 'sum resident packed allocations', 'lifetime': 'persistent', 'name': 'packed_weights', 'provenance': 'selected GGUF tensor/file inventory'}, {'bytes': 75497472, 'formula': 'kv_bytes_per_token * admitted_context + scale_bytes', 'lifetime': 'persistent', 'name': 'kv_cache', 'provenance': 'transformer geometry and admitted context'}, {'bytes': 33554432, 'formula': 'prefill_bytes_per_token * admitted_context', 'lifetime': 'prefill_peak', 'name': 'prefill_activations', 'provenance': 'prefill workload geometry'}, {'bytes': 798720, 'formula': 'n_heads * live_split_s * (head_dim + 2) * sizeof(float32)', 'lifetime': 'prefill_peak', 'name': 'flash_scratch', 'provenance': 'decode/prefill attention geometry'}], 'candidate_decisions': [{'candidate_id': 'direct-packed-baseline', 'estimated_peak_bytes': 5138821120, 'feasible': True, 'memory_terms': [], 'reasons': [], 'strategy': 'DIRECT_PACKED_FALLBACK'}, {'candidate_id': 'full-resident-overlay', 'estimated_peak_bytes': 19030355968, 'feasible': True, 'memory_terms': [{'bytes': 13891534848, 'formula': 'sum covered tensor elements * sizeof(float16)', 'lifetime': 'persistent', 'name': 'dense_fp16_overlay', 'provenance': 'selected GGUF covered tensor inventory'}], 'reasons': [], 'strategy': 'FULL_RESIDENT_OVERLAY'}], 'decision': 'FULL_RESIDENT_OVERLAY', 'device': {'free_bytes': 34036776960, 'provenance': 'nvidia-smi --query-gpu=memory.total,memory.used', 'safety_reserve': {'bytes': 155189248, 'formula': 'align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)', 'lifetime': 'safety_reserve', 'name': 'runtime_safety_reserve', 'provenance': 'nvidia-smi --query-gpu=memory.total,memory.used'}, 'scanned_budget': {'admitted_bytes': 33881587712, 'free_bytes': 34036776960, 'provenance': {'detail': 'live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity', 'source': 'nvidia-smi --query-gpu=memory.total,memory.used'}, 'reserve_bytes': 155189248}, 'total_bytes': 34190917632}, 'feasible_candidate_ids': ['direct-packed-baseline', 'full-resident-overlay'], 'feasible_strategies': ['FULL_RESIDENT_OVERLAY', 'DIRECT_PACKED_FALLBACK'], 'override': None, 'reasons': ['multiple candidates are feasible; performance selection is deferred to machine search'], 'schema': 'tinygrad.prefill_memory_plan.v1'}, 'prefill_tc_attn': False, 'provenance': 'retained promoted candidate + live exact-fact admission', 'routes': mappingproxy({'invocation:sha256:00943e3120f486e535fe65c332f3c709734dd8281b6ca81ef7944f18bab2e926': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:00be05a5285b332420fc322453e0ff64e91135339ef6d8022b909bd9ee910451': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:012169552d6b7191a4b4d4b8d5f89b6aad177d129995747a8beaa3d1d651c030': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:01fc1588d24dddf76d5c755de77c820f37f1fafaebf8f7524831f4897f440d32': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:027134899a1b0c5522a85756fead176867344a9d15ad5e89bef3ace44b3b6271': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:02ed66c160d63ae2e524b34464a1ab9820d2e35dfb2886ebf518350879d6ec8e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:03d3c0c4e53305867be6dc5420ffea9c84c8b4c86e05f8d0c139f89e59b40858': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:043ce6f36faf760a4c2bb918dbcc2e038dd50568f071274412eb37c07aa43544': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:04919b9cb0eb217636f33f2caeb085a41437d4e80ea52e3a3d14aa69ebf3c674': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:04ade02fde7098436af52955f3ce5f22c2fc9aee7a9a334f95b360a49b32a7f5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:04b1f693b7ca448000e2d43a5f7ebcfb8f9dbb8856c03a1264094265dfe610d8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:0684d42d15f3ff934d6593584a0860ba0a45bc0a0e56faa6c446985d85736648': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:07271538e1568a5e6a61001e7c266a1dda4680631eb33a1ed4f7dc9d17349979': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:07986f1f3529e1ecff7eafed9cdb5f6dd2646983d6f47642a7f8b7a84e0aef64': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:08457bdf3a724a5ea61286cb5ad6df495ef78dcc21a3f1b38965ed55238ba416': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:08ae4c3c896aee83652831fb0d99c51abc0bb57cd8d024f17385dad891a01a3b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:098e8a78dd27044a755f5e62028dac33867a64c40ba320cd13661e05fd1a8184': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:0ba3505f4bf1fb523ce533d8ccfa54ae0d7b628439f87aa6c942470e6341ecab': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:0c85478a135b36ba8788d6f9059e3633364b6a0e3d2d634fa4f3a73a6f3ad7e9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:0e5b37eca6cde3074757d11f2255d726dbeefd7775991516a39e37f53e7d7131': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:109c0df5e52a3b5451223a464d6c8482c1f0ee4b52a0996b68445644f1d2c29d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:122ed70f6efa3dcb89b94f6dfd1414003312e0e58c6e95323cf792f5d9c495f5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1293a8e29fd5db4d8d93e12428dce037efd77360d1bc7f22ca6898543350f27d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1299d12d32121cac3c1875359ce38c1fdfe8656e86c40ceb427898ecbf52653a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1307d546ee9114e17c0d9b2a4a78365720e08a36377febb747375b9e4b5e878f': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1336c8eda44688213ed26fa338a65a910c2e792539fa7250c9f6b47f4018d1fe': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:140274ecb6819be53e096d83e12299b934a0810120948ee867630b11ce1ec9d6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:141ef66d4a2aac0ea7a6b64afe90033e89b6b7c17b7b8a3b0d67a7c5cf534ca7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:145b39b97e489ee0f0359729f355672a7fda94ee2ed60e5931d985d85ab43b8f': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1484d77e78a8e4b50a009429f5fa1c4623109ed407ea21dcfa141e4dfff84bf7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:159a30cd3a71a96cb7b0ddbfba8d4a6afc8c1f7a14aacec10e082bdd3bc3c5a1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:15aa863763aae7e520c9e8b5e935290e6d043c3dfcc08ba7d8e1191efddfd3f1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:16451f3959cc65be9362db491f1d177b884eb64f70fa0075c95fe0bc14ad4614': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:16aa23c48955b5cc03bad157f5a318b54ad108cbc247cd1446f74a7e720a873a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:16e47c5d2495661ac2ab804fafa6e0ec603068ef14bc8c7256e0123350084aa4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:17b8bd9e8b8421397e134a00def0c7d7f22e341b3d651567acae7376c3284938': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:197afb41a6209a0ee632ef4be3ad8dcd576c7e39e1d18d5aa5fec44a1f2725a7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1c7310708ef3646bc8a0d900bbbf1eea05add2a3cd0d47a56374bdd34e367f87': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1dcf91c9aa076509b20df0ea3f96300969b75e9473b56f931380947e953dce8e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1e141c7565a9aa80803579f427cce9c7ded3fd4e1647ea176174575deec19206': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1f08f9eb0344e08fa187c426c05d5bcc9d31fedcbc133399a74c74204895eda2': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:1f92a760cbae03ab5361bb9c84ef3d0b2ba6a06e489399d2a7de53ea05ee409c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:21699fd70fae8af40826587eeb60696b4c738b7df8b11937eeadc6a285a97c9a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2302b453dad82473e2759c8a46fe2a23601d0a2ce3aa771ffd4a246e807a9004': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:242b46437bd2568160bfac55aa471c30c1741adc32d4f9f82e6515d34d844676': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:24ddacf44b63e4a61c290c485ca40bd686f7836b1b4ece845b81644fac8b6f04': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:264d7bde64b9dd03ab09b21853731d8bd8614c76afe9dc57f6701fc13ac124c6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2868283bb4c35ae90b0e25ffcef2590d792f7483eeb375f2ffe9f58311e35078': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2893631a3a0e712067daf5bdcba459d596595b8f2d9596d260fac054d858cee5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:29890b0bc285271f85e9655ed9779ad0f0a70f7cbcbe21403db01252ea402a62': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:29abe24be87a12f40de1695ae0ca0363bebf9779a357210ba63be1a5f36d17f3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2b7f335e201d5dd9cf10a2a992f83fd511a7ad326ed0f655409470e1552c8070': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2c1204b92900d5157f9f412072f1091a70fb885d54be0b7e4957540aca3d0987': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:2d84afed67f48cf5d01604132696cb04a5c1c5ceea39fa99794c976d559b8423': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:30d16ea2284fb5e05e6f05003dd1b391f67e9dc09eefec226e9f22484d3022f7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:30d706893e5614143a27f6010eaaa33636351c0f82199f4d61ae334f88c9ba55': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3173fe464f231ec3b7810fff6975e2e5518e3d29e85576922e81a1b7e79cfff0': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:32203d75b1b8d66f19aee83d8ac0f27a5a3d17f14d21d34c78769926ac67ec44': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3356040488e9855ea00da37cf2aa830c2a468509636483fa3ca48a5e146c1262': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:35469625a7985023da1ef5725fe883e35d57ac5d9e1a5d5908cb4dfe30be6ac8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:35bbc707f41ba51fa53355c5da1b90e25e48a56d6c9ec5517fa699cd1c9aa1e6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:367e33fddeef7be1196c65e82e8c3a2b7084b3de43add2bcb0d328c1341c40ba': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:36f8f0cd9250fce317bfa0963e8890becc4630db17acf47af04d0eced1013611': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:379b77d4f7740d99a4dc8be4ac1c78351b58dfaa1a98e121fbcb22b5c685c214': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3883e288d39163520d881e2904879a89d95b0045f1c56a9833cc6fdb617799b3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3942d75da84a2b4fb493697803b0b92c9b4592dcc02cd9df07caa90188cfbec6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:39a69566f0f1cc771167e582e8cc87696406c86a8bc741fa31e28d68b23b5d61': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3aac417ff8cda903d26f42bb2368bb246f8955ecd30f26814b6e3d38e43b4dd9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3ab912fb1fb1236f935bc5314d22b4006cd952919cb4c73694f6f446dd0266a8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3ac6bd084a8799c4bcdd5d7dc995f372e9b6faf48c212c2c00aae5a892840df9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3ad27a00b042e65883da79eb17a01f3e94e4f59ba870c7763f9a5f5dea983ddb': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3c007e91bc303cc50a5579a721645964e6e1668fe5a63d370f78d4f4cad2fd0c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3c7350e3d547cd1e22bd408affa58c00b5150022b20401b7ddba57718eee78c2': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:3faa1f6b8669f74433c2e04dd4d87bad692b26aa9bbe711111a5c16d78f9b297': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:40d32fad46145e846ef01e3f57123ac3e8137608438837350d836963a181d679': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4120e41555482afab9bf6ab1db852a1c1cff26c9b478718a976c7b6fcfdf6ce8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:41f06a83dfb94ca0ad8474b740f65b4ab46f819c0f3024bb4550ff9535c80c44': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:44076bfb7553e52e1c2f754259eb5953c9622a3753c66d17d30980e222205313': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:453ff31b5c57c288b7c8172d03b57bff01cce1acb143bde88cc318be8e95303e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4643434dc410af6a9e26e321030619a920d00eb8fa75a60ae00a31891d3e9217': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4786b4f415fec36ac7b3f9fa667a298195bad9d20dd8408d4f3ff220b41cbb41': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4a331f4960ec9baf4ef74d8b0b6e2ff3040e5f8d641114065b63f2395cc93fc7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4ac004f66dc9669751803ae6a4cad36a3fd367fc8afebf724f4c18f2971eddb2': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4ada2da29657d5e9b9053e8d99a9f1ca7d03c722d98a29959fb67699182f8d0b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4d5d51c4ccc36c6b70a51e34388ae20b95fc6bcc053ce41b59c1532d3492f111': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4e5d7a42a767fd7c17a3f82d23ea5bfa746b7cf93afda766c769c519816af8a8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4ee772dd033ae5dd43fbacb31c360d992fb2bbc3c8f3fd97622d6a827edd0e82': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4f276802e0b4b71006135430dda4245d172d4572dbd8585fea4dd57621dd8f8a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:4fce22a11f181bcf2aece0ff1ee2260117c5c29fd3ddc0e2126ca1f24372548d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:50ee800836d2d36f2f912dc8f172cbb39ab0a27e11b85933100edb11d3947765': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:55687b046ee4d4842cab2ed2b29c0960a232fdffe172e44123f03ab687f32ccd': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:576538a62ea0bb7bbcfb3aa080fa7ab1cf9b3d398720952dc174eced2eb473f1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:588454ac54647a15f8568bac6e9aad816712331625157110929de91e8a57c5f2': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5b7ba5ce67a5aee68d8befeb800defbb991bcb5ed8d41bbf8104e6c090cbcea4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5b8a5b516b4d93a5c35e1b8d7cfd72ca5d449c2bd9f01f1a03571d7e5373a86a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5bc06ca4b1f096f430517e1208644730afb4298ddbcb3cbdced68e73bbfa8a54': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5cf8b0a832612264ed281ce2667c8852e7e6a82c049e311c2a5b0169e8385eb4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5e22d50320fad2f2cea6c47c8ce47ed6e1b9005f7cf8cafcbcabee71bbcf5d27': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:5eb30fd8a565674f56327363218d6e919896df7df4f1686949b27a6647d1f7d3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:601ab2750a2cca87995de928fe735bbf2a44dd9ba9bbf96dc4fc7efc8f555e7e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:649f92d5b4d46a913d25250cc350c04e31445e425f5409a15b866276af9d25c5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:658043174a5e241c112e6b4f5df9ec7a8fd26e45a82fecdd8c00f31576438a6c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:65a9ed2b266b356741e5e26d39295b46dd46e2e6871c472b7f4c859a626fd2e9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:66b1e1696a83753c9fc903b6f6a2503b18ee7d1cd7499f19a8f01f019dd4df61': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:678a5f1b186eb7bc915d8db19ce27ff52de372bc7142cc53888d560f2c4f73ba': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:67b191c245d8164c4a5be66544bafb6691e508a655a3677fcadb4a0dd41441d8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:68184bb5a7b2539acffd99a4a71708636a4c129bf0eb58d97af8a1259a268a6e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:69acbf7802e16a048e86e5a6c1bc90af59aad887cd529253adf52ad943887286': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6ab915ff592fd86894c6857c78b322ee6dc9375c2e58617ff289940026472918': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6ad52eee7a1c74a435fb1d60529f2803171a775933f1429f6435812957b5ae91': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6b99d5011fc2f1356218363b1ef2c2d07e4e4ee9095347a8e5bbccc37286e8a1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6d90f94eb1a570bf598f3ffc344d06b36d630c0449495f3bb645f66dda230097': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6f1df96772d8b0c189864e282827fdb47f0e8ff2570abe4bba6e05756c309aa7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:6f65e9695bd6e93570475a0135e9efe75391b1d0ca1b4c83637add370dfcbd65': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:701a235e2b5f81a99ffc249fc4918be0f5b2cff1e7c2337af3f1994dbb252ae5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:70b55aeee781f4c37a9505bc0131933255106e7206935fb75049f1848290ac4d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:744a41df4a3458152a24e55c517a55d25ac7cfbcf45fc34efd6bafbf80b10edd': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7ad9b49502f941091d182af9fbe0fcacd4307d9280d06b77001366a7cffa765d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7c2bcc6c215b0e374a1a70d097448252ac18dea6f81634fd4f08803291fbe653': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7d99c92a669bcdd093d492806cc157b7131dace320baeb1d9def6c9d1296d5be': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7da29f843ed645bff1fb5feb897c15767aaa4b21481e7c642532f110d1a2398a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7f06bc5363ea3e5be232c6c5a21fd75b9f7f880a3903fb79e6c4b8a68717eb3c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:7f7ba123ac8d8d768fedfe39ab869a43bd252168afb1a080cea96159ba3925b4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8038bf55703abf6d636b5a254f687770e9380651d8ad79114f80d2d68a5f04a6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8044d7ad4294abe926612790fd4572974e7270d6ed6a9db372a619a43653cff3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:810bbfcec87024fc5b084ac9c4e5eae1e190620afc62b491d6fb9e627f76f4f8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8176828515fce89f3f65cebd3742c8e50d51040347617f93f126f5737ca31dd6': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:81ede7dd605cc71471fff7a145692f29170031e3e79348e0a64098eda856ec01': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:81f36fa99b3be1d64136d241dfc633546fcfded9ba7ef4cdea63d5fb6794db74': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:82f0e10ff4e10854173ab3bd57a47b3bc6b4085136d0c37bf099c4634aef729e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:833727c609617b883948118b6ed2a286f13cbe7ce9a76a4a7094927814a151ed': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:83b0cb2d9d52374a5742abd4efa2ccc21bec926fb9c11e6e83a5f58929fd1708': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:83fc188b879a689ce50087e63508f9408d772916727329677e260624b742c581': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:876aefcc0d621ec2bf15fdd8b7ff1a4fc479cb657ba6833bf9d1da440dbdf6bc': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:87ebd8e985cd7a297dd253a9dce069e1f4b76fa420d2206ab08344f0d4bd06dc': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:88dcaa0b8f2e4a539bd8fd9214a256eb4fd3352c40c1ab4e8b4a237e763e74ca': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8a2cb2ddd50891d32594d7c4c72bb8cb039abe691d33fa39e925f5cbffc69fed': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8d0ec03ec807469af321b131b13fcb426be28e2085a36229452a6de1bc303d77': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8e9e535fd7dd0ef539cbc5fa2a17b48b37f802b6213a1b17e8722e155964595d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:8ef51a7322dbd1d4bfdab97cbd496c682407d0e74a4da0a6835f994fc7d2152e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:9191ecc55f2161ee9c8b397679d5cf958167d03d2971f2b6dd7799a2389dc1c9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:91b42648ffeda3f343081de71383b729197642f24cbb71631f2b9c3c5bd50c06': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:924623af62a72f556e40d77306a1edb6cfe94501cc6c28d722a2c23427a237b1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:92ee88dbffea69a609abd2f9b874175d47f54baf40686972619f37557d2ca5f5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:957d0b0bced11350d37dc23ed0b37b1d586106db64e250455200e70159261e08': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:96733b177eef52ab7cbb5a4f3125516b54c9e8157c00a3d5e7239564c2a3b708': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:97209bd327b7ee6a4644bb108db05236f4fb370da003cfff888cb5af0e3c32c3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:986f85f76074422402360dd9b1309c457c8c95c49eeb6dac7a22cbe1d95219a7': 'fixed-ggml-linear', 'invocation:sha256:99a5ac8236b10edc57eb36183403bc8d284480515e7b6f96d745f7920601dbc8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:9a8437dae2e0d0900c58249ba3e8777e7d52aace49997ff8e396b3b6ecd6b7e9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:9c7fe7036d096620da0fe572560a9fe3ed1eb2f8342d8969ddc2727268339b9d': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:9da64d905d4de91048b619c1d53e1fe7dc394b4686481bb6707ea0e1b73c7b56': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:9edeeb81e75276c2158ad71baba422df19abbb7f92d0450417670eb0a8a77f58': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a07822ce12ba729e81149bed2056adc8ef37bf686fed3469c68ec53fff7b9ff5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a08b4241b2b35ab42eb65cfdaaf77b1c988ea5fab689633a1a567254623e0c58': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a197cf964922a6df6aa7cc6130fe1f986ad881b644e2170fbd8277234dae2b56': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a4d6367f6772074329923e6bfdc1b021ae86efd1a53ba0bbd2158ea507bd2f97': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a5584c58176f3dba13dcf7ac7324754e5f2df62cf54482e3ab14244abacbebb4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a5be40ca4b7aec3daff6560b6db523f9ec1bf410c3ea3963443d6d29c8315fc9': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a6326647a9e23dbb5d574ad55b7dc1e81ba1647fcd86e493604fbb9393b584bb': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a638ad61b758a0fb96cd2afa889245d09957ab2b9236291c51bd364637a011d1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a67d1ddac484d4d58c11b3195015c5cb7420bd4007ffb5974ceee29f0d012c3c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a89dd619187e60505969d41d2830509aae9f59e457ab6c208f099507cf612804': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:a923d9a15c3fb28bebaf9aacd9a53684701e47e510234a03546a16d0f8b8539a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:add2b214b978737347dd91a834b1dab2ebe82cf1d3783fe6a7a74561beaa8c3c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ae480c0d911d3224852c4b23a8e4295bf0639282a52726ff08ced121e8a9377c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:af648d88ac78613768dd8fc4c79e30604cae93cd21f131f80fed3fab9de7647b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b0dcd78ec576dc7073e214abd82ff47fe6b77187e8d508e6a16e6d1d6294eefd': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b4c3990bc00c36994d29a2ae5497f51fda65dc65e3552976c16ead5b70d46e49': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b504502c7a76cbfa38ef5df005c24bf3cbd7b38c51bf758d11277691cd50c2c3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b5547ccb727033d3beccb660a95abfa02e05280af120ce9b5bee32f8fb7abec8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b5cf9d093e82385d124eb9ba9b7916baab9f99a1b204ab5f56c7d6afd34c92e1': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b5e2f6b0a34ddb6725c7b94e6105260139c3156d7f7384eeae4314b841a3e6f5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:b669e7cae3e765f5b2bb6725ede20d299a743372379857e4f813a75f075a46ec': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:bc22de4bbde5bc19ac4ec8ab4ed987d3a0af8584dd9fda5864cd182d34229a22': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c0e819abf13a9cc90285339e292176f5fe3c34433bb38d757c8c3aa57d3343f7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c3d724bd644515362e5652023299344f48054a0cca4a5a3b9b22c699dcd882f8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c4e10fee4e142761a74749ea74666053ee215bff77dcb71d489d6dfaa93a69a2': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c514724fef68c34d07d7bb15e5517de8b9615380dbfe5d11af4cdd96e8a3c379': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c68d88e5e88ed82eed375e6402b89af546cb7162c09e0134994c47a7520af704': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c74e7155def5d9720f75346949ab7ca6a5db0d5b39c45121130c786cc23532ec': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c77a042b03537bd1b548f14a49ce34676c60216feccec4513c6ffe0bce633bb7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c782f11a2eced9e1c7bb33a822fd0add286b0d63c4013b47a84ddb62559f8676': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c8381ca2bd54e7114a0ba5278bf69ccc3c84760923d2e262e11544d07498aaef': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c8d2cab6aae68a026f8a1daa65bc6016bc72d6d3de997000f066c8343b808872': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c934df7efc30c138c205f79de4f24b7972e0bdcb484ee61471208e5dd197c426': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c99dd2fd4205cc61f1943317d2b704c0f668534d6d0647ad1f1e57290a9c3a36': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:c9cc22647baf8d06a60ccf5b8238fa670102ffda6d948ce59fa99d6d2a8eaee7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:cab40185353cdc3f7a4242cdc6a16fecbe88e585abdd700172e687e35298ce08': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:cbfe47bec90e10f0d2044effefbc74b5545f60292bdad8ccd3d38d6b1d668b4b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ccb6168a36642d82578375313bdac53d6bc9ee618cfef3994c6a16a07d062cc0': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:cce83d95173b63624202cb41fb61173ddb7b61f310339345f4d1e063965d8486': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:cdfd0b5d9652a1d2f7697cf4c6c18a924580cab0708a847e2d5539b988547b91': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ce99cc4d560adf822d02b074928e1c16020f17cdb53d4e5e081a39a1b6892a6e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:cf6e312020e72ab19183122d71a39b5132e2672a87ba7e3777a5509329504cfe': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d01f371b4f3b7128753cca9f38e56393dbd7a4c268df1bef2e86ac41261f687e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d0bfd5586b184a5fc4f5ea295e0d13b3665590aa68dfb7ae75dd5a7545c23b68': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d19d1ae668133615c779f6e75f469b1f7e17f7e5a87d9b48cf38ebfad8f4a60b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d451cc8f4ccbdf803ea8b00fe400721059bf492573ddc2b358c1c749c04d9602': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d455735093792514259ac29e0553ed38415c7833d71b6873fa18d66ca2c14dcf': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d45bb8cfc533aec916a5d7b431cf869f6b109acb85fb82a091ab8e9d8b43b46b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d4a67da5824b8513def50ff88ae07cd048b5d82509432092ede60b9fab86ffcd': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d661495c461d84cfaebf84abb35b4ddacb734d2d7a89abb5c902179ac654653b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d6ee9edee93a43dff1a18bf172974d4884822014b4ebc97ce10b19c90a8eb574': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d83088a6eb5e4eefaa675d56134957433cdf8bd56f27fa162ddacbcd59c2aa5e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d8326fd1c1d6da0ce95d907a074e0c18ee249ea6ddaa96d9fb6fdcbffb55fd4a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d885583313eb0fdf1236aba7e8230b51ba8576263f13a36ec586553fb4d28e48': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d89a8f32be1fb7ad397dc9e3bb3cccf43ea5f7791384c05e28edcc0c23c17a47': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:d9ec8e057f77345ed4c59fe1df7c12cda732284aab3b6fe105d1ddcacfdd0c0e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:da64581351e2b4b053b486f27add20db3502d9e6496ca715e6562606c4b095bf': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:dab1c27e62bdb376484a40b66479b1182ce5d48d1c00784bf0ceaf1a3a24f746': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:daf2bf4f1d6d19e26f9ba74a9a4b56efd0fc22611a92b32142a6b5280c7131ff': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:db7cec47e8bc4632c0318023a8a64bd4ea547d5e33d8c1efbc7f9ee0dcae1dda': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:dba463db9e921d5eccadab9027459079b3e14e23d647b794afedccfa3e99c08c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:dbdefbaf5df90f6d7a2dcdff6cf5a6bdccd5c27023b2aa6dbdd2b2a4aa7d7de8': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:de1bfd8cf888660360053a581eaa62ac8850df295579f082bb62d366237942f5': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:de445a883acab1eccc46badf84d210a293355a660490d8696f3630aae4f064a4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:df3a67d84017e1c2031eda159bb17f3869bc5d565165419a2b2b318de3bcddec': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e1048d0f90bf2e7ca2b5a6d3e11b92c8b6e019e8781781e396e221267343f8fa': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e27a6be12b6dbf460a0fa306428c6b9e482d5b5b72d0b05589f9317a86090f0f': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e2b43bae1b8d675c6ff3d2ccbbbbbdaa611804a65a3beddd54b37af2d16f6543': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e324f4977aee3b9ee1bb72e240b1ee799d141a710dcd983d6481f8a2d96669b3': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e3ef327299edfb0ce1d9cb614017eaf1ecabcd4d9ea6889862984cce7dc84a90': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e4f21b66c491496c5b65922d32075be43c9b72f4ffcf88d461e2a8c99ba24b6c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e681bf9ce65ef5e66bbf83125e3dcd72ba841eabb82e4df81c62b37b498d6f5e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e776c5befbabe8b057dcf5b4ebfb7fb12f7543e9eba3124ba83eec8a02363b02': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e8bc8d13f41972e9f12ff79423d6efa83b8739878def1c888ff483364cdd2daa': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:e8fd81ed137ef1b3a0e1b300630a06b28908b11f60c5f043c30b89d54bafe3fa': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:eb08f5cd3b770c584284fd0625482803dce96e47d10000f7fd151040abcf4e61': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:eb6cf6efe5e0946b166e5c2e3c78eaccf3a47eacf04fdb70e6fe2979c1a7b0a0': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ec4270546b32985fa31c78c7c0d10d1cbe5775dd84be0bad9d7bfbd947093262': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ec876020fd0f9f69c4efc0ec2b9a15fc47e947fac203c2053e8872174c035fad': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ed671318f1e14ab11ff961cc9f9f525874fdb85943dfa23a20aef503284ae45e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ede39de92d9f0ff64ea976eea1c48935ac9ac5b3b6cfecdc68c1358af00aa487': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:eec7349e99dcf1e729719701b7737cb8dbdaf2ae088ac88929e5c18719d050bf': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ef014450e014849c9ea2939db98fbbbf5932ae7a0ecd2c5638403b3ecb702787': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ef7be1fbc5681d34cf3dae46ed0842fc27a005688fff61be3bb2d7ce4485df89': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:efc4436eeefda1d64beb6c7287272150755ffc6717a598b744ec084846df534e': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f0458fb12dab4c8a111709570fc206a7e50c8e93ed50e5ea044f17c4313a9857': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f24b603185e909dec38cdfc5814ac6246e30c6399231459e438fa76852bb3d95': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f26440d45b7bfe13976b3cf6ad5449f4acb785ab34ef4a4c578285c61d6078ea': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f44f81b5f64bd868737ace74ba36d29a056bda78331ffa535e799a89c5ea594b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f53e39c460fbecab22815aed850a16560082ae40ea00e4d55ad39f49fb81973f': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f5c11d49a4b9ef0ff6538df1b7c16277129f91b2653cc90889f7c76eb42433b7': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f670125fdded59ad238bb570b11143f5097e95e544e15bbbf6ff16feb69474ac': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:f9cc20999b862e9ff4e565134bf6e0abba6f560459d700bb5384046569d05576': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fa52e22b6b63f2f8b4ecebf0d74b03297c706728618f365b6497632a859c54a4': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fcac53b85c7e8f7c80c900d6fd04350bc5b89a32143136e247c2daf22527087a': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fdf165e2ae39033e61cf9b005eb94c18832b6b5f153591446aecfd96d8755446': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fe2860f76395c43ccf86817b5138cbb0c284abb73fb09c50f911fe6f44f5c01c': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fed60104022c8ca0927ffd0bea9fd550e2c1ea6a786500b082d151abf855ad23': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:fef98e6ab0a50e781aa6cbbd6b6c9786c3b33ea8676f23070891171f1d78769b': 'prefill_wmma_lds_dbuf_generated', 'invocation:sha256:ff6d258c73b2bcd1cb41cc7fb0490bae755905665ba2fca920d02071a158633d': 'prefill_wmma_lds_dbuf_generated'}), 'selection_authority': 'promoted_exact_candidate', 'strategy': 'FULL_RESIDENT_OVERLAY', 'workload_reuse': False}"
+  },
+  "program_count": 0,
+  "program_names": {},
+  "replay": {
+    "logits": "not_returned_by_greedy_entrypoint",
+    "same_token": true,
+    "token_finite": true
+  },
+  "schema": "tinygrad.nv_ordinary_prefill_census.v1",
+  "status": "FAIL",
+  "wall": {
+    "median_ms": 3052.274566,
+    "min_ms": 2771.462436,
+    "rounds": 9,
+    "samples_ms": [
+      3052.274566,
+      2797.215594,
+      3042.00058,
+      3071.832168,
+      2787.552049,
+      3060.266576,
+      3107.324576,
+      2771.462436,
+      3066.594448
+    ],
+    "warmups": 0
+  }
+}
