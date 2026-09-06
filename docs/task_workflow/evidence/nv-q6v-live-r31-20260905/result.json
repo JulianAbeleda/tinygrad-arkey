@@ -1,0 +1,1 @@
+{"schema":"tinygrad.nv.q6v.live.r31.v1","status":"PASS","weights":18,"candidate_median_ms":16.148709,"llama_median_ms":15.942049,"max_abs":0.00995528698,"allclose":true,"second_activation_allclose":true,"distinct":true,"scope":"18 canonical GGUF type-14 attn_v weights; graph-owned producer/main/fixup TinyJit lifecycle"}

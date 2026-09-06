@@ -1,0 +1,3 @@
+# Q6 attention-V live R31
+
+A fresh paired TinyJit run used all 18 canonical GGUF type-14 `attn_v` weights. The compiler Q6 candidate and llama QKV Q6 oracle both used graph-owned producer/main/fixup calls with dynamic activations and alternating synchronized timing. Candidate median was `16.148709 ms`; llama median was `15.942049 ms`. Both activations were finite and allclose (`max_abs=0.009955287` on the first), with distinct second-input outputs. This is a live 18-role correctness/lifecycle gate; the measured candidate is only marginally slower and remains unqualified pending full route census and model R9.
