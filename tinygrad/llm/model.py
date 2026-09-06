@@ -2829,7 +2829,9 @@ class Transformer:
     probes = (lo, horizon, 769, 1025, 1281, 2305)
     required = {_active_horizon_flash_split_count(True, tc-1, self.max_context) for tc in probes if lo <= tc <= horizon}
     required.discard(None)
-    for split_count, ctx in ((s,min(ctx,self.max_context-1)) for s,ctx in variants if min(ctx,self.max_context-1) >= 511):
+    for split_count, ctx in ((s,min(ctx,self.max_context-1)) for s,ctx in variants
+                             if min(ctx,self.max_context-1) >= 511 and
+                             _flash_decode_geometry_for_split({}, s)["token_bound"] <= self.max_context):
       if expected_output_tokens is not None and split_count not in required: continue
       direct = bool(getattr(self, "_decode_direct_greedy_promoted", False))
       slots = (0, 1) if direct and getattr(self, "_decode_feedback_pingpong_promoted", False) else (None,)

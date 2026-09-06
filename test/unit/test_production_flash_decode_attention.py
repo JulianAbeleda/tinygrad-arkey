@@ -233,6 +233,28 @@ def test_active_horizon_wide_selector_and_geometry_are_bounded():
   assert _flash_decode_geometry_for_split({"sentinel":1}, None) == {"sentinel":1}
   assert _flash_decode_geometry_for_split({}, 64) == {"split_count":64}
 
+
+def test_active_horizon_prewarm_skips_bands_larger_than_physical_context():
+  from tinygrad.llm.model import Transformer
+
+  class Realized:
+    def realize(self): return self
+
+  class Model:
+    _prewarm_active_horizon_flash_pairs = Transformer._prewarm_active_horizon_flash_pairs
+    _flash_decode_active_horizon_lease = True
+    _decode_direct_greedy_promoted = False
+    max_context = 1024
+    calls = []
+    def __call__(self, *args, **kwargs):
+      self.calls.append(kwargs["flash_split_count"])
+      return Realized()
+    def reset_generation_state(self): pass
+
+  model = Model()
+  model._prewarm_active_horizon_flash_pairs(prompt_len=512)
+  assert model.calls == [6, 6, 6, 8, 8, 8]
+
 def test_flash_block_geometry_override_is_merged_last():
   from tinygrad.llm.model import _flash_block_geometry
   class M: pass
