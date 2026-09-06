@@ -10,10 +10,11 @@ def fn(a):
 def gn(a):
  la.begin_trace();return tuple(la.project_q6_v(a,q) for q in w)
 cj,lj=TinyJit(fn),TinyJit(gn)
-def run(j,a):o=j(a);Tensor.realize(*o);Device['NV'].synchronize();return np.stack([v.numpy().copy() for v in o])
+def run(j,a):o=j(a);Tensor.realize(*o);Device['NV'].synchronize();return o
+def snap(o): return np.stack([v.numpy().copy() for v in o])
 for _ in range(3):run(cj,x);run(lj,x)
 cs=[];ls=[]
 for i in range(31):
  for n,j in ([('c',cj),('l',lj)] if i%2==0 else [('l',lj),('c',cj)]):
   t=time.perf_counter_ns();run(j,x);(cs if n=='c' else ls).append((time.perf_counter_ns()-t)/1e6)
-yc,yl=run(cj,x),run(lj,x); xb=Tensor(z*.7,device='NV').realize();yc2,yl2=run(cj,xb),run(lj,xb); print({'candidate_ms':statistics.median(cs),'llama_ms':statistics.median(ls),'max_abs':float(np.max(abs(yc-yl))),'allclose':bool(np.allclose(yc,yl,rtol=.02,atol=.5)),'second_close':bool(np.allclose(yc2,yl2,rtol=.02,atol=.5)),'distinct':float(np.max(abs(yc2-yc)))>0})
+yc,yl=snap(run(cj,x)),snap(run(lj,x)); xb=Tensor(z*.7,device='NV').realize();yc2,yl2=snap(run(cj,xb)),snap(run(lj,xb)); print({'candidate_ms':statistics.median(cs),'llama_ms':statistics.median(ls),'max_abs':float(np.max(abs(yc-yl))),'allclose':bool(np.allclose(yc,yl,rtol=.02,atol=.5)),'second_close':bool(np.allclose(yc2,yl2,rtol=.02,atol=.5)),'distinct':float(np.max(abs(yc2-yc)))>0})
