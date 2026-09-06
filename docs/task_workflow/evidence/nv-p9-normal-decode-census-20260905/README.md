@@ -36,4 +36,3 @@ Files:
 - `tinygrad-census-run.json`: one-token normal-route timing and token evidence.
 - `tinygrad-d512-r3.json`: three 40-token tinygrad repetitions.
 - `llama-d512-r3.json`: fresh llama-bench prompt and generation rows.
-- `*.log`: raw command output.
