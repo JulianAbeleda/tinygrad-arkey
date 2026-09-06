@@ -10,7 +10,7 @@ from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import bi
 
 MODEL='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf'
 def main():
-  ap=argparse.ArgumentParser(); ap.add_argument('--model',default=MODEL); ap.add_argument('--z',required=True); ap.add_argument('--out',required=True); ap.add_argument('--rounds',type=int,default=31); ap.add_argument('--candidate',choices=('wide','streamk'),default='wide'); ap.add_argument('--streamk-unroll',type=int,choices=(1,2,4,8),default=None); ap.add_argument('--tile-k',type=int,choices=(64,128,256),default=64); ap.add_argument('--sliced-fixup',action='store_true'); a=ap.parse_args()
+  ap=argparse.ArgumentParser(); ap.add_argument('--model',default=MODEL); ap.add_argument('--z',required=True); ap.add_argument('--out',required=True); ap.add_argument('--rounds',type=int,default=31); ap.add_argument('--candidate',choices=('wide','streamk'),default='wide'); ap.add_argument('--streamk-unroll',type=int,choices=(1,2,4,8,16,32),default=None); ap.add_argument('--tile-k',type=int,choices=(64,128,256),default=64); ap.add_argument('--sliced-fixup',action='store_true'); a=ap.parse_args()
   md=read_metadata(pathlib.Path(a.model)); infos=[i for i in md.infos if i.name.endswith('.ffn_down.weight') and i.typ==12]
   if len(infos)!=18: raise RuntimeError(f'expected exactly 18 type12 metadata names, found {len(infos)}')
   z=np.load(a.z)

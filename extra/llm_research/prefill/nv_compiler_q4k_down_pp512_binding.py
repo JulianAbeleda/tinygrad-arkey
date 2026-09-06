@@ -90,7 +90,7 @@ class DownCapture:
 
 def binding_for(device="NV", *, variant="wide", streamk_unroll=None, tile_k=64, sliced_fixup=False):
   if variant not in ("wide", "streamk"): raise ValueError(f"unknown Q4 down variant {variant}")
-  if streamk_unroll not in (None,1,2,4,8): raise ValueError("streamk_unroll must be one of 1,2,4,8")
+  if streamk_unroll not in (None,1,2,4,8,16,32): raise ValueError("streamk_unroll must be one of 1,2,4,8,16,32")
   if variant == "streamk":
     if tile_k != 64: raise ValueError("streamk tile_k must remain 64")
     return _streamk_asset(device, streamk_unroll, sliced_fixup)

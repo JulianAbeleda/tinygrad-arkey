@@ -46,7 +46,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   loop=f"for (int Ridx0 = 0; Ridx0 < {k_blocks}; Ridx0++) {{"
   if loop not in math: raise ValueError("compiler outer-K loop not found")
   if unroll is not None:
-    if unroll not in (1,2,4,8): raise ValueError("unsupported Stream-K outer-K unroll")
+    if unroll not in (1,2,4,8,16,32): raise ValueError("unsupported Stream-K outer-K unroll")
     math=math.replace(loop,f"#pragma unroll {unroll}\n  {loop}",1)
   math=math.replace(loop,"for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++) {",1)
   direct=source[store_start:function_end]
