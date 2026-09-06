@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import hashlib
+import hashlib, os
 from tinygrad import Device, Tensor, dtypes
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key
@@ -139,13 +139,15 @@ class CompilerQ4StreamKCapture:
     plain=base.q_program if n==4096 else base.main_program
     sources=[u.arg for u in plain.src if u.op is Ops.SOURCE]
     if len(sources)!=1: raise ValueError("plain Q/O must retain one compiler source")
-    source=transform_compiler_q4k_to_streamk(sources[0],unroll=8,tiles_n=n//128,k_blocks=64,
+    unroll=int(os.environ.get("NV_COMPILER_Q4_STREAMK_UNROLL", "8"))
+    if unroll not in (1,2,4,8,16,32): raise ValueError("NV_COMPILER_Q4_STREAMK_UNROLL must be 1, 2, 4, 8, 16, or 32")
+    source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
       output_stride=n,kernel_name="q4_qo_streamk")
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)
     rows,active=q4_down_fixup_map(k=K,n=n)
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
       raise ValueError("Q4 Stream-K map must cover every tile")
-    compiler=NVRTCCompiler(dev.arch,ptx=False,cache_key="q4_qo_streamk_v1")
+    compiler=NVRTCCompiler(dev.arch,ptx=False,cache_key=f"q4_qo_streamk_u{unroll}_v1")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)
