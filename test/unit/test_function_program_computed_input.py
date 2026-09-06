@@ -274,3 +274,28 @@ def test_store_destination_keeps_invocation_arguments_in_outer_namespace():
   # descending into its body falsely marks it, while stopping at FUNCTION
   # entirely loses the actual destination argument.
   assert _writable_function_param_slots((store,)) == frozenset({2})
+
+
+def test_shared_store_destinations_have_bounded_analysis_work(monkeypatch):
+  import tinygrad.callify as callify
+  destination = UOp.param(4, dtypes.int32, (8,), "CPU")
+  for _ in range(32): destination = UOp(Ops.CONTIGUOUS, destination.dtype, (destination,))
+  stores = tuple(UOp(Ops.STORE, dtypes.void, (destination, UOp.const(dtypes.int32, i))) for i in range(10))
+  original = callify._function_body_invocation_nodes
+  graph_size = len(original(stores))
+  visited = []
+  def counted(srcs):
+    nodes = original(srcs)
+    visited.append(len(nodes))
+    return nodes
+  monkeypatch.setattr(callify, '_function_body_invocation_nodes', counted)
+  assert callify._writable_function_param_slots(stores) == frozenset({4})
+  assert sum(visited) <= 3 * graph_size
+
+
+def test_param_backed_context_candidate_skips_program_toposort(monkeypatch):
+  from tinygrad.function import _maybe_add_to_ctx
+  candidate = UOp.param(0, dtypes.int32, (8,), 'CPU')
+  def unexpected(*args, **kwargs): raise AssertionError('PARAM candidate does not need a PROGRAM ancestry scan')
+  monkeypatch.setattr(UOp, 'toposort', unexpected)
+  assert _maybe_add_to_ctx(([],), candidate) is None
