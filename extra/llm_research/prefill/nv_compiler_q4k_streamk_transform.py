@@ -19,7 +19,8 @@ def _partial_store_block(direct_store_block:str, *, output_stride:int=12288, out
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
-                                     double_buffer:bool=False, fragment_load_to_use:bool=False) -> str:
+                                     double_buffer:bool=False, fragment_load_to_use:bool=False,
+                                     shared_load_to_pack:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -62,6 +63,24 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     if fragment.count("unsigned int val")!=11 or "int alu79 =" not in fragment:
       raise ValueError("fragment load-to-use schedule requires exact val0..val10 group")
     math=math[:frag_start]+math[frag_stop:publish]+fragment+math[publish:]
+  if shared_load_to_pack:
+    # The emitted source declares every scalar shared load before packing any
+    # fragment.  Place each single-use load immediately before its pack instead,
+    # preserving the pack and all subsequent IMMA/FP32 arithmetic verbatim.
+    load_re=re.compile(r"^    signed char (val(?:2[6-9]|[3-9][0-9]|[12][0-9]{2}|3[0-4][0-9]|345)) = \(\*\(buf1.*\);\n",re.M)
+    loads={m.group(1):m.group(0) for m in load_re.finditer(math)}
+    if len(loads)!=320: raise ValueError(f"shared load-to-pack requires exact val26..val345 set, found {len(loads)}")
+    math=load_re.sub("",math)
+    pack_re=re.compile(r"^    (?:signed_char(?:8|16)|float) cast(?:1[7-9]|[2-9][0-9]) = .*;$",re.M)
+    consumed=set()
+    def stage_pack(m):
+      names=[x for x in re.findall(r"\bval\d+\b",m.group(0)) if x in loads]
+      if not names: return m.group(0)
+      if any(x in consumed for x in names): raise ValueError("shared scalar load has multiple pack consumers")
+      consumed.update(names)
+      return "".join(loads[x] for x in names)+m.group(0)
+    math=pack_re.sub(stage_pack,math)
+    if consumed!=set(loads): raise ValueError(f"shared load-to-pack left {len(set(loads)-consumed)} loads without a pack")
   if double_buffer:
     shared="__shared__ __align__(16) signed char buf1[20480];"
     if source.count(shared)!=1: raise ValueError("double buffer requires the exact 20 KiB shared tile")

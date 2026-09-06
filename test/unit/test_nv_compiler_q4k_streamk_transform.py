@@ -42,6 +42,16 @@ def test_fragment_load_to_use_moves_exact_q4_group_after_q8_loads():
   assert transformed.index("unsigned int val10 =") < transformed.index("__syncthreads();")
   assert transformed.count("unsigned int val0 =")==1 and transformed.count("unsigned int val10 =")==1
 
+def test_shared_load_to_pack_stages_each_scalar_at_its_single_consumer():
+  if not FIXTURE.exists(): return
+  transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),shared_load_to_pack=True)
+  lines=transformed.splitlines()
+  assert lines.index(next(x for x in lines if "signed char val33 =" in x))+16 == \
+    lines.index(next(x for x in lines if "signed_char16 cast17 =" in x))
+  assert lines.index(next(x for x in lines if "signed char val153 =" in x))+8 == \
+    lines.index(next(x for x in lines if "signed_char8 cast24 =" in x))
+  assert transformed.count("signed char val26 =")==1 and transformed.count("signed char val345 =")==1
+
 
 def test_sliced_fixup_matches_same_partials_on_nv():
   import numpy as np
