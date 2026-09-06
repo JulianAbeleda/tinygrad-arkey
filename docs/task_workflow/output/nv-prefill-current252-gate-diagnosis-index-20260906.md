@@ -21,9 +21,11 @@ The generated gate/up main is the U8, 170-owner Stream-K program
 `q4_qo_streamk`, invoked 72 times with a five-buffer ABI (output, partials,
 partial IDs, compact Q8 record, canonical Q4 weight) and followed by active
 fixups. Its source tile is 20 KiB; CUDA reports 21,504 allocated shared bytes.
-The promoted fragment load-to-use spelling reports 255 registers and 88 stack
-bytes. These facts describe the current binary and must accompany any new NCU
-capture.
+The actual default U8 spelling reports 255 registers, 80 stack bytes, and
+21,504 shared bytes. The default-off fragment load-to-use research spelling
+reports 255 registers and 88 stack bytes; the combined fragment/interleave arm
+reports 225 registers and zero stack. These distinct facts must not be merged
+when interpreting a new NCU capture.
 
 ## Historical counter hypothesis, with topology boundary
 
@@ -88,3 +90,16 @@ result as a negative and select the next mechanism from the refreshed current
 counter delta rather than another scalar source toggle. Any full prefill parity
 claim additionally requires a fresh matched llama endpoint; the historical
 35--38 ms llama range is reference context only.
+
+## Paused execution point
+
+`extra/llm_research/prefill/nv_prefill_gateup_streamk_ncu_bridge.py` adapts the
+retained CUDA-primary-context bridge to the exact five-buffer main plus active
+fixup ABI. Current default and combined fragment/interleave sources/cubins were
+built locally and report the resources above. The first G0 invocation stopped
+before CUDA initialization because the inherited symbol parser required
+`__launch_bounds__` on the fixup; the bridge now accepts either signature and
+is CPU syntax/symbol checked. Per the user pause, no replacement GPU launch or
+NCU run was started. Resume with the paired G0 control/interleave correctness
+run, then profile only after both outputs match and all readonly/coverage gates
+pass.
