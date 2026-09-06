@@ -70,6 +70,40 @@ def _captured_program_count(jit) -> int | None:
   return sum(count_target(call.src[0]) for call in captured.linear.src)
 
 
+def _captured_program_evidence(jit) -> list[dict]:
+  """Serialize exact PROGRAM identity and geometry from one selected captured JIT."""
+  from tinygrad.engine.metadata import PROGRAM_IDENTITY_FIELDS, resolve_call_metadata
+  from tinygrad.helpers import Metadata, dedup
+  from tinygrad.uop.ops import Ops, ProgramInfo
+  captured = getattr(jit, "captured", None)
+  if captured is None: return []
+
+  def program_calls(call, path:tuple[int, ...]):
+    target = call.src[0]
+    if target.op is Ops.PROGRAM: yield call, path
+    elif target.op is Ops.CUSTOM_FUNCTION and target.arg == "graph" and target.src:
+      for index, child in enumerate(target.src[0].src): yield from program_calls(child, (*path, index))
+
+  rows = []
+  for top_index, top_call in enumerate(captured.linear.src):
+    for call, path in program_calls(top_call, (top_index,)):
+      program = call.src[0]
+      if not isinstance(program.arg, ProgramInfo): continue
+      source = next((x.arg for x in program.src if x.op is Ops.SOURCE and isinstance(x.arg, str)), None)
+      binary = next((x.arg for x in program.src if x.op is Ops.BINARY and isinstance(x.arg, bytes)), None)
+      call_metadata = getattr(getattr(call, "arg", None), "metadata", ())
+      metadata = tuple(dedup((*call_metadata, *resolve_call_metadata(call)))) if isinstance(call_metadata, tuple) else resolve_call_metadata(call)
+      semantic = [{field:getattr(item, field) for field in PROGRAM_IDENTITY_FIELDS}
+                  for item in metadata if isinstance(item, Metadata) and all(hasattr(item, field) for field in PROGRAM_IDENTITY_FIELDS)]
+      rows.append({"ordinal":len(rows), "capture_path":list(path), "program_hash":program.key.hex(),
+                   "program_name":program.arg.name, "global_size":list(program.arg.global_size),
+                   "local_size":list(program.arg.local_size) if program.arg.local_size is not None else None,
+                   "source_sha256":hashlib.sha256(source.encode()).hexdigest() if source is not None else None,
+                   "binary_sha256":hashlib.sha256(binary).hexdigest() if binary is not None else None,
+                   "semantic_identities":semantic, "workload_roles":list(dict.fromkeys(x["role"] for x in semantic))})
+  return rows
+
+
 def _make_prompt(ids:list[int], depth:int) -> list[int]:
   if depth < 1: raise ValueError("fixed decode depth must be positive")
   if not ids: raise ValueError("tokenizer produced no deterministic prompt tokens")
@@ -149,6 +183,7 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   payload = census.to_dict()
   payload["capture"] = {"phase":"decode", "selected_jits":list(selected), "warmup_decode":count,
                         "programs_by_jit":{name:_captured_program_count(jit) for name,jit in selected.items()},
+                        "program_evidence_by_jit":{name:_captured_program_evidence(jit) for name,jit in selected.items()},
                         "captured":True}
   return payload
 

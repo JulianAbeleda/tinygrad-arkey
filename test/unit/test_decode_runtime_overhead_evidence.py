@@ -39,3 +39,19 @@ def test_capture_warms_and_observes_both_production_slots(monkeypatch):
   assert count == 6
   assert len(selected) == 2
   assert all(jit.cnt == 3 and jit.captured is not None for jit in selected.values())
+
+
+def test_captured_program_evidence_records_identity_geometry_and_order():
+  from types import SimpleNamespace as NS
+  from tinygrad import dtypes, UOp
+  from tinygrad.uop.ops import Ops, ProgramInfo
+  from extra.llm_research.decode.decode_runtime_overhead import _captured_program_evidence
+  body, device = UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU")
+  source, binary = UOp(Ops.SOURCE, arg="kernel source"), UOp(Ops.BINARY, arg=b"kernel binary")
+  program = UOp(Ops.PROGRAM, dtypes.void, src=(body, device, UOp(Ops.LINEAR), source, binary),
+                arg=ProgramInfo("captured_test", global_size=(7, 2, 1), local_size=(32, 1, 1)))
+  captured = NS(linear=UOp(Ops.LINEAR, src=(program.call(), program.call())))
+  rows = _captured_program_evidence(NS(captured=captured))
+  assert [row["ordinal"] for row in rows] == [0, 1]
+  assert all(row["program_name"] == "captured_test" and row["global_size"] == [7, 2, 1] for row in rows)
+  assert len({row["source_sha256"] for row in rows}) == len({row["binary_sha256"] for row in rows}) == 1
