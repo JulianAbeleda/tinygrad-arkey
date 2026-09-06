@@ -196,3 +196,16 @@ of a remaining generic lifecycle deficit. Its 15.782221 ms gap to the promoted
 native route is the cost of the compiler-generated replacement population. The
 remaining generated-route campaign must close per-role generated body service;
 it must not attribute this delta to the already-qualified default lifecycle.
+
+The exact ordinary selector was then rerun without a vocabulary override. It
+passes at 34.890318 ms median (34.366884 ms minimum), 3.9289105 ms or 10.12%
+below the fresh llama reference. Thus the promoted default itself, rather than
+only the mixed diagnostic control, exceeds prefill parity.
+
+A generated paired-K64 staging discriminator was also tested and rejected. It
+preserved the exact output hash but measured 323.776007 us; combining it with
+the register-safe interleave measured 300.224006 us. Both lose to the selected
+271.616012 us main-plus-fixup replay. The result shows that the selected loop's
+global loads before its recycle barrier provide useful latency hiding; merely
+amortizing barriers over two panels removes that overlap and is not a viable
+route.

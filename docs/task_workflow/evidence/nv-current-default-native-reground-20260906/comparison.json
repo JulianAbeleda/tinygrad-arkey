@@ -6,5 +6,8 @@
   "tinygrad_latency_advantage_percent": 9.931066765018278,
   "boundary": "sequential cross-harness; same Qwen3-8B model and pp512, distinct prompt/token inspection",
   "generated_stack_median_ms": 50.746286,
-  "generated_vs_native_delta_ms": 15.782221
+  "generated_vs_native_delta_ms": 15.782221,
+  "ordinary_default_median_ms": 34.890318,
+  "ordinary_default_delta_ms": -3.9289105000000006,
+  "ordinary_default_latency_advantage_percent": 10.121042204638355
 }
