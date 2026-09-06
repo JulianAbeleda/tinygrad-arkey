@@ -224,6 +224,26 @@ Next steps:
 Promotion bar: a reproducible batch-1 decode win or parity across the qualified
 context bands, with no llama cubin in the selected graph.
 
+Current normal-route checkpoint (2026-09-05): direct-greedy and two-capture
+feedback ping-pong remain closed by default.  The substrate was introduced as
+an explicit experiment in commit `a1a51c349`; the ordinary loader still assigns
+neither `_decode_direct_greedy_promoted` nor
+`_decode_feedback_pingpong_promoted`, and production reads both with a false
+default.  The retained d512 qualification proved exact full logits and argmax,
+distinct fixed return buffers, zero written-input shadows, and an 89--94
+us/token reverse-wall recovery.  d2048 and synthetic resident-zero-KV d4096
+also passed as depth non-regressions.  That record explicitly did not promote
+policy.
+
+Reconnect this candidate only through the normal load/route authority, then
+repeat current-composition full-logit and token checks, alias-contract and
+fallback checks for every selected horizon graph, fresh-process startup
+accounting (two captures multiply horizon prewarm cost), context coverage, and
+a replicated normal A/B/A wall bracket.  Until those gates pass, its historical
+roughly 2% endpoint opportunity is not booked against the current gap.  Source
+authority and measurements are in
+`docs/task_workflow/input/nv-decode-feedback-pingpong-record-20260805.md`.
+
 ## Why this was not caught earlier
 
 1. Dispatch hid the implementation.  The monolithic llama full-stack branch was
