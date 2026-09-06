@@ -103,42 +103,53 @@ def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int, requ
   finally: gen.close()
 
 
-def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
-  """Capture the second greedy SDPA rollout and retain its runtime-only call bindings."""
+def _decode_jits(model) -> dict:
+  """Inventory concrete rollout JITs, including alternating slots and flash variants."""
+  result = {}
+  def visit(name, value):
+    if hasattr(value, "cnt") and hasattr(value, "captured"): result[name] = value
+    elif isinstance(value, (tuple, list)):
+      for index, child in enumerate(value): visit(f"{name}[{index}]", child)
+    elif isinstance(value, dict):
+      for key, child in value.items(): visit(f"{name}[{key!r}]", child)
+  for name, value in vars(model).items():
+    if name.startswith("rollout_"): visit(name, value)
+  return result
+
+
+def _used_decode_jits(model, before:dict) -> dict:
+  return {name:jit for name,jit in _decode_jits(model).items() if jit.cnt > before.get(name, 0)}
+
+
+def _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm):
   from tinygrad.engine.jit import observe_graph_admissions
   from tinygrad.helpers import Context
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size, warmup_decode+1 if request_scoped_prewarm else None)
+  # Each alternating slot needs its own initial execution and capture.
+  count = max(warmup_decode, 6 if getattr(model, "_decode_feedback_pingpong_promoted", False) else 3)
+  gen, _ = _prefill(model, prompt, chunk_size, count+1 if request_scoped_prewarm else None)
+  before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
   try:
-    census = None
-    for index in range(warmup_decode):
-      if index == 1:
-        with Context(TRACEMETA=1), observe_graph_admissions() as census: next(gen)
-      else: next(gen)
+    with Context(TRACEMETA=1), observe_graph_admissions() as census:
+      for _ in range(count): next(gen)
   finally: gen.close()
-  # temperature=0 is explicitly routed through the deterministic greedy JIT,
-  # and the exact d512 boundary selects flash.  Inspect the same route generate
-  # selected instead of hard-coding either the stochastic or SDPA graph.
-  from tinygrad import UOp
-  use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
-  pair = getattr(model, "rollout_greedy_pingpong_jits_flash" if use_flash else "rollout_greedy_pingpong_jits", None)
-  selected = pair[1] if getattr(model, "_decode_feedback_pingpong_promoted", False) and pair else (model.rollout_greedy_jit_flash if use_flash else model.rollout_greedy_jit)
-  if census is None or getattr(selected, "captured", None) is None:
-    states = {name:{"cnt":getattr(jit, "cnt", None), "captured":getattr(jit, "captured", None) is not None}
-              for name in ("rollout_jit", "rollout_jit_flash", "rollout_greedy_jit", "rollout_greedy_jit_flash")
-              if (jit:=getattr(model, name, None)) is not None}
-    raise RuntimeError(f"second greedy {'flash' if use_flash else 'sdpa'} rollout warmup did not capture selected JIT; {states=}")
-  return census
+  selected = _used_decode_jits(model, before)
+  if not selected or any(jit.captured is None for jit in selected.values()):
+    raise RuntimeError(f"normal decode warmup did not capture all selected JITs: {list(selected)}")
+  return census, selected, count
+
+
+def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
+  """Observe production decode warmup, including every selected alternating slot."""
+  return _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)[0]
 
 
 def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
-  """Serialize exactly the second SDPA rollout capture; prefill remains unobserved."""
-  census = capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)
+  census, selected, count = _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)
   payload = census.to_dict()
-  from tinygrad import UOp
-  use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
-  payload["capture"] = {"phase": "decode", "route": "flash" if use_flash else "sdpa", "warmup_index": 2,
-                        "jit": "rollout_greedy_jit_flash" if use_flash else "rollout_greedy_jit", "captured": True}
+  payload["capture"] = {"phase":"decode", "selected_jits":list(selected), "warmup_decode":count,
+                        "programs_by_jit":{name:_captured_program_count(jit) for name,jit in selected.items()},
+                        "captured":True}
   return payload
 
 
@@ -225,9 +236,12 @@ def main(argv:list[str] | None=None) -> int:
       graph_census["capture"]["fixed_depth"] = depth
     else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
     w_reps, d_reps = [], []
+    measured_jits = {}
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
+      before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
       w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm)
+      measured_jits.update(_used_decode_jits(model, before))
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token]})
       if args.skip_dispatch_diagnostic:
@@ -248,12 +262,11 @@ def main(argv:list[str] | None=None) -> int:
     w_ms = 1e3 / statistics.median(w_tok_s)
     d_ms = 1e3 / statistics.median(d_tok_s) if d_tok_s else None
     route_set = sorted({route for routes in route_reps for route in routes})
-    jits = [model.rollout_greedy_jit_flash if route == "flash" else model.rollout_greedy_jit for route in route_set]
-    programs = {route: _captured_program_count(jit) for route, jit in zip(route_set, jits)}
+    programs = {name:_captured_program_count(jit) for name,jit in measured_jits.items()}
     host_ms, host_pct = _host_residual(w_ms, d_ms) if d_ms is not None else (None, None)
     row = {"ctx": depth, "fixed_depth": depth, "decode_tokens": profile.nmeas, "reps": args.reps,
            "route_sequence": route_reps[0], "route_sequences_identical": all(x == route_reps[0] for x in route_reps),
-           "routes": route_set, "programs_per_token_by_route": programs,
+           "routes": route_set, "programs_per_token_by_selected_jit": programs,
            "wall_ms_W": w_ms, "dispatch_ms_D": d_ms, "host_sync_residual_ms": host_ms,
            "host_sync_pct_of_wall": host_pct, "tok_s_W": statistics.median(w_tok_s),
            "tok_s_D_diagnostic": statistics.median(d_tok_s) if d_tok_s else None,
