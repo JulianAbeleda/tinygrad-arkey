@@ -15,6 +15,19 @@ def test_complete_token_ids_are_opt_in_for_cross_runtime_correctness():
   assert complete["sha256"] == compact["sha256"]
 
 
+def test_atomic_evidence_serializes_symbolic_uop_and_rejects_unknown(tmp_path):
+  import json, pytest
+  from tinygrad import UOp
+  from extra.llm_research.decode.decode_runtime_overhead import _atomic_json
+  path = tmp_path / "symbolic.json"
+  symbolic = UOp.variable("evidence_bound", 0, 8)
+  _atomic_json(path, {"bound":symbolic})
+  assert json.loads(path.read_text())["bound"] == {
+    "kind":"symbolic_uop_unresolved", "key":symbolic.key.hex(), "op":symbolic.op.name,
+    "dtype":str(symbolic.dtype), "expression":str(symbolic), "arg":repr(symbolic.arg), "bound_value":None}
+  with pytest.raises(TypeError): _atomic_json(path, {"unsupported":object()})
+
+
 def test_observed_jits_include_both_slots_and_flash_variants():
   from types import SimpleNamespace as NS
   from extra.llm_research.decode.decode_runtime_overhead import _decode_jits, _used_decode_jits

@@ -29,13 +29,23 @@ def _nv_gpu_state() -> dict:
   if len(values) != len(NV_STATE_FIELDS): raise RuntimeError("nvidia-smi state field count mismatch")
   return dict(zip(NV_STATE_FIELDS, values))
 
+def _evidence_json_default(value):
+  """Retain symbolic UOp evidence without making arbitrary objects printable."""
+  from tinygrad import UOp
+  from tinygrad.uop.ops import Ops
+  if isinstance(value, UOp):
+    return {"kind":"symbolic_uop_unresolved", "key":value.key.hex(), "op":value.op.name,
+            "dtype":str(value.dtype), "expression":str(value), "arg":repr(value.arg),
+            "bound_value":value.src[1].arg if value.op is Ops.BIND and len(value.src) > 1 else None}
+  raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
+
 
 def _atomic_json(path:pathlib.Path, payload:dict) -> None:
   path.parent.mkdir(parents=True, exist_ok=True)
   fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
   try:
     with os.fdopen(fd, "w") as f:
-      json.dump(payload, f, indent=2, sort_keys=True)
+      json.dump(payload, f, indent=2, sort_keys=True, default=_evidence_json_default)
       f.write("\n")
       f.flush()
       os.fsync(f.fileno())
