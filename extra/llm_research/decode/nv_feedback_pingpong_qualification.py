@@ -87,9 +87,9 @@ def census(arm:str, model_path:str, depth:int, max_context:int) -> dict:
           "program_names":[x[0] for x in rows], "raw_debug":capture.getvalue().splitlines()[-20:]}
 
 
-def timing(arm:str, model_path:str, depth:int, count:int, reps:int, max_context:int) -> dict:
+def timing(arm:str, model_path:str, depth:int, count:int, reps:int, max_context:int, gpu_state:bool=False) -> dict:
   from tinygrad import Device
-  model, dev, samples, hashes = _model(arm, model_path, max_context), Device[Device.DEFAULT], [], []
+  model, dev, samples, hashes, states = _model(arm, model_path, max_context), Device[Device.DEFAULT], [], [], []
   for _ in range(reps):
     model.reset_generation_state(); model._decode_direct_greedy_promoted = arm in ("greedy", "pingpong")
     model._decode_feedback_pingpong_promoted = arm == "pingpong"
@@ -97,25 +97,34 @@ def timing(arm:str, model_path:str, depth:int, count:int, reps:int, max_context:
     try:
       next(gen)
       for _ in range(6): next(gen)  # both arms captured before included timing
-      dev.synchronize(); started=time.perf_counter_ns()
+      dev.synchronize()
+      before = None
+      if gpu_state:
+        from extra.llm_research.decode.decode_runtime_overhead import _nv_gpu_state
+        before = _nv_gpu_state()
+      started=time.perf_counter_ns()
       for _ in range(count): output.append(int(next(gen)))
       dev.synchronize(); samples.append((time.perf_counter_ns()-started)/count/1e6)
+      after = _nv_gpu_state() if gpu_state else None
+      states.append({"before":before, "after":after})
     finally: gen.close()
     hashes.append(hashlib.sha256(",".join(map(str, output)).encode()).hexdigest())
   pair = _warmed_pair(model)
   return {"schema":"tinygrad.nv.feedback_pingpong_qualification.v1", "arm":arm, "mode":"timing", "callify_redirect":_redirect(), "samples_ms":samples,
           "median_ms":statistics.median(samples), "token_hashes":hashes, "tokens_identical":len(set(hashes))==1,
+          "gpu_state_scope":"immediately_before_and_after_timed_decode_window" if gpu_state else None, "gpu_states":states,
           "contract":pingpong_capture_contract(pair) if arm == "pingpong" and pair is not None else None}
 
 
 def main() -> int:
   ap=argparse.ArgumentParser(); ap.add_argument("--arm", choices=("legacy","greedy","pingpong"), required=True)
   ap.add_argument("--mode", choices=("logits","census","timing"), required=True); ap.add_argument("--model", default=DEFAULT_MODEL)
+  ap.add_argument("--gpu-state", action="store_true", help="record NV state immediately around each timed decode window")
   ap.add_argument("--depth", type=int, default=512); ap.add_argument("--count", type=int, default=8); ap.add_argument("--reps", type=int, default=3)
   ap.add_argument("--max-context", type=int, default=1024); ap.add_argument("--out", type=pathlib.Path, required=True); args=ap.parse_args()
   if args.mode == "logits": result,array=logits(args.arm,args.model,args.depth,args.count,args.max_context); np.savez_compressed(args.out.with_suffix(".npz"),logits=array)
   elif args.mode == "census": result=census(args.arm,args.model,args.depth,args.max_context)
-  else: result=timing(args.arm,args.model,args.depth,args.count,args.reps,args.max_context)
+  else: result=timing(args.arm,args.model,args.depth,args.count,args.reps,args.max_context,args.gpu_state)
   args.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n"); print(json.dumps(result,sort_keys=True)); return 0
 
 
