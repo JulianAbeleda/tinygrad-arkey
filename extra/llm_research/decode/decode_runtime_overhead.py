@@ -119,6 +119,7 @@ def _captured_program_evidence(jit) -> list[dict]:
       rows.append({"ordinal":len(rows), "capture_path":list(path), "program_hash":program.key.hex(),
                    "program_name":program.arg.name, "global_size":list(program.arg.global_size),
                    "local_size":list(program.arg.local_size) if program.arg.local_size is not None else None,
+                   "program_provenance":list(program.arg.provenance) if program.arg.provenance is not None else None,
                    "source_sha256":hashlib.sha256(source.encode()).hexdigest() if source is not None else None,
                    "source_text":source,
                    "binary_sha256":hashlib.sha256(binary).hexdigest() if binary is not None else None,

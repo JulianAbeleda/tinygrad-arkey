@@ -2502,6 +2502,9 @@ class ProgramInfo:
   # compatible and occupy their usual slots when this is empty.
   arg_blobs: tuple[tuple[int, bytes, int], ...] = ()
   arg_layout: tuple[tuple[str, int, int, int], ...] = ()
+  # Positive construction provenance for finalized PROGRAMs. None is deliberately
+  # fail-closed for manually assembled or legacy PROGRAM UOps.
+  provenance: tuple[str, str, str]|None = None
 
   @property
   def function_name(self): return to_function_name(self.name)

@@ -524,7 +524,8 @@ def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
     import re
     name = re.sub(r'[^A-Za-z0-9_.-]', '_', getattr(getattr(prg, "arg", None), "name", "kernel"))
     open(f'/tmp/nv1-generated-{name}.cu','w').write(src)
-  new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src)))) if ctx.has_aux else prg.arg
+  provenance = ("tinygrad_renderer", f"{type(ctx).__module__}.{type(ctx).__qualname__}", ctx.target.device)
+  new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src))) if ctx.has_aux else prg.arg.aux, provenance=provenance)
   return prg.replace(src=prg.src + (UOp(Ops.SOURCE, arg=src),), arg=new_arg)
 
 def do_compile(ctx:Renderer, prg:UOp, source:UOp) -> UOp|None:

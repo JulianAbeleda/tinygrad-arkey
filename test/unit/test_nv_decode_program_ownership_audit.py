@@ -1,9 +1,9 @@
 from extra.llm_research.decode.nv_decode_program_ownership_audit import _native_marker_sha, audit
 
 
-def _row(name, source):
+def _row(name, source, provenance=None):
   return {"ordinal":0, "program_hash":"ab"*32, "program_name":name, "source_sha256":source,
-          "binary_sha256":"cd"*32, "global_size":[1,1,1], "local_size":[32,1,1]}
+          "binary_sha256":"cd"*32, "global_size":[1,1,1], "local_size":[32,1,1], "program_provenance":provenance}
 
 
 def test_nonmarker_source_transport_remains_unknown():
@@ -12,6 +12,23 @@ def test_nonmarker_source_transport_remains_unknown():
                            "program_evidence_by_jit":{"rollout":[row]}}})
   assert result["no_known_native_precompiled_marker_in_selected_graph"]
   assert result["programs"][0]["transport_provenance"] == "unknown_source_transport"
+  assert not result["all_unique_programs_construction_proven"]
+
+
+def test_typed_renderer_provenance_positively_proves_construction():
+  row=_row("rendered", "ef"*32, ["tinygrad_renderer", "tinygrad.renderer.cuda.CUDARenderer", "NV"])
+  result=audit({"capture":{"selected_jits":["rollout"], "programs_by_jit":{"rollout":1},
+                           "program_evidence_by_jit":{"rollout":[row]}}})
+  assert result["all_unique_programs_construction_proven"]
+  assert result["renderer_owned_unique_programs"] == 1
+  assert result["programs"][0]["construction_provenance"] == "tinygrad_renderer"
+
+
+def test_arbitrary_provenance_fails_closed():
+  row=_row("rendered", "ef"*32, ["tinygrad_rendererish", "unknown", "NV"])
+  result=audit({"capture":{"selected_jits":["rollout"], "programs_by_jit":{"rollout":1},
+                           "program_evidence_by_jit":{"rollout":[row]}}})
+  assert not result["all_unique_programs_construction_proven"]
 
 
 def test_native_program_marker_is_detected():

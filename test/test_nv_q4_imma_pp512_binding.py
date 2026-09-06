@@ -1,5 +1,6 @@
 import unittest
 from extra.llm_research.prefill.nv_q4_imma_pp512_binding import supports
+from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
 from tinygrad.uop.ops import ProgramInfo, UOp
 
 
@@ -24,6 +25,11 @@ class TestPP512BindingAdmission(unittest.TestCase):
   def test_symbolic_program_val_still_requires_binding(self):
     symbolic=UOp.variable("symbolic_native_arg", 1, 4096)
     with self.assertRaises(KeyError): ProgramInfo(vars=(symbolic,)).vals({})
+
+  def test_native_program_records_construction_provenance(self):
+    program=native_nv_program("fixture", b"\x7fELFfixture", global_size=(1,1,1), local_size=(32,1,1), globals=())
+    self.assertEqual(program.arg.provenance,
+      ("native_precompiled", "extra.llm_research.prefill.nv_native_program_uop.native_nv_program", "NV"))
 
 
 if __name__ == "__main__": unittest.main()

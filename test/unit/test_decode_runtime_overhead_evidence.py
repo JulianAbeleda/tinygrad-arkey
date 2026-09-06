@@ -68,13 +68,29 @@ def test_captured_program_evidence_records_identity_geometry_and_order():
   body, device = UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU")
   source, binary = UOp(Ops.SOURCE, arg="kernel source"), UOp(Ops.BINARY, arg=b"kernel binary")
   program = UOp(Ops.PROGRAM, dtypes.void, src=(body, device, UOp(Ops.LINEAR), source, binary),
-                arg=ProgramInfo("captured_test", global_size=(7, 2, 1), local_size=(32, 1, 1)))
+                arg=ProgramInfo("captured_test", global_size=(7, 2, 1), local_size=(32, 1, 1),
+                                provenance=("tinygrad_renderer", "test.Renderer", "CPU")))
   captured = NS(linear=UOp(Ops.LINEAR, src=(program.call(), program.call())))
   rows = _captured_program_evidence(NS(captured=captured))
   assert [row["ordinal"] for row in rows] == [0, 1]
   assert all(row["program_name"] == "captured_test" and row["global_size"] == [7, 2, 1] for row in rows)
   assert len({row["source_sha256"] for row in rows}) == len({row["binary_sha256"] for row in rows}) == 1
   assert all(row["source_text"] == "kernel source" for row in rows)
+  assert all(row["program_provenance"] == ["tinygrad_renderer", "test.Renderer", "CPU"] for row in rows)
+
+
+def test_render_records_concrete_renderer_provenance():
+  from types import SimpleNamespace as NS
+  from tinygrad import UOp
+  from tinygrad.codegen import do_render
+  from tinygrad.uop.ops import Ops, ProgramInfo
+  class TestRenderer:
+    target=NS(device="CPU")
+    has_aux=False
+    def render(self, _): return "source"
+  program=UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU"), UOp(Ops.LINEAR)), arg=ProgramInfo())
+  rendered=do_render(TestRenderer(), program, program.src[2])
+  assert rendered.arg.provenance == ("tinygrad_renderer", f"{TestRenderer.__module__}.{TestRenderer.__qualname__}", "CPU")
 
 
 def test_nv_gpu_state_requires_and_names_every_field(monkeypatch):

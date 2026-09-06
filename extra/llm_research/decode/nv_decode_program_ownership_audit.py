@@ -30,9 +30,13 @@ def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
       first = occurrences[0]
       stable = all(tuple(row.get(key) if isinstance(row.get(key), list) else (row.get(key),)) ==
                    tuple(first.get(key) if isinstance(first.get(key), list) else (first.get(key),))
-                   for row in occurrences for key in ("program_name", "source_sha256", "binary_sha256", "global_size", "local_size"))
+                   for row in occurrences for key in ("program_name", "source_sha256", "binary_sha256", "global_size", "local_size", "program_provenance"))
       if not stable: raise ValueError(f"PROGRAM hash has inconsistent identity or geometry: {program_hash}")
       native_precompiled = first["source_sha256"] == _native_marker_sha(first["program_name"])
+      provenance = first.get("program_provenance")
+      renderer_owned = provenance == ["tinygrad_renderer", "tinygrad.renderer.cuda.CUDARenderer", "NV"]
+      native_owned = native_precompiled and provenance == ["native_precompiled",
+        "extra.llm_research.prefill.nv_native_program_uop.native_nv_program", "NV"]
       recompiled_sha = None
       cached_sha = None
       if compiler is not None and first["source_sha256"] in source_texts:
@@ -52,6 +56,8 @@ def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
                    "launch_count":len(occurrences), "source_sha256":first["source_sha256"],
                    "binary_sha256":first["binary_sha256"], "global_size":first["global_size"],
                    "local_size":first["local_size"], "recompiled_binary_sha256":recompiled_sha,
+                   "program_provenance":provenance, "construction_provenance":
+                   "tinygrad_renderer" if renderer_owned else "native_nv_program" if native_owned else "unknown",
                    "source_recompile_match":recompile_match, "compiler_cached_binary_sha256":cached_sha,
                    "source_compiler_cache_match":cache_match, "transport_provenance":
                    "native_precompiled_cubin" if native_precompiled else
@@ -61,6 +67,8 @@ def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
   native = [row for row in rows if row["transport_provenance"] == "native_precompiled_cubin"]
   recompiled = [row for row in rows if row["transport_provenance"] == "source_binary_recompiled_match"]
   cached = [row for row in rows if row["transport_provenance"] == "source_binary_compiler_cache_match"]
+  renderer_owned = [row for row in rows if row["construction_provenance"] == "tinygrad_renderer"]
+  unknown_owned = [row for row in rows if row["construction_provenance"] == "unknown"]
   return {"schema":SCHEMA, "selected_jits":capture.get("selected_jits", []),
           "program_launches":sum(row["launch_count"] for row in rows), "unique_programs":len(rows),
           "native_precompiled_unique_programs":len(native), "native_precompiled_programs":native,
@@ -68,6 +76,9 @@ def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
           "all_unique_programs_source_recompiled":bool(rows) and len(recompiled) == len(rows),
           "source_compiler_cache_matched_unique_programs":len(cached),
           "all_unique_programs_source_transported":bool(rows) and len(recompiled) + len(cached) == len(rows),
+          "renderer_owned_unique_programs":len(renderer_owned),
+          "unknown_construction_unique_programs":len(unknown_owned),
+          "all_unique_programs_construction_proven":bool(rows) and not unknown_owned,
           "no_known_native_precompiled_marker_in_selected_graph":not native,
           "interpretation":(("Every selected PROGRAM's retained SOURCE recompiles to its captured binary with the recorded compiler. "
                              "This positively proves SOURCE-to-binary transport, but generator/registry lineage requires a separate match. ")
@@ -76,7 +87,9 @@ def audit(census:dict, compiler=None, cached_lookup=None) -> dict:
                              "or the production compiler cache. Cache matches prove current source-keyed transport, not fresh toolchain reproducibility. "
                              if rows and len(recompiled)+len(cached) == len(rows) else
                              "An unmatched or unrecompiled source remains unknown; marker absence is not universal positive provenance. "))+
-                           "The selected graph contains no recognized native_nv_program marker used by the known llama packed bindings.",
+                           "Construction ownership is proven only for exact typed NV CUDARenderer or native_nv_program provenance; absent or "
+                           "unknown provenance fails closed. The selected graph contains no recognized native_nv_program marker used by the "
+                           "known llama packed bindings.",
           "programs":sorted(rows, key=lambda row:(row["jit_owner"], row["program_name"], row["program_hash"]))}
 
 

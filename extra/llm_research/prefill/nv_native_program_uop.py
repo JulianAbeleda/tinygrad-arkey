@@ -43,7 +43,8 @@ def native_nv_program(name:str, cubin:bytes, *, global_size:tuple[int, int, int]
   return UOp(Ops.PROGRAM, src=(UOp(Ops.SINK, arg=KernelInfo(name=name)), UOp(Ops.DEVICE, arg="NV"), UOp(Ops.LINEAR),
     UOp(Ops.SOURCE, arg=f"// precompiled native cubin: {name}"), UOp(Ops.BINARY, arg=cubin)),
     arg=ProgramInfo(name=name, global_size=global_size, local_size=local_size, vars=fixed_vars, globals=globals,
-                    outs=outs, ins=ins, aux=((shared_mem,) if shared_mem else ()), arg_blobs=arg_blobs, arg_layout=arg_layout))
+                    outs=outs, ins=ins, aux=((shared_mem,) if shared_mem else ()), arg_blobs=arg_blobs, arg_layout=arg_layout,
+                    provenance=("native_precompiled", "extra.llm_research.prefill.nv_native_program_uop.native_nv_program", "NV")))
 
 
 def call_native(program:UOp, *tensors, wait:bool=False) -> None:
