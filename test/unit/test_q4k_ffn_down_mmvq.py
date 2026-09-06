@@ -529,3 +529,28 @@ def test_vocab_prefill_selector_rejects_unqualified_arch_and_conflicting_leases(
   monkeypatch.setenv("NV_LLAMA_Q6_VOCAB_PP512","1")
   with pytest.raises(RuntimeError,match="conflict"):
     model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+
+
+def test_compiler_vocab_follows_stack_and_explicit_rollback(monkeypatch):
+  from types import SimpleNamespace
+  import os
+  import tinygrad.llm.model as model_module
+  class FakeDevice:
+    DEFAULT="NV"
+    def __getitem__(self, name): return SimpleNamespace(arch="sm_120")
+  monkeypatch.setattr(model_module,"Device",FakeDevice())
+  monkeypatch.setattr(model_module,"getenv",lambda key,default=0:int(os.environ.get(key,default)))
+  config=SimpleNamespace(prefill_ubatch=512,num_blocks=36,dim=4096,hidden_dim=12288,n_heads=32,
+                         n_kv_heads=8,head_dim=128,num_experts=0,vocab_size=151936)
+  monkeypatch.delenv("NV_COMPILER_Q6_VOCAB_PP512",raising=False)
+  monkeypatch.delenv("NV_LLAMA_Q6_VOCAB_PP512",raising=False)
+  monkeypatch.setattr(model_module,"_nv_q4_production_mode",lambda config:"compiler")
+  assert model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  monkeypatch.setenv("NV_COMPILER_Q6_VOCAB_PP512","0")
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  monkeypatch.delenv("NV_COMPILER_Q6_VOCAB_PP512")
+  monkeypatch.setenv("NV_LLAMA_Q6_VOCAB_PP512","1")
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)
+  monkeypatch.delenv("NV_LLAMA_Q6_VOCAB_PP512")
+  monkeypatch.setattr(model_module,"_nv_q4_production_mode",lambda config:"llama")
+  assert not model_module._nv_compiler_q6_vocab_pp512_enabled(config)

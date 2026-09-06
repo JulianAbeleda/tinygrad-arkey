@@ -149,8 +149,12 @@ def _nv_llama_prefill_role_enabled(config, override:str) -> bool:
   return Device.DEFAULT == "NV" and bool(getenv(override, int(_nv_q4_production_mode(config) == "llama")))
 
 def _nv_compiler_q6_vocab_pp512_enabled(config) -> bool:
-  if getenv("NV_COMPILER_Q6_VOCAB_PP512", 0) and getenv("NV_LLAMA_Q6_VOCAB_PP512", 0): raise RuntimeError("compiler and llama Q6 vocab leases conflict")
-  return bool(getenv("NV_COMPILER_Q6_VOCAB_PP512", 0)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and config.vocab_size == 151936 \
+  # The qualified compiler stack includes its vocabulary tail. Explicit llama
+  # leases take precedence over the implicit selection; two explicit leases conflict.
+  llama_vocab = bool(getenv("NV_LLAMA_Q6_VOCAB_PP512", 0))
+  enabled = bool(getenv("NV_COMPILER_Q6_VOCAB_PP512", int(_nv_q4_production_mode(config) == "compiler" and not llama_vocab)))
+  if enabled and llama_vocab: raise RuntimeError("compiler and llama Q6 vocab leases conflict")
+  return enabled and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and config.vocab_size == 151936 \
       and Device[Device.DEFAULT].arch in ("sm_120", "sm_120a")
 
 def _nv_llama_packed_o_capture(model,jit,binding):

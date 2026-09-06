@@ -1,0 +1,97 @@
+{
+  "schema": "tinygrad.current252.vocabulary_lifecycle_audit.v1",
+  "contracts": {
+    "control-a": {
+      "arm_pass": true,
+      "projection_mains": 252,
+      "projection_producers": 252,
+      "projection_weights": 252,
+      "canonical_weights": true,
+      "remaining_overlays": 0,
+      "vocabulary_calls": 0,
+      "generic_vocabulary_calls": 1,
+      "route_pass": true
+    },
+    "candidate-b": {
+      "arm_pass": true,
+      "projection_mains": 252,
+      "projection_producers": 252,
+      "projection_weights": 252,
+      "canonical_weights": true,
+      "remaining_overlays": 0,
+      "vocabulary_calls": 1,
+      "generic_vocabulary_calls": 0,
+      "route_pass": true
+    },
+    "control-c": {
+      "arm_pass": true,
+      "projection_mains": 252,
+      "projection_producers": 252,
+      "projection_weights": 252,
+      "canonical_weights": true,
+      "remaining_overlays": 0,
+      "vocabulary_calls": 0,
+      "generic_vocabulary_calls": 1,
+      "route_pass": true
+    }
+  },
+  "quality": {
+    "control-a": {
+      "shape": [
+        1,
+        151936
+      ],
+      "finite": true,
+      "same_token": true,
+      "max_abs": 0.007936716079711914,
+      "mean_abs": 0.0007047786493785679,
+      "allclose": true
+    },
+    "control-c": {
+      "shape": [
+        1,
+        151936
+      ],
+      "finite": true,
+      "same_token": true,
+      "max_abs": 0.007936716079711914,
+      "mean_abs": 0.0007047786493785679,
+      "allclose": true
+    }
+  },
+  "structural_pass": true,
+  "correctness_pass": true,
+  "medians_ms": {
+    "control-a": 53.313233,
+    "candidate-b": 50.746286,
+    "control-c": 53.183219
+  },
+  "control_mean_ms": 53.248226,
+  "recovery_ms": 2.5019400000000047,
+  "recovery_percent": 4.698635406182366,
+  "control_drift_ms": 0.13001399999999563,
+  "beats_both_controls_by_0p5ms": true,
+  "input_sha256": {
+    "control-a.json": "6cf668d9b878ed75b4caec139e315addbc8127d8870d4acdc6063f159cfc5fc0",
+    "candidate-b.json": "e18a7f7e5ce84037101199b15db0f64c7aef25ce5d8e33a50e153174a6e2a427",
+    "control-c.json": "bc2fb0c68209673dc7914df79ef12c7d3b776367afcb859786726963de622bf9"
+  },
+  "scope": "Same-harness whole-prefill replay; GPU states are process-boundary observations, not locked clocks or CUPTI active-body times.",
+  "projection_identities_unchanged": true,
+  "automatic_selection": {
+    "status": "PASS",
+    "median_ms": 50.428258,
+    "generated_vocab_calls": 1,
+    "same_logits_as_explicit_candidate": true,
+    "same_token": true
+  },
+  "llama_reference": {
+    "build_commit": "ac4cddeb0",
+    "settled_median_ms": 38.8192285,
+    "excluded_sample_indices": [
+      0
+    ],
+    "candidate_minus_llama_ms": 11.927057499999997,
+    "scope": "Fresh sequential cross-harness reference; different prompt/token protocol, not a bracketing parity qualification."
+  }
+}

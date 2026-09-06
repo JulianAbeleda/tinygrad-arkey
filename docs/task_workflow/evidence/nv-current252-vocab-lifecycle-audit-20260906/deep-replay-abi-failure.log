@@ -1,0 +1,12 @@
+max_context=explicit -> 512 (free 34.0GB, budget 33.9GB with scanned reserve 0.2GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 70238, q8-cap 106542)
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py", line 865, in <module>
+    if __name__=="__main__":main()
+                            ^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py", line 640, in main
+    stage_buffers=_graph_stage_buffers(jit,identities) if args.deep_replay else {}
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py", line 307, in _graph_stage_buffers
+    if call.arg.outs!=(0,) or call.arg.ins!=(1,2):raise RuntimeError(f"unexpected {role} captured ABI")
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: unexpected gate_up captured ABI

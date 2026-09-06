@@ -12,6 +12,17 @@ Q6_DOWN_NAMES = (
   "nv_q6_oracle_broad_cta_serial_q6_tile8_fragments_q6_phase_metadata_combined_publish_factor_da_oracle_publisher_fp32_legacy_ssa_vector_both_segments_in_cta_streamk_s0",
   "nv_q6_destination_major_fixup",
 )
+PRODUCER_NAMES = frozenset(("q8_compact_record_fp16", "q8_compact_record_fp16_k12288",
+  "q8_compact_record_fp16_q6_attn_v", "q8_streamk_record_fp16_q6_ffn_down"))
+FIXUP_NAMES = frozenset(("q4k_imma_fixup_active", "nv_q6_destination_major_fixup"))
+
+
+def _lifecycle_kind(row:dict) -> str:
+  if row["name"] in PRODUCER_NAMES: return "projection_producer"
+  if row["name"] in FIXUP_NAMES: return "projection_fixup"
+  if row["primary"] in ("q", "k", "v", "o", "gate", "up", "down"): return "projection_main"
+  if row["role"] == "support": return "unresolved_support"
+  return row["primary"]
 
 def _specialize_current(rows:list[dict]) -> None:
   counters=collections.Counter()
@@ -25,6 +36,7 @@ def _specialize_current(rows:list[dict]) -> None:
       primary,tag="down","q4_down_main" if name == "q4_down_streamk" else "q4_down_fixup"
     elif name in GATE_STREAMK_NAMES: primary,tag="gate_up",name
     elif name in Q6_DOWN_NAMES: primary,tag="down",name
+    elif name == "q6k_v_four_warp_fp16_direct_151936_4096": primary,tag="vocabulary","generated_vocabulary_main"
     else: primary,tag=_primary(row)
     if primary == "qo":
       row["primary"]=row["role"]="q" if counters[tag]%2 == 0 else "o";counters[tag]+=1
@@ -56,12 +68,26 @@ def main():
   if any(counts[k]!=v for k,v in expected.items()): raise ValueError(f'role census mismatch: {dict(counts)}')
   active=collections.defaultdict(Decimal)
   for r in rows: active[r['primary']]+=Decimal(str(r['duration']))
+  lifecycle=collections.defaultdict(lambda:{"launches":0,"command_interval_us":Decimal(0)})
+  for r in rows:
+    kind=r["lifecycle_kind"]=_lifecycle_kind(r)
+    lifecycle[kind]["launches"]+=1
+    lifecycle[kind]["command_interval_us"]+=Decimal(str(r['duration']))
+  lifecycle={kind:{**value,"command_interval_us":str(value["command_interval_us"])} for kind,value in lifecycle.items()}
   unknown=sum(1 for r in rows if _primary(r)[0] is None)
+  # The historical classifier has a catch-all support category. Zero unknown
+  # rows therefore proves interval accounting, not complete semantic attribution.
+  unresolved_support=[r for r in rows if r["lifecycle_kind"] == "unresolved_support"]
   timeline=_interval_partition(rows)
   payload={'schema':'tinygrad.nv_prefill_current_hcq_ledger.v1','selected_invocation':len(groups)-1,
     'available_invocations':len(groups),'segments':6,'launches':len(rows),'unknown_launches':unknown,
     'launch_counts':dict(sorted(counts.items())),'active_us':{k:str(v) for k,v in sorted(active.items())},
-    'timeline':timeline,'entries':rows,'classification_basis':'named historical HCQ classifier, current pp512 composed population; layers anchored by Q'}
+    'timeline':timeline,'entries':rows,'classification_basis':'named historical HCQ classifier, current pp512 composed population; layers anchored by Q',
+    'unresolved_support_launches':len(unresolved_support),
+    'unresolved_support_us':str(sum((Decimal(str(r['duration'])) for r in unresolved_support),Decimal(0))),
+    'timing_boundary':'HCQ command intervals, not CUPTI kernel-active duration',
+    'lifecycle_components':lifecycle,
+    'semantic_closure':not unresolved_support and not unknown}
   if unknown or sum(counts.values())!=len(rows): raise ValueError('classification closure failed')
   p=pathlib.Path(a.out);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n')
   print(json.dumps({'status':'PASS','launches':len(rows),'unknown_launches':unknown,'timeline':timeline},indent=2))

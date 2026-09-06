@@ -1,5 +1,17 @@
 # NVIDIA generated-kernel handoff
 
+Latest selected-path reconciliation:
+[`nv-prefill-selected-lifecycle-audit-20260906.md`](nv-prefill-selected-lifecycle-audit-20260906.md).
+It finds and repairs the omitted generated vocabulary tail in current252:
+53.313 / 50.746 / 53.183 ms off/on/off, 2.502 ms recovery. The compiler stack
+now selects that tail automatically; `NV_COMPILER_Q6_VOCAB_PP512=0` rolls back.
+Fresh llama reference is 38.819 ms (sequential cross-harness, not strict parity).
+The refreshed profile separates 252 mains, 252 producers, 108 fixups, and an
+unresolved support bucket. HCQ intervals are not pure kernel-active durations;
+zero unknown under the old catch-all classifier was not semantic closure.
+Twenty-cycle qualification is output replay; optional internal-buffer replay
+still requires adapting its legacy three-buffer ABI check for Stream-K.
+
 ## End goal
 
 Run Qwen3-8B decode and prefill competitively through tinygrad/BoltBeam-generated
