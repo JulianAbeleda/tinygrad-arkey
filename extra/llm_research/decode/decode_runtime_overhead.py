@@ -121,7 +121,8 @@ def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:
   # selected instead of hard-coding either the stochastic or SDPA graph.
   from tinygrad import UOp
   use_flash = _route(model, UOp.variable("capture_start_pos", 0, model.max_context - 1).bind(len(prompt)), 1)
-  selected = model.rollout_greedy_jit_flash if use_flash else model.rollout_greedy_jit
+  pair = getattr(model, "rollout_greedy_pingpong_jits_flash" if use_flash else "rollout_greedy_pingpong_jits", None)
+  selected = pair[1] if getattr(model, "_decode_feedback_pingpong_promoted", False) and pair else (model.rollout_greedy_jit_flash if use_flash else model.rollout_greedy_jit)
   if census is None or getattr(selected, "captured", None) is None:
     states = {name:{"cnt":getattr(jit, "cnt", None), "captured":getattr(jit, "captured", None) is not None}
               for name in ("rollout_jit", "rollout_jit_flash", "rollout_greedy_jit", "rollout_greedy_jit_flash")
