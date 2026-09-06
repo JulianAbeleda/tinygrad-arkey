@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 from types import MappingProxyType
 from typing import Mapping
 
@@ -21,6 +22,8 @@ from tinygrad.uop.ops import Ops, UOp
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 from extra.llm_research.prefill.nv_native_program_uop import native_nv_program
 from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import _record_source
+from extra.llm_research.prefill.nv_tile_major_q8_1_record import (TileMajorQ8ActivationRecordTransform,
+  TileMajorActivationCarrierSpec, tile_major_q8_carrier)
 
 M, N, K, TILE_K = 512, 1024, 4096, 64
 PROJECTIONS_PER_MODEL = 36
@@ -71,8 +74,9 @@ class CompilerKPP512Binding:
   warmstart_contexts: Mapping
 
   @classmethod
-  def compile(cls, dev, role:str="attn_k") -> "CompilerKPP512Binding":
-    wt, at = PackedWeightTransform("Q4_K",N,K), Q8ActivationRecordTransform(M,K)
+  def compile(cls, dev, role:str="attn_k", *, tile_q8:bool=False) -> "CompilerKPP512Binding":
+    wt = PackedWeightTransform("Q4_K",N,K)
+    at = TileMajorQ8ActivationRecordTransform(M,K) if tile_q8 else Q8ActivationRecordTransform(M,K)
     wp, ap = Q4KInt8FragmentProvider(wt), Q8Int8FragmentProvider(at)
     accumulator = Q4KQ8GroupAccumulatorContract(wp,ap)
     stride = TILE_K+(TILE_K//16)*4
@@ -87,8 +91,12 @@ class CompilerKPP512Binding:
     # carried by the context identity and compilation order, not by changing
     # this established key ABI.
     key = warmstart_key({M,N},K,wt.storage_dtype)
-    lib = NVRTCCompiler(dev.arch,ptx=False,cache_key=f"nv_q8_compact_record_fp16_{role}_v1").compile(_record_source())
-    producer = native_nv_program("q8_compact_record_fp16",lib,global_size=(M,8,1),local_size=(128,1,1),
+    if tile_q8:
+      from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import FP16_DS4_SOURCE
+      producer_source,producer_name=FP16_DS4_SOURCE,"q8_ds4_fp16_pp512"
+    else: producer_source,producer_name=_record_source(),"q8_compact_record_fp16"
+    lib = NVRTCCompiler(dev.arch,ptx=False,cache_key=f"nv_q8_record_fp16_{role}_{'tile' if tile_q8 else 'flat'}_v1").compile(producer_source)
+    producer = native_nv_program(producer_name,lib,global_size=(M,8,1),local_size=(128,1,1),
                                  globals=(0,1),outs=(1,),ins=(0,))
     warmstart, contexts = {key:(Opt(OptOps.TC,0,(-1,2,1)),)}, {key:context}
 
@@ -96,10 +104,11 @@ class CompilerKPP512Binding:
     # exact compiler PROGRAM as an immutable reusable asset.
     from tinygrad.codegen import to_program_cache
     from tinygrad.codegen.opt.postrange import warmstart_candidate_state
-    record_probe = Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device="NV").realize()
+    record_probe = Tensor.empty(at.storage_units,dtype=dtypes.uint32,device="NV").realize()
     words_probe = Tensor.empty(wt.packed_bytes//4,dtype=dtypes.uint32,device="NV").realize()
     with warmstart_candidate_state(warmstart,contexts):
-      _activation_carrier(record_probe,at).matmul(_weight_carrier(words_probe,wt).transpose(),dtype=dtypes.int) \
+      (tile_major_q8_carrier(record_probe,TileMajorActivationCarrierSpec(at)) if tile_q8 else _activation_carrier(record_probe,at)) \
+        .matmul(_weight_carrier(words_probe,wt).transpose(),dtype=dtypes.int) \
         .cast(dtypes.float).contiguous().realize()
     matching = [program for program in to_program_cache.values() if program.op is Ops.PROGRAM and program.src and
                 getattr(program.src[0].arg,"candidate_context",None) is not None and
@@ -179,19 +188,22 @@ def _project(binding:CompilerKPP512Binding,x:Tensor,words:Tensor,*,model_family:
     raise ValueError("unsupported compiler Q4 K research route")
   if x.dtype != dtypes.float16 or words.dtype != dtypes.uint32:
     raise ValueError("compiler Q4 K route requires fp16 activation and canonical uint32 Q4_K words")
-  record = Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device=x.device)
+  record = Tensor.empty(binding.activation.storage_units,dtype=dtypes.uint32,device=x.device)
   _, record = x.uop_program(record,fxn=lambda *_:binding.producer)
   # Keep the main as an ordinary compiler-owned matmul inside the attention
   # function.  The immutable asset above pins its exact candidate identity and
   # launch; normal scheduling then owns the output lifetime instead of routing
   # an opaque preallocated output through the nested block FUNCTION.
-  return _activation_carrier(record,binding.activation).matmul(
+  activation = tile_major_q8_carrier(record,TileMajorActivationCarrierSpec(binding.activation)) \
+    if isinstance(binding.activation,TileMajorQ8ActivationRecordTransform) else _activation_carrier(record,binding.activation)
+  return activation.matmul(
     _weight_carrier(words,binding.transform).transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous()
 
 
 def binding_for(device:str="NV", role:str="attn_k") -> CompilerKPP512Binding:
   if device != "NV": raise ValueError("compiler Q4 K research binding is NV-only")
-  key=f"{device}:{role}"
+  tile_q8=bool(int(os.environ.get("NV_COMPILER_Q4_K_TILE_Q8", "1")))
+  key=f"{device}:{role}:{int(tile_q8)}"
   if key not in _BINDINGS:
-    _BINDINGS[key] = CompilerKPP512Binding.compile(Device[device], role)
+    _BINDINGS[key] = CompilerKPP512Binding.compile(Device[device], role, tile_q8=tile_q8)
   return _BINDINGS[key]
