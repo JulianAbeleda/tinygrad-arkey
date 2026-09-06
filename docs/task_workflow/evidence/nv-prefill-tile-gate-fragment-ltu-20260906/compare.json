@@ -1,0 +1,11 @@
+{
+  "baseline_medians_ms": [47.642309, 47.870729],
+  "candidate_median_ms": 47.671007,
+  "candidate_min_ms": 47.464152,
+  "candidate_replay_exact_cycles": 5,
+  "enable": "NV_COMPILER_Q4_STREAMK_FRAGMENT_LOAD_TO_USE=1",
+  "mean_baseline_median_ms": 47.756519,
+  "promotion": "retained_default_off",
+  "schema": "tinygrad.nv_prefill_tile_gate_fragment_ltu_compare.v1",
+  "status": "PASS_NEUTRAL"
+}

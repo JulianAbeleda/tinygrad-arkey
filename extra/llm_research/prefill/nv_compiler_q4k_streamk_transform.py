@@ -63,7 +63,19 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     if min(frag_start,frag_stop,publish)<0: raise ValueError("fragment load-to-use schedule markers not found")
     fragment=math[frag_start:frag_stop]
     if fragment.count("unsigned int val")!=11 or "int alu79 =" not in fragment:
-      raise ValueError("fragment load-to-use schedule requires exact val0..val10 group")
+      # The tile-major Q8 carrier changes compiler numbering and leaves ten Q4
+      # words ahead of the first activation-record load. Derive that boundary
+      # from the captured ABI instead of mistaking activation val10 for Q4.
+      weight_loads=list(re.finditer(rf"^    unsigned int val\d+ = \(\*\({re.escape(w_arg)}.*;$",math,re.M))
+      record_loads=list(re.finditer(rf"^    unsigned int val\d+ = \(\*\({re.escape(rec_arg)}.*;$",math,re.M))
+      if len(weight_loads)!=10 or not record_loads or weight_loads[-1].end() >= record_loads[0].start():
+        raise ValueError("fragment load-to-use schedule requires exact flat or tile-major Q4 group")
+      frag_start=weight_loads[0].start(); frag_stop=weight_loads[-1].end()+1
+      fragment=math[frag_start:frag_stop]
+      if fragment.count("unsigned int val")!=10 or rec_arg in fragment:
+        raise ValueError("tile-major fragment load-to-use boundary escaped Q4 words")
+      publish=math.find("    __syncthreads();",record_loads[0].start())
+      if publish<0: raise ValueError("tile-major fragment load-to-use publish marker not found")
     math=math[:frag_start]+math[frag_stop:publish]+fragment+math[publish:]
   if shared_load_to_pack:
     # The emitted source declares every scalar shared load before packing any
