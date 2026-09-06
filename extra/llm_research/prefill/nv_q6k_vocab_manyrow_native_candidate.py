@@ -31,16 +31,20 @@ def contract() -> dict:
     "integration": "not_model_integrated",
   }
 
-def run_live(model_path, activation_path, rounds, preserve_input_dtype=False):
+def run_live(model_path, activation_path, rounds, preserve_input_dtype=False, candidate_kind="manyrow"):
   import collections, hashlib, statistics
   from types import SimpleNamespace
   import numpy as np
-  from tinygrad import Tensor, Device, TinyJit
+  from tinygrad import Tensor, Device, TinyJit, dtypes
   from tinygrad.uop.ops import Ops
   from extra.llm_research.layout import read_metadata, packed_u16_slice
   from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for
   from extra.llm_research.prefill.nv_compiler_q4k_qo_72real_proxy import program_key
   from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabManyRowAdmission, q6k_vocab_manyrow_call
+  if candidate_kind == "direct-four-warp":
+    from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+    from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_research_program
+    direct_program=KernelProgram("decode_q6k_vocab_four_warp_fp16","q6k_vocab_four_warp_fp16",KernelProgramProvenance.RESEARCH_ONLY,emit_q6k_v_four_warp_fp16_direct(rows=ROWS),OutputSpec((ROWS,),dtypes.float32))
   if rounds<1: raise ValueError("rounds must be positive")
   path=Path(model_path); md=read_metadata(path)
   info=next(i for i in md.infos if i.name=="output.weight")
@@ -53,7 +57,8 @@ def run_live(model_path, activation_path, rounds, preserve_input_dtype=False):
   inputs=[Tensor(v,device="NV").realize() for v in (values,values*np.float32(.7))]
   @TinyJit
   def candidate(x):
-    logits=q6k_vocab_manyrow_call(Q6KVocabManyRowAdmission(preserve_input_dtype=preserve_input_dtype),linear,x.reshape(1,1,K))
+    logits=(execute_research_program(Tensor.empty((ROWS,),dtype=dtypes.float32,device="NV"),weight,x.reshape(K).cast(dtypes.float16).contiguous(),program=direct_program).reshape(ROWS)
+      if candidate_kind == "direct-four-warp" else q6k_vocab_manyrow_call(Q6KVocabManyRowAdmission(preserve_input_dtype=preserve_input_dtype),linear,x.reshape(1,1,K)))
     if logits is None: raise RuntimeError("candidate admission failed")
     logits=logits.reshape(ROWS)
     return logits,logits.argmax()
@@ -100,9 +105,10 @@ def main() -> int:
   ap.add_argument("--model",default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
   ap.add_argument("--rounds",type=int,default=31)
   ap.add_argument("--preserve-input-dtype",action="store_true")
+  ap.add_argument("--candidate",choices=("manyrow","direct-four-warp"),default="manyrow")
   ap.add_argument("--activation",type=Path,default=Path("docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32"))
   a=ap.parse_args()
-  report=run_live(a.model,a.activation,a.rounds,a.preserve_input_dtype) if a.fixture else contract()
+  report=run_live(a.model,a.activation,a.rounds,a.preserve_input_dtype,a.candidate) if a.fixture else contract()
   payload=json.dumps(report,indent=2)+"\n"
   if a.out: a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_text(payload)
   else: print(payload,end="")
