@@ -786,10 +786,10 @@ def main():
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_down_main"]==18,
       census["q6_down_producer"]==18,census["q4_down_main"]==18,census["q4_down_producer"]==18,
-      census["compiler_main_total"]==234,census["q8_producer_total"]==198,census["candidate_weight_args"]==234,
-      census["unique_weight_bases"]==234,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
-      census["remaining_v_down_fp16_overlays"]==18,census["weight_copy_kernels"]==0,census["old_fixups"]==0,
-      census["q6_old_fixups"]==0))
+      census["q6_v_main"]==18,census["q6_v_producer"]==18,census["compiler_main_total"]==252,
+      census["q8_producer_total"]==216,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
+      census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
+      census["active_fixups"]==90,census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.gate_q8_reuse:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["down_oracle_main"]==0,census["gate_q8_record_allocations"]==36,census["k_main"]==36,

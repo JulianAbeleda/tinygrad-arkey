@@ -82,6 +82,8 @@ def test_compiler_gate_q8_reuse_requires_streamk(monkeypatch):
   config=SimpleNamespace()
   monkeypatch.setattr(model,"getenv",_env({}))
   monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:True)
+  assert model._nv_compiler_q4_gate_q8_reuse_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q8_REUSE":0}))
   assert not model._nv_compiler_q4_gate_q8_reuse_enabled(config)
   monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q8_REUSE":1}))
   assert model._nv_compiler_q4_gate_q8_reuse_enabled(config)

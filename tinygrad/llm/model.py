@@ -204,7 +204,8 @@ def _nv_compiler_q4_gate_streamk_enabled(config) -> bool:
     _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_gate_q8_reuse_enabled(config) -> bool:
-  return bool(getenv("NV_COMPILER_Q4_GATE_Q8_REUSE", 0)) and _nv_compiler_q4_gate_streamk_enabled(config)
+  """Reuse one generated Q8 record across each ordered gate/up pair; zero is rollback."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q8_REUSE", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
