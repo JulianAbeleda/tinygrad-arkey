@@ -1,0 +1,49 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_qo_72real_proxy.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 4096,
+    "tile_k": 64
+  },
+  "roles": {
+    "q": 36,
+    "o": 36
+  },
+  "real_weight_buffers": 72,
+  "identity": "fc3b6e588b4dc162749e50ef060e3e2312f8560463e8a7219bcc99cc7fb0627a",
+  "captured_calls": {
+    "packed": 72,
+    "fp16": 72
+  },
+  "sample_replay_exact": true,
+  "sample_distinct_real_weights": true,
+  "sample_finite": true,
+  "timing": {
+    "packed_r9_ms": [
+      7.7891,
+      7.785061,
+      8.781923
+    ],
+    "packed_min_ms": 7.785061,
+    "packed_median_ms": 7.7891,
+    "packed_per_call_us": 108.12584722222222,
+    "fp16_r9_ms": [
+      13.936708,
+      17.788959,
+      13.889019
+    ],
+    "fp16_min_ms": 13.889019,
+    "fp16_median_ms": 13.936708,
+    "fp16_per_call_us": 192.90304166666667,
+    "packed_over_fp16": 0.5605191410566865,
+    "llama_estimate_per_call_us": 61.5,
+    "packed_over_llama_estimate": 1.758143857271906
+  },
+  "representation": {
+    "expanded_global_packed_weight": false,
+    "partial_workspace_bytes": 0,
+    "fixup_calls": 0
+  },
+  "passed": true
+}
