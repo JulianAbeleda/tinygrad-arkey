@@ -1,0 +1,117 @@
+{
+  "arm": "greedy",
+  "callify_redirect": 0,
+  "contract": null,
+  "gpu_state_scope": "immediately_before_and_after_timed_decode_window",
+  "gpu_states": [
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "138.49",
+        "power.draw.instant": "446.22",
+        "pstate": "P0",
+        "temperature.gpu": "52",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2542",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "88.65",
+        "power.draw.instant": "73.44",
+        "pstate": "P0",
+        "temperature.gpu": "46",
+        "temperature.gpu.tlimit": "41",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "118.94",
+        "power.draw.instant": "446.02",
+        "pstate": "P0",
+        "temperature.gpu": "47",
+        "temperature.gpu.tlimit": "38",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "83.78",
+        "power.draw.instant": "143.08",
+        "pstate": "P0",
+        "temperature.gpu": "47",
+        "temperature.gpu.tlimit": "40",
+        "temperature.memory": "N/A"
+      }
+    },
+    {
+      "after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "119.26",
+        "power.draw.instant": "446.49",
+        "pstate": "P0",
+        "temperature.gpu": "51",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "86.59",
+        "power.draw.instant": "189.28",
+        "pstate": "P0",
+        "temperature.gpu": "45",
+        "temperature.gpu.tlimit": "43",
+        "temperature.memory": "N/A"
+      }
+    }
+  ],
+  "median_ms": 4.1856044,
+  "mode": "timing",
+  "samples_ms": [
+    4.1805118,
+    4.1856044,
+    4.1890146
+  ],
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_pairs": [
+    null,
+    null,
+    null
+  ],
+  "token_hashes": [
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b"
+  ],
+  "tokens_identical": true
+}

@@ -20,6 +20,8 @@ normal full-logits route census. The earlier `pre-fix-census.json` is retained:
 its null contract exposed that selecting the sole warm pair was invalid when
 automatic prewarming had warmed more than one candidate.
 
+A separate greedy-only R3 median is 4.185604 ms, only 0.192% below the mean legacy control. Ping-pong is 2.640% below greedy alone. Its exercised `rollout_greedy_jit_flash_s6` has one written-input shadow, while the ping-pong pair has zero. Both routes have 416 launches; the observed 4001.24 versus 3904.36 us debug sums and steady timings localize the material gain to removal of the recurrent alias shadow through alternating fixed returns.
+
 This is a current same-prompt correctness and ordered R3 service gate. It does
 not cover the 8/10/18/34-split context bands, quantify cold-start cost
 precisely, separate direct-greedy from two-slot feedback, or establish a
