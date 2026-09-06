@@ -1,0 +1,48 @@
+{
+  "arm": "pingpong",
+  "callify_redirect": 0,
+  "contract": {
+    "admitted": true,
+    "program_counts": [
+      5,
+      5
+    ],
+    "reason": "distinct_fixed_returns_and_read_only_inputs",
+    "return_device": "NV",
+    "return_dtype": "dtypes.int",
+    "return_shape": [
+      1,
+      1
+    ],
+    "written_input_shadows": [
+      0,
+      0
+    ]
+  },
+  "graph_group_sizes": [
+    32,
+    64,
+    128,
+    256,
+    44
+  ],
+  "kernel_us": 5999.0599999999995,
+  "lazy_capture_after_prefill": false,
+  "mode": "census",
+  "program_count": 524,
+  "program_names": [],
+  "raw_debug": [
+    "*** NV      2503 batched 32                                     arg  0 mem  19.19 GB tm    338.38us/     0.34ms (  10736 GFLOPS  763|3851   GB/s) ",
+    "*** NV      2504 batched 64                                     arg  0 mem  19.19 GB tm    669.82us/     1.01ms (  10811 GFLOPS  745|4098   GB/s) ",
+    "*** NV      2505 batched 128                                    arg  0 mem  19.19 GB tm   1419.86us/     2.43ms (  11193 GFLOPS  749|4035   GB/s) ",
+    "*** NV      2506 batched 256                                    arg  0 mem  19.19 GB tm   2771.89us/     5.20ms (  11751 GFLOPS  776|3947   GB/s) ",
+    "*** NV      2507 batched 44                                     arg  0 mem  19.19 GB tm    799.11us/     6.00ms (  18109 GFLOPS 1098|6419   GB/s) "
+  ],
+  "request_scoped_prewarm": true,
+  "route_still_promoted": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_jit": "rollout_greedy_pingpong_jits[0]",
+  "selected_jit_written_input_shadows": 0,
+  "selected_pair": "rollout_greedy_pingpong_jits",
+  "token": 13
+}
