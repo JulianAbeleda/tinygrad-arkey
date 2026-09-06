@@ -1,6 +1,12 @@
 from extra.llm_research.decode.decode_runtime_overhead import _token_evidence
 
 
+def test_disabled_reduce_output_trace_skips_graph_walk():
+  from tinygrad.callify import _trace_reduce_output_markers
+  # An invalid graph input makes any attempted UOp.sink/toposort walk fail.
+  _trace_reduce_output_markers((object(),), "disabled")
+
+
 def test_complete_token_ids_are_opt_in_for_cross_runtime_correctness():
   compact = _token_evidence([1, 2, 3])
   complete = _token_evidence([1, 2, 3], include_token_ids=True)

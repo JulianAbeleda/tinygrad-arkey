@@ -528,7 +528,8 @@ def _bind_reduce_output_invocation_inputs(srcs:tuple[UOp, ...], args:tuple[UOp, 
 
 def _trace_reduce_output_markers(srcs:tuple[UOp, ...], stage:str) -> None:
   """Count marker reachability at a callify boundary, without affecting IR."""
-  from tinygrad.llm.reduce_output_trace import trace_reduce_output
+  from tinygrad.llm.reduce_output_trace import REDUCE_OUTPUT_TRACE, trace_reduce_output
+  if not REDUCE_OUTPUT_TRACE.value: return
   for u in UOp.sink(*srcs).toposort():
     if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec):
       trace_reduce_output(stage, "candidate" if u.arg.owned_contiguous_candidate else "ordinary")
