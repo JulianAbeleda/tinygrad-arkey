@@ -263,3 +263,14 @@ def test_nested_single_computed_program_output_is_returned_not_stale():
   for start in (0, 10, 20, 30, 40):
     np.testing.assert_array_equal(run(_values(start)).numpy(), np.arange(start, start+8, dtype=np.int32)*3 + 1)
   np.testing.assert_array_equal(output.numpy(), output_before)
+
+
+def test_store_destination_keeps_invocation_arguments_in_outer_namespace():
+  outer = UOp.param(2, dtypes.int32, (8,), "CPU")
+  inner = UOp.param(0, dtypes.int32, (8,), "CPU")
+  forwarded = UOp(Ops.FUNCTION, dtypes.void, (UOp.maketuple(inner), outer), CallInfo(precompile=True))
+  store = UOp(Ops.STORE, dtypes.void, (forwarded.gettuple(0), UOp.const(dtypes.int32, 1)))
+  # The destination aliases outer slot 2. Slot 0 belongs only to the callee;
+  # descending into its body falsely marks it, while stopping at FUNCTION
+  # entirely loses the actual destination argument.
+  assert _writable_function_param_slots((store,)) == frozenset({2})
