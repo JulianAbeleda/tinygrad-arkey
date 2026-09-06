@@ -52,6 +52,19 @@ def test_pingpong_contract_lookup_finds_active_horizon_pair():
   assert _warmed_pair(model) is live
 
 
+def test_pingpong_selection_uses_counter_change_when_multiple_pairs_are_warm():
+  from types import SimpleNamespace as NS
+  from extra.llm_research.decode.nv_feedback_pingpong_qualification import _pair_counts, _selected_pair
+  pair=lambda:(NS(captured=object(), cnt=2), NS(captured=object(), cnt=2))
+  base,s6=pair(),pair()
+  model=NS(rollout_greedy_pingpong_jits=pair(), rollout_greedy_pingpong_jits_flash=base,
+           rollout_greedy_pingpong_jits_flash_s6=s6, rollout_greedy_pingpong_jits_flash_s64=pair(),
+           rollout_greedy_pingpong_jits_flash_live={8:pair()})
+  before=_pair_counts(model); s6[1].cnt += 1
+  name,selected=_selected_pair(model,before)
+  assert name == "rollout_greedy_pingpong_jits_flash_s6" and selected is s6
+
+
 def test_capture_warms_and_observes_both_production_slots(monkeypatch):
   from types import SimpleNamespace as NS
   from extra.llm_research.decode import decode_runtime_overhead as mod
