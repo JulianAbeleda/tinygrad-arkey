@@ -34,5 +34,25 @@ class TestNVCompilerQ4KQOBinding(unittest.TestCase):
       self.assertFalse(census(captured(wrong),[(expected,1)])["exact"])
     self.assertFalse(census(captured(expected),[(expected,2)])["exact"])
 
+  def test_streamk_captures_do_not_share_projection_cursors(self):
+    from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import StreamKQOCapture
+    # Immutable program/map handles may be shared, but trace positions may not.
+    asset=StreamKQOCapture(None,None,None,None,None,"fixture",cursor=12)
+    first,second=asset.new_capture(),asset.new_capture()
+    first.cursor=35
+    second.begin_trace()
+    self.assertEqual((asset.cursor,first.cursor,second.cursor),(12,35,0))
+    with self.assertRaises(ValueError): first.prepare(72)
+
+  def test_streamk_map_preserves_global_tile_indices_for_both_k_shapes(self):
+    from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_fixup_map
+    for k in (4096,12288):
+      rows,active=q4_down_fixup_map(k=k)
+      self.assertEqual(len(rows),128)
+      self.assertEqual(active,tuple(range(128)))
+      self.assertTrue(all(1<=len(row)<=3 and all(0<=slot<340 for slot in row) for row in rows))
+      self.assertEqual(len({slot for row in rows for slot in row}),sum(map(len,rows)))
+    with self.assertRaises(ValueError): q4_down_fixup_map(k=2048)
+
 
 if __name__=="__main__":unittest.main()

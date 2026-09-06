@@ -29,6 +29,7 @@ def main():
   ap.add_argument('--model',default='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf')
   ap.add_argument('--role',choices=('q','o'),required=True)
   ap.add_argument('--rounds',type=int,default=31)
+  ap.add_argument('--variant',choices=('wide','streamk'),default='wide')
   ap.add_argument('--out',required=True)
   a=ap.parse_args()
   if a.rounds < 1: raise ValueError('rounds must be positive')
@@ -39,7 +40,7 @@ def main():
     raise ValueError('expected exactly 36 Q4_K weights with shape (4096,4096)')
   weights=[packed_u32_slice(path,md,i,device='NV').contiguous().realize() for i in infos]
   weight_ids=[w.uop.buf_uop for w in weights]
-  candidate=binding_for('NV'); candidate.prepare(36)
+  candidate=binding_for('NV',variant=a.variant).new_capture(); candidate.prepare(36)
   if a.role=='q':
     from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as llama_binding
     oracle=llama_binding('NV').new_capture()
@@ -64,7 +65,9 @@ def main():
     outputs=jit(x); Tensor.realize(*outputs); Device['NV'].synchronize(); return outputs
   def snapshot(outputs): return np.stack([x.numpy().copy() for x in outputs])
   for _ in range(3): run(generated,inputs[0]); run(llama,inputs[0])
-  cc=census(generated,[(candidate.producer,36),(candidate.q_program,36)])
+  expected=[(candidate.producer,36),(candidate.q_program,36)]
+  if a.variant=='streamk': expected.append((candidate.fixup_program,36))
+  cc=census(generated,expected)
   lc=census(llama,[(p,36) for p in oracle_programs])
   # Correctness snapshots are deliberately outside the timing window.
   pairs=[]; first_outputs=[]
@@ -85,7 +88,7 @@ def main():
       samples[name].append((time.perf_counter_ns()-start)/1e6)
   passed=all(p['finite'] and p['allclose'] for p in pairs) and distinct and stable and cc['exact'] and lc['exact']
   result={'schema':'tinygrad.nv.qo.live.v2','status':('PASS_DIRECT' if a.rounds>=31 else 'PASS_SMOKE') if passed else 'FAIL',
-          'role':role,'scope':'isolated projection lifecycle; QKV shared producer and O residual are excluded',
+          'role':role,'variant':a.variant,'scope':'isolated projection lifecycle; QKV shared producer and O residual are excluded',
           'weights':[{'name':i.name,'ggml_type':i.typ,'shape':list(reversed(i.dims))} for i in infos],
           'fixture':{'kind':'synthetic normal','seed':3,'sha256':hashlib.sha256(x_np.tobytes()).hexdigest()},
           'canonical_buffers_stable':stable,'candidate_census':cc,'llama_census':lc,'correctness':pairs,'distinct':distinct,
