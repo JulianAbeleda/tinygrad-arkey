@@ -62,3 +62,20 @@ def test_nv_gpu_state_requires_and_names_every_field(monkeypatch):
   values=[str(i) for i in range(len(mod.NV_STATE_FIELDS))]
   monkeypatch.setattr(mod.subprocess, "check_output", lambda *args, **kwargs: ", ".join(values))
   assert mod._nv_gpu_state() == dict(zip(mod.NV_STATE_FIELDS, values))
+
+
+def test_measure_w_gpu_state_brackets_only_timed_decode_window(monkeypatch):
+  from extra.llm_research.decode import decode_runtime_overhead as mod
+  events=[]
+  class Gen:
+    def __next__(self): events.append("token"); return 7
+    def close(self): events.append("close")
+  class Dev:
+    def synchronize(self): events.append("sync")
+  monkeypatch.setattr(mod, "_reset", lambda model:events.append("reset"))
+  monkeypatch.setattr(mod, "_prefill", lambda *args:(events.append("prefill") or Gen(), 3))
+  states=iter(({"point":"before"}, {"point":"after"}))
+  monkeypatch.setattr(mod, "_nv_gpu_state", lambda:(events.append("state") or next(states)))
+  _, _, tokens, prelude, before, after = mod._measure_w(object(), Dev(), [1], 1, 2, capture_gpu_state=True)
+  assert events == ["reset", "prefill", "sync", "state", "token", "token", "state", "close"]
+  assert tokens == [7, 7] and prelude == 3 and before["point"] == "before" and after["point"] == "after"

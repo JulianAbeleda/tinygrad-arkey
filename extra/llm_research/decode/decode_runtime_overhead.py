@@ -199,18 +199,21 @@ def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmu
   return payload
 
 
-def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int, request_scoped_prewarm:bool=False) -> tuple[float, list[float], list[int], int]:
+def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int, request_scoped_prewarm:bool=False,
+               capture_gpu_state:bool=False) -> tuple[float, list[float], list[int], int, dict|None, dict|None]:
   _reset(model)
   gen, prelude = _prefill(model, prompt, chunk_size, nmeas+1 if request_scoped_prewarm else None)
   latencies, generated = [], []
   try:
     dev.synchronize()
+    gpu_before = _nv_gpu_state() if capture_gpu_state else None
     for _ in range(nmeas):
       started = time.perf_counter()
       generated.append(int(next(gen)))
       latencies.append(time.perf_counter() - started)
+    gpu_after = _nv_gpu_state() if capture_gpu_state else None
   finally: gen.close()
-  return sum(latencies), latencies, generated, prelude
+  return sum(latencies), latencies, generated, prelude, gpu_before, gpu_after
 
 
 def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int, request_scoped_prewarm:bool=False):
@@ -287,9 +290,8 @@ def main(argv:list[str] | None=None) -> int:
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
       before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
-      gpu_before = _nv_gpu_state() if args.gpu_state and Device.DEFAULT == "NV" else None
-      w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm)
-      gpu_after = _nv_gpu_state() if args.gpu_state and Device.DEFAULT == "NV" else None
+      w_elapsed, per_token, generated, prelude, gpu_before, gpu_after = _measure_w(
+        model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm, args.gpu_state and Device.DEFAULT == "NV")
       measured_jits.update(_used_decode_jits(model, before))
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
                      "per_token_ms": [x * 1e3 for x in per_token], "gpu_state_before":gpu_before, "gpu_state_after":gpu_after})
