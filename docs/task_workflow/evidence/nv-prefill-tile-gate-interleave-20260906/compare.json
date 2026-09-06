@@ -1,0 +1,14 @@
+{
+  "baseline_medians_ms": [47.642309, 47.870729],
+  "candidate_medians_ms": [47.599797, 47.558841],
+  "candidate_min_ms": [47.498358, 47.254465],
+  "candidate_replay_exact_cycles_per_run": 5,
+  "enable": "NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES=1",
+  "frozen_investment_threshold_ms": 0.5,
+  "mean_baseline_median_ms": 47.756519,
+  "mean_candidate_median_ms": 47.579319,
+  "mean_latency_win_ms": 0.1772,
+  "promotion": "retained_default_off",
+  "schema": "tinygrad.nv_prefill_tile_gate_interleave_compare.v1",
+  "status": "STOP_BELOW_FROZEN_0P5_MS_THRESHOLD"
+}
