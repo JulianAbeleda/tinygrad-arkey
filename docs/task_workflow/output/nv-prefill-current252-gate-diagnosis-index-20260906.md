@@ -56,6 +56,7 @@ used the wide three-buffer body and different ownership.
 | all shared loads at pack use | remove scalar shared-load live ranges | 254 registers, zero stack | 56.741611 ms, decisively slower | STOP; `nv-prefill-current252-gate-shared-ltp-20260906` |
 | fragment-only shared loads at pack use | reduce fragment scalar lifetime while retaining early scale loads | 255 registers, 88-byte stack | 53.215871 ms; no material win over adjacent promoted controls | STOP; same evidence directory |
 | interleave eight WMMA results with 16 accumulator updates | cap live IMMA results while preserving each FP32 expression | 225 registers, zero stack, shared unchanged | 52.832851/52.734764/52.960819 ms bracket; 0.162071 ms vs mean control | STOP below frozen 0.5 ms threshold; `nv-prefill-current252-gate-interleave-20260906` |
+| CUDA cache/shared carveout policy | test whether llama's larger shared footprint induces a beneficial function-cache partition absent from generated launch conversion | exact current cubin; 31 event-timed samples per arm; all outputs/read-only gates pass | 25% carveout is only about 1.5 us/role faster; prefer-shared and 75--100% carveout regress about 18 us/role | STOP; `nv-prefill-current252-gate-cache-policy-20260906` |
 
 Every completed model arm above requires the current252 census, canonical/read-
 only weights, zero overlays, full logits/token comparison, and 20-cycle exact

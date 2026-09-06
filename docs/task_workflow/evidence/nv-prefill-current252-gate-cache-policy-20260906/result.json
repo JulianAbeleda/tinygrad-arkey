@@ -1,0 +1,10 @@
+{
+  "cache_config_median_us": {"default": 271.424, "prefer_shared": 291.680, "prefer_l1": 271.712, "prefer_equal": 271.200},
+  "carveout_median_us": {"0": 269.728, "25": 268.224, "50": 269.952, "75": 288.224, "100": 288.192},
+  "correctness": "all arms finite, complete, readonly inputs preserved, identical output hash",
+  "decision": "STOP",
+  "reason": "best cache/carveout signal is about 1.5 us per role and does not address the measured 52 us per-role service delta; shared-heavy policies regress about 18 us",
+  "repetitions": 31,
+  "schema": "tinygrad.nv_prefill_gate_cache_policy.v1",
+  "warmups": 10
+}
