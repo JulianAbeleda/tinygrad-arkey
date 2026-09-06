@@ -1,0 +1,728 @@
+{
+  "schema": "tinygrad.nv.qo.live.v2",
+  "status": "PASS_DIRECT",
+  "role": "attn_output",
+  "scope": "isolated projection lifecycle; QKV shared producer and O residual are excluded",
+  "weights": [
+    {
+      "name": "blk.0.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.1.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.2.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.3.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.4.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.5.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.6.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.7.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.8.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.9.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.10.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.11.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.12.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.13.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.14.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.15.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.16.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.17.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.18.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.19.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.20.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.21.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.22.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.23.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.24.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.25.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.26.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.27.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.28.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.29.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.30.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.31.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.32.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.33.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.34.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "name": "blk.35.attn_output.weight",
+      "ggml_type": 12,
+      "shape": [
+        4096,
+        4096
+      ]
+    }
+  ],
+  "fixture": {
+    "kind": "synthetic normal",
+    "seed": 3,
+    "sha256": "cffe0b9ae3cf41565f139093c920a62a931da294f5e518c8bb401611bffcc028"
+  },
+  "canonical_buffers_stable": true,
+  "candidate_census": {
+    "exact": true,
+    "calls": 72,
+    "programs": [
+      {
+        "identity": [
+          "q8_compact_record_fp16",
+          "c96d13799df38173f8df6513efb5dc89ef179312d08059304e25f01924e027d7",
+          [
+            512,
+            8,
+            1
+          ],
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1
+          ],
+          [
+            0
+          ],
+          [],
+          []
+        ],
+        "count": 36
+      },
+      {
+        "identity": [
+          "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+          "b3513ba7787b8b94a4b8bc7ebe563da000807df22930135026b0f323eddde5f4",
+          [
+            32,
+            4,
+            1
+          ],
+          [
+            32,
+            2,
+            4
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 36
+      }
+    ]
+  },
+  "llama_census": {
+    "exact": true,
+    "calls": 108,
+    "programs": [
+      {
+        "identity": [
+          "q8_ds4_fp16_o_pp512",
+          "8abadf5d19752295739933bfbf4c5de93781785b47e15dbc0b7787b1aacae0f2",
+          [
+            512,
+            8,
+            1
+          ],
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1
+          ],
+          [
+            0
+          ],
+          [],
+          []
+        ],
+        "count": 36
+      },
+      {
+        "identity": [
+          "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+          "a384402a518732f8fc4214d43135ae532adef874dc4af0f9b772932a948b9d41",
+          [
+            170,
+            1,
+            1
+          ],
+          [
+            32,
+            8,
+            1
+          ],
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            4,
+            16,
+            4096,
+            512,
+            16,
+            512,
+            4096,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            65536,
+            589824,
+            2097152,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            65536,
+            589824,
+            2097152,
+            1,
+            2,
+            4
+          ],
+          [
+            58880
+          ]
+        ],
+        "count": 36
+      },
+      {
+        "identity": [
+          "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+          "8c9fc37aa51d62188f255cd0f5e1c3c74795074d4f6cc009891bccf3f4a38008",
+          [
+            170,
+            4,
+            1
+          ],
+          [
+            32,
+            4,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            4,
+            16,
+            4096,
+            512,
+            4096,
+            1,
+            0,
+            1,
+            2097152,
+            1,
+            0,
+            1,
+            2097152,
+            1,
+            2,
+            4
+          ],
+          []
+        ],
+        "count": 36
+      }
+    ]
+  },
+  "correctness": [
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.03487861156463623
+    },
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.023423194885253906
+    }
+  ],
+  "distinct": true,
+  "timing_ms": {
+    "samples": {
+      "candidate": [
+        4.372984,
+        5.47326,
+        5.582345,
+        5.470194,
+        5.550815,
+        4.194919,
+        5.47318,
+        5.38801,
+        11.693172,
+        11.701528,
+        9.849299,
+        11.795164,
+        8.777044,
+        8.84864,
+        8.47146,
+        8.335907,
+        8.706673,
+        6.625765,
+        5.674959,
+        8.696544,
+        8.336628,
+        5.382399,
+        8.218486,
+        8.813453,
+        7.042597,
+        8.212906,
+        8.634628,
+        8.275233,
+        10.843376,
+        6.405722,
+        9.280791
+      ],
+      "llama": [
+        3.456613,
+        3.605001,
+        3.522566,
+        3.440612,
+        3.531653,
+        3.448197,
+        3.431946,
+        3.804246,
+        7.524523,
+        8.153383,
+        7.251891,
+        8.328773,
+        9.90267,
+        8.815908,
+        10.22792,
+        7.707075,
+        7.102048,
+        8.680584,
+        9.704316,
+        8.677939,
+        10.036259,
+        8.636291,
+        7.520976,
+        8.213306,
+        10.027935,
+        7.579626,
+        8.864849,
+        8.237211,
+        7.130142,
+        6.731343,
+        7.183021
+      ]
+    },
+    "orders": [
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ]
+    ],
+    "rounds": 31,
+    "candidate_median": 8.275233,
+    "llama_median": 7.579626
+  }
+}
