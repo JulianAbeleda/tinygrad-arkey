@@ -1,0 +1,1 @@
+{"schema":"tinygrad.nv.q6v.tile64x64.r31.v1","status":"PASS_CORRECTNESS_REJECT_PERFORMANCE","candidate_median_ms":1.276592,"llama_median_ms":0.928517,"max_abs":0.00995528698,"allclose":true,"second_close":true,"distinct":true,"scope":"18 canonical type-14 V weights, dynamic TinyJit producer/main/fixup"}
