@@ -39,6 +39,17 @@ SRC_FP16=SRC.replace("void q8_compact(const float* __restrict__ x", "void q8_com
   "__half2float(__low2half(h1)),__half2float(__high2half(h1)));"
 )
 
+# Opt-in producer matching the llama DS4 quantization arithmetic.  Keep the
+# compact packet ABI identical; callers select this source explicitly.
+_llama = SRC_FP16
+assert _llama.count("float s=(v.x+v.y)+(v.z+v.w);") == 1
+assert _llama.count("float d=a==0.0f?1.0f:a*0x1.020408p-7f;") == 1
+assert _llama.count("tg_round_i8(v.") == 4
+_llama = _llama.replace("float s=(v.x+v.y)+(v.z+v.w);", "float s=((v.x+v.y)+v.z)+v.w;")
+_llama = _llama.replace("float d=a==0.0f?1.0f:a*0x1.020408p-7f;", "float dinv=a==0.0f?0.0f:127.0f/a; float d=a==0.0f?0.0f:1.0f/dinv;")
+for _c in "xyzw": _llama = _llama.replace(f"tg_round_i8(v.{_c},d)", f"(signed char)roundf(v.{_c}*dinv)")
+SRC_FP16_LLAMA = _llama
+
 def sha(a):return hashlib.sha256(a.tobytes()).hexdigest()
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--rounds',type=int,default=9);ap.add_argument('--out',required=True);a=ap.parse_args()
