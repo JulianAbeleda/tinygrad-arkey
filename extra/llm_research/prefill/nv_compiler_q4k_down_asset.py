@@ -44,7 +44,7 @@ class DownAsset:
   warmstart: object; warmstart_contexts: object
   @classmethod
   def compile(cls,dev, *, tile_k=TILE_K):
-    if tile_k not in (64,256): raise ValueError("down tile_k must be 64 or 256")
+    if tile_k not in (64,128,256): raise ValueError("down tile_k must be 64, 128 or 256")
     wt,at=PackedWeightTransform("Q4_K",N,K),Q8ActivationRecordTransform(M,K)
     wp,ap=Q4KInt8FragmentProvider(wt),Q8Int8FragmentProvider(at)
     acc=Q4KQ8GroupAccumulatorContract(wp,ap)

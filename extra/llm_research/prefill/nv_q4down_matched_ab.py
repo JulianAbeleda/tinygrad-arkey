@@ -10,7 +10,7 @@ from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import bi
 
 MODEL='/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf'
 def main():
-  ap=argparse.ArgumentParser(); ap.add_argument('--model',default=MODEL); ap.add_argument('--z',required=True); ap.add_argument('--out',required=True); ap.add_argument('--rounds',type=int,default=9); ap.add_argument('--candidate',choices=('wide','streamk'),default='wide'); ap.add_argument('--streamk-unroll',type=int,choices=(1,2,4,8),default=None); a=ap.parse_args()
+  ap=argparse.ArgumentParser(); ap.add_argument('--model',default=MODEL); ap.add_argument('--z',required=True); ap.add_argument('--out',required=True); ap.add_argument('--rounds',type=int,default=9); ap.add_argument('--candidate',choices=('wide','streamk'),default='wide'); ap.add_argument('--streamk-unroll',type=int,choices=(1,2,4,8),default=None); ap.add_argument('--tile-k',type=int,choices=(64,128,256),default=64); a=ap.parse_args()
   md=read_metadata(pathlib.Path(a.model)); infos=[i for i in md.infos if i.name.endswith('.ffn_down.weight') and i.typ==12]
   if len(infos)!=18: raise RuntimeError(f'expected exactly 18 type12 metadata names, found {len(infos)}')
   z=np.load(a.z)
@@ -30,7 +30,7 @@ def main():
   # Real lifecycle timing: each TinyJit receives a dynamic activation and
   # constructs producer/main/fixup calls inside its captured graph. No host
   # reduction or prebuilt-output sink is included in this window.
-  ctim=compiler_capture_for(variant=a.candidate, streamk_unroll=a.streamk_unroll); ltim=llama.new_capture()
+  ctim=compiler_capture_for(variant=a.candidate, streamk_unroll=a.streamk_unroll, tile_k=a.tile_k); ltim=llama.new_capture()
   def cfn(act):
     ctim.begin_trace(); ctim.prepare_records(18)
     return tuple(ctim.project(act,w,model_family='qwen3_8b',role='ffn_down') for w in weights)

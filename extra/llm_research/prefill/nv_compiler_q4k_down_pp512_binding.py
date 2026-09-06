@@ -88,8 +88,11 @@ class DownCapture:
     self.cursor+=1
     return _project(self.asset,x,words,**kw)
 
-def binding_for(device="NV", *, variant="wide", streamk_unroll=None):
+def binding_for(device="NV", *, variant="wide", streamk_unroll=None, tile_k=64):
   if variant not in ("wide", "streamk"): raise ValueError(f"unknown Q4 down variant {variant}")
   if streamk_unroll not in (None,1,2,4,8): raise ValueError("streamk_unroll must be one of 1,2,4,8")
-  return _streamk_asset(device, streamk_unroll) if variant == "streamk" else _asset_for(device)
-def capture_for(device="NV", *, variant="wide", streamk_unroll=None): return DownCapture(binding_for(device, variant=variant, streamk_unroll=streamk_unroll))
+  if variant == "streamk":
+    if tile_k != 64: raise ValueError("streamk tile_k must remain 64")
+    return _streamk_asset(device, streamk_unroll)
+  return _asset_for(device, tile_k=tile_k)
+def capture_for(device="NV", *, variant="wide", streamk_unroll=None, tile_k=64): return DownCapture(binding_for(device, variant=variant, streamk_unroll=streamk_unroll, tile_k=tile_k))
