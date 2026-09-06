@@ -48,7 +48,10 @@ class _GraphOwnedQOCapture:
     out=Tensor.empty(512*4096,dtype=dtypes.float32,device=x.device)
     self.records.append(record);self.outputs.append(out);self.cursor+=1
     _,record=x.uop_program(record,fxn=lambda *_:self.asset.producer)
-    out,record,words=out.uop_program(record,words,fxn=lambda *_:self.asset.main_program)
+    # The composed override returns a projection and leaves residual addition
+    # to the model.  Use the three-buffer plain program for both Q and O;
+    # ``main_program`` is the four-buffer fused-residual contract.
+    out,record,words=out.uop_program(record,words,fxn=lambda *_:self.asset.q_program)
     # Retain the produced Tensor identities, not the pre-program placeholders.
     self.records[-1],self.outputs[-1]=record,out
     return out.reshape(512,4096)
@@ -532,7 +535,9 @@ def main():
               # immutable manifest symbol so stage buffers remain observable.
               "v":None if vval is None else vval.asset.main_program.arg.name,
               "q6_v":None if q6_asset is None else q6_asset.roles["attn_v"].candidate_identity,
-              "qo":None if qo is None else qo.candidate_identity}
+              # This wrapper uses Q/O's plain projection contract for both
+              # roles; residual addition remains in the model graph.
+              "qo":None if qo is None else qo.asset.plain_context.canonical_identity}
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
