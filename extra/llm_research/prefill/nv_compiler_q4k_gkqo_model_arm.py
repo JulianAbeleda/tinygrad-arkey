@@ -433,8 +433,8 @@ def main():
   q6_roles={x.strip() for x in os.environ.get("NV_COMPILER_Q6_IMMA_PP512_ROLES","").split(",") if x.strip()}
   if os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" or \
       os.environ.get("NV_Q4_IMMA_PP512") is not None or (args.q6_v and (q6_env!="1" or q6_roles!={"attn_v"})) or \
-      (not args.q6_v and q6_env is not None):
-    raise SystemExit("combined arm requires compiler gate/up+K; Q6 is admitted only by --q6-v with the exact attn_v role")
+      (not args.q6_v and q6_env != "0"):
+    raise SystemExit("combined arm requires compiler gate/up+K; use --q6-v with the exact attn_v role or set NV_COMPILER_Q6_IMMA_PP512=0")
   if args.gate_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row):
     raise SystemExit("gate oracle requires the unpruned current-best candidate with both Q4 V and Q6 V")
   if args.down_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or args.gate_oracle):
