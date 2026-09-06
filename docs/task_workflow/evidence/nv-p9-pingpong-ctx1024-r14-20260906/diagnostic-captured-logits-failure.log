@@ -1,0 +1,96 @@
+max_context=explicit -> 1536 (free 34.0GB, budget 33.9GB with scanned reserve 0.2GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 70238, q8-cap 106542)
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 522, in alloc
+    try: return self._alloc(size, options if options is not None else self.default_buffer_spec)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 451, in _alloc
+    return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 619, in alloc
+    mem_handle = self.rm_alloc(self.dev.nvdevice, alloc_func, alloc_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 523, in rm_alloc
+    if made.status == nv_gpu.NV_ERR_NO_MEMORY: raise MemoryError(f"rm_alloc returned {get_error_str(made.status)}")
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: rm_alloc returned 81: NV_ERR_NO_MEMORY
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 550, in alloc
+    try: return super().alloc(size, options)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 523, in alloc
+    except (RuntimeError, MemoryError) as e: raise MemoryError(f"Allocation of {size_to_str(size)} failed on {self.dev.device}. "
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: Allocation of 24.00 MB failed on NV. Used: 30.29 GB
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 522, in alloc
+    try: return self._alloc(size, options if options is not None else self.default_buffer_spec)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 451, in _alloc
+    return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 619, in alloc
+    mem_handle = self.rm_alloc(self.dev.nvdevice, alloc_func, alloc_params)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_nv.py", line 523, in rm_alloc
+    if made.status == nv_gpu.NV_ERR_NO_MEMORY: raise MemoryError(f"rm_alloc returned {get_error_str(made.status)}")
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: rm_alloc returned 81: NV_ERR_NO_MEMORY
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_feedback_pingpong_qualification.py", line 165, in <module>
+    if __name__ == "__main__": raise SystemExit(main())
+                                                ^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_feedback_pingpong_qualification.py", line 159, in main
+    if args.mode == "logits": result,array=logits(args.arm,args.model,args.depth,args.count,args.max_context); np.savez_compressed(args.out.with_suffix(".npz"),logits=array)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_feedback_pingpong_qualification.py", line 70, in logits
+    next(gen)  # prefill return intentionally has no comparable full-logit row
+    ^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py", line 2946, in generate
+    out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py", line 2125, in __call__
+    return jit(tokens, start_pos, temperature)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/jit.py", line 641, in __call__
+    if len(params:=get_parameters(ret)): Tensor.realize(*params, var_vals=var_vals)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 1719, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 376, in realize
+    run_linear(linear, graph_var_vals if var_vals is None else var_vals, update_stats=do_update_stats)
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 267, in run_linear
+    for call in linear.src: pm_exec.rewrite(call, ctx)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 2840, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 197, in exec_kernel
+    prg_bufs = [bufs[i].ensure_allocated() for i in ast.arg.globals]
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 142, in ensure_allocated
+    def ensure_allocated(self) -> Buffer: return self.allocate() if not self.is_initialized() else self
+                                                 ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 157, in allocate
+    self._bufs[self.device] = opaque if opaque is not None else self.allocator.alloc(self.nbytes, self.options)
+                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 553, in alloc
+    return super().alloc(size, options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 523, in alloc
+    except (RuntimeError, MemoryError) as e: raise MemoryError(f"Allocation of {size_to_str(size)} failed on {self.dev.device}. "
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+MemoryError: Allocation of 24.00 MB failed on NV. Used: 30.29 GB
