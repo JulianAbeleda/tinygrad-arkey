@@ -273,7 +273,13 @@ def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_fami
     return out.reshape(M, N)
 
 
-def binding_for(device:str="NV") -> CompilerPP512Binding:
+def binding_for(device:str="NV", *, variant="wide"):
+  if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
+  if variant=="streamk":
+    from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
+    key=(device,variant)
+    if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(Device[device],binding_for(device),n=N)
+    return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
   if device not in _BINDINGS: _BINDINGS[device] = CompilerPP512Binding.compile(Device[device])
   return _BINDINGS[device]

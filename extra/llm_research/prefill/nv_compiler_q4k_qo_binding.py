@@ -117,7 +117,7 @@ class CompilerQOBinding:
 
 
 @dataclass
-class StreamKQOCapture:
+class CompilerQ4StreamKCapture:
   """Research capture with independent storage for each projection."""
   producer: UOp
   q_program: UOp
@@ -126,50 +126,63 @@ class StreamKQOCapture:
   active: Tensor
   candidate_identity: str
   cursor: int = 0
+  n: int = 4096
+  population: int = 36
+  roles: tuple[str,...] = ("attn_q","attn_output")
 
   @classmethod
-  def compile(cls, dev, base):
+  def compile(cls, dev, base, *, n=4096):
+    if n not in (4096,12288): raise ValueError("unsupported Q4 Stream-K shape")
+    population,roles=(36,("attn_q","attn_output")) if n==4096 else (72,("ffn_gate","ffn_up"))
     from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
     from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_fixup_map
-    sources=[u.arg for u in base.q_program.src if u.op is Ops.SOURCE]
+    plain=base.q_program if n==4096 else base.main_program
+    sources=[u.arg for u in plain.src if u.op is Ops.SOURCE]
     if len(sources)!=1: raise ValueError("plain Q/O must retain one compiler source")
-    source=transform_compiler_q4k_to_streamk(sources[0],unroll=8,tiles_n=32,k_blocks=64,
-      output_stride=N,kernel_name="q4_qo_streamk")
+    source=transform_compiler_q4k_to_streamk(sources[0],unroll=8,tiles_n=n//128,k_blocks=64,
+      output_stride=n,kernel_name="q4_qo_streamk")
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)
-    rows,active=q4_down_fixup_map(k=K)
-    if len(rows)!=128 or len(active)!=128 or any(not 1<=len(row)<=3 for row in rows):
-      raise ValueError("Q/O Stream-K map must cover every tile")
+    rows,active=q4_down_fixup_map(k=K,n=n)
+    if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
+      raise ValueError("Q4 Stream-K map must cover every tile")
     compiler=NVRTCCompiler(dev.arch,ptx=False,cache_key="q4_qo_streamk_v1")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)
       return p.replace(src=tuple(u.replace(arg=source) if u.op is Ops.SOURCE else u for u in p.src))
     main=program("q4_qo_streamk",source,(170,1,1),(32,2,4),(0,1,2,3,4),(0,1,2),(3,4))
-    fix=program("q4k_imma_fixup_active",fixup_source,(128,4,1),(128,1,1),(0,1,2,3),(0,),(1,2,3),(M,N))
+    fix=program("q4k_imma_fixup_active",fixup_source,(len(active),4,1),(128,1,1),(0,1,2,3),(0,),(1,2,3),(M,n))
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
-    return cls(base.producer,main,fix,slots,active_tensor,identity)
+    return cls(base.producer,main,fix,slots,active_tensor,identity,n=n,population=population,roles=roles)
 
   def prepare(self,count):
-    if count!=36: raise ValueError("Q/O research capture requires 36 projections")
+    if count!=self.population: raise ValueError("Q/O research capture has the wrong projection population")
+  def prepare_records(self,count): self.prepare(count)
+  @property
+  def main_program(self): return self.q_program
   def begin_trace(self): self.cursor=0
   def new_capture(self): return replace(self,cursor=0)
   def project(self,x,words,residual=None,*,model_family,role,weight_type="Q4_K"):
-    if (not supports(model_family=model_family,role=role,weight_type=weight_type,m=x.shape[0],n=N,k=x.shape[1],device=x.device)
-        or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=N*(K//256)*36):
+    if (model_family!="qwen3_8b" or role not in self.roles or weight_type!="Q4_K" or x.shape!=(M,K) or x.device!="NV"
+        or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=self.n*(K//256)*36):
       raise ValueError("unsupported Q/O Stream-K input contract")
     if residual is not None: raise ValueError("Stream-K Q/O research arm is projection-only")
-    if self.cursor>=36: raise ValueError("Q/O Stream-K capture exceeds 36 projections")
+    if self.cursor>=self.population: raise ValueError("Q/O Stream-K capture exceeds 36 projections")
     self.cursor+=1
     record=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device=x.device)
     _,record=x.uop_program(record,fxn=lambda *_:self.producer)
-    out=Tensor.empty(M*N,dtype=dtypes.float32,device=x.device)
+    out=Tensor.empty(M*self.n,dtype=dtypes.float32,device=x.device)
     partial=Tensor.empty(340*128*128,dtype=dtypes.float32,device=x.device)
     ids=Tensor.empty(340,dtype=dtypes.int32,device=x.device)
     out,partial,ids,words,record=out.uop_program(partial,ids,words,record,fxn=lambda *_:self.q_program)
     out,partial,slots,active=out.uop_program(partial,self.slots,self.active,fxn=lambda *_:self.fixup_program)
-    return out.reshape(M,N)
+    return out.reshape(M,self.n)
+
+
+# Compatibility name for the original Q/O-only research capture.
+StreamKQOCapture = CompilerQ4StreamKCapture
 
 
 def binding_for(device="NV", *, variant="wide"):

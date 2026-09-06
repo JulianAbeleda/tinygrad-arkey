@@ -52,6 +52,11 @@ class TestNVCompilerQ4KQOBinding(unittest.TestCase):
       self.assertEqual(active,tuple(range(128)))
       self.assertTrue(all(1<=len(row)<=3 and all(0<=slot<340 for slot in row) for row in rows))
       self.assertEqual(len({slot for row in rows for slot in row}),sum(map(len,rows)))
+    rows,active=q4_down_fixup_map(k=4096,n=12288)
+    self.assertEqual(len(rows),384)
+    self.assertTrue(0<len(active)<len(rows))
+    self.assertEqual(active,tuple(i for i,row in enumerate(rows) if row))
+    self.assertTrue(all(len(row)<=2 for row in rows))
     with self.assertRaises(ValueError): q4_down_fixup_map(k=2048)
 
 
