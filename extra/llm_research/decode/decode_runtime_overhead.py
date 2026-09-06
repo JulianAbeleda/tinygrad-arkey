@@ -12,11 +12,22 @@ decode timing begins; JIT capture is warmed in a separate request.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, os, pathlib, statistics, sys, tempfile, time
+import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, tempfile, time
 
 from extra.llm_research.decode.decode_harness import DEFAULT_MODEL, csv_ints, decode_run_profile
 
 SCHEMA = "tinygrad.decode.fixed_depth.v2"
+NV_STATE_FIELDS = ("pstate", "clocks.sm", "clocks.mem", "temperature.gpu", "temperature.gpu.tlimit", "temperature.memory",
+                   "power.draw.average", "power.draw.instant", "clocks_event_reasons.sw_power_cap",
+                   "clocks_event_reasons.hw_slowdown", "clocks_event_reasons.hw_thermal_slowdown",
+                   "clocks_event_reasons.sw_thermal_slowdown")
+
+
+def _nv_gpu_state() -> dict:
+  raw=subprocess.check_output(["nvidia-smi", f"--query-gpu={','.join(NV_STATE_FIELDS)}", "--format=csv,noheader,nounits"], text=True).strip()
+  values=[x.strip() for x in raw.split(",")]
+  if len(values) != len(NV_STATE_FIELDS): raise RuntimeError("nvidia-smi state field count mismatch")
+  return dict(zip(NV_STATE_FIELDS, values))
 
 
 def _atomic_json(path:pathlib.Path, payload:dict) -> None:
@@ -240,6 +251,7 @@ def main(argv:list[str] | None=None) -> int:
                   help="omit D so W is the final GPU interval for external system tracing")
   ap.add_argument("--request-scoped-prewarm", action="store_true",
                   help="pass each request's measured output horizon to production generate prewarming")
+  ap.add_argument("--gpu-state", action="store_true", help="record NV clocks, power, and thermal state around each W repetition")
   ap.add_argument("--single-graph-live-bands", action="store_true",
                   help="diagnostic: disable direct-greedy/ping-pong capture and use the qualified full-logits graph")
   ap.add_argument("--out", required=True, help="unique output JSON for this invocation")
@@ -275,10 +287,12 @@ def main(argv:list[str] | None=None) -> int:
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
       before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
+      gpu_before = _nv_gpu_state() if args.gpu_state and Device.DEFAULT == "NV" else None
       w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm)
+      gpu_after = _nv_gpu_state() if args.gpu_state and Device.DEFAULT == "NV" else None
       measured_jits.update(_used_decode_jits(model, before))
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
-                     "per_token_ms": [x * 1e3 for x in per_token]})
+                     "per_token_ms": [x * 1e3 for x in per_token], "gpu_state_before":gpu_before, "gpu_state_after":gpu_after})
       if args.skip_dispatch_diagnostic:
         from tinygrad import UOp
         route_sp = UOp.variable("reported_start_pos", 0, profile.max_context - 1).bind(len(prompt))
@@ -350,6 +364,7 @@ def main(argv:list[str] | None=None) -> int:
                            "decode_tokens": profile.nmeas, "reps": args.reps, "warmup_decode": args.warmup_decode,
                            "chunk_size": args.chunk_size, "temperature": 0.0, "seed": 20260617,
                            "dispatch_diagnostic":not args.skip_dispatch_diagnostic,
+                           "gpu_state":args.gpu_state,
                            "request_scoped_prewarm":args.request_scoped_prewarm,
                            "single_graph_live_bands":args.single_graph_live_bands},
               "runtime_settings": {"kv_cache": "int8+fp16_scale" if model.config.kv_quant else "fp16",

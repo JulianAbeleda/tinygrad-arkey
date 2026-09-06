@@ -55,3 +55,10 @@ def test_captured_program_evidence_records_identity_geometry_and_order():
   assert [row["ordinal"] for row in rows] == [0, 1]
   assert all(row["program_name"] == "captured_test" and row["global_size"] == [7, 2, 1] for row in rows)
   assert len({row["source_sha256"] for row in rows}) == len({row["binary_sha256"] for row in rows}) == 1
+
+
+def test_nv_gpu_state_requires_and_names_every_field(monkeypatch):
+  from extra.llm_research.decode import decode_runtime_overhead as mod
+  values=[str(i) for i in range(len(mod.NV_STATE_FIELDS))]
+  monkeypatch.setattr(mod.subprocess, "check_output", lambda *args, **kwargs: ", ".join(values))
+  assert mod._nv_gpu_state() == dict(zip(mod.NV_STATE_FIELDS, values))
