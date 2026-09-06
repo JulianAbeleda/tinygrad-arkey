@@ -5,6 +5,7 @@ from decimal import Decimal
 from nv_prefill_hcq_exact_accounting import _primary, _interval_partition
 
 CURRENT_QO_ID = "4de2a30ea73fa03dcbfb788035f41c6b418acc34e4b0862840bb140170f1e72d"
+CURRENT_K_ID = "91b77c60cd1795de178666a99274e883cab26a7f66ff558bc282a6e90c826448"
 CURRENT_Q6_V_ID = "47c05cc9e63ce8aa27f30b2132e96728a8b259019b5e79e0396ae94f31c3b655"
 CURRENT_Q4_V_NAME = "r_8_32_32_2_2_2_2_2_2_64_2_2_2_16b68e06c3ae78a7a2268b570f8b1b25a2d6565bbe49eaee035f420e67629580"
 GATE_STREAMK_NAMES = ("q4_qo_streamk", "q4k_imma_fixup_active")
@@ -13,7 +14,7 @@ Q6_DOWN_NAMES = (
   "nv_q6_destination_major_fixup",
 )
 PRODUCER_NAMES = frozenset(("q8_compact_record_fp16", "q8_compact_record_fp16_k12288",
-  "q8_compact_record_fp16_q6_attn_v", "q8_streamk_record_fp16_q6_ffn_down"))
+  "q8_compact_record_fp16_q6_attn_v", "q8_streamk_record_fp16_q6_ffn_down", "q8_ds4_fp16_pp512"))
 FIXUP_NAMES = frozenset(("q4k_imma_fixup_active", "nv_q6_destination_major_fixup"))
 
 
@@ -30,6 +31,7 @@ def _specialize_current(rows:list[dict]) -> None:
   for row in rows:
     name=row["name"]; ident=(row.get("metadata") or {}).get("canonical_identity")
     if ident == CURRENT_QO_ID: primary,tag="qo","qo_main"
+    elif ident == CURRENT_K_ID: primary,tag="k","k_main"
     elif ident == CURRENT_Q6_V_ID: primary,tag="v","q6_v_main"
     elif name == CURRENT_Q4_V_NAME and ident is None: primary,tag="v","q4_v_main"
     elif name == "q4_down_streamk" or (name == "q4k_imma_fixup_active" and previous_name == "q4_down_streamk"):
