@@ -26,3 +26,11 @@ This is a current same-prompt correctness and ordered R3 service gate. It does
 not cover the 8/10/18/34-split context bands, quantify cold-start cost
 precisely, separate direct-greedy from two-slot feedback, or establish a
 replicated external llama parity result. Normal defaults remain closed.
+
+A corrected R13 full-logits rerun explicitly enters the completed active-horizon
+selector state that diagnostic mode normally skips. Counter deltas prove the
+control used `rollout_logits_jit_flash_s6` and the candidate used both
+`rollout_greedy_logits_pingpong_jits_flash_s6` slots. Their full arrays remain
+bit-identical with the same hash and tokens, and the exact diagnostic s6 pair
+passes the zero-shadow contract. These `s6-*` artifacts supersede the base-pair
+logits files for s6 qualification; the originals remain as historical evidence.
