@@ -34,7 +34,7 @@ def test_generated_q6_down_is_the_compiler_stack_default(monkeypatch):
   monkeypatch.setattr(model,"getenv",_env({}))
   assert model._nv_compiler_q6_imma_pp512_enabled(config)
   assert model._nv_compiler_q6_imma_role_enabled(config,"ffn_down")
-  assert not model._nv_compiler_q6_imma_role_enabled(config,"attn_v")
+  assert model._nv_compiler_q6_imma_role_enabled(config,"attn_v")
 
 
 def test_generated_q6_down_has_explicit_rollback_and_preempts_llama(monkeypatch):

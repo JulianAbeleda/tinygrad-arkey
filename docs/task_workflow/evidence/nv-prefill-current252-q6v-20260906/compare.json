@@ -1,0 +1,23 @@
+{
+  "candidate_delta_ms": -1.6660594999999958,
+  "candidate_delta_percent": -3.030944997890006,
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "finite": true,
+    "max_abs": 0.16928625106811523,
+    "mean_abs": 0.01915581524372101,
+    "same_token": true
+  },
+  "medians_ms": {
+    "candidate_b": 53.302259,
+    "control_a": 54.935668,
+    "control_c": 55.000969,
+    "control_mean": 54.968318499999995
+  },
+  "population": {
+    "generated_projection_roles": 252,
+    "remaining_v_down_fp16_overlays": 0
+  },
+  "schema": "tinygrad.nv_prefill_current252_q6v_compare.v1",
+  "status": "PASS"
+}

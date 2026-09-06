@@ -218,7 +218,7 @@ def _nv_compiler_q6_imma_pp512_enabled(config) -> bool:
 def _nv_compiler_q6_imma_role_enabled(config, role:str) -> bool:
   # FFN-down passed the exact live-oracle and full-model gates.  Attention-V
   # remains research-only until it independently clears those gates.
-  roles = frozenset(str(getenv("NV_COMPILER_Q6_IMMA_PP512_ROLES", "ffn_down")).split(","))
+  roles = frozenset(str(getenv("NV_COMPILER_Q6_IMMA_PP512_ROLES", "attn_v,ffn_down")).split(","))
   return _nv_compiler_q6_imma_pp512_enabled(config) and role in roles
 
 def _nv_compiler_q6_imma_capture(model, jit, binding):
