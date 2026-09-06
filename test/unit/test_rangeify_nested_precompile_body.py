@@ -132,3 +132,28 @@ def test_nested_precompile_resolve_is_shared_across_composites():
   assert _BASE_CONVERT_COUNTS, "expected nested precompile bodies to hit the body-keyed base"
   assert max(_BASE_CONVERT_COUNTS.values()) <= 1, \
     f"precompile body re-converted per composite: {_BASE_CONVERT_COUNTS}"
+
+
+def test_nested_resolution_memo_is_scoped_to_one_schedule():
+  """Invocation-bound LINEARs may share a memo within one schedule, but a later
+  schedule must not inherit the prior request's concrete scratch buffers."""
+  import tinygrad.schedule as schedule
+
+  original, seen = schedule._resolve_nested_items, []
+  def traced(body, cache, seen_set=None, first_out=None):
+    seen.append(cache)
+    return original(body, cache, seen_set, first_out)
+  schedule._resolve_nested_items = traced
+  try:
+    _schedule(_wrapper(Tensor.empty(N, dtype=dtypes.float32).contiguous()))
+    first_count = len(seen)
+    _schedule(_wrapper(Tensor.empty(N, dtype=dtypes.float32).contiguous()))
+  finally:
+    schedule._resolve_nested_items = original
+
+  first, second = seen[:first_count], seen[first_count:]
+  assert first and second
+  assert len({id(cache) for cache in first}) == 1
+  assert len({id(cache) for cache in second}) == 1
+  assert first[0] is not second[0]
+  assert not hasattr(schedule, "_resolve_nested_cache")

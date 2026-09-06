@@ -157,7 +157,6 @@ _M4_RESOLVE_DEPTH_LIMIT = 64
 # transferred) once.  The resolved kernel list itself is context-dependent (the
 # shared per-invocation seen-set decides how much of the sub-chain is re-emitted),
 # so the cache stores the bound body, not a resolved output.
-_resolve_nested_cache: dict[tuple, UOp] = {}
 
 pm_precompile_local_buffers = PatternMatcher([
   # create new BUFFERs for LUNIQUE BUFFERs from rangeify, once per precompile body
@@ -317,7 +316,8 @@ def _resolve_nested_items(body:UOp, cache:dict, seen:set|None=None, first_out:di
   finally:
     _m4_resolve_depth -= 1
 
-def _resolve_linear_call(linear_call:UOp) -> UOp:
+def _resolve_linear_call(linear_call:UOp, nested_cache:dict[tuple, UOp]|None=None) -> UOp:
+  if nested_cache is None: nested_cache = {}
   """Resolve one cached LINEAR invocation and retain its output ownership.
 
   Callify records requested-output owners on the outer invocation.  Flattening
@@ -407,7 +407,7 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
 
   # The bound body may still embed composite CALLs (the resadd chain nests them).
   # Resolve those here, memoized, so the outer single-pass walk sees a flat body.
-  resolved = _resolve_nested_items(resolved, _resolve_nested_cache)
+  resolved = _resolve_nested_items(resolved, nested_cache)
 
   if _trace:
     _t2 = time.perf_counter()
@@ -675,7 +675,8 @@ def _elide_residual_transports(linear:UOp) -> UOp:
 
 pm_resolve_linear_call = PatternMatcher([
   # call LINEAR is resolved here
-  (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), _resolve_linear_call),
+  (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True),
+   lambda ctx,linear_call: _resolve_linear_call(linear_call, ctx)),
 ])+pm_flatten_linear
 
 schedule_cache: dict[bytes, UOp] = {}
@@ -725,7 +726,10 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   # outer walk per resolution and wedges host RSS ~50MB/s).  walk_rewrite visits each
   # node once and uses rewrite results as-is, so resolution + one flatten at the root
   # stays linear in the final schedule size.
-  linear = graph_rewrite(linear_call, pm_resolve_linear_call, name="resolve linear call", walk=True)
+  # Resolved nested bodies bind invocation-specific scratch/output buffers. Share
+  # them only within this schedule walk; a process-global memo retains every
+  # realized request's intermediates after the returned LINEAR is gone.
+  linear = graph_rewrite(linear_call, pm_resolve_linear_call, ctx={}, name="resolve linear call", walk=True)
   linear = _drop_dead_schedule_items(linear, linear_call.src[1:])
   linear = _elide_residual_transports(linear)
   _t2 = time.perf_counter()
