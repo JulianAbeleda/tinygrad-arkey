@@ -722,7 +722,7 @@ def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, .
     elif user.op is Ops.STORE and user.src:
       # STORE destinations may carry INDEX/view nodes rather than a direct
       # PARAM. Any enclosing PARAM in that destination address is writable.
-      for value in user.src[0].toposort():
+      for value in _function_body_invocation_nodes((user.src[0],)):
         if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
   _memo[srcs] = frozenset(writable)
   return _memo[srcs]
