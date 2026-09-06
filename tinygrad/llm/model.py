@@ -3007,9 +3007,14 @@ class Transformer:
             out = (out[0].realize(), out[1].realize())
           else: out = out.realize()
           if feedback_slot is not None:
-            pair = self.rollout_greedy_logits_pingpong_jits_flash if diagnostic_full_logits and _uf else \
-                   self.rollout_greedy_logits_pingpong_jits if diagnostic_full_logits else \
-                   self.rollout_greedy_pingpong_jits_flash if _uf else self.rollout_greedy_pingpong_jits
+            if diagnostic_full_logits:
+              pair = _flash_jit_variant(_flash_split, self.rollout_greedy_logits_pingpong_jits_flash,
+                self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64,
+                self.rollout_greedy_logits_pingpong_jits_flash_live) if _uf else self.rollout_greedy_logits_pingpong_jits
+            else:
+              pair = _flash_jit_variant(_flash_split, self.rollout_greedy_pingpong_jits_flash,
+                self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64,
+                self.rollout_greedy_pingpong_jits_flash_live) if _uf else self.rollout_greedy_pingpong_jits
             if all(getattr(jit, "captured", None) is not None for jit in pair):
               from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
               if not pingpong_capture_contract(pair)["admitted"]:

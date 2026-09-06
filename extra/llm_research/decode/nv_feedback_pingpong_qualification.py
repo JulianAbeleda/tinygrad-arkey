@@ -31,8 +31,10 @@ def _redirect() -> int:
 
 
 def _warmed_pair(model, diagnostic:bool=False):
-  candidates = ((model.rollout_greedy_logits_pingpong_jits_flash, model.rollout_greedy_logits_pingpong_jits)
-                if diagnostic else (model.rollout_greedy_pingpong_jits_flash, model.rollout_greedy_pingpong_jits))
+  prefix = "rollout_greedy_logits_pingpong_jits" if diagnostic else "rollout_greedy_pingpong_jits"
+  candidates = [getattr(model, prefix), getattr(model, prefix+"_flash"), getattr(model, prefix+"_flash_s6"),
+                getattr(model, prefix+"_flash_s64")]
+  candidates.extend(getattr(model, prefix+"_flash_live").values())
   warm = [pair for pair in candidates if all(getattr(jit, "captured", None) is not None for jit in pair)]
   if len(warm) != 1: return None
   return warm[0]

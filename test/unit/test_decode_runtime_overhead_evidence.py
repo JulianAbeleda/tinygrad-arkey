@@ -41,6 +41,17 @@ def test_observed_jits_include_both_slots_and_flash_variants():
     'rollout_greedy_pingpong_jits_flash_live[64][0]', 'rollout_greedy_pingpong_jits_flash_live[64][1]']
 
 
+def test_pingpong_contract_lookup_finds_active_horizon_pair():
+  from types import SimpleNamespace as NS
+  from extra.llm_research.decode.nv_feedback_pingpong_qualification import _warmed_pair
+  cold=lambda:(NS(captured=None), NS(captured=None))
+  live=cold(); live[0].captured=object(); live[1].captured=object()
+  model=NS(rollout_greedy_pingpong_jits=cold(), rollout_greedy_pingpong_jits_flash=cold(),
+           rollout_greedy_pingpong_jits_flash_s6=live, rollout_greedy_pingpong_jits_flash_s64=cold(),
+           rollout_greedy_pingpong_jits_flash_live={8:cold()})
+  assert _warmed_pair(model) is live
+
+
 def test_capture_warms_and_observes_both_production_slots(monkeypatch):
   from types import SimpleNamespace as NS
   from extra.llm_research.decode import decode_runtime_overhead as mod
