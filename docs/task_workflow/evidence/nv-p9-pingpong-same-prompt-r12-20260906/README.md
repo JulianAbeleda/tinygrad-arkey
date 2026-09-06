@@ -1,6 +1,6 @@
 # NV P9 same-prompt feedback ping-pong R12
 
-Current HEAD, context 512, max context 1024. The full-logits legacy and
+Context 512, max context 1024, using the historical diagnostic loader that disables prefill attention routes; the measured decode graph remains ordinary. The full-logits legacy and
 ping-pong arms use the same prompt and retain eight complete 151936-wide FP32
 rows. Their arrays are bit-identical (SHA-256 `1d6c6891...`, max and mean
 absolute difference zero); sampled tokens equal argmax in both arms.
