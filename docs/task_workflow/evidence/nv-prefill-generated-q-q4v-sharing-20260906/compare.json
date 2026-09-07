@@ -4,5 +4,11 @@
   "shared_ms": 47.783762,
   "advantage_ms": 0.03429449999999434,
   "producer_calls_before": 216,
-  "producer_calls_after": 198
+  "producer_calls_after": 198,
+  "rebracket_candidate_a_ms": 47.783762,
+  "rebracket_control_ms": 48.002935,
+  "rebracket_candidate_c_ms": 47.771044,
+  "rebracket_candidate_mean_ms": 47.77740300000001,
+  "rebracket_advantage_ms": 0.22553199999999407,
+  "decision": "RETAIN_GENERATED_INTEGRATION"
 }
