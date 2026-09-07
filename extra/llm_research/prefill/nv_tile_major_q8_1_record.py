@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad import Tensor, dtypes
-from tinygrad.uop.ops import UOp
+from tinygrad.uop.ops import UOp, Ops
 from tinygrad.codegen.opt.packed_weight import Q8ActivationRecordTransform
 
 
@@ -53,6 +53,12 @@ class TileMajorActivationCarrierSpec:
     if self.abi != "q8_1.logical_mk_to_s8.v1": raise ValueError("unsupported tile-major carrier ABI")
 
 def tile_major_q8_carrier(record: Tensor, spec: TileMajorActivationCarrierSpec) -> Tensor:
+  # An opaque producer returns AFTER(buffer, call).  Keep the carrier over the
+  # allocation itself and move the ordering edge outside the logical view.
+  # This preserves its (M,K) shape through rangeify without a copy or cast.
+  if record.uop.op is Ops.AFTER:
+    carrier=UOp.packed_activation_carrier(record.uop.src[0], spec)
+    return Tensor(UOp(Ops.AFTER, carrier.dtype, (carrier,)+record.uop.src[1:]))
   return Tensor(UOp.packed_activation_carrier(record.uop, spec))
 
 

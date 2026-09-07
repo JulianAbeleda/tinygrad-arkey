@@ -239,7 +239,7 @@ spec_shared = PatternMatcher([
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
                                                      Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA,
-                                                     Ops.MEMORY_SEMANTIC, Ops.PACKED_FRAGMENT_LOAD})),),
+                                                     Ops.MEMORY_SEMANTIC, Ops.PACKED_FRAGMENT_LOAD, Ops.PACKED_ACTIVATION_CARRIER})),),
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
@@ -337,7 +337,9 @@ spec_tensor = PatternMatcher([
    p.dtype == p.arg.logical_dtype and p.arg.abi == "q8_1.logical_mk_to_s8.v1" and
    tuple(p.arg.logical_shape) == tuple(p.arg.transform.logical_shape) and
    p.arg.record_bytes == p.arg.transform.packed_bytes and len(p.src) == 1 and
-   (p.src[0].op is Ops.PARAM or (p.src[0].op is Ops.INDEX and p.src[0].dtype.scalar() == dtypes.uint))),
+   (p.src[0].op is Ops.PARAM or
+    (p.src[0].op is Ops.BUFFER and p.src[0].dtype.scalar() == dtypes.uint and p.src[0].size >= p.arg.record_bytes//4) or
+    (p.src[0].op is Ops.INDEX and p.src[0].dtype.scalar() == dtypes.uint))),
   # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
   # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),

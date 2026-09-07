@@ -134,13 +134,13 @@ def _nv_llama_full_packed_pp512_enabled(config) -> bool:
 def _nv_q4_production_mode(config) -> str|None:
   """Select independent production leases after explicit research overrides.
 
-  The llama packed stack remains the ordinary exact-shape NV default.
-  Explicit compiler gate/up or K leases select the generated research stack.
+  The qualified generated stack is the ordinary exact-shape NV default.
+  NV_COMPILER_FULL_PACKED_PP512=0 rolls the whole stack back to llama; explicit
+  research overrides remain authoritative for diagnosis.
   """
   explicit = _nv_q4_imma_pp512_mode()
   if explicit is not None: return explicit
-  if Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) \
-      and _nv_compiler_q4_imma_k_pp512_enabled(config):
+  if Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and bool(getenv("NV_COMPILER_FULL_PACKED_PP512",1)):
     return "compiler"
   return "llama" if _nv_llama_full_packed_pp512_enabled(config) else None
 
@@ -195,18 +195,17 @@ def _nv_llama_packed_q4k_down_capture(model,jit,binding):
 
 def _nv_compiler_q4k_down_enabled(config)->bool:
   """Generated Q4 FFN-down Stream-K lease inside the exact compiler pp512 arm."""
-  return bool(getenv("NV_COMPILER_Q4_DOWN_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_DOWN_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
     _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
-  """Generated K lease follows the selected compiler gate/up route only."""
-  explicit = _nv_q4_imma_pp512_mode()
-  selected = Device.DEFAULT == "NV" and explicit == "compiler"
-  return bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 0)) and selected and _nv_compiler_q4_imma_pp512_qualified(config)
+  """Qualified generated K lease; zero rolls back K inside the compiler stack."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_gate_streamk_enabled(config) -> bool:
   """Select the qualified generated gate/up Stream-K body inside the compiler pp512 arm."""
-  return bool(getenv("NV_COMPILER_Q4_GATE_STREAMK", 1)) and _nv_q4_imma_pp512_mode() == "compiler" and \
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_GATE_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
     _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_gate_q8_reuse_enabled(config) -> bool:
@@ -218,17 +217,17 @@ def _nv_compiler_q4_gate_q8_packed_loads_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_GATE_Q8_PACKED_LOADS", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
 def _nv_compiler_q4_gate_q4_packed_publication_enabled(config) -> bool:
-  """Use qualified packed Q4 nibble publication; zero is rollback."""
-  return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
+  """Experimental packed Q4 nibble publication; explicit one enables it."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 0)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
 def _nv_compiler_q4_imma_q_pp512_enabled(config) -> bool:
   """Selected generated Q Stream-K route; zero is explicit rollback to wide Q."""
-  return bool(getenv("NV_COMPILER_Q4_Q_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_Q_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
     _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   """Selected generated O Stream-K x4 route; zero is explicit rollback."""
-  return bool(getenv("NV_COMPILER_Q4_O_STREAMK_X4", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_O_STREAMK_X4", 1)) and _nv_q4_production_mode(config) == "compiler" and \
     _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_k_capture(model, jit, binding):

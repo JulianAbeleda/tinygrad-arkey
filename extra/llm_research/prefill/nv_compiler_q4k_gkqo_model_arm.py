@@ -536,6 +536,7 @@ def main():
   ap.add_argument("--generated-o-streamk-x4",action="store_true",help="compose native Q4-A x4/interleave/coalesced stores on generated O Stream-K")
   ap.add_argument("--ordinary-selected-o",action="store_true",help="leave O to the ordinary model selector instead of the research override")
   ap.add_argument("--ordinary-selected-q",action="store_true",help="select the qualified Q-only Stream-K production route")
+  ap.add_argument("--ordinary-selected-stack",action="store_true",help="require the clean-env qualified generated pp512 stack")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
   ap.add_argument("--q-x4",action="store_true",help="typed generated Q weight-A native x4 fragment")
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
@@ -585,12 +586,20 @@ def main():
   requested_q6_roles=({"attn_v"} if args.q6_v else set()) | ({"ffn_down"} if args.q6_down and not args.native_q6_down else set())
   if args.q4_down_streamk and (args.arm!="candidate" or not args.q4_v or not (args.q6_down or args.native_q6_down) or not args.gate_streamk):
     raise SystemExit("Q4 down Stream-K requires the current216 Stream-K candidate")
-  if bool(int(os.environ.get("NV_COMPILER_Q4_DOWN_STREAMK","0"))) != args.q4_down_streamk:
+  if not args.ordinary_selected_stack and bool(int(os.environ.get("NV_COMPILER_Q4_DOWN_STREAMK","0"))) != args.q4_down_streamk:
     raise SystemExit("Q4 down Stream-K flag must match NV_COMPILER_Q4_DOWN_STREAMK")
-  if os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" or \
+  if not args.ordinary_selected_stack and (os.environ.get("NV_COMPILER_Q4_IMMA_PP512")!="1" or os.environ.get("NV_COMPILER_Q4_IMMA_K_PP512")!="1" or \
       os.environ.get("NV_Q4_IMMA_PP512") is not None or (requested_q6_roles and (q6_env!="1" or q6_roles!=requested_q6_roles)) or \
-      (not requested_q6_roles and q6_env != "0"):
+      (not requested_q6_roles and q6_env != "0")):
     raise SystemExit("combined arm requires compiler gate/up+K and an exact explicit Q6 role set, or NV_COMPILER_Q6_IMMA_PP512=0")
+  if args.ordinary_selected_stack:
+    enables=("NV_COMPILER_Q4_IMMA_PP512","NV_COMPILER_Q4_IMMA_K_PP512","NV_COMPILER_Q4_IMMA_QO_PP512",
+             "NV_COMPILER_Q6_IMMA_PP512","NV_COMPILER_Q6_IMMA_PP512_ROLES","NV_COMPILER_Q4_DOWN_STREAMK")
+    present=[key for key in enables if key in os.environ]
+    if present: raise SystemExit(f"ordinary selected stack forbids research enable variables: {present}")
+    if not (args.arm=="candidate" and args.gate_streamk and args.ordinary_selected_gate and args.ordinary_selected_q and
+            args.ordinary_selected_o and args.q4_down_streamk and args.q4_v and args.q6_v and args.q6_down):
+      raise SystemExit("ordinary selected stack requires the complete qualified generated role population")
   if args.gate_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row):
     raise SystemExit("gate oracle requires the unpruned current-best candidate with both Q4 V and Q6 V")
   if args.down_oracle and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or args.gate_oracle):
@@ -620,7 +629,7 @@ def main():
       args.gate_oracle or args.down_oracle or args.gate_q8_reuse):
     raise SystemExit("fused gate epilogue requires the unpruned current-best candidate and an isolated arm")
   qo_env=os.environ.get("NV_COMPILER_Q4_IMMA_QO_PP512")
-  if qo_env != "1": raise SystemExit("captured combined arm requires Q/O env=1 for both matched arms")
+  if not args.ordinary_selected_stack and qo_env != "1": raise SystemExit("captured combined arm requires Q/O env=1 for both matched arms")
 
   from tinygrad.llm.generate import load_model_and_tokenizer
   from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear,Q6KPrimitiveLinear
@@ -630,6 +639,14 @@ def main():
   # This arm is an exact pp512 experiment; requesting a 4608-token KV plan
   # causes admission to reject on constrained validation GPUs before capture.
   model,_=load_model_and_tokenizer(args.model,512,seed=20260617)
+  if args.ordinary_selected_stack:
+    import tinygrad.llm.model as model_module
+    selectors=(model_module._nv_q4_production_mode(model.config)=="compiler",
+      model_module._nv_compiler_q4_imma_k_pp512_enabled(model.config),model_module._nv_compiler_q4_gate_streamk_enabled(model.config),
+      model_module._nv_compiler_q4_imma_q_pp512_enabled(model.config),model_module._nv_compiler_q4_imma_o_pp512_enabled(model.config),
+      model_module._nv_compiler_q4k_down_enabled(model.config),model_module._nv_compiler_q6_imma_role_enabled(model.config,"attn_v"),
+      model_module._nv_compiler_q6_imma_role_enabled(model.config,"ffn_down"))
+    if not all(selectors): raise RuntimeError(f"clean-env production selector rejected generated pp512 stack: {selectors}")
   if args.ordinary_selected_gate:
     import tinygrad.llm.model as model_module
     if not model_module._nv_compiler_q4_gate_streamk_enabled(model.config): raise RuntimeError("production gate Stream-K selector rejected exact pp512")
