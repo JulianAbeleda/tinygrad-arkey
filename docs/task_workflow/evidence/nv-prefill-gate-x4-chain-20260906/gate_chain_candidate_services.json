@@ -1,0 +1,1846 @@
+{
+  "rounds": 9,
+  "rows": [
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 36,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        257.408,
+        256.64,
+        255.64799999999997,
+        255.936,
+        254.688,
+        254.14399999999998,
+        254.272,
+        254.20800000000003,
+        254.43199999999996
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 37,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        254.91199999999998,
+        254.176,
+        251.36,
+        254.048,
+        253.984,
+        253.76000000000002,
+        253.952,
+        255.42400000000004,
+        254.72
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 40,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.552,
+        19.712,
+        19.552,
+        19.584,
+        19.552,
+        19.616,
+        19.616,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 80,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        255.264,
+        255.19999999999996,
+        255.072,
+        254.336,
+        254.14399999999998,
+        254.52800000000002,
+        253.05600000000004,
+        255.264,
+        252.64
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 81,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        255.04,
+        254.52800000000002,
+        254.94400000000002,
+        254.87999999999997,
+        254.11199999999997,
+        254.624,
+        253.92,
+        253.632,
+        253.856
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 84,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.68,
+        19.52,
+        19.584,
+        19.552,
+        19.52,
+        19.552,
+        19.488,
+        19.552,
+        19.52
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 124,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        254.91199999999998,
+        254.91199999999998,
+        255.32799999999997,
+        254.11199999999997,
+        255.35999999999999,
+        254.816,
+        253.69599999999997,
+        254.46399999999997,
+        252.416
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 125,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        254.816,
+        253.82399999999998,
+        254.01599999999996,
+        253.216,
+        254.624,
+        254.848,
+        253.88800000000003,
+        254.752,
+        254.59199999999998
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 128,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.616,
+        19.552,
+        19.584,
+        19.52,
+        19.552,
+        19.456,
+        19.488,
+        19.488
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 168,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        256.608,
+        256.896,
+        254.848,
+        254.46399999999997,
+        254.752,
+        252.70400000000004,
+        253.408,
+        254.368,
+        254.272
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 169,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        255.35999999999999,
+        253.088,
+        255.456,
+        255.96799999999996,
+        255.808,
+        256.256,
+        256.448,
+        255.552,
+        256.0
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 172,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.584,
+        19.584,
+        19.616,
+        19.52,
+        19.552,
+        19.552,
+        19.616,
+        19.456
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 211,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        256.512,
+        256.064,
+        256.8,
+        256.032,
+        254.784,
+        254.94400000000002,
+        254.59199999999998,
+        254.752,
+        252.8
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 212,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        253.952,
+        254.65600000000003,
+        251.93600000000004,
+        253.79200000000003,
+        255.168,
+        257.184,
+        255.936,
+        254.11199999999997,
+        255.64799999999997
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 215,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.584,
+        19.68,
+        19.584,
+        19.648,
+        19.68,
+        19.808,
+        19.616,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 254,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        256.48,
+        255.96799999999996,
+        255.456,
+        256.416,
+        255.32799999999997,
+        256.992,
+        255.87200000000004,
+        256.704,
+        256.16
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 255,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        256.16,
+        256.256,
+        255.29600000000002,
+        255.168,
+        254.784,
+        254.08,
+        254.11199999999997,
+        255.10400000000004,
+        255.456
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 258,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.52,
+        19.52,
+        19.552,
+        19.52,
+        19.52,
+        19.552,
+        19.52,
+        19.488,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 298,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        255.23199999999997,
+        255.904,
+        255.29600000000002,
+        253.88800000000003,
+        254.94400000000002,
+        256.064,
+        256.576,
+        256.032,
+        256.864
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 299,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        256.256,
+        256.224,
+        255.904,
+        256.544,
+        256.32,
+        257.344,
+        255.584,
+        256.896,
+        256.8
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 302,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.552,
+        19.552,
+        19.52,
+        19.488,
+        19.52,
+        19.552,
+        19.648,
+        19.488
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 341,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        254.304,
+        256.96,
+        255.904,
+        256.832,
+        255.52,
+        253.504,
+        255.552,
+        255.19999999999996,
+        252.99200000000002
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 342,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        256.128,
+        252.95999999999998,
+        255.552,
+        254.91199999999998,
+        256.8,
+        256.192,
+        256.48,
+        256.896,
+        254.688
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 345,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.904,
+        19.52,
+        19.616,
+        19.616,
+        19.68,
+        19.584,
+        19.648,
+        19.616,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 384,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        256.64,
+        256.736,
+        253.12,
+        254.496,
+        253.6,
+        255.67999999999998,
+        254.11199999999997,
+        254.624,
+        255.136
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 385,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        257.696,
+        258.112,
+        256.384,
+        257.056,
+        257.696,
+        257.024,
+        257.44,
+        256.992,
+        257.248
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 388,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.552,
+        19.68,
+        19.616,
+        19.616,
+        19.584,
+        19.584,
+        19.584,
+        19.68
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 428,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        257.76,
+        258.304,
+        256.832,
+        257.248,
+        257.088,
+        255.96799999999996,
+        256.864,
+        256.416,
+        256.992
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 429,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        255.77599999999998,
+        256.288,
+        255.616,
+        255.96799999999996,
+        255.23199999999997,
+        255.19999999999996,
+        257.056,
+        255.87200000000004,
+        255.19999999999996
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 432,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.52,
+        19.488,
+        19.488,
+        19.456,
+        19.488,
+        19.52,
+        19.584,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 471,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        257.792,
+        256.992,
+        255.96799999999996,
+        256.096,
+        254.816,
+        256.128,
+        256.736,
+        256.512,
+        255.264
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 472,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        255.808,
+        256.608,
+        256.672,
+        257.824,
+        256.64,
+        257.248,
+        255.32799999999997,
+        255.84,
+        256.544
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 475,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.84,
+        19.776,
+        19.744,
+        19.648,
+        19.616,
+        19.648,
+        19.712,
+        19.68,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 514,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        257.44,
+        255.616,
+        255.584,
+        255.71200000000002,
+        256.032,
+        255.552,
+        256.416,
+        254.624,
+        256.032
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 515,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        255.29600000000002,
+        255.936,
+        256.96,
+        255.42400000000004,
+        254.688,
+        255.87200000000004,
+        258.24,
+        268.128,
+        269.632
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 518,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.712,
+        19.68,
+        19.616,
+        19.712,
+        19.648,
+        19.68,
+        19.616,
+        19.52,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 558,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.392,
+        269.248,
+        265.728,
+        264.8,
+        265.472,
+        265.056,
+        264.256,
+        264.384,
+        264.512
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 559,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        266.496,
+        265.248,
+        265.472,
+        266.176,
+        267.456,
+        265.312,
+        269.088,
+        269.664,
+        267.904
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 562,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.616,
+        19.616,
+        19.488,
+        19.552,
+        19.584,
+        19.552,
+        19.552,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 601,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.296,
+        268.448,
+        267.136,
+        266.56,
+        265.728,
+        262.88,
+        265.248,
+        265.952,
+        265.376
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 602,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        266.112,
+        266.048,
+        266.336,
+        265.984,
+        266.176,
+        265.856,
+        266.592,
+        266.176,
+        266.368
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 605,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.712,
+        19.68,
+        19.616,
+        19.552,
+        19.616,
+        19.584,
+        19.552,
+        19.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 644,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.616,
+        269.76,
+        269.536,
+        268.928,
+        267.648,
+        269.6,
+        269.536,
+        269.408,
+        269.632
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 645,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        269.28,
+        270.24,
+        267.616,
+        269.248,
+        270.464,
+        268.64,
+        267.264,
+        269.184,
+        266.944
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 648,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.584,
+        19.616,
+        19.584,
+        19.648,
+        19.584,
+        19.488,
+        19.552,
+        19.68,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 688,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.024,
+        268.96,
+        264.352,
+        264.608,
+        267.584,
+        267.712,
+        267.552,
+        262.72,
+        263.84
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 689,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        265.6,
+        264.992,
+        265.152,
+        265.408,
+        266.688,
+        264.64,
+        265.12,
+        264.32,
+        264.128
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 692,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.552,
+        19.68,
+        19.648,
+        19.616,
+        19.648,
+        19.552,
+        19.648,
+        19.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 731,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.264,
+        269.408,
+        264.96,
+        264.576,
+        264.224,
+        263.84,
+        264.576,
+        265.184,
+        265.504
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 732,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.832,
+        264.96,
+        265.984,
+        265.536,
+        265.824,
+        265.984,
+        265.28,
+        267.072,
+        266.304
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 735,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.552,
+        19.584,
+        19.648,
+        19.584,
+        19.616,
+        19.616,
+        19.584,
+        19.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 774,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        270.304,
+        270.112,
+        268.768,
+        269.76,
+        269.376,
+        269.76,
+        269.76,
+        266.848,
+        269.664
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 775,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.736,
+        269.888,
+        267.168,
+        268.416,
+        267.168,
+        270.336,
+        269.344,
+        266.56,
+        268.96
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 778,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.52,
+        19.584,
+        19.712,
+        19.584,
+        19.744,
+        19.648,
+        19.648,
+        19.648,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 818,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.76,
+        269.504,
+        264.192,
+        265.504,
+        264.544,
+        264.672,
+        265.44,
+        265.28,
+        266.144
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 819,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.48,
+        264.992,
+        265.056,
+        264.608,
+        265.408,
+        266.4,
+        267.808,
+        270.624,
+        269.376
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 822,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.584,
+        19.584,
+        19.616,
+        19.584,
+        19.648,
+        19.552,
+        19.648,
+        19.584,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 861,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.616,
+        270.304,
+        269.824,
+        269.632,
+        267.776,
+        269.728,
+        271.072,
+        269.984,
+        268.288
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 862,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        269.92,
+        269.632,
+        266.144,
+        267.584,
+        267.904,
+        268.64,
+        266.88,
+        269.6,
+        267.136
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 865,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.616,
+        19.584,
+        19.808,
+        19.648,
+        19.616,
+        19.552,
+        19.616,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 904,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        270.176,
+        268.608,
+        268.864,
+        266.56,
+        268.704,
+        267.04,
+        268.16,
+        267.52,
+        267.84
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 905,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        267.968,
+        268.704,
+        267.84,
+        269.728,
+        268.96,
+        267.424,
+        264.288,
+        269.312,
+        268.0
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 908,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.776,
+        19.776,
+        19.84,
+        19.744,
+        19.68,
+        19.648,
+        19.744,
+        19.68,
+        19.744
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 948,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.76,
+        268.832,
+        268.224,
+        266.944,
+        268.352,
+        267.744,
+        268.352,
+        268.704,
+        268.32
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 949,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.384,
+        267.36,
+        267.776,
+        263.264,
+        262.592,
+        263.424,
+        263.104,
+        263.36,
+        265.504
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 952,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.552,
+        19.584,
+        19.52,
+        19.488,
+        19.616,
+        19.52,
+        19.648,
+        19.616,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 991,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.856,
+        268.256,
+        267.456,
+        263.488,
+        263.392,
+        264.288,
+        264.416,
+        264.032,
+        263.36
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 992,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.608,
+        265.536,
+        265.248,
+        268.352,
+        269.376,
+        265.664,
+        265.056,
+        265.152,
+        265.312
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 995,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.616,
+        19.616,
+        19.776,
+        19.648,
+        19.616,
+        19.616,
+        19.616,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1034,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.344,
+        267.872,
+        263.264,
+        263.52,
+        264.576,
+        264.064,
+        264.672,
+        264.384,
+        264.0
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1035,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        266.752,
+        267.648,
+        268.288,
+        267.84,
+        264.16,
+        264.0,
+        264.16,
+        268.48,
+        268.48
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1038,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.712,
+        19.616,
+        19.712,
+        19.616,
+        19.584,
+        19.552,
+        19.584,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1078,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.92,
+        269.152,
+        263.968,
+        264.0,
+        265.44,
+        264.992,
+        268.672,
+        270.048,
+        269.568
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1079,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        265.248,
+        265.472,
+        264.864,
+        264.384,
+        265.28,
+        265.248,
+        267.04,
+        265.664,
+        265.824
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1082,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.744,
+        19.52,
+        19.552,
+        19.584,
+        19.616,
+        19.584,
+        19.52,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1121,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.52,
+        269.376,
+        266.848,
+        266.848,
+        266.336,
+        265.024,
+        265.696,
+        266.72,
+        265.76
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1122,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.352,
+        266.912,
+        267.52,
+        266.848,
+        266.4,
+        267.168,
+        266.56,
+        262.56,
+        267.84
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1125,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.552,
+        19.68,
+        19.552,
+        19.52,
+        19.584,
+        19.584,
+        19.616,
+        19.68
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1164,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.48,
+        270.112,
+        270.272,
+        269.088,
+        269.536,
+        266.912,
+        269.216,
+        267.04,
+        269.184
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1165,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.256,
+        270.432,
+        269.568,
+        269.12,
+        267.648,
+        268.832,
+        267.36,
+        268.992,
+        267.424
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1168,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.616,
+        19.616,
+        19.584,
+        19.616,
+        19.584,
+        19.616,
+        19.648,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1208,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.728,
+        269.568,
+        270.08,
+        270.016,
+        267.936,
+        269.664,
+        269.088,
+        267.232,
+        269.216
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1209,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.736,
+        264.896,
+        264.608,
+        264.352,
+        263.712,
+        263.616,
+        263.872,
+        264.64,
+        268.448
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1212,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.584,
+        19.52,
+        19.648,
+        19.648,
+        19.584,
+        19.616,
+        19.584,
+        19.616,
+        19.712
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1251,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        270.944,
+        268.32,
+        269.152,
+        267.776,
+        268.448,
+        268.48,
+        268.16,
+        268.416,
+        267.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1252,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.768,
+        268.672,
+        263.84,
+        263.712,
+        266.08,
+        268.928,
+        270.4,
+        268.288,
+        263.872
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1255,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.52,
+        19.52,
+        19.552,
+        19.552,
+        19.616,
+        19.584,
+        19.744,
+        19.584,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1294,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.472,
+        268.896,
+        266.624,
+        264.256,
+        264.16,
+        264.736,
+        264.096,
+        263.744,
+        264.064
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1295,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.256,
+        264.896,
+        265.184,
+        266.048,
+        269.792,
+        267.072,
+        264.736,
+        265.408,
+        265.6
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1298,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.648,
+        19.648,
+        19.616,
+        19.616,
+        19.616,
+        19.648,
+        19.584,
+        19.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1338,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        270.912,
+        268.736,
+        265.344,
+        264.352,
+        264.736,
+        265.76,
+        265.056,
+        264.96,
+        264.288
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1339,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.896,
+        265.472,
+        265.76,
+        265.152,
+        265.888,
+        265.056,
+        265.12,
+        264.704,
+        268.8
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1342,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.584,
+        19.616,
+        19.712,
+        19.648,
+        19.616,
+        19.744,
+        19.616,
+        19.552,
+        19.648
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1382,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.952,
+        269.92,
+        269.12,
+        270.144,
+        269.28,
+        269.632,
+        266.784,
+        269.248,
+        269.824
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1383,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        268.832,
+        270.176,
+        269.376,
+        268.992,
+        267.936,
+        269.376,
+        269.408,
+        269.568,
+        269.024
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1386,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.648,
+        19.584,
+        19.68,
+        19.616,
+        19.552,
+        19.552,
+        19.552,
+        19.552,
+        19.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1426,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        269.728,
+        270.144,
+        264.64,
+        264.16,
+        264.448,
+        262.816,
+        267.296,
+        267.808,
+        268.16
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1427,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        264.096,
+        261.92,
+        263.872,
+        264.064,
+        264.96,
+        265.76,
+        264.896,
+        266.464,
+        269.44
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1430,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.616,
+        19.552,
+        19.616,
+        19.616,
+        19.616,
+        19.616,
+        19.648,
+        19.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1470,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        270.816,
+        268.576,
+        264.0,
+        265.088,
+        265.536,
+        265.28,
+        265.632,
+        264.992,
+        262.752
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1471,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        265.472,
+        265.76,
+        265.056,
+        265.28,
+        265.472,
+        265.408,
+        266.528,
+        266.208,
+        267.072
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1474,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.68,
+        19.712,
+        19.744,
+        19.68,
+        19.648,
+        19.712,
+        19.712,
+        19.68,
+        19.84
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1514,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        268.736,
+        267.488,
+        267.488,
+        267.328,
+        266.784,
+        266.464,
+        266.4,
+        266.272,
+        261.632
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1515,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        263.04,
+        262.784,
+        262.976,
+        270.176,
+        269.664,
+        261.216,
+        270.976,
+        269.696,
+        261.472
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1518,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.616,
+        19.552,
+        19.584,
+        19.584,
+        19.552,
+        19.616,
+        19.584,
+        19.552,
+        19.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1557,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        271.84,
+        269.888,
+        269.888,
+        269.76,
+        271.008,
+        269.44,
+        270.592,
+        268.992,
+        269.44
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1558,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        269.44,
+        270.496,
+        269.056,
+        269.024,
+        269.44,
+        266.816,
+        270.304,
+        269.92,
+        269.376
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1561,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        19.712,
+        19.616,
+        19.68,
+        19.648,
+        19.648,
+        19.616,
+        19.616,
+        19.584,
+        19.584
+      ]
+    }
+  ],
+  "schema": "tinygrad.nv_prefill_live_service.v1",
+  "selected": [
+    "E_64_192_8_16_4_d9bed63012d4c10348afbf4b9a0bf16f79c6d9697f1d2d5a03167acaf43978a6",
+    "q4_qo_streamk"
+  ]
+}
