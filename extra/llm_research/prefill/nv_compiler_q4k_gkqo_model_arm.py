@@ -325,13 +325,15 @@ def _compare_snapshot(reference,current):
     "same_length":len(reference[key])==len(current[key])} for key in reference}
 
 
-def _capture(model,qo,chunk,temp,candidate,native_o=None):
+def _capture(model,qo,chunk,temp,candidate,native_o=None,native_qkv=None):
   gate,kval=model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture
   vval=getattr(model, "_nv_compiler_q4_imma_v_pp512_binding", None)
   q6val=getattr(model, "_nv_compiler_q6_imma_pp512_binding", None)
   q4down=getattr(model, "_nv_compiler_q4k_down_pp512_binding", None)
   _configure(model,gate)
   for block in model.blk:block._nv_compiler_q4_imma_k_pp512_binding=kval
+  if native_qkv is not None:
+    for block in model.blk:block._nv_qkv_packed_pp512_binding=native_qkv
   role_by_id={}
   if qo is not None:
     for block in model.blk:role_by_id[id(block.attn_q)]="attn_q";role_by_id[id(block.attn_output)]="attn_output"
@@ -353,6 +355,7 @@ def _capture(model,qo,chunk,temp,candidate,native_o=None):
       if q4down is not None:q4down.begin_trace()
       if qo is not None:qo.begin_trace()
       if native_o is not None:native_o.begin_trace()
+      if native_qkv is not None:native_qkv.begin_trace()
       _call_and_sync(run,chunk,temp)
   if run.captured is None:raise RuntimeError("combined gate/up+K+Q/O arm did not capture")
   return run
@@ -418,6 +421,7 @@ def main():
   ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
+  ap.add_argument("--native-qkv",action="store_true",help="diagnostic native Q/K/V substitution on the current252 graph")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
   ap.add_argument("--gate-q8-reuse",action="store_true")
@@ -468,6 +472,7 @@ def main():
   if args.native_gate_up and (args.arm!="candidate" or args.gate_q8_reuse or args.gate_oracle or args.gate_epilogue_fused):
     raise SystemExit("native gate/up is a diagnostic candidate substitution and excludes other gate arms")
   if args.native_o and (args.arm!="candidate" or args.qo_streamk): raise SystemExit("native O requires the current plain Q/O candidate")
+  if args.native_qkv and args.arm!="candidate":raise SystemExit("native QKV is a diagnostic candidate substitution")
   if args.gate_epilogue_fused and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or
       args.gate_oracle or args.down_oracle or args.gate_q8_reuse):
     raise SystemExit("fused gate epilogue requires the unpruned current-best candidate and an isolated arm")
@@ -561,7 +566,7 @@ def main():
       delattr(block.ffn_down,"_pf16_w")
     if args.q4_down_streamk and isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"):
       delattr(block.ffn_down,"_pf16_w")
-  qo=native_o=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
+  qo=native_o=native_qkv=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
   if True:
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as qo_binding_for, RECORD_U32
     # binding_for() has already compiled and frozen Q/O's ordinary compiler PROGRAM under
@@ -575,6 +580,9 @@ def main():
     if args.native_o:
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as native_o_binding_for
       native_o_asset=native_o_binding_for("NV");native_o_asset.prepare_records(36);native_o=native_o_asset.new_capture()
+    if args.native_qkv:
+      from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as native_qkv_binding_for
+      native_qkv=native_qkv_binding_for("NV").new_capture()
   identities={"gate_up":gate_asset.main.arg.name if args.native_gate_up else gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
               "down_oracle":"nv_down_oracle_zero" if args.down_oracle else None,
               "gate_epilogue":"nv_gate_silu_mul_cast_fused" if args.gate_epilogue_fused else None,
@@ -588,11 +596,13 @@ def main():
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
               "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.plain_context.canonical_identity,
-              "native_o":None if native_o is None else native_o.asset.main.arg.name}
+              "native_o":None if native_o is None else native_o.asset.main.arg.name,
+              "native_qkv_q4":None if native_qkv is None else native_qkv.asset.q4_q_main.arg.name,
+              "native_qkv_q6":None if native_qkv is None else native_qkv.asset.q6_main.arg.name}
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
-  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o)
+  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o,native_qkv)
   # Retain the actual finalized GraphRunner objects before any teardown.  F1
   # consumes these objects in-process; no runtime or Buffer is serialized.
   from tinygrad.engine.realize import graph_cache
@@ -722,6 +732,9 @@ def main():
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
   if args.qo_streamk: mains["qo"]=[c for c in calls if _call_name(c)=="q4_qo_streamk_n4096"]
   if native_o is not None:mains["native_o"]=[c for c in calls if _call_name(c)==native_o.asset.main.arg.name]
+  if native_qkv is not None:
+    mains["native_qkv_q4"]=[c for c in calls if _call_name(c)==native_qkv.asset.q4_q_main.arg.name]
+    mains["native_qkv_q6"]=[c for c in calls if _call_name(c)==native_qkv.asset.q6_main.arg.name]
   if q4_down_asset is not None: mains["q4_down"]=[c for c in calls if _call_name(c)==q4_down_asset.main_program.arg.name]
   # K and serialized V intentionally share the generated kernel symbol.  K
   # retains compiler candidate_context; the remaining exact-symbol calls are V.
@@ -747,6 +760,7 @@ def main():
   # Serialized V native calls do not expose typed transform arguments through
   # `_weight_arg`; their immutable manifest ABI owns one canonical weight input.
   if v_calls: weights += [f"serialized-v-{i}" for i in range(len(v_calls))]
+  if native_qkv is not None:weights += [f"native-qkv-canonical-{i}" for i in range(108)]
   canonical={lin.prefill_packed_weight().uop.buf_uop for block in model.blk for lin in
     (block.ffn_gate,block.ffn_up,block.attn_k,block.attn_q,block.attn_output) if isinstance(lin,Q4KPrimitiveLinear)}
   canonical.update(block.attn_v.prefill_packed_weight().uop.buf_uop for block in model.blk if isinstance(block.attn_v,Q6KPrimitiveLinear))
@@ -802,7 +816,13 @@ def main():
   if args.gate_epilogue_fused: expected_stage.update({"gate_epilogue_records":36,"gate_epilogue_outputs":36})
   if args.arm=="candidate":expected_stage.update({"qo_records":72,"qo_outputs":72})
   stage_census_pass=not args.deep_replay or all(stage_census.get(key,{}).get("calls")==count for key,count in expected_stage.items())
-  if args.native_o:
+  if args.native_qkv:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["qo_main"]==36,
+      len(mains["native_qkv_q4"])==90,len(mains["native_qkv_q6"])==18,census["q4_down_main"]==18,
+      census["q6_down_main"]==18,census["compiler_main_total"]==252,census["candidate_weight_args"]==252,
+      census["unique_weight_bases"]==252,census["all_weights_canonical"],census["remaining_v_down_fp16_overlays"]==0,
+      census["weight_copy_kernels"]==0))
+  elif args.native_o:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,
       census["qo_main"]==36,len(mains["native_o"])==36,census["v_main"]==18,census["q6_v_main"]==18,
       census["q6_down_main"]==18,census["q4_down_main"]==18,census["compiler_main_total"]==252,

@@ -1,0 +1,27 @@
+{
+  "census": {
+    "canonical_weight_bases": 252,
+    "generated_o_mains": 36,
+    "native_q4_qkv_mains": 90,
+    "native_q6_v_mains": 18,
+    "overlays": 0,
+    "projection_mains": 252
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "finite": true,
+    "max_abs": 0.13143349,
+    "mean_abs": 0.024430212,
+    "replay_exact_cycles_each_arm": 5,
+    "same_token": true
+  },
+  "generated_mean_median_ms": 47.9389885,
+  "generated_medians_ms": [
+    47.956002,
+    47.921975
+  ],
+  "generated_minus_native_qkv_ms": 3.1334655,
+  "native_qkv_median_ms": 44.805523,
+  "schema": "tinygrad.nv_prefill_current252_native_qkv_delta.v1",
+  "status": "PASS"
+}
