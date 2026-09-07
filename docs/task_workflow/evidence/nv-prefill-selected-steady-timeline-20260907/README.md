@@ -1,0 +1,3 @@
+# Selected pp512 steady NV timeline
+
+`PROFILE=1` was filtered to the final complete replay execution window only: NV compute events, exactly1648 launches, with model load, JIT/allocation, SDMA, host readback and inter-window gaps excluded. The compute span is51,328.75us and summed kernel duration51,056.50us. Positive inter-launch gaps total277.25us; p50=0, p95=1.75us, max=5.25us. Across845 gaps adjacent to generated producer/main/fixup roles, total exposure is236.25us, p50=0, p95=2.5us, max=5.25us. This is below the frozen0.5ms aggregate gate, so queue-gap work is closed for the selected replay.

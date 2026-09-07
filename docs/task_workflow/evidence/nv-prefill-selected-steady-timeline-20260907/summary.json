@@ -1,0 +1,14 @@
+{
+  "events": 1648,
+  "compute_span_us": 51328.75,
+  "summed_duration_us": 51056.5,
+  "positive_gap_sum_us": 277.25,
+  "gap_p50_us": 0,
+  "gap_p95_us": 1.75,
+  "gap_max_us": 5.25,
+  "role_adjacent_count": 845,
+  "role_adjacent_gap_sum_us": 236.25,
+  "role_adjacent_gap_p50_us": 0,
+  "role_adjacent_gap_p95_us": 2.5,
+  "role_adjacent_gap_max_us": 5.25
+}
