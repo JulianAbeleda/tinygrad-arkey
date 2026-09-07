@@ -199,3 +199,26 @@ def test_streamk_launch_preserves_canonical_argument_order():
   assert _streamk_main(SimpleNamespace(main_program=main),out,partial,ids,words,record)[0] is out
   with pytest.raises(ValueError,match="sizes mismatch"):
     _streamk_main(SimpleNamespace(main_program=main),out,partial,ids,record,words)
+
+def test_compiler_q_streamk_defaults_on_with_explicit_rollback(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_q4_production_mode",lambda _:"compiler")
+  monkeypatch.setattr(model,"_nv_compiler_q4_imma_pp512_qualified",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert model._nv_compiler_q4_imma_q_pp512_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_Q_STREAMK":0}))
+  assert not model._nv_compiler_q4_imma_q_pp512_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  monkeypatch.setattr(model,"_nv_q4_production_mode",lambda _:"llama")
+  assert not model._nv_compiler_q4_imma_q_pp512_enabled(config)
+
+def test_compiler_capture_cache_is_namespaced_by_binding():
+  class Binding:
+    def __init__(self,name,n,roles): self.candidate_identity,self.n,self.population,self.roles=name,n,36,roles
+    def new_capture(self): return (self.candidate_identity,self.n,self.roles)
+  owner=SimpleNamespace();jit=object();gate=Binding("gate",12288,("ffn_gate","ffn_up"));q=Binding("qo",4096,("attn_q",));o=Binding("qo",4096,("attn_output",))
+  assert model._nv_compiler_q4_imma_capture(owner,jit,gate)==("gate",12288,("ffn_gate","ffn_up"))
+  assert model._nv_compiler_q4_imma_capture(owner,jit,q)==("qo",4096,("attn_q",))
+  assert model._nv_compiler_q4_imma_capture(owner,jit,o)==("qo",4096,("attn_output",))
+  assert model._nv_compiler_q4_imma_capture(owner,jit,q) is model._nv_compiler_q4_imma_capture(owner,jit,q)
+  assert len(owner._nv_compiler_q4_imma_pp512_captures)==3

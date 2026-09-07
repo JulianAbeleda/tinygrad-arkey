@@ -370,10 +370,14 @@ def _graph_buffer(buf):
     "dtype":None if dtype is None else str(dtype), "hash":digest}
 
 
-def _graph_stage_buffers(jit,identities):
+def _program_binary_digest(program):
+  return next((hashlib.sha256(u.arg).hexdigest() for u in program.src if u.op is Ops.BINARY and isinstance(u.arg,bytes)),None)
+
+def _graph_stage_buffers(jit,identities,program_roles=None):
   """Return the allocations actually rebound into the captured HCQ graphs."""
   from tinygrad.engine.realize import graph_cache
   by_identity={value:key for key,value in identities.items() if value is not None}
+  program_roles=program_roles or {}
   stages={f"{role}_{kind}":[] for role in by_identity.values() for kind in ("records","outputs")}
   for outer in jit.captured.linear.src:
     if outer.src[0].op is not Ops.CUSTOM_FUNCTION or outer.src[0].arg!="graph":continue
@@ -382,7 +386,7 @@ def _graph_stage_buffers(jit,identities):
     for _,call,bufs,_ in graph.calls:
       if call.op is not Ops.PROGRAM:continue
       ctx=getattr(call.arg,"candidate_context",None)
-      role=by_identity.get(getattr(ctx,"canonical_identity",None))
+      role=program_roles.get(_program_binary_digest(call)) or by_identity.get(getattr(ctx,"canonical_identity",None))
       if role is None:
         role=next((native_role for native_role in ("v","gate_up","gate_oracle","down_oracle","gate_epilogue")
           if getattr(call.arg,"name",None)==identities.get(native_role)),None)
@@ -529,6 +533,7 @@ def main():
   ap.add_argument("--generated-o-streamk",action="store_true",help="isolate generated Stream-K on O while Q remains wide")
   ap.add_argument("--generated-o-streamk-x4",action="store_true",help="compose native Q4-A x4/interleave/coalesced stores on generated O Stream-K")
   ap.add_argument("--ordinary-selected-o",action="store_true",help="leave O to the ordinary model selector instead of the research override")
+  ap.add_argument("--ordinary-selected-q",action="store_true",help="select the qualified Q-only Stream-K production route")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
   ap.add_argument("--q-x4",action="store_true",help="typed generated Q weight-A native x4 fragment")
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
@@ -597,6 +602,7 @@ def main():
   if args.generated_o_streamk and (args.arm!="candidate" or args.qo_streamk or args.native_o):raise SystemExit("generated O Stream-K requires wide generated Q and excludes native O")
   if args.generated_o_streamk_x4 and not args.generated_o_streamk:raise SystemExit("generated O Stream-K x4 requires --generated-o-streamk")
   if args.ordinary_selected_o and not args.generated_o_streamk_x4:raise SystemExit("ordinary selected O requires generated O Stream-K x4 census")
+  if args.ordinary_selected_q and (args.qo_streamk or args.native_q or args.native_qkv):raise SystemExit("ordinary selected Q requires the generated Q-only route")
   if args.native_q and (args.arm!="candidate" or args.qo_streamk or args.native_qkv): raise SystemExit("native Q requires the current plain Q/O candidate")
   if args.native_k and (args.arm!="candidate" or args.native_qkv): raise SystemExit("native K excludes the combined native QKV diagnostic")
   if args.native_q4_v and (args.arm!="candidate" or not args.q4_v or args.native_qkv): raise SystemExit("native Q4 V requires candidate Q4 V and excludes native QKV")
@@ -741,6 +747,10 @@ def main():
     if args.q_x4 and getattr(qo_asset,"operand_order",getattr(getattr(qo_asset,"q_context",None),"operand_order",None))!="weight_a_activation_b":
       raise RuntimeError("typed Q x4 binding lost its swapped operand contract")
     qo=qo_asset.new_capture() if args.qo_streamk else _GraphOwnedQOCapture(qo_asset,RECORD_U32)
+    if args.ordinary_selected_q:
+      from tinygrad.llm.model import _nv_compiler_q4_imma_q_pp512_enabled
+      if not _nv_compiler_q4_imma_q_pp512_enabled(model.config): raise RuntimeError("ordinary generated Q selector is not active")
+      qo=dataclasses.replace(qo_binding_for("NV",variant="streamk"),population=36,roles=("attn_q",)).new_capture()
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
     if args.native_o:
@@ -777,7 +787,7 @@ def main():
               "q4_down":None if q4_down_asset is None else q4_down_asset.candidate_identity,
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
-              "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.q_context.canonical_identity,
+              "qo":None if qo is None else qo.candidate_identity if (args.qo_streamk or args.ordinary_selected_q) else qo.asset.q_context.canonical_identity,
               "qo_o":None if qo is None or args.qo_streamk or not args.q_x4 else qo.asset.conventional_context.canonical_identity,
               "native_o":"q4_qo_streamk_n4096" if args.ordinary_selected_o else None if native_o is None else "q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name,
               "native_q":None if native_q is None else native_q.asset.q4_q_main.arg.name,
@@ -854,7 +864,10 @@ def main():
       "program":"nv_sm120_q16_grid_hd128_loop_attention","exact_population":36,
       "graph_calls":rows,"census":{"predicted":36,"observed":len(rows)},
       "full_t512_relaunch":False,"source":"finalized-TinyJit-graph"})
-  stage_buffers=_graph_stage_buffers(jit,identities) if args.deep_replay else {}
+  program_roles={}
+  if args.ordinary_selected_q: program_roles[_program_binary_digest(qo.q_program)]="qo"
+  if args.ordinary_selected_o: program_roles[_program_binary_digest(ordinary_o_capture.q_program)]="native_o"
+  stage_buffers=_graph_stage_buffers(jit,identities,program_roles) if args.deep_replay else {}
   stage_census={key:{"calls":len(bufs),"unique_allocations":len({id(buf) for buf in bufs})} for key,bufs in stage_buffers.items()}
   a0=_numpy_output(_call_and_sync(jit,chunk_a,temp));deep0=_snapshot(model,stage_buffers) if args.deep_replay else None
   cycles=[];a1=b=None
@@ -921,7 +934,9 @@ def main():
   if native_k is not None:mains["k"]=[c for c in calls if _call_name(c)==native_k.asset.q4_k_main.arg.name]
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
   if args.qo_streamk: mains["qo"]=[c for c in calls if _call_name(c)=="q4_qo_streamk_n4096"]
+  if args.ordinary_selected_q: mains["qo"]=[c for c in calls if _program_binary_digest(c.src[0])==_program_binary_digest(qo.q_program)]
   if native_o is not None or args.ordinary_selected_o:mains["native_o"]=[c for c in calls if _call_name(c)==("q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name)]
+  if args.ordinary_selected_o:mains["native_o"]=[c for c in calls if _program_binary_digest(c.src[0])==_program_binary_digest(ordinary_o_capture.q_program)]
   if native_q is not None:mains["native_q"]=[c for c in calls if _call_name(c)==native_q.asset.q4_q_main.arg.name]
   if native_qkv is not None:
     mains["native_qkv_q4"]=[c for c in calls if _call_name(c)==native_qkv.asset.q4_q_main.arg.name]
@@ -1088,9 +1103,9 @@ def main():
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,
       census["qo_main"]==36,len(mains["native_o"])==36,census["v_main"]==18,census["q6_v_main"]==18,
       census["q6_down_main"]==18,census["q4_down_main"]==18,census["compiler_main_total"]==252,
-      census["q8_producer_total"]==(234 if args.generated_o_streamk and args.gate_x4_chain else 216),census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
+      census["q8_producer_total"]==(234 if args.generated_o_streamk else 216),census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
-      census["active_fixups"]==(126 if args.generated_o_streamk else 90),census["weight_copy_kernels"]==0))
+      census["active_fixups"]==((162 if args.ordinary_selected_q else 126) if args.generated_o_streamk else 90),census["weight_copy_kernels"]==0))
   elif args.native_gate_up:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_down_main"]==18,
@@ -1143,7 +1158,7 @@ def main():
       census["q6_down_main"]==18,census["q6_down_producer"]==18,census["q4_down_main"]==18,census["q4_down_producer"]==18,
       census["compiler_main_total"]==252,census["q8_producer_total"]==252,census["candidate_weight_args"]==252,
       census["unique_weight_bases"]==252,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
-      census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==90,
+      census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==(162 if args.ordinary_selected_q else 90),
       census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.q4_down_streamk:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,

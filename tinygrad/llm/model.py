@@ -107,8 +107,14 @@ def _nv_compiler_q4_imma_capture(model, jit, binding):
   """Return stable capture-local state without putting it in a device global."""
   captures = getattr(model, "_nv_compiler_q4_imma_pp512_captures", None)
   if captures is None: captures = model._nv_compiler_q4_imma_pp512_captures = {}
-  if jit not in captures: captures[jit] = binding.new_capture()
-  return captures[jit]
+  program=getattr(binding,"q_program",None)
+  if program is None: program=getattr(binding,"main_program",None)
+  info=getattr(program,"arg",None)
+  binding_identity=(type(binding).__module__,type(binding).__qualname__,getattr(binding,"candidate_identity",None),
+    getattr(info,"name",None),getattr(binding,"n",None),getattr(binding,"population",None),tuple(getattr(binding,"roles",())))
+  key=(jit,binding_identity)
+  if key not in captures: captures[key] = binding.new_capture()
+  return captures[key]
 
 def _nv_llama_packed_q4k_capture(model,jit,binding):
   captures=getattr(model,"_nv_llama_packed_q4k_pp512_captures",None)
@@ -214,6 +220,11 @@ def _nv_compiler_q4_gate_q8_packed_loads_enabled(config) -> bool:
 def _nv_compiler_q4_gate_q4_packed_publication_enabled(config) -> bool:
   """Use qualified packed Q4 nibble publication; zero is rollback."""
   return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
+def _nv_compiler_q4_imma_q_pp512_enabled(config) -> bool:
+  """Selected generated Q Stream-K route; zero is explicit rollback to wide Q."""
+  return bool(getenv("NV_COMPILER_Q4_Q_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   """Selected generated O Stream-K x4 route; zero is explicit rollback."""
@@ -1095,7 +1106,10 @@ class TransformerBlock(FFNBlock):
       elif _nv_compiler_q4_imma_k_pp512_enabled(self.config) and \
           isinstance(getattr(self,"attn_k",None),Q4KPrimitiveLinear) and x.device == "NV" and x.numel() == 512*4096:
         binding, flat = self._nv_compiler_q4_imma_k_pp512_binding, x.reshape(512,4096)
-        q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
+        if getattr(self, "_nv_compiler_q4k_q_pp512_binding", None) is not None and isinstance(self.attn_q,Q4KPrimitiveLinear):
+          q = _prefill_semantic(_prefill,prefill_scratch,self._nv_compiler_q4k_q_pp512_binding.project(
+            flat,self.attn_q.prefill_packed_weight(),model_family="qwen3_8b",role="attn_q"))
+        else: q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
         k = _prefill_semantic(_prefill,prefill_scratch,
           binding.project(flat,self.attn_k.prefill_packed_weight(),model_family="qwen3_8b",role="attn_k"))
         if getattr(self, "_nv_compiler_q4_imma_v_pp512_enabled", False) and x.device == "NV" and isinstance(self.attn_v, Q4KPrimitiveLinear):
@@ -2014,7 +2028,12 @@ class Transformer:
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
       block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
-    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
+    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = _nv_compiler_q_binding = None
+    if is_prefill_v2 and _nv_compiler_q4_imma_q_pp512_enabled(self.config):
+      from dataclasses import replace as _dc_replace
+      from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_q_binding_for
+      _nv_compiler_q_binding=_dc_replace(compiler_q_binding_for("NV",variant="streamk"),population=len(self.blk),roles=("attn_q",))
+      _nv_compiler_q_binding.prepare(len(self.blk))
     if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
       from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
       _nv_compiler_o_binding=compiler_o_binding_for("NV",variant="streamk",native_q_x4=True,o_only=True)
@@ -2144,6 +2163,12 @@ class Transformer:
     if _nv_o_binding is not None:
       o_capture=_nv_llama_packed_o_capture(self,jit,_nv_o_binding); o_capture.begin_trace()
       for block in self.blk: block._nv_llama_packed_o_pp512_binding=o_capture
+    if _nv_compiler_q_binding is not None:
+      q_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_q_binding)
+      q_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q4k_q_pp512_binding=q_capture
+        if isinstance(block.attn_q,Q4KPrimitiveLinear) and hasattr(block.attn_q,"_pf16_w"): delattr(block.attn_q,"_pf16_w")
     if _nv_compiler_o_binding is not None:
       o_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_o_binding)
       o_capture.begin_trace()
