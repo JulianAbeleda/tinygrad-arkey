@@ -1,0 +1,87 @@
+{
+  "schema": "tinygrad.nv_flash_graph_family_delta.v1",
+  "status": "PASS",
+  "rows": [
+    {
+      "program": "E_2048_4_8_16_2_82263f3d7c6516dd0d8b78f8d75f712cfb3098cdcd6c9a1b11ff2c17e7eeb030",
+      "generated_calls": 36,
+      "native_calls": 0,
+      "delta": -36
+    },
+    {
+      "program": "E_4096_32_4_5a86e3920e805a3a101a901d317f8e77ce35e37c5c5673e0ab78d740016ef947",
+      "generated_calls": 36,
+      "native_calls": 0,
+      "delta": -36
+    },
+    {
+      "program": "E_4096_32_4_65918f72cc4abae74467a085e56cffc4ecd7f3949482f83e291d3ca7c856b6e9",
+      "generated_calls": 36,
+      "native_calls": 0,
+      "delta": -36
+    },
+    {
+      "program": "E_512_4_2_8_16_4_284de8f2c9c98fcb873331166e5366c16b6d3ea5594fe638257749ba7f83929d",
+      "generated_calls": 36,
+      "native_calls": 0,
+      "delta": -36
+    },
+    {
+      "program": "E_512_8_8_16_4_1664fbfbb99d6de9997b2d62a7bb2034ef02058fc6b20396c61f6b9038d93ecd",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "generated_calls": 179,
+      "native_calls": 144,
+      "delta": -35
+    },
+    {
+      "program": "E_64_64_8_16_4_5361cb456fed9cef2355a716696c409941ed1e2d444343bdd8596b747bb8376f",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "E_64_8_8_16_4_06131712708bbabc2c6872e91e47ce39ea8c754ae5c767eef2d0312c1ad258ce",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "E_64_8_8_16_4_4419b8c46e1596d220eb30bff9c653a9e23ca7b1c1d690259cc6fbe83a92599c",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "E_8_64_2_8_16_4_291c3bcf55b09b0912abc771253f6b2d97b09e5e10b12c4066d2ca05fdc80584",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "E_8_64_2_8_16_4_70014c3fe64df791d2a4df56638b7cf4ff8486a1289cb38ecb7b8f06b1538cb9",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "nv_llama_fattn_mma_pp512",
+      "generated_calls": 0,
+      "native_calls": 36,
+      "delta": 36
+    },
+    {
+      "program": "nv_sm120_q16_grid_hd128_loop_attention",
+      "generated_calls": 36,
+      "native_calls": 0,
+      "delta": -36
+    }
+  ],
+  "generated_total_changed": 359,
+  "native_total_changed": 396,
+  "net_launch_delta": 37
+}
