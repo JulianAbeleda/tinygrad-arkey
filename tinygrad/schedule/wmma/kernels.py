@@ -410,7 +410,7 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   # path, so it does not affect the spec-driven route's Hd-threading.
   end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=2,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
   return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))
-def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,warps_per_cta:int=1,fragment_model=None,stage_k:bool=True,stage_v:bool=False)->UOp:
+def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128,warps_per_cta:int=1,fragment_model=None,stage_k:bool=True,stage_v:bool=False,q_rope_freqs:UOp|None=None)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""
   # NV2c research-only copy; default AMD builder is intentionally separate.
   from tinygrad.uop.ops import AttentionOutputDrainSpec, AttentionGridSpec, LoopStateSpec, PackedFragmentLoopSpec, AxisType
@@ -424,13 +424,16 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
   hd=grid.head_dim; hd_blocks=hd//16
   owners=(q,k,v,out); sizes=(q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners) or tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes: raise ValueError(f"grid loop requires Q1/K2/V3/out0 sized {sizes}")
-  if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires fp16 and finite scale")
+  if tuple(x.ptrdtype.base for x in owners)!=((dtypes.float if q_rope_freqs is not None else dtypes.half),dtypes.half,dtypes.half,dtypes.half) or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires typed Q/K/V and finite scale")
+  if q_rope_freqs is not None and (q_rope_freqs.op is not Ops.PARAM or q_rope_freqs.arg.slot!=4 or q_rope_freqs.ptrdtype.base is not dtypes.float or q_rope_freqs.ptrdtype.size!=512*128): raise ValueError("invalid Q-RoPE frequency ABI")
   valid_kv=kv_tokens if valid_kv is None else valid_kv
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
   if (output_block_base,acc_blocks) != (0,hd_blocks) and (acc_blocks not in {1,2,4} or not 0 <= output_block_base <= hd_blocks-acc_blocks or output_block_base % acc_blocks): raise ValueError("grid loop requires a full or aligned accumulator slice")
   if query_start is None: query_start=valid_kv-q_tokens
   if warps_per_cta not in {1,4}: raise ValueError("unsupported warps_per_cta")
-  thread=UOp.special(32*warps_per_cta,"lidx0"); lane=thread.alu(Ops.AND,UOp.const(dtypes.weakint,31)); warp=thread.alu(Ops.SHR,UOp.const(dtypes.weakint,5)); group=UOp.special((q_heads*grid.q_tiles+warps_per_cta-1)//warps_per_cta,"gidx0").alu(Ops.MUL,UOp.const(dtypes.weakint,warps_per_cta)).alu(Ops.ADD,warp) if warps_per_cta==4 else UOp.special(q_heads*grid.q_tiles,"gidx0")
+  thread=UOp.special(32*warps_per_cta,"lidx0",dtype=dtypes.int) if warps_per_cta==4 else UOp.special(32,"lidx0")
+  lane=thread.alu(Ops.AND,UOp.const(dtypes.int,31)).cast(dtypes.weakint); warp=thread.alu(Ops.SHR,UOp.const(dtypes.int,5)).cast(dtypes.weakint)
+  group=UOp.special((q_heads*grid.q_tiles+warps_per_cta-1)//warps_per_cta,"gidx0").alu(Ops.MUL,UOp.const(dtypes.weakint,warps_per_cta)).alu(Ops.ADD,warp) if warps_per_cta==4 else UOp.special(q_heads*grid.q_tiles,"gidx0")
   col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); zero_wmma=UOp.const(dtypes.float.vec(fragment_model.c_carrier),(0.0,)*fragment_model.c_carrier); warg=fragment_model.wmma_warg
   full_kv_tiles=(kv_tokens+15)//16
   # THEORY 3 (docs/prefill-needle-theories-20260724.md): causal_v1 masks every KV tile fully past
@@ -487,10 +490,15 @@ def nv_sm120_q16_grid_hd128_cooperative_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_
   v_staged=stage_v
   k_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(k,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,stage_generation=0,slots=slots,slot_index=slot,pre_barrier=True))) if k_staged else k
   v_shared=lower_cooperative_tile_load(UOp.cooperative_tile_load(v,tile_base,CooperativeTileLoadSpec(tile_base=tile_base,loop_axis=rng,stage_generation=1,slots=slots,slot_index=slot,pre_barrier=False))) if v_staged else v
+  if q_rope_freqs is not None:
+    from tinygrad.uop.ops import CooperativeQRoPEStageSpec
+    from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_q_rope_stage
+    q_shared=lower_cooperative_q_rope_stage(q,q_rope_freqs,group,lane,warp,rng,CooperativeQRoPEStageSpec())
+  else: q_shared=q
   def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
   def fr(owner,role,b,call=0):
-    staged = k_staged if role == "K" else v_staged if role == "V" else False
-    selected = k_shared if role=="K" and k_staged else v_shared if role=="V" and v_staged else owner
+    staged = q_rope_freqs is not None if role=="Q" else k_staged if role == "K" else v_staged if role == "V" else False
+    selected = q_shared if role=="Q" and staged else k_shared if role=="K" and k_staged else v_shared if role=="V" and v_staged else owner
     return packed_fragment_load(selected, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group, call=call, fragment_model=fragment_model, physical_local_size=32*warps_per_cta, storage="shared" if staged else "global", shared_phase_abi="single_buffer_barrier_v1" if staged else None, stage_wait=stage_begin if staged else None)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero_wmma

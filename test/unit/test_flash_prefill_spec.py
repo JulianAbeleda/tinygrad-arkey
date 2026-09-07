@@ -17,7 +17,8 @@ def test_flash_prefill_descriptor_validates_and_serializes():
   assert spec.to_json() == {
     "Hq": 32, "Hkv": 8, "Hd": 128, "q_tokens": 16, "kv_tokens": 512, "causal": True,
     "valid_kv": 384, "query_start": 368, "acc_blocks": 8, "output_block_base": 0,
-    "phase_abi_v1": False, "scale": 0.125, "target": "amd_gfx1100",
+    "phase_abi_v1": False, "warps_per_cta": 1, "q_rope_stage": False,
+    "scale": 0.125, "target": "amd_gfx1100",
   }
 
   with pytest.raises(ValueError, match="positive 16-multiple head_dim <=128"):

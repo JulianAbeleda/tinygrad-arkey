@@ -69,6 +69,10 @@ from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 
+def _flash_prefill_identity(spec) -> str:
+  """Stable program identity containing the complete codegen-affecting spec."""
+  return f"{spec.target}_q16_grid_hd128_loop_attention:{spec!r}"
+
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which the fragment-model kernel exists /
 # is generatable. Extend as the proven matrix grows (see B7 in the scope doc). This
 # stays the proven-on-GPU shape allowlist; FlashPrefillAttentionSpec.validate() (below)
@@ -180,7 +184,7 @@ def prefill_grid_spec(q:Tensor, k:Tensor) -> AttentionGridSpec | None:
 
 
 def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, causal:bool,
-                            ctx:SharedAttentionCandidateContext) -> Tensor:
+                            ctx:SharedAttentionCandidateContext, q_rope_inputs:tuple[Tensor,Tensor]|None=None) -> Tensor:
   """Inject the proven fused-attention program via Tensor.uop_program.
 
   Q/K/V arrive fp16 (1, H, T, 128); returns fp16 (1, Hq, T, 128). custom_kernel
@@ -233,10 +237,12 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   except ValueError as e:
     raise NotImplementedError(f"custom_kernel_attention: {e}") from None
   nv_k_stage = spec_target == "nv_sm120" and bool(_getenv("PREFILL_NV_K_STAGE", 1))
+  q_rope_stage=spec_target=="nv_sm120" and bool(_getenv("PREFILL_NV_FLASH_Q_ROPE_STAGE"))
+  if q_rope_stage and (q_rope_inputs is None or q_rope_inputs[0].shape!=(1,Hq,T,Hd) or q_rope_inputs[0].dtype is not dtypes.float32 or q_rope_inputs[1].shape!=(T,Hd) or q_rope_inputs[1].dtype is not dtypes.float32): raise NotImplementedError("invalid Q-RoPE stage inputs")
   spec = FlashPrefillAttentionSpec(Hq=Hq, Hkv=Hkv, Hd=Hd, q_tokens=T, kv_tokens=KV, causal=causal, scale=sc,
     valid_kv=ctx.kv_tokens, query_start=ctx.start_pos, output_block_base=ctx.output_block_base,
     acc_blocks=None if ctx_full_default else ctx.acc_blocks, target=spec_target,
-    warps_per_cta=4 if nv_k_stage else 1)
+    warps_per_cta=4 if nv_k_stage else 1, q_rope_stage=q_rope_stage)
   try:
     spec.validate()
   except ValueError as e:
@@ -244,7 +250,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   if spec.target not in _PREFILL_EMITTERS:
     raise NotImplementedError(f"custom_kernel_attention: no emitter registered for target {spec.target!r}")
 
-  q_flat = q.cast(dtypes.float16).reshape(Hq * T * Hd)
+  q_flat=q_rope_inputs[0].reshape(Hq*T*Hd) if q_rope_stage else q.cast(dtypes.float16).reshape(Hq*T*Hd)
   k_flat = k.cast(dtypes.float16).reshape(Hkv * KV * Hd)
   # V VECTORIZATION (PREFILL_V_TRANSPOSED): uop_program already .contiguous()'s each input into a
   # fresh buffer, so materializing V as [Hkv][Hd][KV] instead of [Hkv][KV][Hd] costs one transposed
@@ -252,8 +258,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   # 16 b128 loads (see amd_attention_abi.expand_loop_fragment). Element count is identical.
   v_flat = (v.cast(dtypes.float16).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
             else v.cast(dtypes.float16).reshape(Hkv * KV * Hd))
-  identity = (f"{spec.target}_q16_grid_hd128_loop_attention:role=attention_tile,"
-              f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
+  identity = _flash_prefill_identity(spec)
   fxn,ticket=lower_authorized_candidate({"family":"flash_prefill_spec.v1","identity":identity,
     "spec_repr":repr(spec),"spec_binding":"prefill_spec"},
     (("custom_kernel_prefill_attention","flash_prefill_score"),
@@ -262,7 +267,8 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, fxn,
     output_spec=OutputSpec((Hq * T * Hd,), dtypes.float16),
     boltbeam_ticket=ticket)
-  result = execute_promoted_program(None, q_flat, k_flat, v_flat, program=program)
+  ins=(q_flat,k_flat,v_flat,q_rope_inputs[1].reshape(T*Hd)) if q_rope_stage else (q_flat,k_flat,v_flat)
+  result=execute_promoted_program(None,*ins,program=program)
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
   # once we know this call is committed to the fused custom-kernel route, not a
   # NotImplementedError fallback). role="attention_tile" matches the manifest row's
@@ -277,7 +283,7 @@ def sdpa_fallback(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, mask:Tensor
 
 def route_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=None, mask:Tensor|None=None,
                             causal:bool=False, ctx:SharedAttentionCandidateContext|None=None,
-                            use_custom_kernel:bool=False) -> Tensor:
+                            use_custom_kernel:bool=False, q_rope_inputs:tuple[Tensor,Tensor]|None=None) -> Tensor:
   """THE single entry the model calls. Chooses injection / (legacy) semantic / SDPA.
 
   q/k/v are fp16 at this boundary (the model casts Q->half; K/V are fp16). Result is
@@ -286,7 +292,7 @@ def route_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=No
   grid = prefill_grid_spec(q, k)
   if use_custom_kernel and grid is not None and ctx is not None:
     try:
-      return custom_kernel_attention(q, k, v, scale=scale, causal=causal, ctx=ctx)
+      return custom_kernel_attention(q,k,v,scale=scale,causal=causal,ctx=ctx,q_rope_inputs=q_rope_inputs)
     except NotImplementedError:
       pass  # until B1-B4 land, fall through to the proven paths
   return sdpa_fallback(q, k, v, scale=scale, mask=mask)

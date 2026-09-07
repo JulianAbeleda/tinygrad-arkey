@@ -308,7 +308,8 @@ def _nv_independent_warp_fragment(x):
   lane_ops, group_ops = walk(lane), walk(group)
   if getattr(a, "physical_local_size", None) == 128 and __import__('os').getenv("NV_F2_DUMP_INDEX_TREES"):
     print("NV_F2_INDEX_TREE " + repr({"lane":lane_ops,"group":group_ops}))
-  lane_names={str(v.arg).strip("'\"") for v in (lane, lane.src[0]) if getattr(v,"op",None) is Ops.SPECIAL}; group_names={str(v.arg).strip("'\"") for v in (group, group.src[0], group.src[1], group.src[0].src[0], group.src[1].src[0]) if getattr(v,"op",None) is Ops.SPECIAL}
+  lane_names={str(arg).strip("'\"") for op,arg in lane_ops if op=="SPECIAL"}
+  group_names={str(arg).strip("'\"") for op,arg in group_ops if op=="SPECIAL"}
   lane_consts={int(a) for o,a in lane_ops if o=="CONST" and str(a).lstrip('-').isdigit()}; group_consts={int(a) for o,a in group_ops if o=="CONST" and str(a).lstrip('-').isdigit()}
   if lane_names != {'lidx0'} or group_names != {'lidx0','gidx0'}:
     return False

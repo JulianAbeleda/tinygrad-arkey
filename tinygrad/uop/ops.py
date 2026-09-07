@@ -2232,6 +2232,17 @@ class SharedTileOwnerSpec(NamedTuple):
     if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV shared tile end barrier requires loop axis")
     return self
 
+class CooperativeQRoPEStageSpec(NamedTuple):
+  native_abi: str = "nv_sm120_q_rope_stage_pp512_v1"
+  q_tokens: int = 512
+  q_heads: int = 32
+  head_dim: int = 128
+  warps: int = 4
+  tile_elements: int = 2048
+  def validate(self):
+    if tuple(self) != ("nv_sm120_q_rope_stage_pp512_v1",512,32,128,4,2048): raise ValueError("invalid exact NV pp512 Q-RoPE stage")
+    return self
+
 class PackedFragmentLoopSpec(NamedTuple):
   """Exact Hd128 fragment role plus a runtime KV-tile RANGE source."""
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"

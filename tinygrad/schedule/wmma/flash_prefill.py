@@ -51,6 +51,7 @@ class FlashPrefillAttentionSpec:
   phase_abi_v1: bool = False
   warps_per_cta: int = 1
   target: str = "amd_gfx1100"
+  q_rope_stage: bool = False
 
   def __post_init__(self):
     if self.acc_blocks is None:
@@ -76,6 +77,7 @@ class FlashPrefillAttentionSpec:
       if not 0 <= self.output_block_base <= 8 - self.acc_blocks:
         raise ValueError("output_block_base is outside the accumulator-slice range")
     if self.warps_per_cta not in {1, 4}: raise ValueError("warps_per_cta must be 1 or 4")
+    if self.q_rope_stage and (self.target != "nv_sm120" or self.Hd != 128 or self.q_tokens != 512 or self.warps_per_cta != 4): raise ValueError("Q-RoPE stage requires exact NV pp512 four-warp descriptor")
     return self
 
   def emit(self, kernel_info=None):
@@ -99,27 +101,31 @@ class FlashPrefillAttentionSpec:
     from tinygrad.uop.ops import KernelInfo
     from tinygrad.codegen.opt.attention_fragment import attention_fragment_model
     fragment_model = attention_fragment_model(self.target)
-    ki = kernel_info if kernel_info is not None else KernelInfo(name=f"{self.target}_q16_grid_hd128_loop_attention")
+    suffix="_q_rope_stage" if self.q_rope_stage else ""
+    ki = kernel_info if kernel_info is not None else KernelInfo(name=f"{self.target}_q16_grid_hd128_loop_attention{suffix}")
 
-    def fxn(out_ph: UOp, q_ph: UOp, k_ph: UOp, v_ph: UOp) -> UOp:
+    def fxn(out_ph: UOp, q_ph: UOp, k_ph: UOp, v_ph: UOp, *extra:UOp) -> UOp:
+      if len(extra)!=int(self.q_rope_stage): raise ValueError("Q-RoPE stage frequency ABI mismatch")
       builder = nv_sm120_q16_grid_hd128_cooperative_attention if self.target == "nv_sm120" and self.warps_per_cta == 4 else amd_gfx1100_q16_grid_hd128_loop_attention
+      kwargs={"q_rope_freqs":extra[0] if extra else None} if builder is nv_sm120_q16_grid_hd128_cooperative_attention else {}
       return builder(
         q_ph, k_ph, v_ph, out_ph, q_tokens=self.q_tokens, q_heads=self.Hq,
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,
         output_block_base=self.output_block_base, acc_blocks=self.acc_blocks,
-        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, warps_per_cta=self.warps_per_cta, kernel_info=ki, fragment_model=fragment_model)
+        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, warps_per_cta=self.warps_per_cta, kernel_info=ki, fragment_model=fragment_model, **kwargs)
     return fxn
 
   @property
   def emitted_kernel_names(self) -> tuple[str, ...]:
-    return (f"{self.target}_q16_grid_hd128_loop_attention",)
+    return (f"{self.target}_q16_grid_hd128_loop_attention{'_q_rope_stage' if self.q_rope_stage else ''}",)
 
   def to_json(self) -> dict[str, Any]:
     return {"Hq": self.Hq, "Hkv": self.Hkv, "Hd": self.Hd, "q_tokens": self.q_tokens,
             "kv_tokens": self.kv_tokens, "causal": self.causal, "valid_kv": self.valid_kv,
             "query_start": self.query_start, "acc_blocks": self.acc_blocks,
             "output_block_base": self.output_block_base, "phase_abi_v1": self.phase_abi_v1,
+            "warps_per_cta": self.warps_per_cta, "q_rope_stage": self.q_rope_stage,
             "scale": self.scale, "target": self.target}
 
 

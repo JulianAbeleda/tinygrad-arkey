@@ -84,6 +84,22 @@ def _shared_tile_owner(owner:UOp) -> tuple[UOp,UOp]:
     raise ValueError("shared tile owner barrier must publish one store group")
   return local, barrier
 
+def lower_cooperative_q_rope_stage(q:UOp, freqs:UOp, group:UOp, lane:UOp, warp:UOp, loop_axis:UOp, spec) -> UOp:
+  from tinygrad.uop.ops import CooperativeQRoPEStageSpec, SharedTileOwnerSpec
+  if not isinstance(spec,CooperativeQRoPEStageSpec) or spec.validate() is not spec: raise ValueError("invalid Q-RoPE stage spec")
+  if q.op is not Ops.PARAM or q.ptrdtype.base is not dtypes.float or q.ptrdtype.size != 32*512*128: raise ValueError("Q-RoPE stage requires fp32 Q")
+  if freqs.op is not Ops.PARAM or freqs.ptrdtype.base is not dtypes.float or freqs.ptrdtype.size != 512*128: raise ValueError("Q-RoPE stage requires fp32 frequencies")
+  shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(spec.warps*spec.tile_elements,AddrSpace.LOCAL),arg=("nv_q_rope_stage",spec.native_abi))
+  qhead=group//32; qtile=group%32; stores=[]
+  for i in range(64):
+    j=lane+UOp.const(lane.dtype,i*32); row=j//UOp.const(lane.dtype,128); dim=j%UOp.const(lane.dtype,128); lo=dim%UOp.const(lane.dtype,64)
+    base=(qhead*512+qtile*16+row)*128; x1=q.index(base+lo).load(); x2=q.index(base+lo+64).load()
+    fbase=(qtile*16+row)*128; c=freqs.index(fbase+lo).load(); s=freqs.index(fbase+lo+64).load()
+    val=(dim<64).where(x1*c-x2*s,x2*c+x1*s).cast(dtypes.half)
+    stores.append(shared.index(warp*spec.tile_elements+j,ptr=True).store(val))
+  barrier=UOp(Ops.BARRIER,dtypes.void,(UOp.group(*stores),),arg=("nv2a_tile_barrier","single_buffer_barrier_v1"))
+  return shared.after(barrier).replace(tag=SharedTileOwnerSpec(loop_axis=loop_axis,stage_generation=2,slots=4,slot_index=warp))
+
 
 def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
   """Register-level encoding of one C-fragment drain store, derived from the spec authority.
@@ -218,11 +234,13 @@ def expand_loop_fragment(x:UOp) -> UOp:
   def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
   model=getattr(x.arg,"fragment_model",None)
   if shared_storage:
-    if role not in {"K", "V"}: raise ValueError("shared packed fragments currently require K/V role")
+    if role not in {"Q", "K", "V"}: raise ValueError("shared packed fragments require Q/K/V role")
     if model is not None:
       lanes=model.fragment_lanes(role)
       call_off=x.arg.call*model.tc.dims[0] if x.arg.call else 0
-      if role == "K":
+      if role == "Q":
+        offs=tuple(model.operand_row(0,i,lane)*128+block*16+model.operand_k(0,i,lane) for i in range(lanes))
+      elif role == "K":
         row=model.operand_row(1,0,lane)+UOp.const(dtypes.weakint,call_off) if call_off else model.operand_row(1,0,lane)
         offs=tuple((row*128 + block*16 + model.operand_k(1,i,lane)) for i in range(lanes))
       else:

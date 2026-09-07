@@ -1205,7 +1205,8 @@ class TransformerBlock(FFNBlock):
     # Q is roped via _fr (the gathered ring table when ring, else freqs_cis) indexed by start_pos: in the full ring
     # start_pos is the write slot wp, and _fr[wp] = freqs[pos_of(wp)] = the query's (newest) position -> consistent
     # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
-    _q_rope = apply_rope(q[..., :self.config.rope_dim], _fr[_graph_pos:_graph_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
+    _q_flash_rope_inputs=(q,_fr[_graph_pos:_graph_pos+T])
+    _q_rope = apply_rope(q[..., :self.config.rope_dim], _q_flash_rope_inputs[1]).cat(q[..., self.config.rope_dim:], dim=-1)
     if _qk_norm_rope and _q_norm_input is not None and self.config.rope_dim == self.config.head_dim and not _rope_read:
       _q_rope = _decode_reduce_output_rmsnorm_rope(self.attn_q_norm, _q_norm_input, _q_rope, _fr, True)
     q = _prefill_semantic(_prefill, prefill_scratch, _q_rope)
@@ -1352,7 +1353,7 @@ class TransformerBlock(FFNBlock):
       with role_metadata("shared_prefill_attention"):
         attn = _prefill_semantic(_prefill, prefill_scratch,
           route_prefill_attention(q.cast(dtypes.float16), k.cast(dtypes.float16), v.cast(dtypes.float16),
-            mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
+            mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True,q_rope_inputs=_q_flash_rope_inputs).cast(q.dtype))
     elif self.config.prefill_tc_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # Q/K/V have the same fp16 activation contract for resident-overlay and
       # packed-weight projections.  Capture attention once at that boundary;
