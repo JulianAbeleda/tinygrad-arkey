@@ -287,10 +287,14 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
     # The tile-major record is the qualified gate/up conversion; zero restores
     # the flat compact record without changing the generated main contract.
     compact_q8=bool(int(os.environ.get("NV_COMPILER_Q4_GATE_TILE_Q8", "1")))
-    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8)
+    warp_raw=os.environ.get("NV_COMPILER_Q4_GATE_WARP", "2,4")
+    try:warp_m,warp_n=(int(x) for x in warp_raw.split(","))
+    except Exception as e:raise ValueError("NV_COMPILER_Q4_GATE_WARP must be warp_m,warp_n") from e
+    schedule=CompilerQ4ScheduleConfig(warp_m=warp_m,warp_n=warp_n);schedule.validate()
+    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n)
     if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(
-      Device[device],CompilerPP512Binding.compile(Device[device],compact_q8=True,producer_arithmetic=producer_arithmetic)
-      if compact_q8 else binding_for(device,producer_arithmetic=producer_arithmetic),n=N,pair_q8_reuse=pair_q8_reuse)
+      Device[device],CompilerPP512Binding.compile(Device[device],schedule,compact_q8=compact_q8,producer_arithmetic=producer_arithmetic),
+      n=N,pair_q8_reuse=pair_q8_reuse)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
   key=(device,producer_arithmetic)
