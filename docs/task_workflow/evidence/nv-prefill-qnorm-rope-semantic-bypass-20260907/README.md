@@ -1,0 +1,3 @@
+# Q RMSNorm to RoPE semantic-boundary bypass
+
+A default-off discriminator bypassed the `prefill_scratch` semantic marker between Q RMSNorm and RoPE under the qualified pp512 route. Correctness, replay, canonical ownership and the 252/234/162 topology pass, but finalized graph structure is byte-for-byte unchanged at the relevant boundary: total program calls remain 1683, E2048 RoPE remains 36 calls, and the two E4096 KV copies remain 72 calls. The semantic marker is not the materialization cause. The model edit is reverted; the next integration must change the producer/output ABI rather than marker placement.
