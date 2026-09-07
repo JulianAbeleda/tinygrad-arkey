@@ -872,10 +872,10 @@ def main():
       if runtime is None:raise RuntimeError(f"service runtime missing for {name} at {ordinal}")
       live=tuple(buf.get_buf("NV") for buf in bufs)
       runtime(*live,global_size=program.arg.global_size,local_size=program.arg.local_size,wait=True)
-      samples=[float(runtime(*live,global_size=program.arg.global_size,local_size=program.arg.local_size,wait=True))*1e6
+      service_samples=[float(runtime(*live,global_size=program.arg.global_size,local_size=program.arg.local_size,wait=True))*1e6
         for _ in range(args.service_rounds)]
       service.append({"ordinal":ordinal,"name":name,"previous":None if ordinal==0 else getattr(entries[ordinal-1][0].arg,"name",""),
-        "next":None if ordinal+1==len(entries) else getattr(entries[ordinal+1][0].arg,"name",""),"samples_us":samples})
+        "next":None if ordinal+1==len(entries) else getattr(entries[ordinal+1][0].arg,"name",""),"samples_us":service_samples})
     _write(args.dump_service_inventory,{"schema":"tinygrad.nv_prefill_live_service.v1","rounds":args.service_rounds,
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
@@ -1013,7 +1013,7 @@ def main():
   elif args.share_q_q4v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
       census["v_main"]==18,census["q6_v_main"]==18,census["q6_down_main"]==18,census["q4_down_main"]==18,
-      census["compiler_main_total"]==252,census["q8_producer_total"]==198,census["candidate_weight_args"]==252,
+      census["compiler_main_total"]==252,census["q8_producer_total"]==(234 if args.gate_x4_chain else 198),census["candidate_weight_args"]==252,
       census["unique_weight_bases"]==252,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
       census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==(162 if args.qo_streamk else 90),census["weight_copy_kernels"]==0))
   elif args.native_q6_v:

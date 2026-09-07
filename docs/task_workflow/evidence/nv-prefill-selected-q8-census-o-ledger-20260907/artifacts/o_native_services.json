@@ -1,0 +1,4297 @@
+{
+  "rounds": 9,
+  "rows": [
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 8,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.52,
+        3.648,
+        3.616,
+        3.584,
+        3.584,
+        3.712,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 10,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.68,
+        3.68,
+        3.68,
+        3.68,
+        3.68,
+        3.712,
+        3.744,
+        3.8719999999999994,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 13,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        154.272,
+        154.4,
+        154.208,
+        154.08,
+        154.144,
+        154.848,
+        154.592,
+        154.304,
+        154.336
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 28,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.984,
+        1.92,
+        1.856,
+        1.856,
+        1.984,
+        1.9520000000000002,
+        1.984,
+        1.888,
+        2.016
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 29,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.728,
+        1.76,
+        1.856,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 36,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 37,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.648,
+        3.552,
+        3.584,
+        3.552,
+        3.744,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 54,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.616,
+        3.584,
+        3.584,
+        3.552,
+        3.616,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 56,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.68,
+        3.776,
+        3.84,
+        3.744,
+        3.712,
+        3.68,
+        3.68,
+        3.712,
+        3.744
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 59,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        155.936,
+        156.608,
+        153.92,
+        154.624,
+        156.544,
+        153.632,
+        153.248,
+        153.312,
+        153.024
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 74,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.856,
+        1.984,
+        1.984,
+        1.9520000000000002,
+        1.984,
+        1.856,
+        1.856,
+        1.856,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 75,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.856,
+        1.728,
+        1.76,
+        1.792,
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 82,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.552,
+        3.68,
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 83,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.552,
+        3.552,
+        3.584,
+        3.584,
+        3.616,
+        3.584,
+        3.68
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 100,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.648,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.616,
+        3.616,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 102,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.84,
+        3.744,
+        3.712,
+        3.68,
+        3.68,
+        3.712,
+        3.712,
+        3.744,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 105,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        155.04,
+        154.4,
+        155.232,
+        155.136,
+        155.232,
+        154.56,
+        154.976,
+        154.24,
+        154.528
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 120,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.016,
+        1.856,
+        1.92,
+        1.92,
+        1.9520000000000002,
+        1.888,
+        1.92,
+        1.92,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 121,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.696,
+        1.728,
+        1.76,
+        1.76,
+        1.728,
+        1.76,
+        1.792,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 128,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.68,
+        3.52,
+        3.616,
+        3.648,
+        3.552,
+        3.616,
+        3.584,
+        3.584,
+        3.648
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 129,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.552,
+        3.52,
+        3.648,
+        3.616,
+        3.68,
+        3.712,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 146,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.712,
+        3.584,
+        3.584,
+        3.616,
+        3.552,
+        3.584,
+        3.52,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 148,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.744,
+        3.744,
+        3.744,
+        3.744,
+        3.712,
+        3.712,
+        3.712,
+        3.68,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 151,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.44,
+        157.568,
+        157.76,
+        155.104,
+        154.848,
+        154.88,
+        154.72,
+        154.048,
+        154.496
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 166,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.9520000000000002,
+        1.92,
+        1.92,
+        2.08,
+        1.92,
+        1.888,
+        1.856,
+        1.856,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 167,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.696,
+        1.728,
+        1.888,
+        1.76,
+        1.792,
+        1.76,
+        1.728,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 174,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.52,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 175,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.616,
+        3.648,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 192,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.68,
+        3.616,
+        3.552,
+        3.552,
+        3.584,
+        3.616,
+        3.616,
+        3.552,
+        3.68
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 193,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.808,
+        3.744,
+        3.712,
+        3.68,
+        3.712,
+        3.712,
+        3.744,
+        3.712,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 195,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        154.752,
+        155.488,
+        155.424,
+        157.888,
+        155.2,
+        155.52,
+        155.232,
+        154.848,
+        154.72
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 211,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.984,
+        1.92,
+        1.92,
+        1.888,
+        1.856,
+        1.888,
+        1.888,
+        2.016,
+        1.76
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 212,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.76,
+        1.792,
+        1.792,
+        1.76,
+        1.728,
+        1.888,
+        1.696,
+        1.856
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 219,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.616,
+        3.712,
+        3.616,
+        3.552,
+        3.616,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 220,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.552,
+        3.616,
+        3.616,
+        3.552,
+        3.584,
+        3.52,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 237,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.648,
+        3.52,
+        3.552,
+        3.52,
+        3.584,
+        3.52,
+        3.616,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 238,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.84,
+        3.8719999999999994,
+        3.68,
+        3.68,
+        3.712,
+        3.68,
+        3.712,
+        3.744
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 240,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        155.424,
+        155.392,
+        155.584,
+        158.24,
+        155.168,
+        155.552,
+        155.328,
+        155.136,
+        155.456
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 256,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.856,
+        1.856,
+        1.888,
+        2.016,
+        1.92,
+        1.888,
+        1.92,
+        1.888,
+        1.824
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 257,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.824,
+        1.728,
+        1.76,
+        1.76,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 264,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.648,
+        3.552,
+        3.552,
+        3.616,
+        3.648,
+        3.68,
+        3.552,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 265,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.648,
+        3.552,
+        3.52,
+        3.712,
+        3.616,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 282,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.52,
+        3.552,
+        3.648,
+        3.584,
+        3.584,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 284,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.68,
+        3.744,
+        3.68,
+        3.68,
+        3.712,
+        3.712,
+        3.84,
+        3.68,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 287,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        158.784,
+        157.056,
+        155.296,
+        155.136,
+        155.36,
+        154.912,
+        156.352,
+        153.504,
+        153.088
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 302,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.824,
+        1.92,
+        1.888,
+        1.888,
+        1.92,
+        1.984,
+        1.856,
+        1.9520000000000002
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 303,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.696,
+        1.728,
+        1.792,
+        1.76,
+        1.728,
+        1.728,
+        1.728,
+        1.792,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 310,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.52,
+        3.68,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 311,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.712,
+        3.616,
+        3.552,
+        3.584,
+        3.52,
+        3.52,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 328,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.712,
+        3.552,
+        3.552,
+        3.552,
+        3.712,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 329,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.648,
+        3.712,
+        3.712,
+        3.744,
+        3.648,
+        3.68,
+        3.712,
+        3.648
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 331,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        159.648,
+        155.872,
+        156.032,
+        156.064,
+        155.264,
+        153.664,
+        152.736,
+        152.544,
+        152.672
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 347,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.92,
+        1.856,
+        1.824,
+        1.824,
+        1.824,
+        1.9520000000000002,
+        1.92,
+        1.856,
+        1.92
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 348,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.792,
+        1.728,
+        1.792,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 355,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.52,
+        3.584,
+        3.552,
+        3.68,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 356,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.616,
+        3.584,
+        3.616,
+        3.584,
+        3.648,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 373,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.584,
+        3.584,
+        3.616,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 374,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.712,
+        3.712,
+        3.68,
+        3.712,
+        3.712,
+        3.776,
+        3.712,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 376,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        158.656,
+        159.04,
+        158.56,
+        155.872,
+        155.712,
+        156.48,
+        156.832,
+        155.616,
+        155.36
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 392,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.9520000000000002,
+        1.856,
+        2.048,
+        1.984,
+        1.792,
+        1.824,
+        1.9520000000000002,
+        1.856,
+        1.824
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 393,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.792,
+        1.76,
+        1.76,
+        1.728,
+        1.728,
+        1.696,
+        1.76,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 400,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.552,
+        3.584,
+        3.616,
+        3.584,
+        3.584,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 401,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.584,
+        3.584,
+        3.648,
+        3.584,
+        3.552,
+        3.584,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 418,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.52,
+        3.584,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 420,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.776,
+        3.744,
+        3.712,
+        3.712,
+        3.68,
+        3.712,
+        3.68,
+        3.744,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 423,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.032,
+        155.616,
+        156.608,
+        156.224,
+        155.936,
+        156.192,
+        156.16,
+        155.456,
+        155.328
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 438,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.016,
+        1.92,
+        1.9520000000000002,
+        1.92,
+        1.888,
+        2.016,
+        1.92,
+        1.92,
+        1.9520000000000002
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 439,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.888,
+        1.792,
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.792,
+        1.824
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 446,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.648,
+        3.552,
+        3.552,
+        3.616,
+        3.712,
+        3.584,
+        3.584,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 447,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.648,
+        3.52,
+        3.52,
+        3.552,
+        3.584,
+        3.584,
+        3.552,
+        3.616,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 464,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.552,
+        3.52,
+        3.648,
+        3.552,
+        3.584,
+        3.616,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 465,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.712,
+        3.84,
+        3.744,
+        3.808,
+        3.712,
+        3.68,
+        3.744,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 467,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        150.72,
+        159.68,
+        159.52,
+        157.248,
+        156.288,
+        157.152,
+        154.56,
+        154.304,
+        153.984
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 483,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.824,
+        1.888,
+        1.92,
+        1.92,
+        1.856,
+        1.856,
+        1.856,
+        1.888,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 484,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.792,
+        1.728,
+        1.76,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 491,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.616,
+        3.712,
+        3.648,
+        3.616,
+        3.584,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 492,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.648,
+        3.584,
+        3.648,
+        3.552,
+        3.552,
+        3.616,
+        3.616,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 509,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.584,
+        3.616,
+        3.552,
+        3.552,
+        3.584,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 510,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.8719999999999994,
+        3.744,
+        3.712,
+        3.68,
+        3.68,
+        3.648,
+        3.712,
+        3.808
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 512,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.64,
+        157.056,
+        156.608,
+        156.064,
+        153.824,
+        153.28,
+        153.984,
+        153.536,
+        153.824
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 528,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.92,
+        1.9520000000000002,
+        1.856,
+        1.824,
+        1.92,
+        1.888,
+        2.08,
+        1.9520000000000002,
+        1.984
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 529,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.76,
+        1.76,
+        1.728,
+        1.76,
+        1.76,
+        1.824,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 536,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.584,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 537,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.648,
+        3.52,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 554,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.584,
+        3.616,
+        3.584,
+        3.488,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 556,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.712,
+        3.712,
+        3.744,
+        3.744,
+        3.712,
+        3.712,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 559,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.152,
+        157.088,
+        156.608,
+        154.464,
+        153.888,
+        153.984,
+        153.728,
+        153.984,
+        152.96
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 574,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.856,
+        1.824,
+        1.9520000000000002,
+        1.92,
+        1.9520000000000002,
+        1.856,
+        1.888,
+        1.92,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 575,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.824,
+        1.76,
+        1.728,
+        1.76,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 582,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.584,
+        3.584,
+        3.68,
+        3.68,
+        3.552,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 583,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.616,
+        3.52,
+        3.552,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 600,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.808,
+        3.616,
+        3.552,
+        3.616,
+        3.552,
+        3.648,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 601,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.776,
+        3.712,
+        3.68,
+        3.712,
+        3.712,
+        3.712,
+        3.712,
+        3.68,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 603,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        157.056,
+        156.768,
+        156.576,
+        156.576,
+        153.28,
+        153.696,
+        153.728,
+        152.448,
+        152.8
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 619,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.9520000000000002,
+        1.92,
+        1.92,
+        1.92,
+        1.856,
+        1.824,
+        1.92,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 620,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.76,
+        1.76,
+        1.76,
+        1.76,
+        1.76,
+        1.728,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 627,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.68,
+        3.648,
+        3.616,
+        3.584,
+        3.584,
+        3.584,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 628,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 645,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.68,
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.52,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 646,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.712,
+        3.712,
+        3.776,
+        3.744,
+        3.68,
+        3.712,
+        3.68,
+        3.808
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 648,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.768,
+        156.96,
+        156.0,
+        153.856,
+        153.28,
+        153.376,
+        152.928,
+        153.248,
+        151.008
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 664,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        2.08,
+        1.888,
+        2.016,
+        1.856,
+        1.888,
+        2.016,
+        1.92,
+        1.9520000000000002
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 665,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.728,
+        1.824,
+        1.728,
+        1.728,
+        1.76,
+        1.792,
+        1.76,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 672,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.552,
+        3.552,
+        3.584,
+        3.552,
+        3.552,
+        3.648,
+        3.648
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 673,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 690,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.712,
+        3.552,
+        3.584,
+        3.552,
+        3.68,
+        3.68,
+        3.584,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 692,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.776,
+        3.744,
+        3.68,
+        3.712,
+        3.744,
+        3.776,
+        3.744,
+        3.776,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 695,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        159.968,
+        157.504,
+        156.96,
+        155.296,
+        156.16,
+        153.952,
+        154.368,
+        153.344,
+        153.408
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 710,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.888,
+        1.856,
+        1.984,
+        1.92,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.92
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 711,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.824,
+        1.728,
+        1.76,
+        1.728,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 718,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.616,
+        3.616,
+        3.68,
+        3.552,
+        3.552,
+        3.68,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 719,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.552,
+        3.648,
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 736,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.648,
+        3.552,
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.648,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 737,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.68,
+        3.712,
+        3.808,
+        3.744,
+        3.776,
+        3.68,
+        3.68,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 739,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.128,
+        156.864,
+        156.416,
+        156.096,
+        156.32,
+        156.864,
+        156.64,
+        156.544,
+        156.672
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 755,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.9520000000000002,
+        1.92,
+        1.888,
+        1.856,
+        1.856,
+        1.856,
+        1.856,
+        1.856,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 756,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.824,
+        1.792,
+        1.76,
+        1.728,
+        1.696,
+        1.728,
+        1.728,
+        1.728,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 763,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.616,
+        3.552,
+        3.648
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 764,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.648,
+        3.616,
+        3.552,
+        3.552,
+        3.616,
+        3.552,
+        3.584,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 781,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.616,
+        3.584,
+        3.616,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 782,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.68,
+        3.744,
+        3.68,
+        3.712,
+        3.712,
+        3.68,
+        3.744,
+        3.744,
+        3.776
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 784,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        158.624,
+        151.296,
+        159.488,
+        157.056,
+        150.304,
+        159.904,
+        159.328,
+        150.048,
+        159.488
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 800,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.048,
+        1.92,
+        2.016,
+        1.92,
+        1.888,
+        1.9520000000000002,
+        1.824,
+        1.888,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 801,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.888,
+        1.76,
+        1.792,
+        1.76,
+        1.728,
+        1.76,
+        1.76,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 808,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.68,
+        3.52,
+        3.616,
+        3.616,
+        3.584,
+        3.584,
+        3.584,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 809,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.584,
+        3.552,
+        3.616,
+        3.552,
+        3.52,
+        3.552,
+        3.584,
+        3.68
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 826,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.584,
+        3.584,
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 828,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.808,
+        3.68,
+        3.68,
+        3.744,
+        3.712,
+        3.68,
+        3.68,
+        3.68,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 831,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.152,
+        157.824,
+        156.416,
+        153.568,
+        153.856,
+        153.504,
+        153.984,
+        153.888,
+        154.368
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 846,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.824,
+        1.856,
+        1.856,
+        1.92,
+        1.856,
+        1.856,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.92
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 847,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.696,
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.76,
+        1.76,
+        1.824
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 854,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.584,
+        3.648,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 855,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.52,
+        3.616,
+        3.584,
+        3.584,
+        3.552,
+        3.52,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 872,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.52,
+        3.68,
+        3.648,
+        3.552,
+        3.584,
+        3.648,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 873,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.808,
+        3.712,
+        3.712,
+        3.744,
+        3.9040000000000004,
+        3.744,
+        3.712,
+        3.808,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 875,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        159.68,
+        156.672,
+        156.8,
+        156.768,
+        155.52,
+        154.464,
+        154.048,
+        154.24,
+        154.432
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 891,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.048,
+        2.08,
+        1.856,
+        1.888,
+        1.984,
+        1.856,
+        1.92,
+        1.856,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 892,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.888,
+        1.76,
+        1.76,
+        1.792,
+        1.728,
+        1.728,
+        1.696,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 899,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.584,
+        3.616,
+        3.68,
+        3.584,
+        3.552,
+        3.52,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 900,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.744,
+        3.616,
+        3.584,
+        3.776,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 917,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.616,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 918,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.712,
+        3.712,
+        3.68,
+        3.68,
+        3.68,
+        3.712,
+        3.712,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 920,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        159.392,
+        150.88,
+        159.232,
+        159.296,
+        150.656,
+        150.528,
+        159.936,
+        160.192,
+        157.856
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 936,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.9520000000000002,
+        1.856,
+        1.856,
+        1.824,
+        1.888,
+        1.888,
+        1.888,
+        1.792
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 937,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.664,
+        1.728,
+        1.76,
+        1.728,
+        1.76,
+        1.728,
+        1.76,
+        1.76,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 944,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.488,
+        3.552,
+        3.648,
+        3.552,
+        3.552,
+        3.584,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 945,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.648,
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 962,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.488,
+        3.552,
+        3.584,
+        3.616,
+        3.584,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 964,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.776,
+        3.68,
+        3.712,
+        3.68,
+        3.808,
+        3.68,
+        3.68,
+        3.68,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 967,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.384,
+        157.056,
+        157.12,
+        157.76,
+        156.352,
+        154.176,
+        153.92,
+        154.272,
+        153.856
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 982,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.856,
+        1.92,
+        1.92,
+        1.888,
+        1.92,
+        2.016,
+        1.824,
+        1.856,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 983,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.792,
+        1.76,
+        1.76,
+        1.76,
+        1.792,
+        1.728,
+        1.76,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 990,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.584,
+        3.584,
+        3.616,
+        3.648
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 991,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.52,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1008,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.648,
+        3.552,
+        3.552,
+        3.552,
+        3.52,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1009,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.776,
+        3.8719999999999994,
+        3.68,
+        3.68,
+        3.68,
+        3.68,
+        3.712,
+        3.712,
+        3.648
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1011,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        157.28,
+        153.728,
+        153.568,
+        153.824,
+        153.312,
+        153.536,
+        153.696,
+        153.536,
+        153.44
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1027,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.824,
+        1.824,
+        1.984,
+        1.888,
+        1.92,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1028,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.76,
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.76,
+        1.792,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1035,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.584,
+        3.552,
+        3.616,
+        3.584,
+        3.52,
+        3.616,
+        3.648
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1036,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.52,
+        3.52,
+        3.584,
+        3.616,
+        3.52,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1053,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.648,
+        3.552,
+        3.584,
+        3.584,
+        3.616,
+        3.648,
+        3.584,
+        3.52,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1054,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.68,
+        3.712,
+        3.744,
+        3.776,
+        3.712,
+        3.712,
+        3.712,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1056,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        158.336,
+        150.112,
+        158.528,
+        159.68,
+        150.272,
+        154.88,
+        160.32,
+        150.272,
+        159.264
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1072,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.9520000000000002,
+        1.92,
+        1.92,
+        1.888,
+        1.9520000000000002,
+        1.92,
+        1.9520000000000002,
+        2.016,
+        1.984
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1073,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.76,
+        1.728,
+        1.728,
+        1.76,
+        1.728,
+        1.76,
+        1.76,
+        1.76,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1080,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.616,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1081,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.68,
+        3.616,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1098,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.552,
+        3.584,
+        3.584,
+        3.712,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1100,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.744,
+        3.712,
+        3.8719999999999994,
+        3.744,
+        3.744,
+        3.84,
+        3.712,
+        3.712,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1103,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.248,
+        156.224,
+        154.72,
+        154.272,
+        154.208,
+        154.176,
+        153.984,
+        152.768,
+        153.216
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1118,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.792,
+        1.92,
+        1.9520000000000002,
+        1.856,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.9520000000000002,
+        1.984,
+        1.792
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1119,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.792,
+        1.76,
+        1.728,
+        1.728,
+        1.76,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1126,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.52,
+        3.584,
+        3.616,
+        3.584,
+        3.584,
+        3.712,
+        3.52,
+        3.52,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1127,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.68,
+        3.52,
+        3.552,
+        3.68,
+        3.52,
+        3.52,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1144,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.52,
+        3.584,
+        3.744,
+        3.616,
+        3.52,
+        3.552,
+        3.52,
+        3.52,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1145,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.712,
+        3.712,
+        3.712,
+        3.68,
+        3.68,
+        3.68,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1147,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        157.152,
+        157.472,
+        156.352,
+        154.752,
+        154.24,
+        153.888,
+        153.856,
+        151.776,
+        152.384
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1163,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.016,
+        1.856,
+        1.888,
+        1.824,
+        1.824,
+        1.9520000000000002,
+        1.92,
+        1.856,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1164,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.696,
+        1.728,
+        1.76,
+        1.76,
+        1.792,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1171,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.488,
+        3.584,
+        3.616,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1172,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.648,
+        3.584,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1189,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.584,
+        3.616,
+        3.584,
+        3.552,
+        3.552,
+        3.584,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1190,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.712,
+        3.712,
+        3.8719999999999994,
+        3.744,
+        3.712,
+        3.712,
+        3.744,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1192,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.832,
+        156.672,
+        153.472,
+        153.152,
+        153.536,
+        154.016,
+        154.144,
+        153.792,
+        154.112
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1208,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.824,
+        1.792,
+        1.888,
+        1.888,
+        2.016,
+        1.856,
+        1.856,
+        1.824,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1209,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.728,
+        1.76,
+        1.76,
+        1.76,
+        1.728,
+        1.824,
+        1.728,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1216,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.68,
+        3.584,
+        3.584,
+        3.616,
+        3.52,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1217,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.584,
+        3.584,
+        3.584,
+        3.52,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1234,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.584,
+        3.68,
+        3.712,
+        3.552,
+        3.52,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1236,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.68,
+        3.68,
+        3.68,
+        3.68,
+        3.712,
+        3.712,
+        3.744
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1239,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.152,
+        154.048,
+        152.896,
+        152.864,
+        152.352,
+        153.792,
+        154.208,
+        154.112,
+        154.976
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1254,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.92,
+        2.016,
+        1.824,
+        1.792,
+        1.9520000000000002,
+        1.92,
+        1.92,
+        2.016,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1255,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.792,
+        1.76,
+        1.696,
+        1.728,
+        1.76,
+        1.728,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1262,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.552,
+        3.52,
+        3.552,
+        3.584,
+        3.616,
+        3.616,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1263,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.52,
+        3.52,
+        3.616,
+        3.616,
+        3.584,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1280,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.52,
+        3.584,
+        3.616,
+        3.552,
+        3.552,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1281,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.808,
+        3.712,
+        3.68,
+        3.712,
+        3.744,
+        3.68,
+        3.84
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1283,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.832,
+        156.32,
+        154.24,
+        154.112,
+        153.664,
+        153.792,
+        154.08,
+        153.44,
+        153.952
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1299,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.856,
+        2.144,
+        1.984,
+        1.888,
+        1.92,
+        1.9520000000000002,
+        1.888,
+        1.856,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1300,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.792,
+        1.728,
+        1.76,
+        1.76,
+        1.792,
+        1.76,
+        1.792,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1307,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.68,
+        3.776,
+        3.584,
+        3.584,
+        3.552,
+        3.52,
+        3.616,
+        3.584,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1308,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.808,
+        3.616,
+        3.52,
+        3.552,
+        3.552,
+        3.68,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16",
+      "ordinal": 1325,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.52,
+        3.552,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1326,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.68,
+        3.744,
+        3.744,
+        3.712,
+        3.712,
+        3.68,
+        3.68,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1328,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "samples_us": [
+        156.672,
+        157.12,
+        156.384,
+        153.952,
+        154.048,
+        154.24,
+        155.616,
+        155.168,
+        155.328
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1344,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.984,
+        2.048,
+        1.888,
+        1.888,
+        1.824,
+        1.824,
+        1.92,
+        1.888
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1345,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.824,
+        1.728,
+        1.728,
+        1.728,
+        1.76,
+        1.792,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1352,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.616,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1353,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.744,
+        3.552,
+        3.68,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1370,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.552,
+        3.648,
+        3.552,
+        3.552,
+        3.616,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1372,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.744,
+        3.68,
+        3.712,
+        3.712,
+        3.744,
+        3.744,
+        3.712,
+        3.712,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1375,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.024,
+        157.024,
+        156.32,
+        154.4,
+        153.824,
+        154.24,
+        153.984,
+        155.36,
+        155.168
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1390,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.888,
+        1.856,
+        2.016,
+        2.016,
+        1.92,
+        1.92,
+        1.984,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1391,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.76,
+        1.728,
+        1.728,
+        1.728,
+        1.792,
+        1.792,
+        1.856,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1398,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.616,
+        3.552,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1399,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.616,
+        3.584,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1416,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.616,
+        3.584,
+        3.616,
+        3.552,
+        3.648,
+        3.552,
+        3.584,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1418,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.712,
+        3.9040000000000004,
+        3.744,
+        3.744,
+        3.712,
+        3.712,
+        3.712,
+        3.68,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1421,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.832,
+        157.088,
+        157.088,
+        158.112,
+        156.768,
+        155.296,
+        153.984,
+        155.2,
+        153.952
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1436,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.92,
+        1.888,
+        2.048,
+        1.9520000000000002,
+        1.856,
+        1.984,
+        1.824,
+        2.08,
+        1.9520000000000002
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1437,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.728,
+        1.728,
+        1.76,
+        1.728,
+        1.824,
+        1.76,
+        1.792,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1444,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.584,
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.552,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1445,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.552,
+        3.616,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1462,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.552,
+        3.52,
+        3.552,
+        3.52,
+        3.616,
+        3.552,
+        3.552,
+        3.552,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1464,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.744,
+        3.68,
+        3.712,
+        3.68,
+        3.712,
+        3.8719999999999994,
+        3.712,
+        3.712,
+        3.744
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1467,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.416,
+        157.216,
+        154.912,
+        154.048,
+        154.144,
+        153.76,
+        154.016,
+        153.536,
+        153.536
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1482,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.824,
+        1.856,
+        1.824,
+        1.856,
+        1.824,
+        1.984,
+        1.92,
+        1.856,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1483,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.76,
+        1.728,
+        1.76,
+        1.792,
+        1.76,
+        1.76,
+        1.76,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1490,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.776,
+        3.648,
+        3.584,
+        3.584,
+        3.584,
+        3.584,
+        3.52,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1491,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.68,
+        3.712,
+        3.552,
+        3.52,
+        3.52,
+        3.52,
+        3.552,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1508,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.584,
+        3.584,
+        3.488,
+        3.52,
+        3.552,
+        3.584,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1510,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.712,
+        3.744,
+        3.744,
+        3.68,
+        3.712,
+        3.744,
+        3.68
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1513,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        157.152,
+        156.352,
+        154.56,
+        154.464,
+        154.624,
+        154.08,
+        153.92,
+        153.984,
+        153.76
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1528,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        2.016,
+        1.984,
+        1.856,
+        1.888,
+        1.92,
+        1.856,
+        1.888,
+        1.92,
+        1.9520000000000002
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1529,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.728,
+        1.728,
+        1.824,
+        1.76,
+        1.728,
+        1.728,
+        1.76
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1536,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.52,
+        3.552,
+        3.584,
+        3.616,
+        3.552,
+        3.52,
+        3.552,
+        3.52
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1537,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.616,
+        3.584,
+        3.584,
+        3.52,
+        3.584,
+        3.584,
+        3.52,
+        3.552,
+        3.616
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1554,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.616,
+        3.552,
+        3.584,
+        3.616,
+        3.68,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1556,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.776,
+        3.68,
+        3.712,
+        3.712,
+        3.744,
+        3.808,
+        3.712,
+        3.712,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1559,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.832,
+        156.032,
+        154.464,
+        154.464,
+        154.144,
+        153.856,
+        154.016,
+        153.856,
+        154.016
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1574,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.984,
+        1.92,
+        1.856,
+        1.856,
+        1.792,
+        1.856,
+        1.824,
+        1.9520000000000002,
+        1.856
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1575,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.792,
+        1.728,
+        1.76,
+        1.728,
+        1.728,
+        1.696,
+        1.76,
+        1.728,
+        1.792
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1582,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.616,
+        3.616,
+        3.616,
+        3.584,
+        3.552,
+        3.52,
+        3.552,
+        3.552,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1583,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.712,
+        3.584,
+        3.616,
+        3.552,
+        3.52,
+        3.552,
+        3.584,
+        3.616,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_compact_record_fp16_q6_attn_v",
+      "ordinal": 1600,
+      "previous": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+      "samples_us": [
+        3.584,
+        3.552,
+        3.552,
+        3.52,
+        3.552,
+        3.744,
+        3.616,
+        3.744,
+        3.584
+      ]
+    },
+    {
+      "name": "q8_compact_record_fp16",
+      "next": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_260fe77454e55583af2ab0fe9886992a2f3c779d1db859b8fb7e13e11cf575e7",
+      "ordinal": 1602,
+      "previous": "q8_compact_record_fp16_q6_attn_v",
+      "samples_us": [
+        3.712,
+        3.68,
+        3.84,
+        3.712,
+        3.808,
+        3.712,
+        3.68,
+        3.744,
+        3.712
+      ]
+    },
+    {
+      "name": "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b",
+      "next": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+      "ordinal": 1605,
+      "previous": "r_8_32_32_2_2_2_2_2_2_64_2_2_2_ba40701e00ba0d8764b731dad769e053f047d8120dd76fe7ec21abc3fd063220",
+      "samples_us": [
+        156.128,
+        156.48,
+        154.24,
+        154.4,
+        154.144,
+        153.696,
+        153.536,
+        154.784,
+        153.696
+      ]
+    },
+    {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "next": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "ordinal": 1620,
+      "previous": "q8_ds4_fp16_o_pp512",
+      "samples_us": [
+        1.888,
+        1.856,
+        1.856,
+        1.888,
+        1.92,
+        1.824,
+        1.92,
+        1.888,
+        2.016
+      ]
+    },
+    {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "next": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+      "ordinal": 1621,
+      "previous": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "samples_us": [
+        1.728,
+        1.728,
+        1.76,
+        1.888,
+        1.792,
+        1.76,
+        1.76,
+        1.728,
+        1.728
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q8_ds4_fp16_pp512",
+      "ordinal": 1627,
+      "previous": "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f",
+      "samples_us": [
+        3.584,
+        3.52,
+        3.584,
+        3.616,
+        3.616,
+        3.616,
+        3.552,
+        3.52,
+        3.552
+      ]
+    },
+    {
+      "name": "q8_ds4_fp16_pp512",
+      "next": "q4_qo_streamk",
+      "ordinal": 1628,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        3.552,
+        3.52,
+        3.712,
+        3.52,
+        3.584,
+        3.584,
+        3.552,
+        3.584,
+        3.552
+      ]
+    }
+  ],
+  "schema": "tinygrad.nv_prefill_live_service.v1",
+  "selected": [
+    "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+    "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+    "q8_compact_record_fp16",
+    "q8_ds4_fp16_pp512",
+    "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b"
+  ]
+}
