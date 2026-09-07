@@ -40,10 +40,10 @@ def _ac(record,at):
 
 @dataclass(frozen=True)
 class DownAsset:
-  producer: object; main_program: object; transform: object; activation: object; candidate_identity: str
+  producer: object; main_program: object; transform: object; activation: object; context: object; candidate_identity: str
   warmstart: object; warmstart_contexts: object
   @classmethod
-  def compile(cls,dev, *, tile_k=TILE_K):
+  def compile(cls,dev, *, tile_k=TILE_K, native_weight_a_x4=False):
     if tile_k not in (64,128,256): raise ValueError("down tile_k must be 64, 128 or 256")
     wt,at=PackedWeightTransform("Q4_K",N,K),Q8ActivationRecordTransform(M,K)
     wp,ap=Q4KInt8FragmentProvider(wt),Q8Int8FragmentProvider(at)
@@ -53,8 +53,11 @@ class DownAsset:
     stride=tile_k+(tile_k//16)*4
     geom=KernelTileGeometry((128,128,tile_k),(2,4),256,32,
       (KernelLDSWindow("A",0,128*stride,stride),KernelLDSWindow("B",128*stride,256*stride,stride)))
-    ident=hashlib.sha256(repr(("ffn_down",geom,wp.identity,ap.identity,acc.abi)).encode()).hexdigest()
-    key=warmstart_key({M,N},K,wt.storage_dtype); context=type("DownContext",(),{"schema_version":"boltbeam.full_kernel_candidate.v1","canonical_identity":ident,"geometry":geom,"packed_weight":wt,"packed_fragment_provider":wp,"packed_activation":at,"packed_activation_provider":ap,"group_accumulator":acc})()
+    ident=hashlib.sha256(repr(("ffn_down",geom,wp.identity,ap.identity,acc.abi,"q4_a_x4" if native_weight_a_x4 else None)).encode()).hexdigest()
+    key=warmstart_key({M,N},K,wt.storage_dtype); context=type("DownContext",(),{"schema_version":"boltbeam.full_kernel_candidate.v1",
+      "canonical_identity":ident,"geometry":geom,"packed_weight":wt,"packed_fragment_provider":wp,"packed_activation":at,
+      "packed_activation_provider":ap,"group_accumulator":acc,"operand_order":"weight_a_activation_b" if native_weight_a_x4 else "activation_a_weight_b",
+      "native_weight_fragment":"q4_a_x4" if native_weight_a_x4 else None})()
     # Reuse the proven compact-record ABI, specializing both the input row
     # stride and scale/sum group stride for K=12288.
     # Use the independently qualified K=12288 producer source.  The former
@@ -65,16 +68,19 @@ class DownAsset:
     opts,ctxs={key:(Opt(OptOps.TC,0,(-1,2,1)),)},{key:context}
     from tinygrad.codegen import to_program_cache
     rp=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device="NV").realize(); wpb=Tensor.empty(wt.packed_bytes//4,dtype=dtypes.uint32,device="NV").realize()
-    with warmstart_candidate_state(opts,ctxs): _ac(rp,at).matmul(_wc(wpb,wt).transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
+    with warmstart_candidate_state(opts,ctxs):
+      activation,weight=_ac(rp,at),_wc(wpb,wt)
+      expr=weight.matmul(activation.transpose(),dtype=dtypes.int) if native_weight_a_x4 else activation.matmul(weight.transpose(),dtype=dtypes.int)
+      expr.cast(dtypes.float).contiguous().realize()
     ms=[p for p in to_program_cache.values() if p.op is Ops.PROGRAM and p.src and getattr(p.src[0].arg,"candidate_context",None) is not None and p.src[0].arg.candidate_context.canonical_identity==ident]
     if len(set(ms))!=1: raise RuntimeError(f"expected one down tileK{tile_k} PROGRAM, found {len(set(ms))}")
     p=ms[0]; main=p.replace(src=(UOp(Ops.SINK,arg=p.src[0].arg),p.src[1],UOp(Ops.LINEAR),*p.src[3:]))
     if main.arg.outs!=(0,) or main.arg.ins!=(1,2): raise RuntimeError(f"unexpected down ABI {main.arg}")
-    return cls(prod,main,wt,at,ident,MappingProxyType(opts),MappingProxyType(ctxs))
+    return cls(prod,main,wt,at,context,ident,MappingProxyType(opts),MappingProxyType(ctxs))
 
 _CACHE={}
-def binding_for(device="NV", *, tile_k=TILE_K):
+def binding_for(device="NV", *, tile_k=TILE_K, native_weight_a_x4=False):
   if device!="NV": raise ValueError("Q4 down asset is NV-only")
-  key=(device,tile_k)
-  if key not in _CACHE: _CACHE[key]=DownAsset.compile(Device[device],tile_k=tile_k)
+  key=(device,tile_k,native_weight_a_x4)
+  if key not in _CACHE: _CACHE[key]=DownAsset.compile(Device[device],tile_k=tile_k,native_weight_a_x4=native_weight_a_x4)
   return _CACHE[key]
