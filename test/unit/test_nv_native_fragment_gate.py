@@ -4,7 +4,9 @@ from tinygrad.helpers import Target
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.runtime.support.compiler_cuda import NVRTCCompiler
 from tinygrad.uop.ops import Ops,UOp
-from tinygrad.codegen.late.native_fragment import PackedFragmentSpec
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec, native_q4_a_fragment, NATIVE_FRAGMENT_X4
+from tinygrad.codegen.late.expander import expand_native_q4_a_fragment
+from tinygrad.dtype import AddrSpace
 from extra.llm_research.prefill.nv_native_fragment_gate import emit_native_fragment_imma,emit_native_fragment_readback,emit_q6k_k64_fragment_readback
 
 def test_q6k_packed_fragment_spec_rejects_non_single_phase():
@@ -12,6 +14,13 @@ def test_q6k_packed_fragment_spec_rejects_non_single_phase():
   try: PackedFragmentSpec("Q6_K", 2, (8,8), "mma_b", phases=4).validate()
   except ValueError: pass
   else: raise AssertionError("multi-phase Q6 fragment contract must fail closed")
+
+def test_q4_a_marker_scalarizes_pointer_before_native_x4():
+  lds=UOp.placeholder((20480,),dtypes.char,99,addrspace=AddrSpace.LOCAL)
+  expanded=expand_native_q4_a_fragment(native_q4_a_fragment(lds,UOp.const(dtypes.int,80)))
+  carrier=expanded.src[0]
+  assert carrier.arg==(NATIVE_FRAGMENT_X4,) and carrier.src[0].op is Ops.INDEX
+  assert carrier.src[1].op is Ops.CONST and carrier.src[1].arg==0
 
 def test_q6k_k64_fragment_gate_emits_native_x2():
   out=UOp.placeholder((64,),dtypes.uint32,0); source=UOp.placeholder((128,),dtypes.uint32,1)

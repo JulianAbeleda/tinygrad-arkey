@@ -9,9 +9,10 @@ from tinygrad.codegen.late.native_fragment import NATIVE_Q4_A_FRAGMENT,native_fr
 def expand_native_q4_a_fragment(x:UOp):
   if x.arg!=(NATIVE_Q4_A_FRAGMENT,) or len(x.src)!=2:return None
   buf,indices=x.src
-  if indices.op is not Ops.UNROLL: return native_fragment_x4(buf,indices).bitcast(dtypes.char.vec(16))
+  def carrier(index): return native_fragment_x4(buf.index(index,ptr=True),UOp.const(dtypes.int,0)).bitcast(dtypes.char.vec(16))
+  if indices.op is not Ops.UNROLL: return carrier(indices)
   vector=indices.src[0]
-  carriers=tuple(native_fragment_x4(buf,vector.gep(i)).bitcast(dtypes.char.vec(16)) for i in range(vector.dtype.count))
+  carriers=tuple(carrier(vector.gep(i)) for i in range(vector.dtype.count))
   return UOp(Ops.UNROLL,x.dtype,(UOp(Ops.VCAT,dtypes.char.vec(16*len(carriers)),carriers),),indices.arg)
 
 def _expand_arg_to_idx(args:tuple[tuple[int, int], ...], rpk:dict[int, int]) -> int:
