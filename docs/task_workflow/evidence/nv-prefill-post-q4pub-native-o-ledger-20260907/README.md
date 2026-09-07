@@ -1,0 +1,3 @@
+# Native O residual after generated O promotion
+
+Matched warmup-9 R9 controls are 44.529866 and 44.726012 ms (midpoint 44.627939 ms). Native O is 44.128310 ms, leaving a 0.499629 ms median residual. Minimum midpoint is 44.4278905 versus native 43.872910, a 0.554981 ms difference. Native arithmetic replay, token198, canonical weights, and zero copy/overlay invariants pass; its formal status is diagnostic-only because it has 90 route-specific fixups versus 126 for selected generated O. Since the median residual does not exceed the frozen 0.5 ms promotion threshold, generated O remains selected and the role is closed pending a disjoint composition.
