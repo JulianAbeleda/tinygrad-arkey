@@ -1,0 +1,7 @@
+{
+  "schema": "tinygrad.nv_generated_qkv_composition.v1",
+  "control_mean_ms": 47.77740300000001,
+  "composite_ms": 47.804003,
+  "advantage_ms": -0.02659999999999485,
+  "decision": "CLOSED_NEUTRAL"
+}

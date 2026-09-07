@@ -152,6 +152,21 @@ class _NativeQ6VDelegate:
     return self.generated.project(x,words,**kwargs)
 
 
+class _GeneratedQKVCompositeCapture:
+  """Compose the retained generated Q, K, and mixed-V bodies at one attention boundary."""
+  def __init__(self,qo,k,q4v,q6):self.qo,self.k,self.q4v,self.q6=qo,k,q4v,q6
+  def begin_trace(self):
+    for x in (self.qo,self.k,self.q4v,self.q6):
+      if x is not None:x.begin_trace()
+  def project_qkv(self,x,q_words,k_words,v_words,*,model_family="qwen3_8b"):
+    q=self.qo.project(x,q_words,model_family=model_family,role="attn_q")
+    k=self.k.project(x,k_words,model_family=model_family,role="attn_k")
+    if v_words.dtype==dtypes.uint32:v=self.q4v.project(x,v_words,model_family=model_family,role="attn_v")
+    elif v_words.dtype==dtypes.uint16:v=self.q6.project(x,v_words,model_family=model_family,role="attn_v")
+    else:raise ValueError("generated QKV composite requires canonical Q4/Q6 V")
+    return q,k,v
+
+
 class _PairedGateQ8Capture:
   """One graph-owned Q8 record shared by each ordered gate/up projection pair."""
   def __init__(self,asset,record_u32):
@@ -388,15 +403,15 @@ def _compare_snapshot(reference,current):
     "same_length":len(reference[key])==len(current[key])} for key in reference}
 
 
-def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qkv=None,native_q6_down=None,native_q4_down=None):
+def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qkv=None,native_q6_down=None,native_q4_down=None,generated_qkv=None):
   gate,kval=model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture
   vval=getattr(model, "_nv_compiler_q4_imma_v_pp512_binding", None)
   q6val=getattr(model, "_nv_compiler_q6_imma_pp512_binding", None)
   q4down=getattr(model, "_nv_compiler_q4k_down_pp512_binding", None)
   _configure(model,gate)
   for block in model.blk:block._nv_compiler_q4_imma_k_pp512_binding=kval
-  if native_qkv is not None:
-    for block in model.blk:block._nv_qkv_packed_pp512_binding=native_qkv
+  if (qkv_override:=native_qkv if native_qkv is not None else generated_qkv) is not None:
+    for block in model.blk:block._nv_qkv_packed_pp512_binding=qkv_override
   if native_q6_down is not None:
     for block in model.blk:block._nv_llama_packed_q6k_down_pp512_binding=native_q6_down
   if native_q4_down is not None:
@@ -426,6 +441,7 @@ def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qk
       if native_o is not None:native_o.begin_trace()
       if native_q is not None:native_q.begin_trace()
       if native_qkv is not None:native_qkv.begin_trace()
+      if generated_qkv is not None:generated_qkv.begin_trace()
       if native_q6_down is not None:native_q6_down.begin_trace()
       if native_q4_down is not None:native_q4_down.begin_trace()
       _call_and_sync(run,chunk,temp)
@@ -498,6 +514,7 @@ def main():
   ap.add_argument("--native-q4-v",action="store_true",help="diagnostic native Q4 V substitution")
   ap.add_argument("--native-q6-v",action="store_true",help="diagnostic native Q6 V substitution")
   ap.add_argument("--share-q-q4v",action="store_true",help="share generated Q flat-Q8 records with compatible Q4 V")
+  ap.add_argument("--compose-generated-qkv",action="store_true",help="compose retained generated Q/K/V at one attention boundary")
   ap.add_argument("--native-qkv",action="store_true",help="diagnostic native Q/K/V substitution on the current252 graph")
   ap.add_argument("--native-q6-down",action="store_true",help="diagnostic native Q6 down substitution")
   ap.add_argument("--native-q4-down",action="store_true",help="diagnostic native Q4 down substitution")
@@ -557,6 +574,8 @@ def main():
   if args.native_q6_v and (args.arm!="candidate" or not args.q6_v or args.native_qkv): raise SystemExit("native Q6 V requires candidate Q6 V and excludes native QKV")
   if args.share_q_q4v and (args.arm!="candidate" or not args.q4_v or args.qo_streamk or args.native_q or args.native_q4_v or args.native_qkv):
     raise SystemExit("Q/Q4-V sharing requires plain generated Q and Q4 V")
+  if args.compose_generated_qkv and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.native_qkv or args.native_q or args.native_k or args.native_q4_v or args.native_q6_v):
+    raise SystemExit("generated QKV composition requires retained generated Q/K/mixed-V roles")
   if args.native_qkv and args.arm!="candidate":raise SystemExit("native QKV is a diagnostic candidate substitution")
   if args.native_q6_down and (args.arm!="candidate" or not args.q6_v):raise SystemExit("native Q6 down requires candidate with generated Q6 V")
   if args.native_q4_down and (args.arm!="candidate" or args.q4_down_streamk):raise SystemExit("native Q4 down excludes generated Q4 down")
@@ -696,6 +715,7 @@ def main():
     vval=_SharedQ4VCapture(v_asset,qo)
     model._nv_compiler_q4_imma_v_pp512_binding=vval
     for block in model.blk:block._nv_compiler_q4_imma_v_pp512_binding=vval
+  generated_qkv=_GeneratedQKVCompositeCapture(qo,kval,vval,q6val) if args.compose_generated_qkv else None
   identities={"gate_up":gate_asset.main.arg.name if args.native_gate_up else gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
               "down_oracle":"nv_down_oracle_zero" if args.down_oracle else None,
               "gate_epilogue":"nv_gate_silu_mul_cast_fused" if args.gate_epilogue_fused else None,
@@ -718,7 +738,7 @@ def main():
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
-  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o,native_q,native_qkv,native_q6_down,native_q4_down)
+  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o,native_q,native_qkv,native_q6_down,native_q4_down,generated_qkv)
   # Retain the actual finalized GraphRunner objects before any teardown.  F1
   # consumes these objects in-process; no runtime or Buffer is serialized.
   from tinygrad.engine.realize import graph_cache
