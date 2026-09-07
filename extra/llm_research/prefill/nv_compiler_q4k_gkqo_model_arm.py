@@ -49,11 +49,16 @@ class _GraphOwnedQOCapture:
     out=Tensor.empty(512*4096,dtype=dtypes.float32,device=x.device)
     self.records.append(record);self.outputs.append(out);self.cursor+=1
     _,record=x.uop_program(record,fxn=lambda *_:self.asset.producer)
-    if role=="attn_q":self.q_records.append(record)
     # The composed override returns a projection and leaves residual addition
     # to the model.  Use the three-buffer plain program for both Q and O;
     # ``main_program`` is the four-buffer fused-residual contract.
-    out,record,words=out.uop_program(record,words,fxn=lambda *_:self.asset.q_program)
+    program=self.asset.q_program if role=="attn_q" else self.asset.plain_program
+    if role=="attn_q" and self.asset.q_context.operand_order=="weight_a_activation_b":
+      if words.numel()!=self.asset.transform.packed_bytes//4 or record.numel()!=self.record_u32:
+        raise RuntimeError("typed swapped Q program arguments do not match canonical weight/record ABI")
+      out,words,record=out.uop_program(words,record,fxn=lambda *_:program)
+    else: out,record,words=out.uop_program(record,words,fxn=lambda *_:program)
+    if role=="attn_q":self.q_records.append(record)
     # Retain the produced Tensor identities, not the pre-program placeholders.
     self.records[-1],self.outputs[-1]=record,out
     return out.reshape(512,4096)
@@ -510,6 +515,7 @@ def main():
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
+  ap.add_argument("--q-x4",action="store_true",help="typed generated Q weight-A native x4 fragment")
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
   ap.add_argument("--native-q4-v",action="store_true",help="diagnostic native Q4 V substitution")
   ap.add_argument("--native-q6-v",action="store_true",help="diagnostic native Q6 V substitution")
@@ -698,7 +704,8 @@ def main():
     # its typed contract.  The composed graph invokes only that opaque PROGRAM, so adding
     # Q/O's shape key to the ambient model warmstart table would incorrectly claim unrelated
     # 512x4096x4096 ordinary matmuls (the exact composition collision this arm must avoid).
-    qo_asset=qo_binding_for("NV",variant="streamk" if args.qo_streamk else "wide")
+    qo_asset=qo_binding_for("NV",variant="streamk" if args.qo_streamk else "wide",native_q_x4=args.q_x4)
+    if args.q_x4 and qo_asset.q_context.operand_order!="weight_a_activation_b": raise RuntimeError("typed Q x4 binding lost its swapped operand contract")
     qo=qo_asset.new_capture() if args.qo_streamk else _GraphOwnedQOCapture(qo_asset,RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
@@ -728,7 +735,8 @@ def main():
               "q4_down":None if q4_down_asset is None else q4_down_asset.candidate_identity,
               # This wrapper uses Q/O's plain projection contract for both
               # roles; residual addition remains in the model graph.
-              "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.plain_context.canonical_identity,
+              "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.q_context.canonical_identity,
+              "qo_o":None if qo is None or args.qo_streamk or not args.q_x4 else qo.asset.conventional_context.canonical_identity,
               "native_o":None if native_o is None else native_o.asset.main.arg.name,
               "native_q":None if native_q is None else native_q.asset.q4_q_main.arg.name,
               "native_qkv_q4":None if native_qkv is None else native_qkv.asset.q4_q_main.arg.name,
@@ -865,6 +873,7 @@ def main():
     _write(args.dump_service_inventory,{"schema":"tinygrad.nv_prefill_live_service.v1","rounds":args.service_rounds,
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
+  if args.q_x4: mains["qo"] += mains.pop("qo_o")
   if native_q6_v is not None:mains["q6_v"]=[c for c in calls if _call_name(c)==native_q6_v.asset.q6_main.arg.name]
   if native_k is not None:mains["k"]=[c for c in calls if _call_name(c)==native_k.asset.q4_k_main.arg.name]
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]

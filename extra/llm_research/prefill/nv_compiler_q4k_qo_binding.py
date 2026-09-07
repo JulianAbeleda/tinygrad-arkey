@@ -29,10 +29,12 @@ class CompilerQOBinding:
   producer:object
   main_program:UOp
   q_program:UOp
+  plain_program:UOp
   transform:object
   activation:object
-  context:object
-  plain_context:object
+  o_context:object
+  q_context:object
+  conventional_context:object
   warmstart:dict
   warmstart_contexts:dict
   records:list[Tensor]
@@ -40,20 +42,25 @@ class CompilerQOBinding:
   cursor:int=0
 
   @classmethod
-  def compile(cls,dev):
+  def compile(cls,dev,*,native_q_x4:bool=False):
     wt,at,_,base_context=_context();key=warmstart_key({M,N},K,wt.storage_dtype)
+    base_context=replace(base_context,operand_order="activation_a_weight_b",native_weight_fragment=None)
+    q_base=replace(base_context,operand_order="weight_a_activation_b",native_weight_fragment="q4_a_x4") if native_q_x4 else base_context
     lib=NVRTCCompiler(dev.arch,ptx=False,cache_key="nv_q8_compact_record_fp16_v1").compile(_record_source())
     producer=native_nv_program("q8_compact_record_fp16",lib,global_size=(M,8,1),local_size=(128,1,1),
                                globals=(0,1),outs=(1,),ins=(0,))
-    def compile_contract(with_residual, salt):
-      context=replace(base_context, canonical_identity=hashlib.sha256((base_context.canonical_identity+salt).encode()).hexdigest())
+    def compile_contract(with_residual, salt, candidate_context):
+      context=replace(candidate_context, canonical_identity=hashlib.sha256((candidate_context.canonical_identity+salt+repr((candidate_context.operand_order,candidate_context.native_weight_fragment))).encode()).hexdigest())
       warmstart,warmstart_contexts={key:(Opt(OptOps.TC,0,(-1,2,1)),)},{key:context}
       from tinygrad.codegen import to_program_cache
       from tinygrad.codegen.opt.postrange import warmstart_candidate_state
       record_probe=Tensor.empty(RECORD_U32,dtype=dtypes.uint32,device="NV").realize()
       words_probe=Tensor.empty(wt.packed_bytes//4,dtype=dtypes.uint32,device="NV").realize()
       residual_probe=Tensor.empty((M,N),dtype=dtypes.float32,device="NV").realize()
-      expr=_activation_carrier(record_probe,at).matmul(_weight_carrier(words_probe,wt).transpose(),dtype=dtypes.int).cast(dtypes.float)
+      activation,weight=_activation_carrier(record_probe,at),_weight_carrier(words_probe,wt)
+      expr=(weight.matmul(activation.transpose(),dtype=dtypes.int) if context.operand_order=="weight_a_activation_b" else
+            activation.matmul(weight.transpose(),dtype=dtypes.int)).cast(dtypes.float)
+      if context.operand_order=="weight_a_activation_b": expr=expr.transpose().contiguous()
       if with_residual: expr=(expr+residual_probe).contiguous()
       else: expr=expr.contiguous()
       with warmstart_candidate_state(warmstart,warmstart_contexts): expr.realize()
@@ -66,12 +73,17 @@ class CompilerQOBinding:
       expected=(1,2,3) if with_residual else (1,2)
       if main.arg.outs!=(0,) or main.arg.ins!=expected:raise RuntimeError(f"unexpected Q/O PROGRAM ABI {main.arg}")
       return main,context
-    q_program,q_context=compile_contract(False,"q")
-    o_program,o_context=compile_contract(True,"o")
-    return cls(producer,o_program,q_program,wt,at,o_context,q_context,{}, {},[],[])
+    plain_program,plain_context=compile_contract(False,"plain",base_context)
+    q_program,q_context=(compile_contract(False,"q_x4",q_base) if native_q_x4 else (plain_program,plain_context))
+    o_program,o_context=compile_contract(True,"o",base_context)
+    return cls(producer=producer,main_program=o_program,q_program=q_program,plain_program=plain_program,transform=wt,activation=at,
+      o_context=o_context,q_context=q_context,conventional_context=plain_context,warmstart={},warmstart_contexts={},records=[],outputs=[])
 
   @property
-  def candidate_identity(self):return self.context.canonical_identity
+  def candidate_identity(self):return self.o_context.canonical_identity
+
+  @property
+  def q_output_transposed(self): return False
 
   def install_warmstart(self,model):
     opts,contexts=dict(model._packed_wmma_warmstart or {}),dict(model._packed_wmma_warmstart_contexts or {})
@@ -106,7 +118,8 @@ class CompilerQOBinding:
     _,record=x.uop_program(record,fxn=lambda *_:self.producer)
     if role == "attn_q":
       if residual is not None: raise ValueError("plain Q projection does not accept residual")
-      out,record,words=out.uop_program(record,words,fxn=lambda *_:self.q_program)
+      if self.q_context.operand_order=="weight_a_activation_b": out,words,record=out.uop_program(words,record,fxn=lambda *_:self.q_program)
+      else: out,record,words=out.uop_program(record,words,fxn=lambda *_:self.q_program)
     else:
       if residual is None:
         out,record,words=out.uop_program(record,words,fxn=lambda *_:self.q_program)
@@ -216,11 +229,12 @@ class CompilerQ4StreamKCapture:
 StreamKQOCapture = CompilerQ4StreamKCapture
 
 
-def binding_for(device="NV", *, variant="wide"):
+def binding_for(device="NV", *, variant="wide", native_q_x4:bool=False):
   if device!="NV": raise ValueError("compiler Q/O research binding is NV-only")
   if variant not in ("wide","streamk"): raise ValueError("unknown Q/O candidate variant")
-  key=(device,variant)
+  if native_q_x4 and variant!="wide": raise ValueError("native Q x4 is only admitted on the wide compiler route")
+  key=(device,variant,native_q_x4)
   if key not in _BINDINGS:
-    _BINDINGS[key]=(CompilerQOBinding.compile(Device[device]) if variant=="wide" else
+    _BINDINGS[key]=(CompilerQOBinding.compile(Device[device],native_q_x4=native_q_x4) if variant=="wide" else
                     StreamKQOCapture.compile(Device[device],binding_for(device)))
   return _BINDINGS[key]

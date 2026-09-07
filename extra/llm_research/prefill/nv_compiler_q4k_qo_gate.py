@@ -76,7 +76,9 @@ def main():
   def generated(record_arg:Tensor,words_arg:Tensor):
     activation,weight=_activation_carrier(record_arg,at),_weight_carrier(words_arg,wt)
     if context.operand_order=="weight_a_activation_b":
-      return weight.matmul(activation.transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
+      out=weight.matmul(activation.transpose(),dtype=dtypes.int).cast(dtypes.float)
+      if os.environ.get("NV_COMPILER_Q4_WEIGHT_A_FUSED_OUTPUT")=="1":out=out.transpose()
+      return out.contiguous().realize()
     return activation.matmul(weight.transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
 
   from tinygrad.codegen import to_program_cache
@@ -99,7 +101,8 @@ def main():
                            global_size=(N//128,M//128,1),local_size=(256,1,1),wait=True)*1e6
     if iteration>=3:oracle_samples.append(elapsed)
 
-  got=out.numpy().reshape(N,M).T if context.operand_order=="weight_a_activation_b" else out.numpy().reshape(M,N)
+  got=out.numpy().reshape(M,N) if os.environ.get("NV_COMPILER_Q4_WEIGHT_A_FUSED_OUTPUT")=="1" else \
+    out.numpy().reshape(N,M).T if context.operand_order=="weight_a_activation_b" else out.numpy().reshape(M,N)
   ref=reference.numpy().reshape(M,N); diff=np.abs(got-ref)
   stem=pathlib.Path(args.out); source_path=stem.with_suffix(".cu"); cubin_path=stem.with_suffix(".cubin"); sass_path=stem.with_suffix(".sass")
   if sources:source_path.write_text("\n\n".join(sources))
