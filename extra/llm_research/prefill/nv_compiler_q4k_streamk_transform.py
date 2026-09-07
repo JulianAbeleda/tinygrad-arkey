@@ -176,7 +176,11 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     # Each accumulator expression remains byte-for-byte unchanged, while 24
     # unrelated int4 IMMA results no longer stay live.
     wmma_re=re.compile(r"^    int4 (wmma\d+) = .*;$",re.M)
-    scale_re=re.compile(r"^    float (cast(?:3[3-9]|[4-8][0-9]|9[0-6])) = .*;$",re.M)
+    # Cast numbering differs by four when the typed Q4-A/x4 carrier removes
+    # scalar fragment assembly.  The body contract is 64 float scale
+    # declarations consumed by the 64 accumulator updates; derive their names
+    # instead of coupling this schedule to renderer-local numbering.
+    scale_re=re.compile(r"^    float (cast\d+) = .*;$",re.M)
     update_re=re.compile(r"^    \(\*\(buf0\+(\d+)\)\) = .*;$",re.M)
     wmmas={m.group(1):m.group(0) for m in wmma_re.finditer(math)}
     scales={m.group(1):m.group(0) for m in scale_re.finditer(math)}
@@ -190,14 +194,15 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     # Activation scales cast33..64 are reused across all four output-column
     # groups, so materialize them once.  Each group then owns eight IMMA
     # results and its eight weight scales without duplicating arithmetic.
-    groups=[*(scales[f"cast{i}"] for i in range(33,65))]; used_wmmas=set(); used_scales={f"cast{i}" for i in range(33,65)}
+    scale_names=sorted(scales,key=lambda x:int(x[4:])); common_scales=set(scale_names[:32])
+    groups=[*(scales[x] for x in scale_names[:32])]; used_wmmas=set(); used_scales=set(common_scales)
     for col in range(0,16,4):
       lines=[updates[c+16*i] for c in range(col,col+4) for i in range(4)]
       wnames=[]; snames=[]
       for line in lines:
         wnames.extend(re.findall(r"\bwmma\d+\b",line)); snames.extend(x for x in re.findall(r"\bcast\d+\b",line) if x in scales)
       wnames=list(dict.fromkeys(wnames)); snames=list(dict.fromkeys(snames))
-      local_scales=[x for x in snames if int(x[4:])>=65]
+      local_scales=[x for x in snames if x not in common_scales]
       if len(wnames)!=8 or len(local_scales)!=8: raise ValueError("unexpected IMMA accumulator dependency group")
       if any(x in used_wmmas for x in wnames) or any(x in used_scales for x in local_scales):
         raise ValueError("interleaved IMMA declaration would be emitted more than once")
