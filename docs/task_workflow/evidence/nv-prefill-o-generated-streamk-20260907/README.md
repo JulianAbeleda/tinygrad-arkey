@@ -50,3 +50,19 @@ and 47.358540 ms (midpoint 47.3790375) against candidate 46.964699 ms: a
 45.938449 ms: a 1.050786 ms win.  The median fails the frozen 0.5 ms promotion
 threshold, so single-owner O Stream-K remains default-off despite removing the
 composition regression.
+
+Composing the qualified Q4-A x4 fragment, WMMA-update interleave, and logical
+XOR4 stores with the single-owner O Stream-K route clears promotion.  Isolated
+R15 measures 206.697 us versus wide 235.080 us (28.383 us/call); output is
+allclose with max_abs 9.537e-6 and inputs are read-only.  Source/SASS census is
+recorded in `x4_resource_census.json`; it has 32 x4 calls, 64 LDSM, 256 IMMA,
+128 SHFL, 64 vector stores, and zero LDL/STL/local/stack spill.
+
+Deep model smoke formally passes with exact three-cycle logits/stages, token198,
+O main/fixup/owners 36 each, generated mains252, Q8 producers234, fixups126,
+canonical weights, and no copies/overlays. Stable control/candidate/control R9
+has control median midpoint47.170311 ms versus candidate46.179898 ms, a
+0.990413 ms win. Minimum midpoint46.9749945 ms versus45.815785 ms is a
+1.1592095 ms win. Both frozen0.5ms gates clear. The exact qualified compiler
+pp512 route now selects this O body ordinarily; rollback is
+`NV_COMPILER_Q4_O_STREAMK_X4=0`.

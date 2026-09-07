@@ -208,7 +208,9 @@ def _nv_compiler_q4_gate_q8_reuse_enabled(config) -> bool:
   return bool(getenv("NV_COMPILER_Q4_GATE_Q8_REUSE", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
-  return bool(getenv("NV_COMPILER_Q4_IMMA_O_PP512", 0)) and _nv_compiler_q4_imma_pp512_qualified(config)
+  """Selected generated O Stream-K x4 route; zero is explicit rollback."""
+  return bool(getenv("NV_COMPILER_Q4_O_STREAMK_X4", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
 
 def _nv_compiler_q4_imma_k_capture(model, jit, binding):
   captures = getattr(model, "_nv_compiler_q4_imma_k_pp512_captures", None)
@@ -2007,7 +2009,8 @@ class Transformer:
     _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = None
     if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
       from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
-      _nv_compiler_o_binding=compiler_o_binding_for("NV"); _nv_compiler_o_binding.prepare(len(self.blk))
+      _nv_compiler_o_binding=compiler_o_binding_for("NV",variant="streamk",native_q_x4=True,o_only=True)
+      _nv_compiler_o_binding.prepare(len(self.blk))
     if is_prefill_v2 and (_nv_q4_production_mode(self.config) == "llama" or getenv("NV_LLAMA_PACKED_QKV_PP512",0)):
       if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed QKV requires exact Qwen3-8B pp512 topology")
       from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as qkv_binding_for

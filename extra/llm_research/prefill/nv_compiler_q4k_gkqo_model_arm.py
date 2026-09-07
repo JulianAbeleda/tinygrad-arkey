@@ -520,6 +520,7 @@ def main():
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
   ap.add_argument("--generated-o-streamk",action="store_true",help="isolate generated Stream-K on O while Q remains wide")
+  ap.add_argument("--generated-o-streamk-x4",action="store_true",help="compose native Q4-A x4/interleave/coalesced stores on generated O Stream-K")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
   ap.add_argument("--q-x4",action="store_true",help="typed generated Q weight-A native x4 fragment")
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
@@ -582,6 +583,7 @@ def main():
     raise SystemExit("native gate/up is a diagnostic candidate substitution and excludes other gate arms")
   if args.native_o and (args.arm!="candidate" or args.qo_streamk): raise SystemExit("native O requires the current plain Q/O candidate")
   if args.generated_o_streamk and (args.arm!="candidate" or args.qo_streamk or args.native_o):raise SystemExit("generated O Stream-K requires wide generated Q and excludes native O")
+  if args.generated_o_streamk_x4 and not args.generated_o_streamk:raise SystemExit("generated O Stream-K x4 requires --generated-o-streamk")
   if args.native_q and (args.arm!="candidate" or args.qo_streamk or args.native_qkv): raise SystemExit("native Q requires the current plain Q/O candidate")
   if args.native_k and (args.arm!="candidate" or args.native_qkv): raise SystemExit("native K excludes the combined native QKV diagnostic")
   if args.native_q4_v and (args.arm!="candidate" or not args.q4_v or args.native_qkv): raise SystemExit("native Q4 V requires candidate Q4 V and excludes native QKV")
@@ -725,7 +727,7 @@ def main():
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as native_o_binding_for
       native_o_asset=native_o_binding_for("NV");native_o_asset.prepare_records(36);native_o=native_o_asset.new_capture()
     if args.generated_o_streamk:
-      native_o=qo_binding_for("NV",variant="streamk").new_capture()
+      native_o=qo_binding_for("NV",variant="streamk",native_q_x4=args.generated_o_streamk_x4).new_capture()
     if args.native_q:
       from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as native_q_binding_for
       native_q=native_q_binding_for("NV").new_capture()

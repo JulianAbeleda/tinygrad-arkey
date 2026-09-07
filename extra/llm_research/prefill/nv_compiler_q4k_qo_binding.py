@@ -29,6 +29,7 @@ class CompilerQOBinding:
   producer:object
   main_program:UOp
   q_program:UOp
+  q_physical_program:UOp
   plain_program:UOp
   transform:object
   activation:object
@@ -72,6 +73,7 @@ class CompilerQOBinding:
       main=compiled.replace(src=(UOp(Ops.SINK,arg=compiled.src[0].arg),compiled.src[1],UOp(Ops.LINEAR),*compiled.src[3:]))
       expected=(1,2,3) if with_residual else (1,2)
       if main.arg.outs!=(0,) or main.arg.ins!=expected:raise RuntimeError(f"unexpected Q/O PROGRAM ABI {main.arg}")
+      physical_main=main
       if context.operand_order=="weight_a_activation_b":
         from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import coalesce_swapped_direct_source
         sources=[u.arg for u in main.src if u.op is Ops.SOURCE]
@@ -80,11 +82,11 @@ class CompilerQOBinding:
         binary=NVRTCCompiler(dev.arch,ptx=False,cache_key="q4_qo_wide_x4_coalesced_v1").compile(source)
         main=main.replace(src=tuple(u.replace(arg=source) if u.op is Ops.SOURCE else
           u.replace(arg=binary) if u.op is Ops.BINARY else u for u in main.src))
-      return main,context
-    plain_program,plain_context=compile_contract(False,"plain",base_context)
-    q_program,q_context=(compile_contract(False,"q_x4",q_base) if native_q_x4 else (plain_program,plain_context))
-    o_program,o_context=compile_contract(True,"o",base_context)
-    return cls(producer=producer,main_program=o_program,q_program=q_program,plain_program=plain_program,transform=wt,activation=at,
+      return main,context,physical_main
+    plain_program,plain_context,_=compile_contract(False,"plain",base_context)
+    q_program,q_context,q_physical=(compile_contract(False,"q_x4",q_base) if native_q_x4 else (plain_program,plain_context,plain_program))
+    o_program,o_context,_=compile_contract(True,"o",base_context)
+    return cls(producer=producer,main_program=o_program,q_program=q_program,q_physical_program=q_physical,plain_program=plain_program,transform=wt,activation=at,
       o_context=o_context,q_context=q_context,conventional_context=plain_context,warmstart={},warmstart_contexts={},records=[],outputs=[],
       q_output_coalesced=native_q_x4)
 
@@ -174,7 +176,7 @@ class CompilerQ4StreamKCapture:
     population,roles=(72,("attn_q","attn_output")) if n==4096 else (72,("ffn_gate","ffn_up"))
     from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import transform_compiler_q4k_to_streamk, active_fixup_source
     from extra.llm_research.prefill.nv_compiler_streamk_codegen import q4_down_fixup_map
-    plain=base.q_program if n==4096 else base.main_program
+    plain=base.q_physical_program if n==4096 else base.main_program
     sources=[u.arg for u in plain.src if u.op is Ops.SOURCE]
     if len(sources)!=1: raise ValueError("plain Q/O must retain one compiler source")
     unroll=int(os.environ.get("NV_COMPILER_Q4_STREAMK_UNROLL", "8"))
@@ -242,7 +244,8 @@ class CompilerQ4StreamKCapture:
     if (model_family!="qwen3_8b" or role not in self.roles or weight_type!="Q4_K" or x.shape!=(M,K) or x.device!="NV"
         or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=self.n*(K//256)*36):
       raise ValueError("unsupported Q/O Stream-K input contract")
-    if residual is not None: raise ValueError("Stream-K Q/O research arm is projection-only")
+    if residual is not None and (role!="attn_output" or residual.shape!=(M,self.n) or residual.dtype!=dtypes.float32):
+      raise ValueError("Stream-K O residual must be float32 logical output shape")
     if self.cursor>=self.population: raise ValueError("Q4 Stream-K capture exceeds its admitted projection population")
     expected_role=self.roles[self.cursor%2]
     if self.pair_q8_reuse and role!=expected_role: raise ValueError("Q8 reuse requires ordered gate/up projection pairs")
@@ -266,19 +269,22 @@ class CompilerQ4StreamKCapture:
     out,partial,slots,active=out.uop_program(partial,self.slots,self.active,fxn=lambda *_:self.fixup_program)
     if role=="attn_q":self.q_records.append(shared_record)
     self.records.append(record);self.outputs.append(out);self.partials.append(partial);self.partial_ids.append(ids)
-    return out.reshape(self.n,M).transpose() if self.physical_transposed else out.reshape(M,self.n)
+    logical=out.reshape(self.n,M).transpose() if self.physical_transposed else out.reshape(M,self.n)
+    return logical if residual is None else logical+residual
 
 
 # Compatibility name for the original Q/O-only research capture.
 StreamKQOCapture = CompilerQ4StreamKCapture
 
 
-def binding_for(device="NV", *, variant="wide", native_q_x4:bool=False):
+def binding_for(device="NV", *, variant="wide", native_q_x4:bool=False, o_only:bool=False):
   if device!="NV": raise ValueError("compiler Q/O research binding is NV-only")
   if variant not in ("wide","streamk"): raise ValueError("unknown Q/O candidate variant")
-  key=(device,variant,native_q_x4)
+  if o_only and variant!="streamk": raise ValueError("O-only ownership requires Stream-K")
+  key=(device,variant,native_q_x4,o_only)
   if key not in _BINDINGS:
-    _BINDINGS[key]=(CompilerQOBinding.compile(Device[device],native_q_x4=native_q_x4) if variant=="wide" else
-                    StreamKQOCapture.compile(Device[device],binding_for(device,native_q_x4=native_q_x4),
-                      coalesced_swapped_output=native_q_x4))
+    asset=(CompilerQOBinding.compile(Device[device],native_q_x4=native_q_x4) if variant=="wide" else
+           StreamKQOCapture.compile(Device[device],binding_for(device,native_q_x4=native_q_x4),
+             coalesced_swapped_output=native_q_x4))
+    _BINDINGS[key]=replace(asset,population=36,roles=("attn_output",)) if o_only else asset
   return _BINDINGS[key]
