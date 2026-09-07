@@ -220,6 +220,23 @@ def _nv_compiler_q4_gate_q4_packed_publication_enabled(config) -> bool:
   """Experimental packed Q4 nibble publication; explicit one enables it."""
   return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 0)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
+def _model_capture_identity(capture)->str|None:
+  asset=getattr(capture,"asset",capture)
+  return getattr(capture,"candidate_identity",None) or getattr(asset,"candidate_identity",None)
+
+def _record_model_owned_prefill_candidate(lin, shape:tuple[int,int,int], capture) -> None:
+  """Observe an invoked model-owned capture through its exact policy attachment."""
+  binding=getattr(lin,"_prefill_graph_gemm_binding",None)
+  policy=binding.get("selected_policy") if isinstance(binding,dict) else None
+  identity=policy.get("candidate_identity") if isinstance(policy,dict) else None
+  role=getattr(lin,"_prefill_graph_role",None)
+  runtime_identity=_model_capture_identity(capture)
+  if runtime_identity != getattr(lin,"_nv_model_owned_candidate_identity",None):
+    raise RuntimeError("model-owned prefill capture identity drift")
+  if isinstance(role,str) and isinstance(identity,str):
+    from tinygrad.llm.prefill_graph_gemm import record_model_forward_candidate
+    record_model_forward_candidate(role=role,shape=shape,canonical_identity=identity,one_buffer=True)
+
 def _nv_compiler_q4_imma_q_pp512_enabled(config) -> bool:
   """Selected generated Q Stream-K route; zero is explicit rollback to wide Q."""
   return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_Q_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
@@ -835,15 +852,18 @@ class FFNBlock:
             _binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
           u = _prefill_semantic(_prefill, prefill_activation,
             _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+          _record_model_owned_prefill_candidate(self.ffn_gate,(512,12288,4096),_binding)
+          _record_model_owned_prefill_candidate(self.ffn_up,(512,12288,4096),_binding)
         if not (_mode == "llama" and _nv_llama_packed_gate_up_epilogue_enabled(self.config)):
           h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
         if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and hasattr(self, "_nv_compiler_q6_imma_pp512_binding") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
           # The ordinary overlay route casts this post-SiLU product before
           # GEMM. Preserve that exact boundary for the native fp16 producer.
           down_input = h.reshape(512, 12288).cast(dtypes.float16).contiguous()
-          return _prefill_semantic(_prefill, prefill_activation,
-            self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
-              model_family="qwen3_8b", role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+          projected=self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
+              model_family="qwen3_8b", role="ffn_down")
+          _record_model_owned_prefill_candidate(self.ffn_down,(512,4096,12288),self._nv_compiler_q6_imma_pp512_binding)
+          return _prefill_semantic(_prefill, prefill_activation,projected.reshape(x.shape[:-1]+(4096,)))
         if _nv_llama_packed_q6k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q6k_down_pp512_binding") and isinstance(self.ffn_down,Q6KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
           return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(
@@ -854,8 +874,10 @@ class FFNBlock:
             down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
         if _nv_compiler_q4k_down_enabled(self.config) and hasattr(self, "_nv_compiler_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
           down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
-          return _prefill_semantic(_prefill,prefill_activation,self._nv_compiler_q4k_down_pp512_binding.project(
-            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+          projected=self._nv_compiler_q4k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down")
+          _record_model_owned_prefill_candidate(self.ffn_down,(512,4096,12288),self._nv_compiler_q4k_down_pp512_binding)
+          return _prefill_semantic(_prefill,prefill_activation,projected.reshape(x.shape[:-1]+(4096,)))
         _down_in = h.reshape(x.shape[:-1]+(12288,))
         _down_out = _pf16(self.ffn_down, _down_in).contiguous()
         if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
@@ -1108,6 +1130,7 @@ class TransformerBlock(FFNBlock):
         if getattr(self, "_nv_compiler_q4k_q_pp512_binding", None) is not None and isinstance(self.attn_q,Q4KPrimitiveLinear):
           q = _prefill_semantic(_prefill,prefill_scratch,self._nv_compiler_q4k_q_pp512_binding.project(
             flat,self.attn_q.prefill_packed_weight(),model_family="qwen3_8b",role="attn_q"))
+          _record_model_owned_prefill_candidate(self.attn_q,(512,4096,4096),self._nv_compiler_q4k_q_pp512_binding)
         else: q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
         k = _prefill_semantic(_prefill,prefill_scratch,
           binding.project(flat,self.attn_k.prefill_packed_weight(),model_family="qwen3_8b",role="attn_k"))
@@ -1420,6 +1443,7 @@ class TransformerBlock(FFNBlock):
       if _o_binding is not None and isinstance(self.attn_output,Q4KPrimitiveLinear) and out_in.numel() == 512*4096:
         _res = getattr(self, "_nv_compiler_q4k_o_pp512_binding", None)
         out=_o_binding.project(out_in.cast(dtypes.float16).contiguous().reshape(512,4096),self.attn_output.prefill_packed_weight(), residual_for_output.reshape(512,4096).cast(dtypes.float32) if _res is not None else None, model_family="qwen3_8b",role="attn_output")
+        if _res is not None: _record_model_owned_prefill_candidate(self.attn_output,(512,4096,4096),_o_binding)
       else: out = _pf16(self.attn_output, out_in)
       return _prefill_semantic(_prefill, prefill_activation, out.reshape(x.shape).contiguous())
     if _has_residual:
@@ -2147,7 +2171,9 @@ class Transformer:
       # lazily by project() and retained only by that capture.
       capture = _nv_compiler_q4_imma_capture(self, jit, _nv_compiler_binding)
       capture.begin_trace()
-      for block in self.blk: block._nv_q4_imma_pp512_binding = capture
+      for block in self.blk:
+        block._nv_q4_imma_pp512_binding = capture
+        block.ffn_gate._nv_model_owned_candidate_identity=block.ffn_up._nv_model_owned_candidate_identity=_model_capture_identity(capture)
     if _nv_gate_only_binding is not None:
       capture = _nv_compiler_q4_imma_capture(self, jit, _nv_gate_only_binding)
       capture.begin_trace()
@@ -2167,11 +2193,14 @@ class Transformer:
       q_capture.begin_trace()
       for block in self.blk:
         block._nv_compiler_q4k_q_pp512_binding=q_capture
+        block.attn_q._nv_model_owned_candidate_identity=_model_capture_identity(q_capture)
         if isinstance(block.attn_q,Q4KPrimitiveLinear) and hasattr(block.attn_q,"_pf16_w"): delattr(block.attn_q,"_pf16_w")
     if _nv_compiler_o_binding is not None:
       o_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_o_binding)
       o_capture.begin_trace()
-      for block in self.blk: block._nv_compiler_q4k_o_pp512_binding=o_capture
+      for block in self.blk:
+        block._nv_compiler_q4k_o_pp512_binding=o_capture
+        block.attn_output._nv_model_owned_candidate_identity=_model_capture_identity(o_capture)
     if _nv_llama_q6_down_binding is not None:
       q6_capture=_nv_llama_packed_q6k_down_capture(self,jit,_nv_llama_q6_down_binding);q6_capture.begin_trace()
       for block in self.blk:block._nv_llama_packed_q6k_down_pp512_binding=q6_capture
@@ -2182,6 +2211,7 @@ class Transformer:
       q4_down_capture=_nv_compiler_q4_down_binding;q4_down_capture.begin_trace()
       for block in self.blk:
         block._nv_compiler_q4k_down_pp512_binding=q4_down_capture
+        block.ffn_down._nv_model_owned_candidate_identity=_model_capture_identity(q4_down_capture)
         if isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"): delattr(block.ffn_down,"_pf16_w")
     if _nv_compiler_k_binding is not None:
       k_capture = _nv_compiler_q4_imma_k_capture(self,jit,_nv_compiler_k_binding)
@@ -2190,7 +2220,9 @@ class Transformer:
     if _nv_compiler_q6_binding is not None:
       q6_capture = _nv_compiler_q6_imma_capture(self,jit,_nv_compiler_q6_binding)
       q6_capture.begin_trace()
-      for block in self.blk: block._nv_compiler_q6_imma_pp512_binding = q6_capture
+      for block in self.blk:
+        block._nv_compiler_q6_imma_pp512_binding = q6_capture
+        if isinstance(block.ffn_down,Q6KPrimitiveLinear): block.ffn_down._nv_model_owned_candidate_identity=_model_capture_identity(q6_capture)
     if not is_prefill_v2:
       if not is_prefill:
         # Decode captures under the M2c callify substrate when a promoted policy

@@ -86,6 +86,14 @@ def finalize_candidate_route_census(collector: dict[str, Any], registry) -> dict
               for _,admission in zip(registry.candidate_set.entries, registry.admissions)
               if admission.normalized_payload["workload"]["role"] in enabled_roles}
   selected = dict(collector["selected"])
+  # Exact model-owned captures may replace the dense body after admission.
+  # Reconcile them only when role, shape, and registry canonical identity all
+  # match; target remains inherited from the already validated admission.
+  for key,row in expected.items():
+    if key in selected: continue
+    matches=[x for x in collector["model_forward"].values() if x["role"]==row["role"] and x["shape"]==row["shape"] and
+             x["canonical_identity"]==row["canonical_identity"] and x["one_buffer"] is True]
+    if len(matches)==1: selected[key]={**row,"bindings":matches[0]["bindings"],"model_owned":True}
   missing = [expected[key] for key in sorted(expected.keys() - selected.keys())]
   unexpected = [selected[key] for key in sorted(selected.keys() - expected.keys())]
   mismatched = [selected[key] for key in sorted(expected.keys() & selected.keys())

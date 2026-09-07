@@ -38,3 +38,18 @@ Artifacts from the bounded runs were written to:
 - `/tmp/ordinary_stack_clean_deep5_a.json` (PASS, exact 252/234/162)
 - `/tmp/ordinary_stack_clean_deep5_b.json` (cycle 0 differs; cycles 1-4 exact)
 - `/tmp/prefill_whole_ordinary_k1_fixed3.log` (executed, stale route-census gate)
+
+## Maintained observer closure
+
+The exact observer census now reconciles a model-owned capture only after its
+project call returns and only through the linear's exact attached registry
+admission.  Runtime capture identity is separately pinned at trace attachment
+and must match at observation.  Thus role aliases can replace the dense body
+without relaxing registry shape, target, or canonical identity checks.
+
+`maintained-k1-observer.json` is the clean-environment K1/start0 result.  Its
+route gate is `PREFILL_ROUTE_BINDING_PASS`: four of four entries selected,
+with no missing, unexpected, or identity-mismatched entries.  Across warmup
+and measured invocation it records `attn_kv=36` per invocation and model-owned
+`attn_qo=72`, `ffn_down=36`, `ffn_gate_up=72` per invocation.  The 16936.8 ms
+sample includes smoke/cold lifecycle and is not timing authority.
