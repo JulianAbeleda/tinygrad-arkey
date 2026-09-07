@@ -29,3 +29,24 @@ Control minima were 47.097054 and 46.927554 ms (midpoint 47.012304 ms) versus
 candidate 49.107910 ms, a 2.095606 ms regression.  The isolated body/lifecycle
 win therefore does not compose with the production graph.  Wide O remains
 selected.
+
+A composition audit found the original generated Stream-K capture retained AFTER
+owners for output, partial workspace, and IDs.  This could schedule its opaque
+multi-output main more than once.  Mirroring the native single-owner contract
+keeps only output's AFTER owner and passes the raw partial/ID allocations to
+fixup.  A one-projection TinyJit then contains exactly one producer, one main,
+one fixup, and one residual service while preserving exact/allclose output.
+
+The full deep graph after this repair has exactly 36 O mains and 36 fixups, 36
+O record/output stage owners without identity deduplication, total mains 252,
+Q8 producers 234, active fixups 126, canonical weights, no copies/overlays, and
+exact three-cycle replay.  Its warmup-1 wall was 50.890940 ms.  The JSON formal
+FAIL is only the then-stale wide-Q/O stage expectation; the harness now expects
+wide Q 36 plus Stream-K O 36.
+
+Stable warmup-9 control/candidate/control R9 measured control medians 47.399535
+and 47.358540 ms (midpoint 47.3790375) against candidate 46.964699 ms: a
+0.4143385 ms win.  Control minimum midpoint was 46.989235 ms against candidate
+45.938449 ms: a 1.050786 ms win.  The median fails the frozen 0.5 ms promotion
+threshold, so single-owner O Stream-K remains default-off despite removing the
+composition regression.

@@ -258,7 +258,11 @@ class CompilerQ4StreamKCapture:
     out=Tensor.empty(M*self.n,dtype=dtypes.float32,device=x.device)
     partial=Tensor.empty(340*128*128,dtype=dtypes.float32,device=x.device)
     ids=Tensor.empty(340,dtype=dtypes.int32,device=x.device)
-    out,partial,ids,words,record=out.uop_program(partial,ids,words,record,fxn=lambda *_:self.q_program)
+    # Retain one lazy AFTER owner for the multi-output main.  The PROGRAM ABI
+    # still declares out/partial/ids as writes, so the raw allocations are
+    # valid fixup inputs.  Keeping every returned AFTER can materialize the
+    # opaque main once per owner in a composed graph.
+    out,_,_,_,_=out.uop_program(partial,ids,words,record,fxn=lambda *_:self.q_program)
     out,partial,slots,active=out.uop_program(partial,self.slots,self.active,fxn=lambda *_:self.fixup_program)
     if role=="attn_q":self.q_records.append(shared_record)
     self.records.append(record);self.outputs.append(out);self.partials.append(partial);self.partial_ids.append(ids)

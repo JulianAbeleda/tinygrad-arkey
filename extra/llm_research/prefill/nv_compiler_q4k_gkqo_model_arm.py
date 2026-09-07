@@ -370,13 +370,6 @@ def _graph_buffer(buf):
     "dtype":None if dtype is None else str(dtype), "hash":digest}
 
 
-def _append_unique_stage_pair(stages,role,output,record):
-  """Append one exact allocation owner; return False for a repeated main/fixup view."""
-  if any(existing is output for existing in stages[f"{role}_outputs"]): return False
-  stages[f"{role}_outputs"].append(output);stages[f"{role}_records"].append(record)
-  return True
-
-
 def _graph_stage_buffers(jit,identities):
   """Return the allocations actually rebound into the captured HCQ graphs."""
   from tinygrad.engine.realize import graph_cache
@@ -398,15 +391,13 @@ def _graph_stage_buffers(jit,identities):
       if role is None and name==identities.get("native_o"): role="native_o"
       if role is None and isinstance(name,str) and name.startswith("nv_q6_oracle_broad_cta_"): role="q6_down"
       if role is None:continue
-      # Stream-K's fixup carries the same candidate context as its main.  The
-      # stage contract owns the main's final output/record once, not both
-      # passes over the same allocations.
-      if role=="native_o" and name!=identities.get("native_o"): continue
+      # Stream-K's fixup carries the same candidate context as its main.  Only
+      # the three-output main owns the projection stage record/output.
+      if role=="native_o" and call.arg.outs!=(0,1,2): continue
       if call.arg.outs==(0,) and call.arg.ins in ((1,2),(1,2,3)): record_index=1
       elif call.arg.outs==(0,1,2) and call.arg.ins==(3,4): record_index=4
       else: raise RuntimeError(f"unexpected {role} captured ABI outs={call.arg.outs} ins={call.arg.ins}")
-      if role=="native_o": _append_unique_stage_pair(stages,role,bufs[0],bufs[record_index])
-      else: stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
+      stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
   return stages
 
 
@@ -1005,7 +996,9 @@ def main():
   if args.down_oracle: expected_stage.update({"down_oracle_records":36,"down_oracle_outputs":36})
   if args.gate_epilogue_fused: expected_stage.update({"gate_epilogue_records":36,"gate_epilogue_outputs":36})
   if args.arm=="candidate":
-    if args.q_x4 and not args.qo_streamk:
+    if args.generated_o_streamk:
+      expected_stage.update({"qo_records":36,"qo_outputs":36})
+    elif args.q_x4 and not args.qo_streamk:
       expected_stage.update({"qo_records":36,"qo_outputs":36,"qo_o_records":36,"qo_o_outputs":36})
     else: expected_stage.update({"qo_records":72,"qo_outputs":72})
   if args.generated_o_streamk: expected_stage.update({"native_o_records":36,"native_o_outputs":36})
