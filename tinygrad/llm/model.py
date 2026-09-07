@@ -2029,8 +2029,10 @@ class Transformer:
       # full-model bracket.  It remains bounded by the existing exact compiler
       # pp512 admission; zero is the explicit rollback to the wide compiler body.
       if nv_q4_mode == "compiler" and _nv_compiler_q4_gate_streamk_enabled(self.config):
+        _gate_x4_interleave = bool(getenv("NV_COMPILER_Q4_GATE_X4_INTERLEAVE", 1))
         _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama",
-                                  pair_q8_reuse=_nv_compiler_q4_gate_q8_reuse_enabled(self.config))
+                                  pair_q8_reuse=_nv_compiler_q4_gate_q8_reuse_enabled(self.config),
+                                  native_weight_a_x4=_gate_x4_interleave, coalesced_swapped_output=_gate_x4_interleave)
       else: _nv_binding = binding_for("NV")
       if nv_q4_mode == "gate_only":
         _nv_gate_only_binding = _nv_binding

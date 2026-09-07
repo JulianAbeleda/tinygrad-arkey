@@ -189,7 +189,7 @@ class CompilerQ4StreamKCapture:
     elif shared_load_to_pack=="1": shared_load_to_pack=True
     elif shared_load_to_pack not in ("all","fragments","scales"):
       raise ValueError("NV_COMPILER_Q4_STREAMK_SHARED_LOAD_TO_PACK must be 0, 1, all, fragments, or scales")
-    interleave_wmma_updates=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES", "0")))
+    interleave_wmma_updates=coalesced_swapped_output or bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES", "0")))
     base_context=getattr(base,"context",None) or base.q_context
     swapped=getattr(base_context,"operand_order","activation_a_weight_b")=="weight_a_activation_b"
     if coalesced_swapped_output and not swapped: raise ValueError("coalesced swapped output requires weight-A operand order")

@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import pytest
 
 from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import active_fixup_source, transform_compiler_q4k_to_streamk
 
@@ -161,6 +163,17 @@ def test_interleaved_wmma_schedule_bounds_results_and_preserves_updates():
     needle=f"(*(buf0+{i})) ="
     assert transformed[transformed.index(needle):transformed.index(needle)+len(original[original.index(needle):].splitlines()[0])] == \
       original[original.index(needle):].splitlines()[0]
+
+def test_interleaved_wmma_schedule_derives_renderer_scale_numbers_and_fails_closed():
+  if not FIXTURE.exists(): return
+  source=FIXTURE.read_text()
+  shifted=re.sub(r"\bcast(3[3-9]|[4-8][0-9]|9[0-6])\b",lambda m:f"cast{int(m.group(1))+100}",source)
+  transformed=transform_compiler_q4k_to_streamk(shifted,interleave_wmma_updates=True)
+  assert transformed.count("int4 wmma")==32
+  assert all(transformed.count(f"float cast{i} =")==1 for i in range(133,197))
+  broken=re.sub(r"^    float cast133 = .*;\n","",shifted,count=1,flags=re.M)
+  with pytest.raises(ValueError,match="32 wmmas, 64 scales, and 64 updates"):
+    transform_compiler_q4k_to_streamk(broken,interleave_wmma_updates=True)
 
 
 def test_sliced_fixup_matches_same_partials_on_nv():
