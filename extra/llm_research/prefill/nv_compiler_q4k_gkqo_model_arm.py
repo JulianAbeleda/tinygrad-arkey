@@ -1003,7 +1003,9 @@ def main():
     "old_gate_fp16_cast":names.get("E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",0),
     "down_oracle_weight_args":len(down_weight_args),"down_oracle_unique_weight_bases":len(set(down_weight_args)),
     "down_oracle_all_weights_overlay":bool(down_weight_args and all(w in down_overlay_bases for w in down_weight_args)),
-    "k_main":len(mains["k"]),"qo_main":len(mains["qo"]),
+    # Native-K diagnostics reuse the K role bucket for weight accounting; do
+    # not present those same calls a second time as generated K mains.
+    "k_main":0 if native_k is not None else len(mains["k"]),"qo_main":len(mains["qo"]),
     "native_k_main":0 if native_k is None else names.get(native_k.asset.q4_k_main.arg.name,0),
     "native_k_fixup":0 if native_k is None else names.get(native_k.asset.q4_k_fix.arg.name,0),
     "native_q_main":len(mains["native_q"]),
