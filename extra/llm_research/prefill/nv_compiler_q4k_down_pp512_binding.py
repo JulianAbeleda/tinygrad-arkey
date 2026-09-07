@@ -52,7 +52,8 @@ def _streamk_asset(device, unroll=None, sliced_fixup=False, restrict_pointers=Fa
 
 def _streamk_main(asset, out, partial, ids, words, record):
   validate_streamk_inputs(words, record)
-  return out.uop_program(partial, ids, words, record, fxn=lambda *_:asset.main_program)
+  out,_,_,_,_=out.uop_program(partial,ids,words,record,fxn=lambda *_:asset.main_program)
+  return out,partial,ids,words,record
 
 def _project(asset,x,words,*,model_family,role,weight_type="Q4_K"):
   if not supports(model_family=model_family,role=role,weight_type=weight_type,m=x.shape[0],n=N,k=x.shape[1],device=x.device): raise ValueError("unsupported compiler Q4 down route")

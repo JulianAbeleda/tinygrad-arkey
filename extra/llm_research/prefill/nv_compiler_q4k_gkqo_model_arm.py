@@ -517,6 +517,7 @@ def main():
   ap.add_argument("--q6-v",action="store_true")
   ap.add_argument("--q6-down",action="store_true")
   ap.add_argument("--q4-down-streamk",action="store_true")
+  ap.add_argument("--q4-down-x4",action="store_true",help="compose Q4-A x4/interleave/coalesced output on Q4 down Stream-K")
   ap.add_argument("--gate-streamk",action="store_true")
   ap.add_argument("--gate-x4-chain",action="store_true",help="typed physical NxM generated gate/up chain using Q4-A x4")
   ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
@@ -550,6 +551,7 @@ def main():
   ap.add_argument("--dump-flash-f1",default="", help="opt-in finalized graph-owned F1 binding dump")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="");args=ap.parse_args()
   if args.gate_x4_chain and not args.gate_streamk: raise ValueError("--gate-x4-chain requires --gate-streamk")
+  if args.q4_down_x4 and not args.q4_down_streamk: raise ValueError("--q4-down-x4 requires --q4-down-streamk")
   if args.arm=="compare":
     cj,ctl=json.loads(pathlib.Path(args.candidate_json).read_text()),json.loads(pathlib.Path(args.control_json).read_text())
     ca,co=np.load(args.candidate_npz),np.load(args.control_npz);cl,ol=ca["logits"].astype(np.float32),co["logits"].astype(np.float32)
@@ -673,7 +675,7 @@ def main():
   q4_down_asset=q4_down_capture=native_q4_down=None
   if args.q4_down_streamk:
     from extra.llm_research.prefill.nv_compiler_q4k_down_pp512_binding import binding_for as q4_down_binding_for, DownCapture
-    q4_down_asset=q4_down_binding_for("NV",variant="streamk",streamk_unroll=8)
+    q4_down_asset=q4_down_binding_for("NV",variant="streamk",streamk_unroll=8,native_weight_a_x4=args.q4_down_x4)
     q4_down_capture=DownCapture(q4_down_asset);q4_down_capture.prepare_records(18)
   if args.native_q4_down:
     from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as native_q4_down_binding_for
