@@ -81,7 +81,8 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
                                      shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False,
-                                     operand_order:str="activation_a_weight_b", logical_transpose_output:bool=False) -> str:
+                                     operand_order:str="activation_a_weight_b", logical_transpose_output:bool=False,
+                                     q8_ds4_packed_loads:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -171,6 +172,43 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
       return "".join(loads[x] for x in names)+m.group(0)
     math=pack_re.sub(stage_pack,math)
     if consumed!=set(loads): raise ValueError(f"shared load-to-pack left {len(set(loads)-consumed)} loads without a pack")
+  if q8_ds4_packed_loads:
+    if operand_order!="weight_a_activation_b": raise ValueError("packed Q8 DS4 loads require activation in MMA B")
+    decl_re=re.compile(r"^    signed char (val\d+) = \(\*\(buf1\+\((alu\d+)\+(\d+)\)\)\);\n",re.M)
+    decls={m.group(1):(m.group(0),m.group(2),int(m.group(3))) for m in decl_re.finditer(math)}
+    remove=set(); replacements={}
+    packs=list(re.finditer(r"^    signed_char8 (cast\d+) = make_signed_char8\((val\d+),(val\d+),(val\d+),(val\d+),(val\d+),(val\d+),(val\d+),(val\d+)\);$",math,re.M))
+    if len(packs)!=8: raise ValueError(f"packed Q8 DS4 loads require eight char8 fragments, found {len(packs)}")
+    for pack in packs:
+      cast,*names=pack.groups(); entries=[decls.get(name) for name in names]
+      if any(x is None for x in entries): raise ValueError("Q8 fragment escaped scalar declarations")
+      bases={x[1] for x in entries}; offsets=[x[2] for x in entries]
+      if len(bases)!=1 or offsets[1:4]!=[offsets[0]+i for i in range(1,4)] or offsets[4:]!=[offsets[0]+16+i for i in range(4)] or offsets[0]%4:
+        raise ValueError("Q8 fragment addresses are not two aligned dword runs")
+      remove.update(x[0] for x in entries); base=entries[0][1]
+      replacements[pack.group(0)]=(f"    uint2 {cast} = make_uint2(*reinterpret_cast<const unsigned int*>(buf1+({base}+{offsets[0]})), "
+        f"*reinterpret_cast<const unsigned int*>(buf1+({base}+{offsets[4]})));")
+    halves=list(re.finditer(r"^    float (cast(?:5[7-9]|[6-7][0-9]|8[0-8])) = (.*);$",math,re.M))
+    if len(halves)!=32: raise ValueError(f"packed Q8 DS4 loads require 32 half values, found {len(halves)}")
+    for half in halves:
+      names=re.findall(r"\bval\d+\b",half.group(2))
+      if len(names)!=2 or any(name not in decls for name in names): raise ValueError("Q8 half escaped scalar declarations")
+      lo,hi=decls[names[0]],decls[names[1]]
+      if lo[1]!=hi[1] or hi[2]!=lo[2]+1 or lo[2]%2: raise ValueError("Q8 half address is not aligned")
+      remove.update((lo[0],hi[0])); replacements[half.group(0)]=f"    float {half.group(1)} = ((float)(*reinterpret_cast<const half*>(buf1+({lo[1]}+{lo[2]}))));"
+    if len(remove)!=128: raise ValueError(f"packed Q8 DS4 loads require 128 unique declarations, found {len(remove)}")
+    for line in remove:
+      if math.count(line)!=1: raise ValueError("Q8 scalar declaration ownership is not unique")
+      math=math.replace(line,"",1)
+    for old,new in replacements.items():
+      if math.count(old)!=1: raise ValueError("Q8 packed consumer ownership is not unique")
+      math=math.replace(old,new,1)
+    if math.count("reinterpret_cast<const unsigned int*>(buf1+")!=16 or math.count("reinterpret_cast<const half*>(buf1+")!=32:
+      raise ValueError("packed Q8 DS4 load census mismatch")
+    math=math.replace("__WMMA_8_16_32_signed_char_int(","__WMMA_8_16_32_signed_char_int_q8u2(")
+    helper="__device__ int4 __WMMA_8_16_32_signed_char_int(signed_char16 a, signed_char8 b, int4 c){"
+    if source.count(helper)!=1: raise ValueError("Q8 uint2 WMMA helper not found")
+    source=source.replace(helper,"__device__ int4 __WMMA_8_16_32_signed_char_int_q8u2(signed_char16 a, uint2 b, int4 c){",1)
   if interleave_wmma_updates:
     # Compute eight IMMA results and their output-column scale values together.
     # Each accumulator expression remains byte-for-byte unchanged, while 24

@@ -59,11 +59,13 @@ class _Context:
   pipeline: None = None
   operand_order: str = "activation_a_weight_b"
   native_weight_fragment: str|None = None
+  q8_ds4_packed_loads: bool = False
 
   def __post_init__(self):
     if self.operand_order not in ("activation_a_weight_b","weight_a_activation_b"): raise ValueError("unsupported packed operand order")
     if self.native_weight_fragment not in (None,"q4_a_x4"): raise ValueError("unsupported native packed weight fragment")
     if self.native_weight_fragment and self.operand_order!="weight_a_activation_b": raise ValueError("native Q4 A x4 requires swapped operands")
+    if self.q8_ds4_packed_loads and self.operand_order!="weight_a_activation_b": raise ValueError("packed Q8 DS4 loads require swapped operands")
 
 
 def _weight_carrier(words:Tensor, transform:PackedWeightTransform) -> Tensor:
@@ -123,7 +125,7 @@ class CompilerPP512Binding:
   warmstart_contexts: Mapping
   @classmethod
   def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False, producer_arithmetic="legacy",
-              native_weight_a_x4:bool=False) -> "CompilerPP512Binding":
+              native_weight_a_x4:bool=False,q8_ds4_packed_loads:bool=False) -> "CompilerPP512Binding":
     config.validate()
     wt = PackedWeightTransform("Q4_K", N, K)
     at = TileMajorQ8ActivationRecordTransform(M, K) if compact_q8 else Q8ActivationRecordTransform(M, K)
@@ -138,7 +140,7 @@ class CompilerPP512Binding:
       "q4_a_x4" if native_weight_a_x4 else None)).encode()).hexdigest()
     context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum,
       operand_order="weight_a_activation_b" if native_weight_a_x4 else "activation_a_weight_b",
-      native_weight_fragment="q4_a_x4" if native_weight_a_x4 else None)
+      native_weight_fragment="q4_a_x4" if native_weight_a_x4 else None,q8_ds4_packed_loads=q8_ds4_packed_loads)
     key = warmstart_key({M, N}, K, wt.storage_dtype)
     if compact_q8:
       from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import FP16_DS4_SOURCE
@@ -295,7 +297,7 @@ def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_fami
 
 
 def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy", pair_q8_reuse=False, native_weight_a_x4=False,
-                coalesced_swapped_output=False):
+                coalesced_swapped_output=False,q8_ds4_packed_loads=False):
   if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
@@ -306,10 +308,10 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
     try:warp_m,warp_n=(int(x) for x in warp_raw.split(","))
     except Exception as e:raise ValueError("NV_COMPILER_Q4_GATE_WARP must be warp_m,warp_n") from e
     schedule=CompilerQ4ScheduleConfig(warp_m=warp_m,warp_n=warp_n);schedule.validate()
-    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n,native_weight_a_x4,coalesced_swapped_output)
+    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n,native_weight_a_x4,coalesced_swapped_output,q8_ds4_packed_loads)
     if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(
       Device[device],CompilerPP512Binding.compile(Device[device],schedule,compact_q8=compact_q8,producer_arithmetic=producer_arithmetic,
-        native_weight_a_x4=native_weight_a_x4),
+        native_weight_a_x4=native_weight_a_x4,q8_ds4_packed_loads=q8_ds4_packed_loads),
       n=N,pair_q8_reuse=pair_q8_reuse,coalesced_swapped_output=coalesced_swapped_output)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")

@@ -105,6 +105,17 @@ def test_compiler_gate_q8_reuse_requires_streamk(monkeypatch):
   monkeypatch.setattr(model,"getenv",_env({}))
   assert not model._nv_compiler_q4_gate_streamk_enabled(config)
 
+def test_compiler_gate_q8_packed_loads_defaults_on_with_rollback(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q8_PACKED_LOADS":0}))
+  assert not model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:False)
+  assert not model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
+
 def test_q6_rollback_keeps_llama_down_lease(monkeypatch):
   config=SimpleNamespace()
   monkeypatch.setattr(model,"_nv_compiler_q4_imma_k_pp512_enabled",lambda _:True)

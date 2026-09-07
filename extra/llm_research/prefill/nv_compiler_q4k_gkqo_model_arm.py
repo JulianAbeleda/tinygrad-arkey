@@ -520,6 +520,7 @@ def main():
   ap.add_argument("--q4-down-x4",action="store_true",help="compose Q4-A x4/interleave/coalesced output on Q4 down Stream-K")
   ap.add_argument("--gate-streamk",action="store_true")
   ap.add_argument("--gate-x4-chain",action="store_true",help="typed physical NxM generated gate/up chain using Q4-A x4")
+  ap.add_argument("--gate-q8-packed-loads",action="store_true",help="pack exact Q8 DS4 fragment and half loads in generated gate/up")
   ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
@@ -551,6 +552,7 @@ def main():
   ap.add_argument("--dump-flash-f1",default="", help="opt-in finalized graph-owned F1 binding dump")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="");args=ap.parse_args()
   if args.gate_x4_chain and not args.gate_streamk: raise ValueError("--gate-x4-chain requires --gate-streamk")
+  if args.gate_q8_packed_loads and not args.gate_x4_chain: raise ValueError("--gate-q8-packed-loads requires --gate-x4-chain")
   if args.q4_down_x4 and not args.q4_down_streamk: raise ValueError("--q4-down-x4 requires --q4-down-streamk")
   if args.arm=="compare":
     cj,ctl=json.loads(pathlib.Path(args.candidate_json).read_text()),json.loads(pathlib.Path(args.control_json).read_text())
@@ -640,7 +642,7 @@ def main():
     gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
                                 producer_arithmetic="llama" if args.gate_streamk else "legacy",
                                 pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk,native_weight_a_x4=args.gate_x4_chain,
-                                coalesced_swapped_output=args.gate_x4_chain)
+                                coalesced_swapped_output=args.gate_x4_chain,q8_ds4_packed_loads=args.gate_q8_packed_loads)
     if args.gate_x4_chain and gate_asset.physical_transposed:
       raise RuntimeError("typed gate x4 binding lost its coalesced logical output contract")
     gate_asset.prepare_records(72)
