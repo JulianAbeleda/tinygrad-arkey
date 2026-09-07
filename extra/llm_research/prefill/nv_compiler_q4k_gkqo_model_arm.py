@@ -398,10 +398,12 @@ def _graph_stage_buffers(jit,identities,program_roles=None):
       # Stream-K's fixup carries the same candidate context as its main.  Only
       # the three-output main owns the projection stage record/output.
       if role=="native_o" and call.arg.outs!=(0,1,2): continue
+      output_index=0
       if call.arg.outs==(0,) and call.arg.ins in ((1,2),(1,2,3)): record_index=1
       elif call.arg.outs==(0,1,2) and call.arg.ins==(3,4): record_index=4
+      elif role=="gate_up" and call.arg.outs==(2,3) and call.arg.ins==(0,1): output_index,record_index=2,1
       else: raise RuntimeError(f"unexpected {role} captured ABI outs={call.arg.outs} ins={call.arg.ins}")
-      stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
+      stages[f"{role}_outputs"].append(bufs[output_index]);stages[f"{role}_records"].append(bufs[record_index])
   return stages
 
 
