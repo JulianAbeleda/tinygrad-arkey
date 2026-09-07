@@ -191,5 +191,42 @@
     "directional_min_win_ms": 0.22415,
     "promotion_gate_ms": 0.5,
     "decision": "retain current selector; below gate and nonstationary"
+  },
+  "classified_comparison": {
+    "llama": {
+      "projection_main_calls": 252,
+      "projection_main_us": 34783.968,
+      "projection_fixup_calls": 252,
+      "projection_fixup_us": 2521.984,
+      "projection_core_calls": 504,
+      "projection_core_us": 37305.952,
+      "q8_including_vocab_calls": 163,
+      "q8_including_vocab_us": 862.336,
+      "attention_calls": 36,
+      "attention_us": 2404.672,
+      "generic_calls": 911,
+      "generic_us": 5721.952
+    },
+    "generated": {
+      "projection_main_fixup_calls": 342,
+      "projection_main_fixup_us": 36161.5,
+      "q8_calls": 234,
+      "q8_us": 919.7,
+      "attention_calls": 36,
+      "attention_us": 3012.75,
+      "generic_calls": 1036,
+      "generic_us": 10962.55
+    },
+    "delta_generated_minus_llama": {
+      "projection_core_calls": -162,
+      "projection_core_us": -1144.452,
+      "q8_calls": 71,
+      "q8_us": 57.364,
+      "attention_calls": 0,
+      "attention_us": 608.078,
+      "generic_calls": 125,
+      "generic_us": 5240.598
+    },
+    "proof_limit": "Generated and llama PROFILE modes differ; durations are attribution evidence, not matched promotion timing."
   }
 }
