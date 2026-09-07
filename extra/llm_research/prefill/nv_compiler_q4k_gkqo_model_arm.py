@@ -61,7 +61,7 @@ class _GraphOwnedQOCapture:
     if role=="attn_q":self.q_records.append(record)
     # Retain the produced Tensor identities, not the pre-program placeholders.
     self.records[-1],self.outputs[-1]=record,out
-    return out.reshape(512,4096)
+    return out.reshape(4096,512).transpose() if role=="attn_q" and self.asset.q_output_transposed else out.reshape(512,4096)
 
 
 class _SharedQ4VCapture:

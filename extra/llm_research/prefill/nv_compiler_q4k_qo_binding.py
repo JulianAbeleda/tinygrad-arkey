@@ -60,7 +60,6 @@ class CompilerQOBinding:
       activation,weight=_activation_carrier(record_probe,at),_weight_carrier(words_probe,wt)
       expr=(weight.matmul(activation.transpose(),dtype=dtypes.int) if context.operand_order=="weight_a_activation_b" else
             activation.matmul(weight.transpose(),dtype=dtypes.int)).cast(dtypes.float)
-      if context.operand_order=="weight_a_activation_b": expr=expr.transpose().contiguous()
       if with_residual: expr=(expr+residual_probe).contiguous()
       else: expr=expr.contiguous()
       with warmstart_candidate_state(warmstart,warmstart_contexts): expr.realize()
@@ -83,7 +82,7 @@ class CompilerQOBinding:
   def candidate_identity(self):return self.o_context.canonical_identity
 
   @property
-  def q_output_transposed(self): return False
+  def q_output_transposed(self): return self.q_context.operand_order=="weight_a_activation_b"
 
   def install_warmstart(self,model):
     opts,contexts=dict(model._packed_wmma_warmstart or {}),dict(model._packed_wmma_warmstart_contexts or {})
@@ -126,7 +125,7 @@ class CompilerQOBinding:
       else:
         if residual.shape != (M,N) or residual.dtype != dtypes.float32: raise ValueError("O residual must be float32 (512,4096)")
         out,record,words,residual=out.uop_program(record,words,residual,fxn=lambda *_:self.main_program)
-    return out.reshape(M,N)
+    return out.reshape(N,M).transpose() if role=="attn_q" and self.q_output_transposed else out.reshape(M,N)
 
 
 @dataclass
