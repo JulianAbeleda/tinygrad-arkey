@@ -294,7 +294,8 @@ def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_fami
     return out.reshape(M, N)
 
 
-def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy", pair_q8_reuse=False, native_weight_a_x4=False):
+def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy", pair_q8_reuse=False, native_weight_a_x4=False,
+                coalesced_swapped_output=False):
   if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
@@ -305,11 +306,11 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
     try:warp_m,warp_n=(int(x) for x in warp_raw.split(","))
     except Exception as e:raise ValueError("NV_COMPILER_Q4_GATE_WARP must be warp_m,warp_n") from e
     schedule=CompilerQ4ScheduleConfig(warp_m=warp_m,warp_n=warp_n);schedule.validate()
-    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n,native_weight_a_x4)
+    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n,native_weight_a_x4,coalesced_swapped_output)
     if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(
       Device[device],CompilerPP512Binding.compile(Device[device],schedule,compact_q8=compact_q8,producer_arithmetic=producer_arithmetic,
         native_weight_a_x4=native_weight_a_x4),
-      n=N,pair_q8_reuse=pair_q8_reuse)
+      n=N,pair_q8_reuse=pair_q8_reuse,coalesced_swapped_output=coalesced_swapped_output)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
   key=(device,producer_arithmetic,native_weight_a_x4)

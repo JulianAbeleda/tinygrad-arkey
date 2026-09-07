@@ -624,9 +624,10 @@ def main():
   else:
     gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
                                 producer_arithmetic="llama" if args.gate_streamk else "legacy",
-                                pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk,native_weight_a_x4=args.gate_x4_chain)
-    if args.gate_x4_chain and gate_asset.physical_transposed is not True:
-      raise RuntimeError("typed gate x4 binding lost its physical transpose contract")
+                                pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk,native_weight_a_x4=args.gate_x4_chain,
+                                coalesced_swapped_output=args.gate_x4_chain)
+    if args.gate_x4_chain and gate_asset.physical_transposed:
+      raise RuntimeError("typed gate x4 binding lost its coalesced logical output contract")
     gate_asset.prepare_records(72)
     if not args.gate_streamk: gate_asset.install_warmstart(model)
     gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset

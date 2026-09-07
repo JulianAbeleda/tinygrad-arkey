@@ -50,6 +50,36 @@ def test_partial_store_offset_remap_is_not_cascaded():
   transformed=_partial_store_block(source,output_stride=512)
   assert "alu242+1024" in transformed and "alu242+4096" in transformed
 
+def test_swapped_xor4_epilogue_maps_each_mma_value_once():
+  coords=[]; sources=[]
+  for lane in range(32):
+    g,q,hi=lane>>2,lane&3,(lane>>2)&1
+    for p in range(2):
+      for half in range(2):
+        coords.append((2*q+p,g+7*hi+half))
+        # hi0 consumes C[p] from itself/XOR4; hi1 consumes C[p+2].
+        source_lane=lane if half==hi else lane^4
+        source_elem=p+2*hi
+        sources.append((source_lane,source_elem))
+  assert len(coords)==len(set(coords))==128
+  assert len(sources)==len(set(sources))==128
+  assert set(coords)=={(r,c) for r in range(8) for c in range(16)}
+  assert set(sources)=={(lane,e) for lane in range(32) for e in range(4)}
+
+def test_swapped_xor4_epilogue_keeps_direct_and_partial_local_indices_identical():
+  from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import _logical_transpose_store_blocks
+  source=""; value=0
+  for row in range(0,64,8):
+    for col in range(0,32,8):
+      off=row*512+col; addr="alu247" if off==0 else f"(alu247+{off})"
+      source+=f"  *((float2*)((data0_6291456+{addr}))) = make_float2((*(buf0+{value})),(*(buf0+{value+32})));\n";value+=1
+  direct,partial=_logical_transpose_store_blocks(source)
+  assert direct.count("float2*)")==partial.count("float2*)")==32
+  assert direct.count("__shfl_xor_sync")==partial.count("__shfl_xor_sync")==64
+  # Both destinations use the same local row/column expressions.
+  assert "((lidx2<<5)+(alu5<<1)+" in direct and "((lidx2<<5)+(alu5<<1)+" in partial
+  assert "((lidx1<<6)+" in direct and "((lidx1<<6)+" in partial
+
 def test_transform_accepts_renderer_renumbered_output_index():
   if not FIXTURE.exists(): return
   source=FIXTURE.read_text().replace("alu242", "alu246")

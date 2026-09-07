@@ -20,12 +20,51 @@ def _partial_store_block(direct_store_block:str, *, store_index:str="alu242", ou
   block=re.sub(rf"{re.escape(store_index)}\+(\d+)",remap_offset,block)
   return block
 
+def _logical_transpose_store_blocks(direct_store_block:str, *, output_arg:str="data0_6291456") -> tuple[str,str]:
+  """Transpose one exact 128x128 swapped IMMA tile with XOR4 and vector stores."""
+  line_re=re.compile(r"^  \*\(\(float2\*\)\(\("+re.escape(output_arg)+
+    r"\+\(?alu\d+(?:\+(\d+))?\)?\)\)\) = make_float2\(\(\*\(buf0\+(\d+)\)\),\(\*\(buf0\+(\d+)\)\)\);$",re.M)
+  rows=[]
+  for m in line_re.finditer(direct_store_block):
+    off=int(m.group(1) or 0); row,col=divmod(off,512)
+    if col>=128: raise ValueError("swapped output store escapes its physical tile")
+    rows.append((row,col,int(m.group(2)),int(m.group(3))))
+  if len(rows)!=32: raise ValueError(f"logical transpose requires 32 physical float2 stores, found {len(rows)}")
+  table={(row,col):(a,b) for row,col,a,b in rows}
+  if len(table)!=32: raise ValueError("logical transpose physical stores overlap")
+  pairs=[]
+  for row,col,a,b in rows:
+    if row%16>=8: continue
+    high=table.get((row+8,col))
+    if high is None: raise ValueError("logical transpose has no r+8 C-fragment partner")
+    pairs.append((row,col,(a,b),high))
+  if len(pairs)!=16: raise ValueError("logical transpose requires 16 low/high store pairs")
+  def emit(partial:bool)->str:
+    lines=[]
+    for pair,(row,col,lo,hi) in enumerate(pairs):
+      for p in range(2):
+        sl,sh,v0,v1=(f"tx{pair}_{p}_{x}" for x in ("sl","sh","0","1"))
+        # Every lane must execute both full-mask shuffles before selection;
+        # placing the intrinsic in a divergent ternary makes its result undefined.
+        lines += [f"  float {sl} = __shfl_xor_sync(0xffffffffu, (*(buf0+{lo[p]})), 4);",
+                  f"  float {sh} = __shfl_xor_sync(0xffffffffu, (*(buf0+{hi[p]})), 4);",
+                  f"  float {v0} = (alu2&1) ? {sh} : (*(buf0+{lo[p]}));",
+                  f"  float {v1} = (alu2&1) ? (*(buf0+{hi[p]})) : {sl};"]
+        local_row=f"((lidx2<<5)+(alu5<<1)+{col+p})"
+        local_col=f"((lidx1<<6)+{row}+alu2+7*(alu2&1))"
+        index=f"(({local_row})*128+{local_col})" if partial else \
+          f"(((gidx0*128+{local_row})*12288)+(gidx1*128)+{local_col})"
+        dest=f"partials+(slot*16384)+{index}" if partial else f"{output_arg}+{index}"
+        lines.append(f"  *((float2*)({dest})) = make_float2({v0},{v1});")
+    return "\n".join(lines)+"\n"
+  return emit(False),emit(True)
+
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      tiles_m:int=4, k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
                                      shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False,
-                                     operand_order:str="activation_a_weight_b") -> str:
+                                     operand_order:str="activation_a_weight_b", logical_transpose_output:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -37,6 +76,8 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   if signature is None: raise ValueError("compiler Q4 kernel signature not found")
   if f"Ridx0 < {k_blocks}" not in source: raise ValueError("source K loop does not match requested Stream-K geometry")
   if operand_order not in ("activation_a_weight_b","weight_a_activation_b"): raise ValueError("unsupported packed operand order")
+  if logical_transpose_output and (operand_order!="weight_a_activation_b" or (tiles_m,tiles_n,output_stride)!=(96,4,512)):
+    raise ValueError("logical transpose output requires exact swapped 96x4 physical grid")
   out_name=kernel_name
   exported=f'extern "C" __global__ void __launch_bounds__(256) {out_name}('
   out_arg,slot1_arg,slot2_arg=signature.group(3),signature.group(4),signature.group(5)
@@ -155,7 +196,8 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     math=math.replace("__syncthreads();","",1)
     math=math.replace("buf1+","buf1+((Ridx0&1)*20480)+")
   direct=source[store_start:function_end]
-  partial=_partial_store_block(direct,store_index=store_index,output_stride=output_stride,output_arg=signature.group(3))
+  if logical_transpose_output: direct,partial=_logical_transpose_store_blocks(direct,output_arg=signature.group(3))
+  else: partial=_partial_store_block(direct,store_index=store_index,output_stride=output_stride,output_arg=signature.group(3))
   prefix=source[:body_start]
   work_units=tiles_n*tiles_m*k_blocks
   owner_loop=f"""  int owner_start = ((owner*{work_units}/{OWNERS})/{BOUNDARY_QUANTUM})*{BOUNDARY_QUANTUM};
@@ -176,14 +218,16 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
           partial+"    }\n")
   return prefix+owner_loop+math+stores+"  }\n}\n"
 
-def active_fixup_source(*, max_contributors:int=2, sliced:bool=False) -> str:
+def active_fixup_source(*, max_contributors:int=2, sliced:bool=False, transpose_physical_tiles_n:int|None=None) -> str:
   if max_contributors < 2: raise ValueError("fixup requires at least two contributors")
   decl=','.join(f"s{i}=map[{max_contributors}*tile+{i}]" for i in range(max_contributors))
   adds=''.join(f"+(s{i}>=0?partials[s{i}*16384+z]:0)" for i in range(1,max_contributors))
   zdecl="int tile=active[blockIdx.x],z=threadIdx.x;" if not sliced else "int tile=active[blockIdx.x],z=blockIdx.y*4096+threadIdx.x;"
   loop="z<16384;z+=256" if not sliced else "z<((blockIdx.y+1)*4096);z+=128"
+  tile_map=(f"nb=(tile/{transpose_physical_tiles_n})*128,mb=(tile%{transpose_physical_tiles_n})*128" if
+            transpose_physical_tiles_n is not None else "nb=(tile%(N/128))*128,mb=(tile/(N/128))*128")
   return f'''extern "C" __global__ void q4k_imma_fixup_active(float *out,const float *partials,const int *map,const int *active,int M,int N) {{
-    {zdecl} int {decl},nb=(tile%(N/128))*128,mb=(tile/(N/128))*128;
+    {zdecl} int {decl},{tile_map};
     if(s0<0)return;
     for (;{loop}) {{ int r=z/128,c=z%128;
       out[(mb+r)*N+nb+c]=partials[s0*16384+z]{adds}; }}
