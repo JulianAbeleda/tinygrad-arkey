@@ -521,6 +521,7 @@ def main():
   ap.add_argument("--gate-streamk",action="store_true")
   ap.add_argument("--gate-x4-chain",action="store_true",help="typed physical NxM generated gate/up chain using Q4-A x4")
   ap.add_argument("--gate-q8-packed-loads",action="store_true",help="pack exact Q8 DS4 fragment and half loads in generated gate/up")
+  ap.add_argument("--ordinary-selected-gate",action="store_true",help="derive generated gate body from the production selector")
   ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
@@ -553,6 +554,7 @@ def main():
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="");args=ap.parse_args()
   if args.gate_x4_chain and not args.gate_streamk: raise ValueError("--gate-x4-chain requires --gate-streamk")
   if args.gate_q8_packed_loads and not args.gate_x4_chain: raise ValueError("--gate-q8-packed-loads requires --gate-x4-chain")
+  if args.ordinary_selected_gate and (not args.gate_streamk or args.native_gate_up): raise ValueError("ordinary selected gate requires generated Stream-K")
   if args.q4_down_x4 and not args.q4_down_streamk: raise ValueError("--q4-down-x4 requires --q4-down-streamk")
   if args.arm=="compare":
     cj,ctl=json.loads(pathlib.Path(args.candidate_json).read_text()),json.loads(pathlib.Path(args.control_json).read_text())
@@ -618,6 +620,11 @@ def main():
   # This arm is an exact pp512 experiment; requesting a 4608-token KV plan
   # causes admission to reject on constrained validation GPUs before capture.
   model,_=load_model_and_tokenizer(args.model,512,seed=20260617)
+  if args.ordinary_selected_gate:
+    import tinygrad.llm.model as model_module
+    if not model_module._nv_compiler_q4_gate_streamk_enabled(model.config): raise RuntimeError("production gate Stream-K selector rejected exact pp512")
+    args.gate_x4_chain=bool(model_module.getenv("NV_COMPILER_Q4_GATE_X4_INTERLEAVE",1))
+    args.gate_q8_packed_loads=args.gate_x4_chain and model_module._nv_compiler_q4_gate_q8_packed_loads_enabled(model.config)
   down_overlay_bases=set()
   if args.down_oracle:
     import tinygrad.llm.model as model_module
