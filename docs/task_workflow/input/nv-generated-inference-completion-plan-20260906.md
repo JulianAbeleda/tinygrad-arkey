@@ -16,7 +16,7 @@ better through the qualified context bands up to 4096 tokens.
 
 - Ordinary native pp512 is 34.890318 ms; fresh llama is 38.8192285 ms. The
   tinygrad graph/lifecycle can therefore beat the reference.
-- Generated current252 pp512 is 50.746286 ms with 252 generated projections,
+- The refreshed generated current252 authority is 47.777403 ms (shared-arm midpoint) with 252 generated projections and `--share-q-q4v`; the older frozen baseline was 50.746286 ms with 252 generated projections,
   generated vocabulary, canonical weights, zero V/down overlays, finite logits,
   token 198, and exact 20-cycle output replay.
 - The generated pp512 gap is 11.9270575 ms to llama and 15.855968 ms to the

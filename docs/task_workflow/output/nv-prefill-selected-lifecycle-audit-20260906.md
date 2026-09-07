@@ -15,7 +15,8 @@ token path, and kernel-active performance. They are different claims.
 | Vocabulary | Generic `r_1187_32_4_16_2_2_2_4_8_*` plus two elementwise calls before this fix | **Qualified omission repaired:** current252 off/on/off is 53.313233 / 50.746286 / 53.183219 ms. Existing four-warp vocabulary now follows the compiler stack; rollback is `NV_COMPILER_Q6_VOCAB_PP512=0`. |
 | Flash | 36 `nv_sm120_q16_grid_hd128_loop_attention` calls | The faster previously promoted MMA Flash is a llama cubin; adding it would change the generated-only objective. The clean-room replacement was rejected at 1.337 ms/layer. |
 | Terminal FFN pruning | Full-batch final FFN | Existing hook was tested and regressed on the earlier composition. It is not a qualified omitted win. |
-| Q8 pair reuse / epilogues | Existing producer and support topology | Reuse was below its investment threshold; fused epilogue and other tested substitutions regressed. No unbooked standalone promotion is established. |
+| Q/Q4-V record reuse | The 18 Q4-V roles consume their block Q projection's compatible flat generated Q8 record | Retained at 47.783762 / 48.002935 / 47.771044 ms shared/control/shared, a 0.225532 ms midpoint win. Q8 producers fall from 216 to 198; rollback omits `--share-q-q4v`. |
+| Other Q8 pair reuse / epilogues | Existing producer and support topology | Gate reuse is already retained; fused epilogue and other tested substitutions regressed. |
 
 ## Timing-boundary correction
 
@@ -209,3 +210,7 @@ the register-safe interleave measured 300.224006 us. Both lose to the selected
 global loads before its recycle barrier provide useful latency hiding; merely
 amortizing barriers over two panels removes that overlap and is not a viable
 route.
+
+## Refreshed current252 authority
+
+Subsequent generated current252 experiments use `--share-q-q4v` in addition to `--q4-v --q6-v --q6-down --q4-down-streamk --gate-streamk --gate-q8-reuse`. The retained shared/control/shared medians are 47.783762 / 48.002935 / 47.771044 ms, establishing a 47.777403 ms candidate midpoint. The selected graph retains 252 generated projection mains and canonical weight bases while reducing Q8 producer launches from 216 to 198. Evidence: `evidence/nv-prefill-generated-q-q4v-sharing-20260906/`.
