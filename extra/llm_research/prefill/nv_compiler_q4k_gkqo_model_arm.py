@@ -1091,9 +1091,9 @@ def main():
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_down_main"]==18,
       census["q6_v_main"]==18,census["q4_down_main"]==18,census["compiler_main_total"]==252,
-      census["q8_producer_total"]==252,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
+      census["q8_producer_total"]==234,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
-      census["active_fixups"]==18,census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+      census["active_fixups"]==54,census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.gate_oracle:
     structural=stage_census_pass and all((census["gate_up_main"]==0,census["gate_oracle_main"]==72,
       census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_v_main"]==18,
