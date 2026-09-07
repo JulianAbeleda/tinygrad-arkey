@@ -1,0 +1,195 @@
+{
+  "schema": "tinygrad.nv_prefill_maintained_device_attribution.v1",
+  "generated": {
+    "source": "../nv-prefill-selected-steady-timeline-20260907/summary.json",
+    "launches": 1648,
+    "summed_kernel_us": 51056.5,
+    "compute_span_us": 51328.75
+  },
+  "llama_rollback": {
+    "profile_mode": "maintained whole-prefill, PROFILE=1, workload_reuse=false",
+    "host_timing_authority": false,
+    "final_window_start_event": 2211,
+    "launches": 1614,
+    "summed_kernel_us": 46294.912,
+    "wall_span_including_eager_host_gaps_us": 310348.864,
+    "warm_window_launches": 1615,
+    "warm_minus_final_multiset": {
+      "E_64_2_8_16_4_40af38ae9c6e8d60e8d2143dca8fa8bed4b006518da4b17d5a0e375cc535146a": 1
+    },
+    "top_programs": [
+      {
+        "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+        "calls": 216,
+        "summed_us": 28990.97599999999
+      },
+      {
+        "name": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+        "calls": 36,
+        "summed_us": 5792.992
+      },
+      {
+        "name": "nv_llama_fattn_mma_pp512",
+        "calls": 36,
+        "summed_us": 2404.672
+      },
+      {
+        "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+        "calls": 216,
+        "summed_us": 2147.0720000000006
+      },
+      {
+        "name": "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561",
+        "calls": 73,
+        "summed_us": 1009.1199999999995
+      },
+      {
+        "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+        "calls": 36,
+        "summed_us": 623.9999999999998
+      },
+      {
+        "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+        "calls": 36,
+        "summed_us": 374.912
+      },
+      {
+        "name": "E_512_8_8_16_4_1664fbfbb99d6de9997b2d62a7bb2034ef02058fc6b20396c61f6b9038d93ecd",
+        "calls": 36,
+        "summed_us": 373.7279999999999
+      },
+      {
+        "name": "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14",
+        "calls": 72,
+        "summed_us": 349.27999999999986
+      },
+      {
+        "name": "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f",
+        "calls": 72,
+        "summed_us": 347.99999999999994
+      },
+      {
+        "name": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+        "calls": 36,
+        "summed_us": 316.47999999999996
+      },
+      {
+        "name": "q6k_vocab_hcq",
+        "calls": 1,
+        "summed_us": 309.888
+      },
+      {
+        "name": "E_64_64_8_16_4_dfb4f4f505716533c80c2fbef495f94d8affe282e39b40d96f3fdc5b8649c948",
+        "calls": 36,
+        "summed_us": 283.3279999999999
+      },
+      {
+        "name": "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63",
+        "calls": 36,
+        "summed_us": 277.344
+      },
+      {
+        "name": "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d",
+        "calls": 71,
+        "summed_us": 255.8080000000001
+      },
+      {
+        "name": "E_512_8_8_16_2_e65e4e0519f77b09b963c1e36720f9d6658b3aed58d893fd3d3cd43452d988f0",
+        "calls": 36,
+        "summed_us": 201.85599999999994
+      },
+      {
+        "name": "E_32_16_2_8_16_4_4_92835f632441c3fec3dc836c82ac95d56874ada4f189a323c7bd556288c46000",
+        "calls": 36,
+        "summed_us": 190.848
+      },
+      {
+        "name": "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b",
+        "calls": 37,
+        "summed_us": 183.26399999999998
+      },
+      {
+        "name": "r_2_512_8_4_4_16_b17914008932ba19317731d2df1ce96ef3bd1e77dd7e329b26bc33993dd8991a",
+        "calls": 36,
+        "summed_us": 165.37599999999995
+      },
+      {
+        "name": "q8_ds4_fp16_down_pp512",
+        "calls": 18,
+        "summed_us": 162.94400000000007
+      },
+      {
+        "name": "q8_ds4_fp16_o_pp512",
+        "calls": 36,
+        "summed_us": 160.864
+      },
+      {
+        "name": "q8_d4_fp16_down_pp512",
+        "calls": 18,
+        "summed_us": 160.25600000000003
+      },
+      {
+        "name": "q8_ds4_fp16_pp512",
+        "calls": 36,
+        "summed_us": 158.144
+      },
+      {
+        "name": "q8_ds4_fp16_qkv_pp512",
+        "calls": 36,
+        "summed_us": 146.912
+      },
+      {
+        "name": "E_64_64_8_16_4_5361cb456fed9cef2355a716696c409941ed1e2d444343bdd8596b747bb8376f",
+        "calls": 36,
+        "summed_us": 142.94399999999996
+      },
+      {
+        "name": "E_8_16_2_8_16_4_4_bfb7c071f7fb3ecd1ad8447888e9dff1f8e4a365777018ee630985cd76194445",
+        "calls": 36,
+        "summed_us": 127.93600000000002
+      },
+      {
+        "name": "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f",
+        "calls": 36,
+        "summed_us": 97.63200000000002
+      },
+      {
+        "name": "E_8_64_2_8_16_4_efeff63d32e22eb0239408079240092f655933f8b37db6c3072d684738489936",
+        "calls": 36,
+        "summed_us": 89.984
+      },
+      {
+        "name": "E_8_64_2_8_16_4_70014c3fe64df791d2a4df56638b7cf4ff8486a1289cb38ecb7b8f06b1538cb9",
+        "calls": 36,
+        "summed_us": 81.984
+      },
+      {
+        "name": "E_8_64_2_8_16_4_291c3bcf55b09b0912abc771253f6b2d97b09e5e10b12c4066d2ca05fdc80584",
+        "calls": 36,
+        "summed_us": 81.216
+      }
+    ]
+  },
+  "delta": {
+    "generated_minus_llama_launches": 34,
+    "generated_minus_llama_summed_kernel_us": 4761.588000000003
+  },
+  "refutations": {
+    "nsys": "Both maintained reports contained no CUDA activity tables; metadata-only traces cannot attribute kernels.",
+    "manual_native_arm": "FAIL: 1540 launches/173720.75us, with 18 fallback r_16_64 kernels totaling 140130.25us; not equivalent to maintained llama rollback."
+  },
+  "q6_bracket": {
+    "generated_a_median_ms": 48.4762,
+    "disabled_b_median_ms": 49.2017,
+    "generated_c_median_ms": 49.5201,
+    "generated_midpoint_median_ms": 48.99815,
+    "directional_median_win_ms": 0.20355,
+    "generated_a_min_ms": 46.9025,
+    "disabled_b_min_ms": 47.3629,
+    "generated_c_min_ms": 47.375,
+    "generated_midpoint_min_ms": 47.13875,
+    "directional_min_win_ms": 0.22415,
+    "promotion_gate_ms": 0.5,
+    "decision": "retain current selector; below gate and nonstationary"
+  }
+}
