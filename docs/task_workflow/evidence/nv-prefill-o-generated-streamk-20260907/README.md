@@ -21,3 +21,11 @@ exact output-buffer identity and requires 36 records/outputs.  No kernel or
 graph path changed in that correction.
 
 The route remains research-only pending the stable full-model timing gate.
+
+The stable warmup-9 control/candidate/control R9 model bracket rejects the
+route.  Control medians were 47.130337 and 47.527812 ms (midpoint
+47.3290745 ms); O Stream-K measured 49.570100 ms, a 2.2410255 ms regression.
+Control minima were 47.097054 and 46.927554 ms (midpoint 47.012304 ms) versus
+candidate 49.107910 ms, a 2.095606 ms regression.  The isolated body/lifecycle
+win therefore does not compose with the production graph.  Wide O remains
+selected.

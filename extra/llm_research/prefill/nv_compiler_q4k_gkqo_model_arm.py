@@ -370,6 +370,13 @@ def _graph_buffer(buf):
     "dtype":None if dtype is None else str(dtype), "hash":digest}
 
 
+def _append_unique_stage_pair(stages,role,output,record):
+  """Append one exact allocation owner; return False for a repeated main/fixup view."""
+  if any(existing is output for existing in stages[f"{role}_outputs"]): return False
+  stages[f"{role}_outputs"].append(output);stages[f"{role}_records"].append(record)
+  return True
+
+
 def _graph_stage_buffers(jit,identities):
   """Return the allocations actually rebound into the captured HCQ graphs."""
   from tinygrad.engine.realize import graph_cache
@@ -398,8 +405,8 @@ def _graph_stage_buffers(jit,identities):
       if call.arg.outs==(0,) and call.arg.ins in ((1,2),(1,2,3)): record_index=1
       elif call.arg.outs==(0,1,2) and call.arg.ins==(3,4): record_index=4
       else: raise RuntimeError(f"unexpected {role} captured ABI outs={call.arg.outs} ins={call.arg.ins}")
-      if role=="native_o" and any(id(existing)==id(bufs[0]) for existing in stages[f"{role}_outputs"]): continue
-      stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
+      if role=="native_o": _append_unique_stage_pair(stages,role,bufs[0],bufs[record_index])
+      else: stages[f"{role}_outputs"].append(bufs[0]);stages[f"{role}_records"].append(bufs[record_index])
   return stages
 
 
