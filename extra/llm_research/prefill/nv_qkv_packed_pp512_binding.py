@@ -83,6 +83,21 @@ class QKVCapture:
     o,s=o.uop_program(s,fxn=lambda *_:self.asset.q4_q_fix)
     return o.reshape(M,QN)
 
+  def project_k(self, x, words, *, model_family="qwen3_8b"):
+    """Isolated K lifecycle using the same programs as project_qkv."""
+    if not self.trace_epoch: raise RuntimeError("begin_trace must establish a capture-local epoch")
+    if (x.shape != (M,K) or x.dtype != dtypes.float16 or words.dtype != dtypes.uint32 or
+        not supports(model_family=model_family,role="attn_k",weight_type="Q4_K",m=M,n=KVN,k=K,device=x.device)):
+      raise ValueError("unsupported K projection")
+    self.cursor += 1
+    r=Tensor.empty(DS4_RECORD_BYTES//4,dtype=dtypes.uint32,device=x.device)
+    _,r=x.uop_program(r,fxn=lambda *_:self.asset.ds4)
+    o=Tensor.empty(M*KVN,dtype=dtypes.float32,device=x.device)
+    s=Tensor.empty(SCRATCH_FLOATS,dtype=dtypes.float32,device=x.device)
+    words,r,o,s=words.uop_program(r,o,s,fxn=lambda *_:self.asset.q4_k_main)
+    o,s=o.uop_program(s,fxn=lambda *_:self.asset.q4_k_fix)
+    return o.reshape(M,KVN)
+
   def project_q6_v(self, x, words, *, model_family="qwen3_8b"):
     if not self.trace_epoch: raise RuntimeError("begin_trace must establish a capture-local epoch")
     if not supports(model_family=model_family,role="attn_v",weight_type="Q6_K",m=M,n=KVN,k=K,device=x.device) or x.dtype != dtypes.float16 or words.dtype != dtypes.uint16: raise ValueError("unsupported Q6 V route")

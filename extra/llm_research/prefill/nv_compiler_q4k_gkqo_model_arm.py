@@ -89,6 +89,22 @@ class _GraphOwnedKCapture:
     return out.reshape(512,1024)
 
 
+class _NativeKCapture:
+  """Adapt the diagnostic native K lifecycle to the model's K route contract."""
+  def __init__(self,capture):self.capture,self.asset=capture,capture.asset
+  @property
+  def candidate_identity(self):return self.asset.q4_k_main.arg.name
+  @property
+  def transform(self):
+    from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+    return PackedWeightTransform("Q4_K",1024,4096)
+  def begin_trace(self):self.capture.begin_trace()
+  def project(self,x,words,*,model_family,role,weight_type="Q4_K",wait=False):
+    del wait
+    if role!="attn_k" or weight_type!="Q4_K":raise ValueError("native K adapter requires attn_k Q4_K")
+    return self.capture.project_k(x,words,model_family=model_family)
+
+
 class _PairedGateQ8Capture:
   """One graph-owned Q8 record shared by each ordered gate/up projection pair."""
   def __init__(self,asset,record_u32):
@@ -431,6 +447,7 @@ def main():
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
+  ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
   ap.add_argument("--native-qkv",action="store_true",help="diagnostic native Q/K/V substitution on the current252 graph")
   ap.add_argument("--native-q6-down",action="store_true",help="diagnostic native Q6 down substitution")
   ap.add_argument("--native-q4-down",action="store_true",help="diagnostic native Q4 down substitution")
@@ -485,6 +502,7 @@ def main():
     raise SystemExit("native gate/up is a diagnostic candidate substitution and excludes other gate arms")
   if args.native_o and (args.arm!="candidate" or args.qo_streamk): raise SystemExit("native O requires the current plain Q/O candidate")
   if args.native_q and (args.arm!="candidate" or args.qo_streamk or args.native_qkv): raise SystemExit("native Q requires the current plain Q/O candidate")
+  if args.native_k and (args.arm!="candidate" or args.native_qkv): raise SystemExit("native K excludes the combined native QKV diagnostic")
   if args.native_qkv and args.arm!="candidate":raise SystemExit("native QKV is a diagnostic candidate substitution")
   if args.native_q6_down and (args.arm!="candidate" or not args.q6_v):raise SystemExit("native Q6 down requires candidate with generated Q6 V")
   if args.native_q4_down and (args.arm!="candidate" or args.q4_down_streamk):raise SystemExit("native Q4 down excludes generated Q4 down")
@@ -565,7 +583,11 @@ def main():
   # Both matched arms use the same graph-owned K lease.  The ordinary capture
   # can lose the canonical packed-A identity when Q/O is nested in the same
   # schedule, causing the tensor-core contract to reject the control.
-  kval=_GraphOwnedKCapture(k_asset,K_RECORD_U32)
+  native_k=None
+  if args.native_k:
+    from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as native_k_binding_for
+    native_k=_NativeKCapture(native_k_binding_for("NV").new_capture())
+  kval=native_k if native_k is not None else _GraphOwnedKCapture(k_asset,K_RECORD_U32)
   vval=_GraphOwnedVCapture(v_asset,K_RECORD_U32) if args.arm=="candidate" and args.q4_v else None
   model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture=gate,kval
   model._nv_compiler_q6_imma_pp512_binding=q6val
@@ -756,6 +778,7 @@ def main():
     _write(args.dump_service_inventory,{"schema":"tinygrad.nv_prefill_live_service.v1","rounds":args.service_rounds,
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
+  if native_k is not None:mains["k"]=[c for c in calls if _call_name(c)==native_k.asset.q4_k_main.arg.name]
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
   if args.qo_streamk: mains["qo"]=[c for c in calls if _call_name(c)=="q4_qo_streamk_n4096"]
   if native_o is not None:mains["native_o"]=[c for c in calls if _call_name(c)==native_o.asset.main.arg.name]
@@ -811,6 +834,7 @@ def main():
     names.get(name,0) for role,name in q6_producer_names.items() if role in requested_q6_roles)
   if native_o is not None:q8 += names.get(native_o.asset.producer.arg.name,0)
   if native_q is not None:q8 += names.get(native_q.asset.ds4.arg.name,0)
+  if native_k is not None:q8 += names.get(native_k.asset.ds4.arg.name,0)
   if native_q6_down is not None:q8 += names.get(native_q6_down.asset.producer.arg.name,0)
   if native_q4_down is not None:q8 += names.get(native_q4_down.asset.producer.arg.name,0)
   if q4_down_asset is not None: q8 += names.get(q4_down_asset.producer.arg.name,0)
@@ -821,6 +845,8 @@ def main():
     "down_oracle_weight_args":len(down_weight_args),"down_oracle_unique_weight_bases":len(set(down_weight_args)),
     "down_oracle_all_weights_overlay":bool(down_weight_args and all(w in down_overlay_bases for w in down_weight_args)),
     "k_main":len(mains["k"]),"qo_main":len(mains["qo"]),
+    "native_k_main":0 if native_k is None else names.get(native_k.asset.q4_k_main.arg.name,0),
+    "native_k_fixup":0 if native_k is None else names.get(native_k.asset.q4_k_fix.arg.name,0),
     "native_q_main":len(mains["native_q"]),
     "native_q_fixup":0 if native_q is None else names.get(native_q.asset.q4_q_fix.arg.name,0),
     "v_main":len(v_calls),"q6_v_main":len(mains["q6_v"]),"q6_v_producer":names.get(q6_producer_names.get("attn_v",""),0),
@@ -872,6 +898,13 @@ def main():
       census["q6_down_main"]==18,census["compiler_main_total"]==252,census["candidate_weight_args"]==252,
       census["unique_weight_bases"]==252,census["all_weights_canonical"],census["remaining_v_down_fp16_overlays"]==0,
       census["weight_copy_kernels"]==0))
+  elif args.native_k:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["native_k_main"]==36,
+      census["native_k_fixup"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_v_main"]==18,
+      census["q6_down_main"]==18,census["q4_down_main"]==18,census["compiler_main_total"]==252,
+      census["q8_producer_total"]==216,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
+      census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
+      census["active_fixups"]==90,census["weight_copy_kernels"]==0))
   elif args.native_q:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,
       census["qo_main"]==36,census["native_q_main"]==36,census["native_q_fixup"]==36,census["v_main"]==18,census["q6_v_main"]==18,
