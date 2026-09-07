@@ -8,3 +8,14 @@
 - Focused identity/serialization tests: `15 passed`.
 
 The earlier warm-cache exactness claims for the range-dependent and first CTA-stage Q-RoPE experiments are withdrawn: `q_rope_stage` was absent from the program identity, and the feature environment was changed after cached `getenv` evaluation. `output_layout` belongs to a separate typed projection descriptor and was already represented there; the Flash spec had no output-layout option.
+
+## Resource and isolated body gate
+
+The exact stage is rejected for model integration before a full-model smoke:
+
+- control/candidate registers: 168/168; stack/local bytes: 0/0; shared bytes: 7,168/23,552;
+- cubin bytes: 31,896/37,560;
+- control/candidate static counts: LDL 0/0, STL 0/0, LDS 36/68, STS 20/84, LDG 144/208, STG 64/64, BAR 4/5, HMMA 32/32, FFMA 31/95;
+- fresh separate-process 15-run timings (first five discarded): control median 12.302854 ms, min 12.215581 ms; stage median 24.492731 ms, min 24.461217 ms; median regression 12.189877 ms (1.99x).
+
+The stage is numerically and identity sound, but its extra fp32 loads/math plus shared publication dominate the removed graph handoff. The experimental route remains default-off. No model smoke was run because the isolated body gate is decisive.
