@@ -77,6 +77,14 @@ def test_decode_invalid_mode_and_symbolic_context_threshold_contract():
   assert not should_use_flash_decode(start, 2, use_flash=True, getenv_fn=_env({}))
 
 
+def test_decode_auto_selects_qualified_context128_with_rollback():
+  before = UOp.variable("start", 0, 4096).bind(126)
+  admitted = UOp.variable("start", 0, 4096).bind(127)
+  assert not should_use_flash_decode(before, 1, getenv_fn=_env({}))
+  assert should_use_flash_decode(admitted, 1, getenv_fn=_env({}))
+  assert not should_use_flash_decode(admitted, 1, getenv_fn=_env({"FLASH_DECODE_THRESHOLD": 512}))
+
+
 def test_prefill_policy_and_observer_sequence_contract():
   policy = immutable_prefill_policy({"strategy": "FULL_RESIDENT_OVERLAY", "candidate_id": "candidate", "routes": {"q": "route"}})
   with pytest.raises(TypeError): policy["routes"]["q"] = "other"

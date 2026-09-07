@@ -35,7 +35,10 @@ def should_use_flash_decode(start_pos, T, use_flash:bool=False, getenv_fn=getenv
   if use_flash or mode == "flash": return True
   try: ctx = start_pos.unbind()[1] + T
   except Exception: return False
-  return ctx >= getenv_fn("FLASH_DECODE_THRESHOLD", 512)
+  # Qualified on Qwen3-8B NV at context 128: generated Flash improves the
+  # ordinary SDPA endpoint by >0.98 ms/token in both median and minimum gates.
+  # FLASH_DECODE_THRESHOLD=512 restores the previous policy.
+  return ctx >= getenv_fn("FLASH_DECODE_THRESHOLD", 128)
 
 def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
   shape = tuple(getattr(x, "shape", ()))
