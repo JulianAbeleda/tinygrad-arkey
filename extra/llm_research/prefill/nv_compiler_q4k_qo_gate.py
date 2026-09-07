@@ -29,8 +29,12 @@ def _context():
   wp, apv = Q4KInt8FragmentProvider(wt), Q8Int8FragmentProvider(at)
   accumulator = Q4KQ8GroupAccumulatorContract(wp, apv)
   stride = 80
-  geometry = KernelTileGeometry((128,128,TILE_K),(2,4),256,32,
-    (KernelLDSWindow("A",0,128*stride,stride), KernelLDSWindow("B",128*stride,256*stride,stride)))
+  if os.environ.get("NV_COMPILER_Q4_Q_K_GEOMETRY") == "1":
+    geometry=KernelTileGeometry((64,32,TILE_K),(2,2),128,32,
+      (KernelLDSWindow("A",0,64*stride,stride),KernelLDSWindow("B",64*stride,96*stride,stride)))
+  else:
+    geometry = KernelTileGeometry((128,128,TILE_K),(2,4),256,32,
+      (KernelLDSWindow("A",0,128*stride,stride), KernelLDSWindow("B",128*stride,256*stride,stride)))
   identity = hashlib.sha256(repr((geometry,wp.identity,apv.identity,accumulator.abi)).encode()).hexdigest()
   return wt, at, identity, _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, apv, accumulator)
 
@@ -112,7 +116,8 @@ def main():
       "source":str(source_path) if sources else None,"sass":{"path":str(sass_path) if sass else None,
         "imma":sass.count("IMMA.16832.S8.S8"),"bar":sass.count("BAR.SYNC"),"ldsm":sass.count("LDSM"),
         "local_load":sass.count("LDL"),"local_store":sass.count("STL")}},
-    "geometry":{"grid":[N//128,M//128,1],"block":[256,1,1],"shared_bytes":21504},
+    "geometry":{"grid":list(programs[0].arg.global_size),"block":list(programs[0].arg.local_size),
+      "shared_bytes":context.geometry.lds_windows[-1].end},
     "timing":{"r9_hot_us":samples,"min_us":min(samples),"median_us":statistics.median(samples),
       "static_oracle_min_us":min(oracle_samples),"static_oracle_median_us":statistics.median(oracle_samples)}}
   rec["passed_correctness"]=bool(rec["correctness"]["finite"] and rec["correctness"]["unwritten_sentinels"]==0 and
