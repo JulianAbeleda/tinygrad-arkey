@@ -484,7 +484,7 @@ def _selected_inventory_routes(inventory:dict, candidate_route_id:str) -> dict[s
           for row in inventory.get("rows", ())}
 
 def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, ubatch:int=512,
-                                          selected_model_source:str|None=None):
+                                          selected_model_source:str|None=None, workload_reuse:bool=False):
   """Consume an exact measured/cache result, or truthfully select the direct packed baseline.
 
   Normal loads always select the baseline. The only non-baseline authority is
@@ -493,7 +493,8 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
   inventory = derive_selected_gguf_prefill_inventory(kv, meta, ubatch)
   invocation_ids = tuple(row["invocation_id"] for row in inventory["rows"])
   request = {"schema": "tinygrad.model_memory_adaptive_request.v1", "inventory": inventory,
-             "device_facts": device_facts.planning_snapshot(), "workload": {"prefill_ubatch": ubatch}}
+             "device_facts": device_facts.planning_snapshot(),
+             "workload": {"prefill_ubatch": ubatch,"workload_reuse":bool(workload_reuse)}}
   authority = _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY.get()
   selected = None
   if authority is not None:
@@ -2257,11 +2258,11 @@ class Transformer:
     use_q4k_primitive = use_q6k_primitive = not isinstance(gguf, Tensor)
     _authority_workload = _measurement_authority[2] if _measurement_authority is not None else {}
     _prefill_ubatch = int(_authority_workload.get("prefill_ubatch", PREFILL_UBATCH))
+    _workload_reuse = bool(_authority_workload.get("workload_reuse", False))
     if _prefill_ubatch <= 0: raise ValueError("selected prefill candidate requires a positive physical M")
     _requested_max_context, _admit_resolved, _ring_admitted = max_context, False, False
     _kv_quant = False
     _overlay_request = None
-    _workload_reuse = False
     _runtime_policy = immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "direct-packed-baseline",
       "routes": {}, "provenance": "preloaded tensors have no selected-GGUF inventory", "measured": False})
     def _print_admission(plan, kv_tag:str, cap_text:str):
@@ -2280,7 +2281,8 @@ class Transformer:
       _runtime_inventory = derive_selected_gguf_prefill_inventory(_admit_kv, _admit_meta, _prefill_ubatch)
       _runtime_policy = select_memory_adaptive_runtime_policy(kv=_admit_kv, meta=_admit_meta,
                                                                device_facts=_device_facts, ubatch=_prefill_ubatch,
-                                                               selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()))
+                                                               selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()),
+                                                               workload_reuse=_workload_reuse)
       _automatic_overlay_policy = None
       if prefill_policy_strategy(_runtime_policy) == "DIRECT_PACKED_FALLBACK" and _runtime_policy.get("measured") is False:
         _automatic_overlay_policy = automatic_promoted_prefill_graph_policy(
@@ -2400,7 +2402,7 @@ class Transformer:
       _print_admission(_plan, "", f"trained {_admission_inputs.trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
 
     _runtime_policy = select_prefill_runtime_policy(_runtime_policy, scanned_device_facts=_device_facts,
-      workload_reuse=_workload_reuse)
+      workload_reuse=bool(_runtime_policy.get("workload_reuse",_workload_reuse)))
     _workload_reuse = bool(_runtime_policy.get("workload_reuse", False))
     # S6: the runtime prefill-v2 flag is True for every executed strategy (REFUSE raises at admission), so it
     # is folded to True here; the admission-time capability keeps the v2_on name on AdmissionInputs.

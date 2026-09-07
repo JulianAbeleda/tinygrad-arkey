@@ -138,7 +138,10 @@ def _runtime_route_env(model) -> dict[str, Any]:
   for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
               "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
     env.pop(key, None)
-  if (registry := getattr(model, "_prefill_graph_gemm_registry", None)) is not None:
+  from tinygrad.llm.model import _nv_q4_production_mode
+  packed_stack=_nv_q4_production_mode(model.config)
+  env["TINYGRAD_OBSERVED_PACKED_PREFILL_STACK"]=packed_stack or "none"
+  if (registry := getattr(model, "_prefill_graph_gemm_registry", None)) is not None and packed_stack=="compiler":
     env["BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"] = json.dumps(registry.candidate_set.to_json(), sort_keys=True,
                                                                   separators=(",", ":"))
   return env
@@ -157,6 +160,7 @@ def _route_attribution(env: dict[str, Any]) -> dict[str, Any]:
     "prefill_q4k_route_pure": bool(prefill_q4k.get("pure")) if prefill_q4k else False,
     "prefill_q4k_route_rolled_back": bool(prefill_q4k.get("rolled_back_to_oracle")) if prefill_q4k else False,
     "prefill_q4k_route_provenance": prefill_q4k.get("provenance", "unknown") if prefill_q4k else "unknown",
+    "packed_projection_stack":env.get("TINYGRAD_OBSERVED_PACKED_PREFILL_STACK","unknown"),
   }
 
 @contextmanager
@@ -183,13 +187,14 @@ REGIME_BY_PROVENANCE = {
 
 def measurement_regime(report: dict[str, Any]) -> dict[str, Any]:
   ra = report.get("route_attribution") or {}
-  prov = ra.get("prefill_route_provenance")
+  rollback=ra.get("packed_projection_stack")=="llama"
+  prov = "rollback_oracle" if rollback else ra.get("prefill_route_provenance")
   regime_id = REGIME_BY_PROVENANCE.get(prov, "unknown")
   return {
     "regime_id": regime_id,
     "provenance": prov,
-    "route_pure": ra.get("prefill_route_pure"),
-    "route_rolled_back": ra.get("prefill_route_rolled_back"),
+    "route_pure": False if rollback else ra.get("prefill_route_pure"),
+    "route_rolled_back": True if rollback else ra.get("prefill_route_rolled_back"),
     "mode": report.get("mode"),
     "logits_only": report.get("logits_only"),
     # only the pure generated regime is authoritative for the generated-route promotion question
@@ -272,6 +277,7 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
                        env: dict[str, Any] | None = None) -> dict[str, Any]:
   e = os.environ if env is None else env
   route = report.get("route_attribution", {})
+  packed_stack=route.get("packed_projection_stack","unknown")
   effective = effective_routes(e)
   effective_route_ids = {r.get("effective_route") for r in effective}
   selected_family = "prefill_gemm"
@@ -285,16 +291,15 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       failures.append(f"required_route={required_route!r} is not reported by effective_routes")
     if selected_route != required_route:
       failures.append(f"prefill_route_family={selected_route!r}, expected {required_route!r}")
-  expected_pure, expected_rollback = True, False
-  if route.get(f"{prefix}_route_pure") is not expected_pure:
-    failures.append(f"{prefix}_route_pure={route.get(f'{prefix}_route_pure')!r}, expected {expected_pure!r}")
-  if route.get(f"{prefix}_route_rolled_back") is not expected_rollback:
-    failures.append(f"{prefix}_route_rolled_back={route.get(f'{prefix}_route_rolled_back')!r}, expected {expected_rollback!r}")
-  provenance = route.get(f"{prefix}_route_provenance")
-  if provenance not in REGIME_BY_PROVENANCE or REGIME_BY_PROVENANCE[provenance] != "generated_pure":
-    failures.append(f"{prefix}_route_provenance={provenance!r}, expected generated-pure provenance")
-  candidate_set_requested = (selected_route == PREFILL_PROMOTED_CANDIDATE_ROUTE or
-                             e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
+  if packed_stack != "llama":
+    if route.get(f"{prefix}_route_pure") is not True:
+      failures.append(f"{prefix}_route_pure={route.get(f'{prefix}_route_pure')!r}, expected True")
+    if route.get(f"{prefix}_route_rolled_back") is not False:
+      failures.append(f"{prefix}_route_rolled_back={route.get(f'{prefix}_route_rolled_back')!r}, expected False")
+    provenance = route.get(f"{prefix}_route_provenance")
+    if provenance not in REGIME_BY_PROVENANCE or REGIME_BY_PROVENANCE[provenance] != "generated_pure":
+      failures.append(f"{prefix}_route_provenance={provenance!r}, expected generated-pure provenance")
+  candidate_set_requested = (e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None)
   if candidate_set_requested:
     census=report.get("candidate_set_route_census")
@@ -313,7 +318,8 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
           "selected_family": selected_family, "selected_route": selected_route,
           "effective_routes": sorted(r for r in effective_route_ids if r),
-          "binding_regime": "generated_pure", "candidate_set_requested":candidate_set_requested,"failures": failures}
+          "binding_regime": "llama_rollback" if packed_stack=="llama" else "generated_pure",
+          "packed_projection_stack":packed_stack,"candidate_set_requested":candidate_set_requested,"failures": failures}
 
 
 def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
@@ -325,7 +331,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       require_route: str | None = None, comparator_id: str | None = None,
                       candidate_id: str | None = None, primitive_class: str | None = None,
                       threshold: dict[str, Any] | None = None, ledger: str | None = None,
-                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None) -> dict[str, Any]:
+                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None,
+                      workload_reuse: bool = False) -> dict[str, Any]:
   if K < 1 or warmups < 0 or rounds < 1: raise ValueError("K >= 1, warmups >= 0, and rounds >= 1 are required")
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   for key, value in model_profile.env.items(): os.environ.setdefault(key, value)
@@ -342,7 +349,21 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   # already uses (`Device[Device.DEFAULT]`). No routing/config behavior changes: this only picks
   # which device's `.synchronize()` the timing window calls.
   dev = Device[Device.DEFAULT]
-  model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
+  if workload_reuse:
+    from tinygrad.llm.device_facts import scan_device_facts
+    from tinygrad.llm.gguf import gguf_load_metadata
+    from tinygrad.llm.model import (_memory_adaptive_measurement_authority, derive_selected_gguf_prefill_inventory,
+                                    automatic_promoted_prefill_graph_policy)
+    facts=scan_device_facts(); kv,meta=gguf_load_metadata(model_path)
+    inventory=derive_selected_gguf_prefill_inventory(kv,meta,chunk_n)
+    workload={"prefill_ubatch":chunk_n,"workload_reuse":True}
+    def reuse_collector(request):
+      policy=dict(automatic_promoted_prefill_graph_policy(inventory,facts.planning_snapshot()))
+      policy["workload_reuse"]=True
+      return {"decision":"SELECTED","validation":"measurement_trial","validated_request":request,"policy":policy}
+    with _memory_adaptive_measurement_authority(device_facts=facts,inventory=inventory,workload=workload,collector=reuse_collector):
+      model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
+  else: model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
   runtime_route_env = _runtime_route_env(model)
   for block in model.blk: block._use_flash, block._prefill_v2 = True, True
   temp = Tensor([0.0])
@@ -436,6 +457,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "K": K,
     "warmups": warmups,
     "rounds": rounds,
+    "workload_reuse": workload_reuse,
     "pin_clock": pin_clock,
     "logits_only": logits_only,
     "clock_pin": next((row["clock_pin"] for row in chunk_rows.values() if row["clock_pin"] is not None), None),
@@ -491,6 +513,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--json", action="store_true", help="print JSON report after the human summary")
   ap.add_argument("--logits-only", action="store_true", default=os.environ.get("PREFILL_WHOLE_LOGITS_ONLY", "0") != "0",
                   help="time prefill logits and skip the final sampling/argmax expression")
+  ap.add_argument("--workload-reuse",action="store_true",
+                  help="declare reusable concrete prefill graphs through the scoped measurement authority")
   ap.add_argument("--require-route", default="",
                   help="fail unless prefill GEMM route attribution equals this effective route id")
   ap.add_argument("--comparator-id", default="", help="id of the same-regime current-default comparator (F4)")
@@ -523,7 +547,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
                              primitive_class=args.primitive_class or None, threshold=threshold,
                              ledger=args.ledger or None, quality_gate=quality_gate,
-                             model_profile_id=args.model_profile or None)
+                             model_profile_id=args.model_profile or None,workload_reuse=args.workload_reuse)
   if not args.no_artifact:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out
