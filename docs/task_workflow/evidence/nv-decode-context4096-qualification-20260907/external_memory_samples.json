@@ -1,0 +1,11 @@
+{
+  "schema": "tinygrad.decode.external_memory_samples.v1",
+  "device_total_mib": 32607,
+  "samples": [
+    {"phase": "pre_launch_idle", "memory_used_mib": 117, "pstate": "P8"},
+    {"phase": "fill_capture", "elapsed_approx_s": 226, "memory_used_mib": 19880, "pstate": "P0", "sm_clock_mhz": 2572},
+    {"phase": "observed_high_water", "elapsed_approx_s": 395, "memory_used_mib": 31362, "pstate": "P0"},
+    {"phase": "post_exit", "memory_used_mib": 117, "pstate": "P8"}
+  ],
+  "qualification": "sampled, not a continuous peak measurement"
+}
