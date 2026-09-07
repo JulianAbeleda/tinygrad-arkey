@@ -39,6 +39,7 @@ class CompilerQOBinding:
   warmstart_contexts:dict
   records:list[Tensor]
   outputs:list[Tensor]
+  q_output_coalesced:bool=False
   cursor:int=0
 
   @classmethod
@@ -71,18 +72,27 @@ class CompilerQOBinding:
       main=compiled.replace(src=(UOp(Ops.SINK,arg=compiled.src[0].arg),compiled.src[1],UOp(Ops.LINEAR),*compiled.src[3:]))
       expected=(1,2,3) if with_residual else (1,2)
       if main.arg.outs!=(0,) or main.arg.ins!=expected:raise RuntimeError(f"unexpected Q/O PROGRAM ABI {main.arg}")
+      if context.operand_order=="weight_a_activation_b":
+        from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import coalesce_swapped_direct_source
+        sources=[u.arg for u in main.src if u.op is Ops.SOURCE]
+        if len(sources)!=1: raise RuntimeError("swapped Q program must retain one compiler source")
+        source=coalesce_swapped_direct_source(sources[0],logical_stride=N)
+        binary=NVRTCCompiler(dev.arch,ptx=False,cache_key="q4_qo_wide_x4_coalesced_v1").compile(source)
+        main=main.replace(src=tuple(u.replace(arg=source) if u.op is Ops.SOURCE else
+          u.replace(arg=binary) if u.op is Ops.BINARY else u for u in main.src))
       return main,context
     plain_program,plain_context=compile_contract(False,"plain",base_context)
     q_program,q_context=(compile_contract(False,"q_x4",q_base) if native_q_x4 else (plain_program,plain_context))
     o_program,o_context=compile_contract(True,"o",base_context)
     return cls(producer=producer,main_program=o_program,q_program=q_program,plain_program=plain_program,transform=wt,activation=at,
-      o_context=o_context,q_context=q_context,conventional_context=plain_context,warmstart={},warmstart_contexts={},records=[],outputs=[])
+      o_context=o_context,q_context=q_context,conventional_context=plain_context,warmstart={},warmstart_contexts={},records=[],outputs=[],
+      q_output_coalesced=native_q_x4)
 
   @property
   def candidate_identity(self):return self.o_context.canonical_identity
 
   @property
-  def q_output_transposed(self): return self.q_context.operand_order=="weight_a_activation_b"
+  def q_output_transposed(self): return self.q_context.operand_order=="weight_a_activation_b" and not self.q_output_coalesced
 
   def install_warmstart(self,model):
     opts,contexts=dict(model._packed_wmma_warmstart or {}),dict(model._packed_wmma_warmstart_contexts or {})

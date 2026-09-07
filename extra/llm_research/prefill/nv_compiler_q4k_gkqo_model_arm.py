@@ -987,7 +987,10 @@ def main():
   if "ffn_down" in requested_q6_roles: expected_stage.update({"q6_down_records":18,"q6_down_outputs":18})
   if args.down_oracle: expected_stage.update({"down_oracle_records":36,"down_oracle_outputs":36})
   if args.gate_epilogue_fused: expected_stage.update({"gate_epilogue_records":36,"gate_epilogue_outputs":36})
-  if args.arm=="candidate":expected_stage.update({"qo_records":72,"qo_outputs":72})
+  if args.arm=="candidate":
+    if args.q_x4 and not args.qo_streamk:
+      expected_stage.update({"qo_records":36,"qo_outputs":36,"qo_o_records":36,"qo_o_outputs":36})
+    else: expected_stage.update({"qo_records":72,"qo_outputs":72})
   stage_census_pass=not args.deep_replay or all(stage_census.get(key,{}).get("calls")==count for key,count in expected_stage.items())
   if args.native_q4_down:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,

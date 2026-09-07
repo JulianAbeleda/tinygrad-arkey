@@ -20,7 +20,8 @@ def _partial_store_block(direct_store_block:str, *, store_index:str="alu242", ou
   block=re.sub(rf"{re.escape(store_index)}\+(\d+)",remap_offset,block)
   return block
 
-def _logical_transpose_store_blocks(direct_store_block:str, *, output_arg:str="data0_6291456") -> tuple[str,str]:
+def _logical_transpose_store_blocks(direct_store_block:str, *, output_arg:str="data0_6291456",
+                                    logical_stride:int=12288) -> tuple[str,str]:
   """Transpose one exact 128x128 swapped IMMA tile with XOR4 and vector stores."""
   line_re=re.compile(r"^  \*\(\(float2\*\)\(\("+re.escape(output_arg)+
     r"\+\(?alu\d+(?:\+(\d+))?\)?\)\)\) = make_float2\(\(\*\(buf0\+(\d+)\)\),\(\*\(buf0\+(\d+)\)\)\);$",re.M)
@@ -53,11 +54,27 @@ def _logical_transpose_store_blocks(direct_store_block:str, *, output_arg:str="d
         local_row=f"((lidx2<<5)+(alu5<<1)+{col+p})"
         local_col=f"((lidx1<<6)+{row}+alu2+7*(alu2&1))"
         index=f"(({local_row})*128+{local_col})" if partial else \
-          f"(((gidx0*128+{local_row})*12288)+(gidx1*128)+{local_col})"
+          f"(((gidx0*128+{local_row})*{logical_stride})+(gidx1*128)+{local_col})"
         dest=f"partials+(slot*16384)+{index}" if partial else f"{output_arg}+{index}"
         lines.append(f"  *((float2*)({dest})) = make_float2({v0},{v1});")
     return "\n".join(lines)+"\n"
   return emit(False),emit(True)
+
+def coalesce_swapped_direct_source(source:str, *, logical_stride:int) -> str:
+  """Rewrite only a compiler wide kernel's physical NxM stores to logical MxN."""
+  signature=re.search(r'extern "C" __global__ void __launch_bounds__\(256\) \w+\(float\* (data0_\d+),', source)
+  if signature is None: raise ValueError("wide swapped source has no exact output signature")
+  output_arg=signature.group(1)
+  store_re=re.compile(r"^  \*\(\(float2\*\)\(\("+re.escape(output_arg)+
+    r"\+\(?alu\d+(?:\+\d+)?\)?\)\)\) = make_float2\(\(\*\(buf0\+\d+\)\),\(\*\(buf0\+\d+\)\)\);$", re.M)
+  stores=list(store_re.finditer(source))
+  if len(stores)!=32: raise ValueError(f"wide swapped source requires 32 terminal stores, found {len(stores)}")
+  direct,_=_logical_transpose_store_blocks(source,output_arg=output_arg,logical_stride=logical_stride)
+  # Compiler terminal stores are contiguous. Replacing one exact span preserves
+  # all generated arithmetic, correction, launch geometry, and packed-input ABI.
+  between=source[stores[0].start():stores[-1].end()]
+  if len(store_re.findall(between))!=32: raise ValueError("wide swapped terminal store span is not contiguous")
+  return source[:stores[0].start()]+direct.rstrip()+source[stores[-1].end():]
 
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
                                      tiles_m:int=4, k_blocks:int=64, output_stride:int=12288,

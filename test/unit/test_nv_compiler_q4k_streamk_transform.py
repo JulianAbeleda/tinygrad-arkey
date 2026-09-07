@@ -80,6 +80,22 @@ def test_swapped_xor4_epilogue_keeps_direct_and_partial_local_indices_identical(
   assert "((lidx2<<5)+(alu5<<1)+" in direct and "((lidx2<<5)+(alu5<<1)+" in partial
   assert "((lidx1<<6)+" in direct and "((lidx1<<6)+" in partial
 
+def test_wide_swapped_epilogue_rewrites_only_terminal_stores():
+  from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import coalesce_swapped_direct_source
+  source='extern "C" __global__ void __launch_bounds__(256) k(float* data0_2097152, unsigned int* data1_1, unsigned int* data2_1) {\n'
+  source+='  int alu244 = 0;\n'
+  value=0
+  for row in range(0,64,8):
+    for col in range(0,32,8):
+      off=row*512+col; addr="alu244" if off==0 else f"(alu244+{off})"
+      source+=f"  *((float2*)((data0_2097152+{addr}))) = make_float2((*(buf0+{value})),(*(buf0+{value+32})));\n";value+=1
+  source+='}\n'
+  transformed=coalesce_swapped_direct_source(source,logical_stride=4096)
+  assert "int alu244 = 0;" in transformed
+  assert transformed.count("__shfl_xor_sync")==64 and transformed.count("float2*)")==32
+  assert "*4096" in transformed and "*12288" not in transformed
+  assert "data0_2097152+(alu244" not in transformed
+
 def test_streamk_q_record_capture_state_is_trace_local():
   from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
   capture=CompilerQ4StreamKCapture(None,None,None,None,None,"id",None,1,q_records=[object()])
