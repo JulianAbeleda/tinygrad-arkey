@@ -247,7 +247,7 @@ class CompilerQ4StreamKCapture:
     if residual is not None and (role!="attn_output" or residual.shape!=(M,self.n) or residual.dtype!=dtypes.float32):
       raise ValueError("Stream-K O residual must be float32 logical output shape")
     if self.cursor>=self.population: raise ValueError("Q4 Stream-K capture exceeds its admitted projection population")
-    expected_role=self.roles[self.cursor%2]
+    expected_role=self.roles[self.cursor%len(self.roles)]
     if self.pair_q8_reuse and role!=expected_role: raise ValueError("Q8 reuse requires ordered gate/up projection pairs")
     if not self.pair_q8_reuse or self.cursor%2==0:
       record=Tensor.empty(self.record_u32,dtype=dtypes.uint32,device=x.device)

@@ -198,3 +198,11 @@ def test_sliced_fixup_matches_same_partials_on_nv():
       globals=(0,1,2,3), outs=(0,), ins=(1,2,3), vals=(128,128))
     call_native(prg,out,partial,slots,active,wait=True)
     np.testing.assert_array_equal(out.numpy().reshape(128,128),expected)
+
+
+def test_streamk_role_cursor_supports_one_and_two_role_populations():
+  from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
+  one=CompilerQ4StreamKCapture(None,None,None,None,None,"id",None,1,population=36,roles=("attn_output",))
+  two=CompilerQ4StreamKCapture(None,None,None,None,None,"id",None,1,population=72,roles=("attn_q","attn_output"))
+  assert [one.roles[i%len(one.roles)] for i in range(4)]==["attn_output"]*4
+  assert [two.roles[i%len(two.roles)] for i in range(4)]==["attn_q","attn_output","attn_q","attn_output"]

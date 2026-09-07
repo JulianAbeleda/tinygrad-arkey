@@ -66,3 +66,11 @@ has control median midpoint47.170311 ms versus candidate46.179898 ms, a
 1.1592095 ms win. Both frozen0.5ms gates clear. The exact qualified compiler
 pp512 route now selects this O body ordinarily; rollback is
 `NV_COMPILER_Q4_O_STREAMK_X4=0`.
+
+`ordinary_selector_final_pass.json` calls the production selector predicate,
+leaves O absent from the research route override, and installs the exact
+selected production capture. It formally passes: wide Q36, O Stream-K
+main/fixup/owners36, mains252, Q8234, fixups126, canonical weight args/bases252,
+zero copies/overlays, token198, and exact logits/every stage over three cycles.
+The two preceding artifacts durably record harness-only misses (symbolic generic
+fallback, then omitted ordinary O weights in census); neither changed kernels.

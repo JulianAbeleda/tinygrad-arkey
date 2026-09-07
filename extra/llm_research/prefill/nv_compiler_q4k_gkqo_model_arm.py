@@ -412,7 +412,8 @@ def _compare_snapshot(reference,current):
     "same_length":len(reference[key])==len(current[key])} for key in reference}
 
 
-def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qkv=None,native_q6_down=None,native_q4_down=None,generated_qkv=None):
+def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qkv=None,native_q6_down=None,native_q4_down=None,generated_qkv=None,
+             ordinary_o:bool=False,ordinary_o_capture=None):
   gate,kval=model._nv_gkqo_gate_capture,model._nv_gkqo_k_capture
   vval=getattr(model, "_nv_compiler_q4_imma_v_pp512_binding", None)
   q6val=getattr(model, "_nv_compiler_q6_imma_pp512_binding", None)
@@ -431,6 +432,7 @@ def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qk
     def route(lin,x):
       if (role:=role_by_id.get(id(lin))) is None:return None
       if tuple(x.shape)!=(1,512,4096):raise RuntimeError(f"unexpected combined Q/O activation {x.shape}")
+      if role=="attn_output" and ordinary_o:return None
       x16=x.cast(dtypes.float16).contiguous()
       if role=="attn_q" and native_q is not None:
         return native_q.project_q(x16.reshape(512,4096),lin.prefill_packed_weight()).reshape(1,512,4096)
@@ -447,6 +449,7 @@ def _capture(model,qo,chunk,temp,candidate,native_o=None,native_q=None,native_qk
       if q6val is not None:q6val.begin_trace()
       if q4down is not None:q4down.begin_trace()
       if qo is not None:qo.begin_trace()
+      if ordinary_o_capture is not None:ordinary_o_capture.begin_trace()
       if native_o is not None:native_o.begin_trace()
       if native_q is not None:native_q.begin_trace()
       if native_qkv is not None:native_qkv.begin_trace()
@@ -521,6 +524,7 @@ def main():
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
   ap.add_argument("--generated-o-streamk",action="store_true",help="isolate generated Stream-K on O while Q remains wide")
   ap.add_argument("--generated-o-streamk-x4",action="store_true",help="compose native Q4-A x4/interleave/coalesced stores on generated O Stream-K")
+  ap.add_argument("--ordinary-selected-o",action="store_true",help="leave O to the ordinary model selector instead of the research override")
   ap.add_argument("--native-q",action="store_true",help="diagnostic native Q substitution on the current252 graph")
   ap.add_argument("--q-x4",action="store_true",help="typed generated Q weight-A native x4 fragment")
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
@@ -584,6 +588,7 @@ def main():
   if args.native_o and (args.arm!="candidate" or args.qo_streamk): raise SystemExit("native O requires the current plain Q/O candidate")
   if args.generated_o_streamk and (args.arm!="candidate" or args.qo_streamk or args.native_o):raise SystemExit("generated O Stream-K requires wide generated Q and excludes native O")
   if args.generated_o_streamk_x4 and not args.generated_o_streamk:raise SystemExit("generated O Stream-K x4 requires --generated-o-streamk")
+  if args.ordinary_selected_o and not args.generated_o_streamk_x4:raise SystemExit("ordinary selected O requires generated O Stream-K x4 census")
   if args.native_q and (args.arm!="candidate" or args.qo_streamk or args.native_qkv): raise SystemExit("native Q requires the current plain Q/O candidate")
   if args.native_k and (args.arm!="candidate" or args.native_qkv): raise SystemExit("native K excludes the combined native QKV diagnostic")
   if args.native_q4_v and (args.arm!="candidate" or not args.q4_v or args.native_qkv): raise SystemExit("native Q4 V requires candidate Q4 V and excludes native QKV")
@@ -710,7 +715,7 @@ def main():
       delattr(block.ffn_down,"_pf16_w")
     if (args.q4_down_streamk or args.native_q4_down) and isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"):
       delattr(block.ffn_down,"_pf16_w")
-  qo=native_o=native_q=native_qkv=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
+  qo=native_o=native_q=native_qkv=ordinary_o_capture=None;qo_linears=[p for block in model.blk for p in (block.attn_q,block.attn_output)]
   if True:
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as qo_binding_for, RECORD_U32
     # binding_for() has already compiled and frozen Q/O's ordinary compiler PROGRAM under
@@ -727,7 +732,13 @@ def main():
       from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as native_o_binding_for
       native_o_asset=native_o_binding_for("NV");native_o_asset.prepare_records(36);native_o=native_o_asset.new_capture()
     if args.generated_o_streamk:
-      native_o=qo_binding_for("NV",variant="streamk",native_q_x4=args.generated_o_streamk_x4).new_capture()
+      selected_o_asset=qo_binding_for("NV",variant="streamk",native_q_x4=args.generated_o_streamk_x4,o_only=args.ordinary_selected_o)
+      if args.ordinary_selected_o:
+        from tinygrad.llm.model import _nv_compiler_q4_imma_o_pp512_enabled
+        if not _nv_compiler_q4_imma_o_pp512_enabled(model.config): raise RuntimeError("ordinary generated O selector is not active")
+        ordinary_o_capture=selected_o_asset.new_capture()
+        for block in model.blk:block._nv_compiler_q4k_o_pp512_binding=ordinary_o_capture
+      else:native_o=selected_o_asset.new_capture()
     if args.native_q:
       from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as native_q_binding_for
       native_q=native_q_binding_for("NV").new_capture()
@@ -753,7 +764,7 @@ def main():
               # roles; residual addition remains in the model graph.
               "qo":None if qo is None else qo.candidate_identity if args.qo_streamk else qo.asset.q_context.canonical_identity,
               "qo_o":None if qo is None or args.qo_streamk or not args.q_x4 else qo.asset.conventional_context.canonical_identity,
-              "native_o":None if native_o is None else "q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name,
+              "native_o":"q4_qo_streamk_n4096" if args.ordinary_selected_o else None if native_o is None else "q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name,
               "native_q":None if native_q is None else native_q.asset.q4_q_main.arg.name,
               "native_qkv_q4":None if native_qkv is None else native_qkv.asset.q4_q_main.arg.name,
               "native_qkv_q6":None if native_qkv is None else native_qkv.asset.q6_main.arg.name,
@@ -762,7 +773,8 @@ def main():
 
   chunk_a=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
   chunk_b=Tensor([[(i*11+3)%1000 for i in range(512)]],dtype="int32").contiguous();temp=Tensor([0.0])
-  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o,native_q,native_qkv,native_q6_down,native_q4_down,generated_qkv)
+  jit=_capture(model,qo,chunk_a,temp,args.arm=="candidate",native_o,native_q,native_qkv,native_q6_down,native_q4_down,generated_qkv,
+               args.ordinary_selected_o,ordinary_o_capture)
   # Retain the actual finalized GraphRunner objects before any teardown.  F1
   # consumes these objects in-process; no runtime or Buffer is serialized.
   from tinygrad.engine.realize import graph_cache
@@ -894,7 +906,7 @@ def main():
   if native_k is not None:mains["k"]=[c for c in calls if _call_name(c)==native_k.asset.q4_k_main.arg.name]
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
   if args.qo_streamk: mains["qo"]=[c for c in calls if _call_name(c)=="q4_qo_streamk_n4096"]
-  if native_o is not None:mains["native_o"]=[c for c in calls if _call_name(c)==("q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name)]
+  if native_o is not None or args.ordinary_selected_o:mains["native_o"]=[c for c in calls if _call_name(c)==("q4_qo_streamk_n4096" if args.generated_o_streamk else native_o.asset.main.arg.name)]
   if native_q is not None:mains["native_q"]=[c for c in calls if _call_name(c)==native_q.asset.q4_q_main.arg.name]
   if native_qkv is not None:
     mains["native_qkv_q4"]=[c for c in calls if _call_name(c)==native_qkv.asset.q4_q_main.arg.name]
@@ -913,7 +925,7 @@ def main():
   down_weight_args=[_buf_uop(c.src[3]) for c in down_oracle_calls if len(c.src)>3]
   from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
   transforms={"gate_up":PackedWeightTransform("Q4_K",12288,4096) if args.native_gate_up else gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
-              "native_o":None if native_o is None else PackedWeightTransform("Q4_K",4096,4096),
+              "native_o":PackedWeightTransform("Q4_K",4096,4096) if native_o is not None or args.ordinary_selected_o else None,
               "native_q":None if native_q is None else PackedWeightTransform("Q4_K",4096,4096),
               "v":None if vval is None else vval.transform,
               "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].transform,
