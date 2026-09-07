@@ -282,10 +282,11 @@ def q4_down_candidate_context() -> StreamKCandidateContext:
   """Construct the closed, default-off Q4-down Stream-K context."""
   return StreamKCandidateContext(Q4_DOWN_STREAMK)
 
-def q4_down_fixup_map(*, n:int=4096, k:int=12288) -> tuple[tuple[int, ...], tuple[int, ...]]:
+def q4_down_fixup_map(*, m:int=512, n:int=4096, k:int=12288) -> tuple[tuple[int, ...], tuple[int, ...]]:
   """Return ordered partial slots and active tiles from the canonical scheduler."""
-  if (n,k) not in ((4096,4096),(4096,12288),(12288,4096)): raise ValueError("unsupported Q4 Stream-K map geometry")
-  g=StreamKSchedule(512,n,k,128,128,64,170,8)
+  if (m,n,k) not in ((512,4096,4096),(512,4096,12288),(512,12288,4096),(12288,512,4096)):
+    raise ValueError("unsupported Q4 Stream-K map geometry")
+  g=StreamKSchedule(m,n,k,128,128,64,170,8)
   schedule=StreamKSchedule(g.m,g.n,g.k,g.tile_m,g.tile_n,g.tile_k,g.owners,8)
   rows=[[] for _ in range(g.output_tiles)]
   seen=set()

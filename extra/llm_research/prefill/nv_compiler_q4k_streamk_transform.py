@@ -10,36 +10,44 @@ def _partial_store_block(direct_store_block:str, *, store_index:str="alu242", ou
   block=direct_store_block
   block=re.sub(rf"int {re.escape(store_index)} = .*?;", f"int {store_index} = ((alu5<<1)+(lidx2<<5)+(alu2*128)+(lidx1*8192));", block, count=1)
   block=block.replace(output_arg+"+", "partials+(slot*16384)+")
-  for value in sorted({int(x) for x in re.findall(rf"{re.escape(store_index)}\+(\d+)",block)},reverse=True):
+  def remap_offset(match:re.Match) -> str:
+    value=int(match.group(1))
     row,column=divmod(value,output_stride)
     if column >= 128: raise ValueError(f"global output offset {value} escapes its 128-column tile")
-    block=block.replace(f"{store_index}+{value}",f"{store_index}+{row*128+column}")
+    return f"{store_index}+{row*128+column}"
+  # Rewrite the original tokens in one pass. Iterative replacement can remap a
+  # newly produced offset a second time (for example 16384 -> 4096 -> 1024).
+  block=re.sub(rf"{re.escape(store_index)}\+(\d+)",remap_offset,block)
   return block
 
 def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles_n:int=96,
-                                     k_blocks:int=64, output_stride:int=12288,
+                                     tiles_m:int=4, k_blocks:int=64, output_stride:int=12288,
                                      kernel_name:str="q4k_imma_stream", restrict_pointers:bool=False,
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
-                                     shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False) -> str:
+                                     shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False,
+                                     operand_order:str="activation_a_weight_b") -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
   launch ownership, the outer K64 range, and terminal output destination change.
   """
-  if any(x <= 0 for x in (tiles_n,k_blocks,output_stride)): raise ValueError("invalid Stream-K source geometry")
+  if any(x <= 0 for x in (tiles_m,tiles_n,k_blocks,output_stride)): raise ValueError("invalid Stream-K source geometry")
   signature=re.search(r'(extern "C" __global__ void __launch_bounds__\(256\) \w+\()'
                       r'(float\* (data0_\d+), unsigned int\* (data1_\d+), unsigned int\* (data2_\d+))(\) \{)',source)
   if signature is None: raise ValueError("compiler Q4 kernel signature not found")
   if f"Ridx0 < {k_blocks}" not in source: raise ValueError("source K loop does not match requested Stream-K geometry")
+  if operand_order not in ("activation_a_weight_b","weight_a_activation_b"): raise ValueError("unsupported packed operand order")
   out_name=kernel_name
   exported=f'extern "C" __global__ void __launch_bounds__(256) {out_name}('
-  out_arg,w_arg,rec_arg=signature.group(3),signature.group(4),signature.group(5)
+  out_arg,slot1_arg,slot2_arg=signature.group(3),signature.group(4),signature.group(5)
+  rec_arg,w_arg=(slot1_arg,slot2_arg) if operand_order=="activation_a_weight_b" else (slot2_arg,slot1_arg)
   qual=" __restrict__" if restrict_pointers else ""
   source=source[:signature.start()]+exported+(
     f"float*{qual} {out_arg}, float*{qual} partials, int*{qual} partial_ids, "
-    f"const unsigned int*{qual} {rec_arg}, const unsigned int*{qual} {w_arg}) {{")+source[signature.end():]
-  source=source.replace(f"  int gidx0 = blockIdx.x; /* {tiles_n} */\n  int gidx1 = blockIdx.y; /* 4 */\n",
+    f"const unsigned int*{qual} {w_arg}, const unsigned int*{qual} {rec_arg}) {{")+source[signature.end():]
+  source=source.replace(f"  int gidx0 = blockIdx.x; /* {tiles_n} */\n  int gidx1 = blockIdx.y; /* {tiles_m} */\n",
                         "  int owner = blockIdx.x; /* 170 persistent owners */\n",1)
+  if "int owner = blockIdx.x" not in source: raise ValueError("compiler output tile grid does not match requested Stream-K geometry")
   body_start=source.find("  (*(buf0+0)) = 0.0f;")
   store_matches=list(re.finditer(r"^  int (alu\d+) = ",source[body_start:],re.M)) if body_start >= 0 else []
   if body_start < 0 or not store_matches: raise ValueError("compiler Q4 body/store boundary not found")
@@ -149,7 +157,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   direct=source[store_start:function_end]
   partial=_partial_store_block(direct,store_index=store_index,output_stride=output_stride,output_arg=signature.group(3))
   prefix=source[:body_start]
-  work_units=tiles_n*(4)*k_blocks
+  work_units=tiles_n*tiles_m*k_blocks
   owner_loop=f"""  int owner_start = ((owner*{work_units}/{OWNERS})/{BOUNDARY_QUANTUM})*{BOUNDARY_QUANTUM};
   if (threadIdx.x==0 && threadIdx.y==0 && threadIdx.z==0) {{ partial_ids[owner*2]=-1; partial_ids[owner*2+1]=-1; }}
   int owner_stop = (owner == {OWNERS-1}) ? {work_units} : ((((owner+1)*{work_units}/{OWNERS})/{BOUNDARY_QUANTUM})*{BOUNDARY_QUANTUM});

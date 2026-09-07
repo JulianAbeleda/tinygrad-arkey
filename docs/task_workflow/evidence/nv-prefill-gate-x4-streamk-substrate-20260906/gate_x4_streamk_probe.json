@@ -1,0 +1,27 @@
+{
+  "control": {
+    "shape": [
+      512,
+      12288
+    ],
+    "finite": true,
+    "sha": "84e9ad1f78f20c5dc205184b73f0884cefd8325bf2b436ab941fe80cb0adddfe",
+    "x4": 0,
+    "physical_transposed": false,
+    "source_bytes": 68085
+  },
+  "candidate": {
+    "shape": [
+      512,
+      12288
+    ],
+    "finite": true,
+    "sha": "b7a8f3b662af91f775d157c4f6740b53d875510c41a546aa47b408d762300229",
+    "x4": 33,
+    "physical_transposed": true,
+    "source_bytes": 63198
+  },
+  "max_abs": 4.291534423828125e-06,
+  "allclose": true,
+  "passed": true
+}

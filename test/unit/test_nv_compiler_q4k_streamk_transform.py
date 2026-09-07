@@ -26,6 +26,30 @@ def test_transform_owns_qualified_unroll_choice():
   transformed=transform_compiler_q4k_to_streamk(FIXTURE.read_text(),unroll=8)
   assert "#pragma unroll 8\n  for (int Ridx0 = k_begin; Ridx0 < k_end; Ridx0++)" in transformed
 
+def test_swapped_transform_exports_semantic_weight_then_record_abi():
+  if not FIXTURE.exists(): return
+  original=FIXTURE.read_text()
+  # Simulate swapped compiler ownership by renaming slot capacities: weight is
+  # slot 1 and activation record is slot 2. Runtime remains (weight, record).
+  original=original.replace("data1_655360", "data1_7077888").replace("data2_7077888", "data2_594432")
+  transformed=transform_compiler_q4k_to_streamk(original,operand_order="weight_a_activation_b")
+  signature=transformed[transformed.index("q4k_imma_stream("):transformed.index(") {",transformed.index("q4k_imma_stream("))]
+  assert signature.index("data1_7077888") < signature.index("data2_594432")
+
+def test_swapped_physical_grid_drives_owner_work_units():
+  if not FIXTURE.exists(): return
+  swapped=FIXTURE.read_text().replace("int gidx0 = blockIdx.x; /* 96 */", "int gidx0 = blockIdx.x; /* 4 */") \
+    .replace("int gidx1 = blockIdx.y; /* 4 */", "int gidx1 = blockIdx.y; /* 96 */")
+  transformed=transform_compiler_q4k_to_streamk(swapped,tiles_n=4,tiles_m=96,output_stride=512,
+    operand_order="weight_a_activation_b")
+  assert "owner*24576" in transformed and "int owner = blockIdx.x" in transformed
+
+def test_partial_store_offset_remap_is_not_cascaded():
+  from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import _partial_store_block
+  source="  int alu242 = old;\n  x=data0_6291456+alu242+4096;\n  y=data0_6291456+alu242+16384;\n"
+  transformed=_partial_store_block(source,output_stride=512)
+  assert "alu242+1024" in transformed and "alu242+4096" in transformed
+
 def test_transform_accepts_renderer_renumbered_output_index():
   if not FIXTURE.exists(): return
   source=FIXTURE.read_text().replace("alu242", "alu246")

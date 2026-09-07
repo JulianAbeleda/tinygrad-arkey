@@ -145,6 +145,7 @@ class CompilerQ4StreamKCapture:
   roles: tuple[str,...] = ("attn_q","attn_output")
   pair_q8_reuse: bool = False
   pair_record: object = None
+  physical_transposed: bool = False
 
   @classmethod
   def compile(cls, dev, base, *, n=4096, pair_q8_reuse=False):
@@ -168,26 +169,35 @@ class CompilerQ4StreamKCapture:
     elif shared_load_to_pack not in ("all","fragments","scales"):
       raise ValueError("NV_COMPILER_Q4_STREAMK_SHARED_LOAD_TO_PACK must be 0, 1, all, fragments, or scales")
     interleave_wmma_updates=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES", "0")))
-    source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=n//128,k_blocks=64,
-      output_stride=n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use,
-      shared_load_to_pack=shared_load_to_pack,interleave_wmma_updates=interleave_wmma_updates)
+    swapped=getattr(base.context,"operand_order","activation_a_weight_b")=="weight_a_activation_b"
+    physical_m,physical_n=(n,M) if swapped else (M,n)
+    source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=physical_n//128,tiles_m=physical_m//128,k_blocks=64,
+      output_stride=physical_n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use,
+      shared_load_to_pack=shared_load_to_pack,interleave_wmma_updates=interleave_wmma_updates,operand_order=base.context.operand_order)
+    # The transformed runtime ABI is semantic and invariant: weight then record.
+    signature=source[source.index(f"{kernel_name}("):source.index(") {",source.index(f"{kernel_name}("))]
+    weight_units=base.context.packed_weight.packed_bytes//base.context.packed_weight.storage_width
+    weight_slot,record_slot=("data1","data2") if swapped else ("data2","data1")
+    weight_token=f"{weight_slot}_{weight_units}"; record_token=f"{record_slot}_{base.context.packed_activation.storage_units}"
+    if not (weight_token in signature and record_token in signature and signature.index(weight_token)<signature.index(record_token)):
+      raise ValueError("transformed Stream-K signature lost packed operand capacities")
     fixup_source=active_fixup_source(max_contributors=3,sliced=True)
-    rows,active=q4_down_fixup_map(k=K,n=n)
+    rows,active=q4_down_fixup_map(k=K,m=physical_m,n=physical_n)
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
       raise ValueError("Q4 Stream-K map must cover every tile")
     compiler=NVRTCCompiler(dev.arch,ptx=False,
-      cache_key=f"q4_qo_streamk_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_v1")
+      cache_key=f"q4_qo_streamk_{physical_m}x{physical_n}_{base.context.operand_order}_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_v2")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)
       return p.replace(src=tuple(u.replace(arg=source) if u.op is Ops.SOURCE else u for u in p.src))
     main=program(kernel_name,source,(170,1,1),(32,2,4),(0,1,2,3,4),(0,1,2),(3,4))
-    fix=program("q4k_imma_fixup_active",fixup_source,(len(active),4,1),(128,1,1),(0,1,2,3),(0,),(1,2,3),(M,n))
+    fix=program("q4k_imma_fixup_active",fixup_source,(len(active),4,1),(128,1,1),(0,1,2,3),(0,),(1,2,3),(physical_m,physical_n))
     slots=Tensor([v for row in rows for v in (*row,*([-1]*(3-len(row))))],dtype=dtypes.int32,device="NV").realize()
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
     return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,base.activation.storage_units,n=n,population=population,roles=roles,
-               pair_q8_reuse=pair_q8_reuse)
+               pair_q8_reuse=pair_q8_reuse,physical_transposed=swapped)
 
   def prepare(self,count):
     if count!=self.population: raise ValueError("Q/O research capture has the wrong projection population")
@@ -221,7 +231,7 @@ class CompilerQ4StreamKCapture:
     ids=Tensor.empty(340,dtype=dtypes.int32,device=x.device)
     out,partial,ids,words,record=out.uop_program(partial,ids,words,record,fxn=lambda *_:self.q_program)
     out,partial,slots,active=out.uop_program(partial,self.slots,self.active,fxn=lambda *_:self.fixup_program)
-    return out.reshape(M,self.n)
+    return out.reshape(self.n,M).transpose() if self.physical_transposed else out.reshape(M,self.n)
 
 
 # Compatibility name for the original Q/O-only research capture.

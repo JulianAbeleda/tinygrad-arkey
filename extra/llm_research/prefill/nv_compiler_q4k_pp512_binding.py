@@ -57,6 +57,13 @@ class _Context:
   packed_activation_provider: Q8Int8FragmentProvider
   group_accumulator: Q4KQ8GroupAccumulatorContract
   pipeline: None = None
+  operand_order: str = "activation_a_weight_b"
+  native_weight_fragment: str|None = None
+
+  def __post_init__(self):
+    if self.operand_order not in ("activation_a_weight_b","weight_a_activation_b"): raise ValueError("unsupported packed operand order")
+    if self.native_weight_fragment not in (None,"q4_a_x4"): raise ValueError("unsupported native packed weight fragment")
+    if self.native_weight_fragment and self.operand_order!="weight_a_activation_b": raise ValueError("native Q4 A x4 requires swapped operands")
 
 
 def _weight_carrier(words:Tensor, transform:PackedWeightTransform) -> Tensor:
@@ -115,7 +122,8 @@ class CompilerPP512Binding:
   warmstart: Mapping
   warmstart_contexts: Mapping
   @classmethod
-  def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False, producer_arithmetic="legacy") -> "CompilerPP512Binding":
+  def compile(cls, dev, config:CompilerQ4ScheduleConfig=DEFAULT_SCHEDULE, *, compact_q8:bool=False, producer_arithmetic="legacy",
+              native_weight_a_x4:bool=False) -> "CompilerPP512Binding":
     config.validate()
     wt = PackedWeightTransform("Q4_K", N, K)
     at = TileMajorQ8ActivationRecordTransform(M, K) if compact_q8 else Q8ActivationRecordTransform(M, K)
@@ -126,8 +134,11 @@ class CompilerPP512Binding:
     if b_end > 256*stride: raise ValueError("Q4 schedule exceeds shared LDS window budget")
     geometry = KernelTileGeometry((config.tile_m, config.tile_n, config.tile_k), (config.warp_m, config.warp_n), config.threads, 32,
       (KernelLDSWindow("A", 0, a_end, stride), KernelLDSWindow("B", a_end, b_end, stride)))
-    identity = hashlib.sha256(repr(("compact_q8" if compact_q8 else "flat_q8", config, geometry, wp.identity, ap.identity, accum.abi)).encode()).hexdigest()
-    context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum)
+    identity = hashlib.sha256(repr(("compact_q8" if compact_q8 else "flat_q8", config, geometry, wp.identity, ap.identity, accum.abi,
+      "q4_a_x4" if native_weight_a_x4 else None)).encode()).hexdigest()
+    context = _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, ap, accum,
+      operand_order="weight_a_activation_b" if native_weight_a_x4 else "activation_a_weight_b",
+      native_weight_fragment="q4_a_x4" if native_weight_a_x4 else None)
     key = warmstart_key({M, N}, K, wt.storage_dtype)
     if compact_q8:
       from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import FP16_DS4_SOURCE
@@ -149,7 +160,10 @@ class CompilerPP512Binding:
     with warmstart_candidate_state(warmstart, warmstart_contexts):
       activation_probe = tile_major_q8_carrier(record_probe, TileMajorActivationCarrierSpec(at)) if compact_q8 else record_probe
       activation_probe = activation_probe if compact_q8 else _activation_carrier(activation_probe, at)
-      activation_probe.matmul(_weight_carrier(words_probe, wt).transpose(), dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
+      weight_probe=_weight_carrier(words_probe,wt)
+      expr=weight_probe.matmul(activation_probe.transpose(),dtype=dtypes.int) if native_weight_a_x4 else \
+        activation_probe.matmul(weight_probe.transpose(),dtype=dtypes.int)
+      expr.cast(dtypes.float).contiguous().realize()
     matching = [program for program in to_program_cache.values() if program.op is Ops.PROGRAM and program.src and
                 getattr(program.src[0].arg, "candidate_context", None) is not None and
                 program.src[0].arg.candidate_context.canonical_identity == identity]
@@ -280,7 +294,7 @@ def _project(binding:CompilerPP512Binding, x:Tensor, words:Tensor, *, model_fami
     return out.reshape(M, N)
 
 
-def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy", pair_q8_reuse=False):
+def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy", pair_q8_reuse=False, native_weight_a_x4=False):
   if variant not in ("wide","streamk"): raise ValueError("unknown gate/up variant")
   if variant=="streamk":
     from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
@@ -291,12 +305,14 @@ def binding_for(device:str="NV", *, variant="wide", producer_arithmetic="legacy"
     try:warp_m,warp_n=(int(x) for x in warp_raw.split(","))
     except Exception as e:raise ValueError("NV_COMPILER_Q4_GATE_WARP must be warp_m,warp_n") from e
     schedule=CompilerQ4ScheduleConfig(warp_m=warp_m,warp_n=warp_n);schedule.validate()
-    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n)
+    key=(device,variant,producer_arithmetic,pair_q8_reuse,compact_q8,warp_m,warp_n,native_weight_a_x4)
     if key not in _BINDINGS: _BINDINGS[key]=CompilerQ4StreamKCapture.compile(
-      Device[device],CompilerPP512Binding.compile(Device[device],schedule,compact_q8=compact_q8,producer_arithmetic=producer_arithmetic),
+      Device[device],CompilerPP512Binding.compile(Device[device],schedule,compact_q8=compact_q8,producer_arithmetic=producer_arithmetic,
+        native_weight_a_x4=native_weight_a_x4),
       n=N,pair_q8_reuse=pair_q8_reuse)
     return _BINDINGS[key]
   if device != "NV": raise ValueError("compiler Q4 IMMA research binding is NV-only")
-  key=(device,producer_arithmetic)
-  if key not in _BINDINGS: _BINDINGS[key] = CompilerPP512Binding.compile(Device[device],producer_arithmetic=producer_arithmetic)
+  key=(device,producer_arithmetic,native_weight_a_x4)
+  if key not in _BINDINGS: _BINDINGS[key] = CompilerPP512Binding.compile(Device[device],producer_arithmetic=producer_arithmetic,
+    native_weight_a_x4=native_weight_a_x4)
   return _BINDINGS[key]
