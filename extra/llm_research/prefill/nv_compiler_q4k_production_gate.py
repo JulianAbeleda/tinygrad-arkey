@@ -28,6 +28,16 @@ class _Context:
   packed_activation_provider: Q8Int8FragmentProvider
   group_accumulator: Q4KQ8GroupAccumulatorContract
   pipeline: None = None
+  operand_order: str = "activation_a_weight_b"
+  native_weight_fragment: str|None = None
+
+  def __post_init__(self):
+    if self.operand_order not in ("activation_a_weight_b","weight_a_activation_b"):
+      raise ValueError("unsupported packed operand order")
+    if self.native_weight_fragment not in (None,"q4_a_x4"):
+      raise ValueError("unsupported native packed weight fragment")
+    if self.native_weight_fragment == "q4_a_x4" and self.operand_order != "weight_a_activation_b":
+      raise ValueError("native Q4 A x4 requires swapped packed operand order")
 
 
 def _weight_carrier(words:Tensor, transform:PackedWeightTransform) -> Tensor:

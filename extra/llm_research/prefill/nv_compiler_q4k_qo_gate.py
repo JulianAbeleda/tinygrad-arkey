@@ -35,8 +35,11 @@ def _context():
   else:
     geometry = KernelTileGeometry((128,128,TILE_K),(2,4),256,32,
       (KernelLDSWindow("A",0,128*stride,stride), KernelLDSWindow("B",128*stride,256*stride,stride)))
-  identity = hashlib.sha256(repr((geometry,wp.identity,apv.identity,accumulator.abi)).encode()).hexdigest()
-  return wt, at, identity, _Context("boltbeam.full_kernel_candidate.v1", identity, geometry, wt, wp, at, apv, accumulator)
+  native_weight_fragment="q4_a_x4" if os.environ.get("NV_COMPILER_Q4_WEIGHT_A_X4")=="1" else None
+  operand_order="weight_a_activation_b" if os.environ.get("NV_COMPILER_Q4_WEIGHT_A")=="1" or native_weight_fragment else "activation_a_weight_b"
+  identity=hashlib.sha256(repr((geometry,wp.identity,apv.identity,accumulator.abi,operand_order,native_weight_fragment)).encode()).hexdigest()
+  return wt,at,identity,_Context("boltbeam.full_kernel_candidate.v1",identity,geometry,wt,wp,at,apv,accumulator,
+    operand_order=operand_order,native_weight_fragment=native_weight_fragment)
 
 
 def _record():
@@ -71,8 +74,10 @@ def main():
   wt,at,identity,context=_context(); key=warmstart_key({M,N},K,wt.storage_dtype)
   @TinyJit
   def generated(record_arg:Tensor,words_arg:Tensor):
-    return _activation_carrier(record_arg,at).matmul(_weight_carrier(words_arg,wt).transpose(),dtype=dtypes.int) \
-      .cast(dtypes.float).contiguous().realize()
+    activation,weight=_activation_carrier(record_arg,at),_weight_carrier(words_arg,wt)
+    if context.operand_order=="weight_a_activation_b":
+      return weight.matmul(activation.transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
+    return activation.matmul(weight.transpose(),dtype=dtypes.int).cast(dtypes.float).contiguous().realize()
 
   from tinygrad.codegen import to_program_cache
   to_program_cache.clear(); samples=[]
@@ -94,7 +99,8 @@ def main():
                            global_size=(N//128,M//128,1),local_size=(256,1,1),wait=True)*1e6
     if iteration>=3:oracle_samples.append(elapsed)
 
-  got,ref=out.numpy().reshape(M,N),reference.numpy().reshape(M,N); diff=np.abs(got-ref)
+  got=out.numpy().reshape(N,M).T if context.operand_order=="weight_a_activation_b" else out.numpy().reshape(M,N)
+  ref=reference.numpy().reshape(M,N); diff=np.abs(got-ref)
   stem=pathlib.Path(args.out); source_path=stem.with_suffix(".cu"); cubin_path=stem.with_suffix(".cubin"); sass_path=stem.with_suffix(".sass")
   if sources:source_path.write_text("\n\n".join(sources))
   binaries=[u.arg for p in programs for u in p.src if u.op is Ops.BINARY and isinstance(u.arg,bytes)]; sass=""

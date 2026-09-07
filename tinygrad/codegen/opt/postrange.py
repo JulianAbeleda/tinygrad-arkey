@@ -711,6 +711,8 @@ class Scheduler:
               if not isinstance(group_accumulator, (Q4KQ8GroupAccumulatorContract, Q6KQ8SubgroupAccumulatorContract)):
                 raise KernelOptError("candidate group accumulator must use a typed K-quant/Q8_1 ABI")
               is_q6 = isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract)
+              swapped_operands=getattr(getattr(self.ast.arg,"candidate_context",None),"operand_order","activation_a_weight_b")=="weight_a_activation_b"
+              if swapped_operands and is_q6:raise KernelOptError("swapped packed operands are qualified only for Q4_K")
               if (self.ren.target.device not in ("NV", "CUDA") or tc.dims != (8, 16, 32) or tc.dtype_in != dtypes.char or
                   tc.dtype_out != dtypes.int or tc.elements_per_thread != (16, 8, 4) or tc.threads != 32):
                 raise KernelOptError("K-quant/Q8_1 group accumulator requires NVIDIA m16n8k32 s8 IMMA")
@@ -720,8 +722,9 @@ class Scheduler:
               if not (isinstance(operands[0], PackedPrecontractOperandTemplate) and
                       isinstance(operands[1], PackedPrecontractOperandTemplate)):
                 raise KernelOptError("K-quant/Q8_1 correction requires typed packed A and B operands")
-              if (operands[0].fragment_provider != group_accumulator.activation or
-                  operands[1].fragment_provider != group_accumulator.weight):
+              expected_providers=(group_accumulator.weight,group_accumulator.activation) if swapped_operands else \
+                                 (group_accumulator.activation,group_accumulator.weight)
+              if tuple(x.fragment_provider for x in operands)!=expected_providers:
                 raise KernelOptError("K-quant/Q8_1 correction providers do not match staged operands")
               if is_q6 and q6_half_tc_uops is None:
                 raise KernelOptError("Q6_K/Q8_1 correction requires paired masked K16 IMMA subtotals")
@@ -743,14 +746,20 @@ class Scheduler:
                   halves = tuple(byte_values[2*part].bitwise_or(byte_values[2*part+1].lshift(8)).bitcast(dtypes.half) for part in range(2))
                   return UOp(Ops.STACK, dtypes.half.vec(2), halves)
                 integer_result = q6_half_tc_uops if is_q6 else tc_uop
-                tc_uop = group_accumulator.combine_staged(integer_result, _metadata("B", local_n), _metadata("A", local_m))
+                tc_uop = group_accumulator.combine_staged(integer_result,
+                  _metadata("A",local_m) if swapped_operands else _metadata("B",local_n),
+                  _metadata("B",local_n) if swapped_operands else _metadata("A",local_m))
               else:
                 k_base = outer_k*candidate_geometry.tile[2]+k_substep*32
                 if is_q6:
-                  tc_uop = group_accumulator.correct(operands[1].source, operands[0].source, row=logical_m, column=logical_n,
+                  weight_operand,activation_operand=(operands[0],operands[1]) if swapped_operands else (operands[1],operands[0])
+                  activation_row,weight_column=(logical_n,logical_m) if swapped_operands else (logical_m,logical_n)
+                  tc_uop = group_accumulator.correct(weight_operand.source,activation_operand.source,row=activation_row,column=weight_column,
                                                      k_base=k_base, integer_dots=q6_half_tc_uops)
                 else:
-                  tc_uop = group_accumulator.correct(operands[1].source, operands[0].source, row=logical_m, column=logical_n,
+                  weight_operand,activation_operand=(operands[0],operands[1]) if swapped_operands else (operands[1],operands[0])
+                  activation_row,weight_column=(logical_n,logical_m) if swapped_operands else (logical_m,logical_n)
+                  tc_uop = group_accumulator.correct(weight_operand.source,activation_operand.source,row=activation_row,column=weight_column,
                                                      k_base=k_base, integer_dot=tc_uop)
 
             # preserve extra reduces

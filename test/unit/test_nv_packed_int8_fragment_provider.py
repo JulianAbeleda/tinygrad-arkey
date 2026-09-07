@@ -8,11 +8,32 @@ from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, P
   PrecontractOperandTemplate, PrecontractThreadAxes, build_precontract_lds_stage, fold_binary_axes,
   validate_precontract_operand_templates)
 from tinygrad.codegen.opt.tc import cuda_81632_i8
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec, native_q4_a_fragment
 from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q4KInt8FragmentProvider, Q8ActivationRecordTransform,
                                                 Q8Int8FragmentProvider, Q4KQ8GroupAccumulatorContract)
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
+
+def test_q4_a_x4_fragment_contract_is_narrow_and_local_byte_addressed():
+  spec=PackedFragmentSpec.q4k_a_k32()
+  assert (spec.format,spec.width,spec.lane_layout,spec.phase,spec.phases)==("Q4_K",4,"mma_a",0,1)
+  for bad in (PackedFragmentSpec("Q4_K",2,(8,8),"mma_a"),PackedFragmentSpec("Q4_K",4,(8,8),"mma_b"),
+              PackedFragmentSpec("Q4_K",4,(8,8),"mma_a",1,2)):
+    with pytest.raises(ValueError): bad.validate()
+  local=UOp.placeholder((4096,),dtypes.char,990,addrspace=AddrSpace.LOCAL)
+  marker=native_q4_a_fragment(local,UOp.const(dtypes.int,80))
+  assert marker.dtype==dtypes.char.vec(16)
+  with pytest.raises(TypeError): native_q4_a_fragment(UOp.param(991,dtypes.char.ptr(4096)),UOp.const(dtypes.int,80))
+
+def test_q4_a_x4_byte_address_map_covers_aligned_rows_and_k_halves():
+  # char* LDS: renderer x4 receives byte offsets. Each half-warp selects one aligned K16 half.
+  stride=80
+  for substep in (0,1):
+    addresses=[(lane&15)*stride+substep*32+(lane>>4)*16 for lane in range(32)]
+    assert len(set(addresses))==32
+    assert all(addr%16==0 and 0<=addr<16*stride for addr in addresses)
+    assert addresses[16:]==[x+16 for x in addresses[:16]]
 
 
 def _operands(provider=True, dtype=dtypes.char):
@@ -30,6 +51,17 @@ def test_nv_packed_int8_precontract_requires_and_accepts_typed_provider():
   validate_precontract_operand_templates(_operands(True), dtype_in=dtypes.char, context="nv q4")
   with pytest.raises(ValueError, match="typed logical fragment provider"):
     validate_precontract_operand_templates(_operands(False), dtype_in=dtypes.char, context="nv q4")
+
+def test_mismatched_q4_q8_roles_accept_exact_m_not_equal_n_swap():
+  m,n,k=UOp.range(512,410),UOp.range(4096,411),UOp.range(4096,412,AxisType.REDUCE)
+  at,wt=Q8ActivationRecordTransform(512,4096),PackedWeightTransform("Q4_K",4096,4096)
+  ap,wp=Q8Int8FragmentProvider(at),Q4KInt8FragmentProvider(wt)
+  activation=PackedPrecontractOperandTemplate("A",UOp.param(1,dtypes.uint32.ptr(at.storage_units)),at,m,k,0,ap)
+  weight=PackedPrecontractOperandTemplate("B",UOp.param(2,dtypes.uint32.ptr(wt.packed_bytes//4)),wt,n,k,0,wp)
+  validate_precontract_operand_templates((activation,weight),dtype_in=dtypes.char,context="conventional M!=N")
+  swapped=(PackedPrecontractOperandTemplate("A",weight.source,wt,n,k,0,wp),
+           PackedPrecontractOperandTemplate("B",activation.source,at,m,k,0,ap))
+  validate_precontract_operand_templates(swapped,dtype_in=dtypes.char,context="swapped M!=N")
 
 
 def test_typed_int8_provider_is_not_silently_used_for_fp16_wmma():

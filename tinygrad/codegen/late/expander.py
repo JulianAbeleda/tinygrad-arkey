@@ -4,6 +4,15 @@ from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.helpers import dedup, flatten, all_same, prod, partition
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, AxisType, range_start
 from tinygrad.schedule.rangeify import BufferizeOpts
+from tinygrad.codegen.late.native_fragment import NATIVE_Q4_A_FRAGMENT,native_fragment_x4
+
+def expand_native_q4_a_fragment(x:UOp):
+  if x.arg!=(NATIVE_Q4_A_FRAGMENT,) or len(x.src)!=2:return None
+  buf,indices=x.src
+  if indices.op is not Ops.UNROLL: return native_fragment_x4(buf,indices).bitcast(dtypes.char.vec(16))
+  vector=indices.src[0]
+  carriers=tuple(native_fragment_x4(buf,vector.gep(i)).bitcast(dtypes.char.vec(16)) for i in range(vector.dtype.count))
+  return UOp(Ops.UNROLL,x.dtype,(UOp(Ops.VCAT,dtypes.char.vec(16*len(carriers)),carriers),),indices.arg)
 
 def _expand_arg_to_idx(args:tuple[tuple[int, int], ...], rpk:dict[int, int]) -> int:
   idx, mul = 0, 1
@@ -139,6 +148,7 @@ def end_unrolls(u:UOp):
   return u.replace(src=(ret,)+tuple(src))
 
 expander = PatternMatcher([
+  (UPat(Ops.CUSTOMI,name="x"),expand_native_q4_a_fragment),
   # push broadcast through AFTER/END
   (UPat.var("x").broadcast(name="b").after(name="a", allow_any_len=True), lambda x,b,a: x.after(*a.src[1:]).broadcast(len(b.src))),
   (UPat.var("x").broadcast(name="b").end(name="a", allow_any_len=True), lambda x,b,a: x.end(*a.src[1:]).broadcast(len(b.src))),

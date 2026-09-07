@@ -1,6 +1,6 @@
 """Backend-neutral multi-register native fragment load capability."""
 from dataclasses import dataclass
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat
 
 NATIVE_FRAGMENT_X4 = "native_fragment_x4_v1"
@@ -9,6 +9,7 @@ NATIVE_FRAGMENT_MATERIALIZED_X2 = "native_fragment_materialized_x2_v1"
 PACKED_I8_SUB = "packed_i8_sub_v1"
 _NATIVE_FRAGMENT_TAG = "native_fragment_carrier_v1"
 NATIVE_FRAGMENT_BITCAST = "native_fragment_bitcast_v1"
+NATIVE_Q4_A_FRAGMENT = "native_q4_a_fragment_v1"
 
 @dataclass(frozen=True)
 class PackedFragmentSpec:
@@ -26,20 +27,33 @@ class PackedFragmentSpec:
   phases: int = 1
 
   def validate(self) -> None:
-    if self.format != "Q6_K": raise ValueError("packed fragment format must be Q6_K")
+    if self.format not in ("Q4_K", "Q6_K"): raise ValueError("packed fragment format must be Q4_K or Q6_K")
     if self.width not in (2, 4): raise ValueError("packed fragment width must be x2 or x4")
     if self.fragment_shape != (8, 8): raise ValueError("packed fragment shape must be m8n8")
     if not self.lane_layout: raise ValueError("packed fragment lane layout is required")
     if self.phase < 0 or self.phases <= 0 or self.phase >= self.phases:
       raise ValueError("packed fragment phase must be within the phase count")
-    if self.phases != 1 or self.phase != 0:
-      raise ValueError("Q6_K one-phase contract only admits phase 0")
+    if self.phases != 1 or self.phase != 0: raise ValueError(f"{self.format} one-phase contract only admits phase 0")
+    if self.format == "Q4_K" and (self.width != 4 or self.lane_layout != "mma_a"):
+      raise ValueError("Q4_K native fragment requires x4 MMA A ownership")
 
   @classmethod
   def q6k_k64(cls, *, width:int=2, lane_layout:str="mma_b") -> "PackedFragmentSpec":
     spec = cls("Q6_K", width, (8, 8), lane_layout)
     spec.validate()
     return spec
+
+  @classmethod
+  def q4k_a_k32(cls, *, lane_layout:str="mma_a") -> "PackedFragmentSpec":
+    spec=cls("Q4_K",4,(8,8),lane_layout)
+    spec.validate()
+    return spec
+
+def native_q4_a_fragment(buffer:UOp,index:UOp)->UOp:
+  if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is not AddrSpace.LOCAL:
+    raise TypeError("native Q4 A fragment requires a local address-space pointer")
+  if index.dtype.scalar() not in (dtypes.int,dtypes.weakint,dtypes.uint): raise TypeError("native Q4 A fragment index must be integer bytes")
+  return UOp(Ops.CUSTOMI,dtypes.char.vec(16),(buffer,index),arg=(NATIVE_Q4_A_FRAGMENT,))
 
 def packed_fragment_load(buffer:UOp, index:UOp, spec:PackedFragmentSpec) -> UOp:
   """Load one packed fragment while preserving its cooperative ABI."""
@@ -118,4 +132,4 @@ pm_lower_native_fragment = PatternMatcher([
   (UPat(Ops.CUSTOMI, name="x"), _lower),
 ])
 
-__all__ = ["PackedFragmentSpec", "packed_fragment_load", "native_fragment_x2", "native_fragment_x4", "native_fragment_materialized_x2", "native_fragment_bitcast", "packed_i8_sub", "is_native_fragment_carrier", "is_native_fragment_marker", "pm_lower_native_fragment"]
+__all__ = ["PackedFragmentSpec", "packed_fragment_load", "native_fragment_x2", "native_fragment_x4", "native_fragment_materialized_x2", "native_fragment_bitcast", "native_q4_a_fragment", "packed_i8_sub", "is_native_fragment_carrier", "is_native_fragment_marker", "pm_lower_native_fragment"]

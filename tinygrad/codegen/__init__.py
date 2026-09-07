@@ -216,6 +216,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
     _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
   sink = graph_rewrite(sink, _expander_pm, name="expander")
+  sink = graph_rewrite(sink,pm_lower_native_fragment,ctx=ren,name="lower post-expander native fragments")
   # pm_warp_reduce (above) builds warp_shfl_xor tags fresh during this pass -- resolve them here too, in the
   # same relative position the old inline AMD string occupied, rather than letting them ride further downstream.
   sink = graph_rewrite(sink, pm_lower_warp_shfl_xor, ctx=ren, name="lower warp_shfl_xor (post-expander)")
