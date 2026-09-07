@@ -211,6 +211,10 @@ def _nv_compiler_q4_gate_q8_packed_loads_enabled(config) -> bool:
   """Use qualified packed Q8 DS4 loads on the selected gate/up body; zero is rollback."""
   return bool(getenv("NV_COMPILER_Q4_GATE_Q8_PACKED_LOADS", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
 
+def _nv_compiler_q4_gate_q4_packed_publication_enabled(config) -> bool:
+  """Use qualified packed Q4 nibble publication; zero is rollback."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
 def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
   """Selected generated O Stream-K x4 route; zero is explicit rollback."""
   return bool(getenv("NV_COMPILER_Q4_O_STREAMK_X4", 1)) and _nv_q4_production_mode(config) == "compiler" and \
@@ -2038,10 +2042,11 @@ class Transformer:
       if nv_q4_mode == "compiler" and _nv_compiler_q4_gate_streamk_enabled(self.config):
         _gate_x4_interleave = bool(getenv("NV_COMPILER_Q4_GATE_X4_INTERLEAVE", 1))
         _gate_q8_packed = _gate_x4_interleave and _nv_compiler_q4_gate_q8_packed_loads_enabled(self.config)
+        _gate_q4_packed = _gate_x4_interleave and _nv_compiler_q4_gate_q4_packed_publication_enabled(self.config)
         _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama",
                                   pair_q8_reuse=_nv_compiler_q4_gate_q8_reuse_enabled(self.config),
                                   native_weight_a_x4=_gate_x4_interleave, coalesced_swapped_output=_gate_x4_interleave,
-                                  q8_ds4_packed_loads=_gate_q8_packed)
+                                  q8_ds4_packed_loads=_gate_q8_packed,q4_packed_publication=_gate_q4_packed)
       else: _nv_binding = binding_for("NV")
       if nv_q4_mode == "gate_only":
         _nv_gate_only_binding = _nv_binding

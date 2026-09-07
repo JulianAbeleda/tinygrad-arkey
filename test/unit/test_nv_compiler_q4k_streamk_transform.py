@@ -2,9 +2,28 @@ from pathlib import Path
 import re
 import pytest
 
-from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import active_fixup_source, transform_compiler_q4k_to_streamk
+from extra.llm_research.prefill.nv_compiler_q4k_streamk_transform import _pack_q4_publication, active_fixup_source, transform_compiler_q4k_to_streamk
 
 FIXTURE=Path("/home/ubuntu/boltbeam-runs/packed-q8-completion-20260830/q4-emitter-baseline.cu")
+
+def _q4_publication_fixture() -> str:
+  lines=[]
+  for val,bank in (("val22",0),("val23",5120)):
+    for comp_i,comp in enumerate("xyzw"):
+      for shift_i,shift in enumerate(("cast4","cast1","cast2","cast3")):
+        offset=bank+comp_i*4+shift_i; addr="alu8" if offset==0 else f"(alu8+{offset})"
+        lines.append(f"    *(buf1+{addr}) = ((signed char)((({val}.{comp}>>{shift})&15u)));" )
+  return "\n".join(lines)+"\n    __syncthreads();\n"
+
+def test_q4_packed_publication_matches_exact_ownership_and_fails_closed():
+  fixture=_q4_publication_fixture()
+  packed=_pack_q4_publication(fixture)
+  assert packed.count("reinterpret_cast<unsigned int*>(buf1+")==8
+  assert "signed char" not in packed
+  with pytest.raises(ValueError,match="exact lane/address ownership"):
+    _pack_q4_publication(fixture.replace("(alu8+1)","(alu8+2)",1))
+  with pytest.raises(ValueError,match="32 scalar nibble stores"):
+    _pack_q4_publication(fixture.replace(fixture.splitlines()[0]+"\n","",1))
 
 def test_transform_preserves_imma_body_and_adds_exact_owner_workspace_contract():
   if not FIXTURE.exists(): return

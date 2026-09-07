@@ -6,6 +6,34 @@ OWNERS, OUTPUT_TILES, K_BLOCKS, TILES_N = 170, 384, 64, 96
 WORK_UNITS, BOUNDARY_QUANTUM = OUTPUT_TILES*K_BLOCKS, 8
 TILE_ELEMENTS, PARTIAL_SLOTS = 128*128, 2*OWNERS
 
+def _pack_q4_publication(math:str) -> str:
+  """Replace the exact 32 scalar Q4 nibble publications with eight aligned words."""
+  store_re=re.compile(r"^    \*\(buf1\+(?P<addr>[^\n]+)\) = \(\(signed char\)\(\(\((?P<val>val2[23])\.(?P<comp>[xyzw])>>(?P<shift>cast[1-4])\)&15u\)\)\);$",re.M)
+  stores=list(store_re.finditer(math))
+  if len(stores)!=32: raise ValueError(f"packed Q4 publication requires 32 scalar nibble stores, found {len(stores)}")
+  seen=set()
+  shifts=("cast4","cast1","cast2","cast3")
+  for st in stores:
+    bank=0 if st.group("val")=="val22" else 5120; comp="xyzw".index(st.group("comp")); shift=shifts.index(st.group("shift"))
+    expected=bank+comp*4+shift; addr=st.group("addr")
+    match=None if addr=="alu8" else re.fullmatch(r"\(alu8\+(\d+)\)",addr)
+    if addr!="alu8" and match is None: raise ValueError("packed Q4 publication has an unsupported address expression")
+    actual=0 if addr=="alu8" else int(match.group(1))
+    if actual!=expected or (key:=(st.group("val"),st.group("comp"),st.group("shift"))) in seen:
+      raise ValueError("packed Q4 publication lost exact lane/address ownership")
+    seen.add(key)
+  math=store_re.sub("",math)
+  publish=math.find("    __syncthreads();")
+  if publish<0: raise ValueError("packed Q4 publication barrier not found")
+  packed=[]
+  for val,bank in (("val22",0),("val23",5120)):
+    for comp_i,comp in enumerate("xyzw"):
+      offset=bank+comp_i*4; addr="alu8" if offset==0 else f"(alu8+{offset})"
+      packed.append(f"    *reinterpret_cast<unsigned int*>(buf1+{addr}) = ({val}.{comp}>>alu1)&0x0f0f0f0fu;")
+  math=math[:publish]+"\n".join(packed)+"\n"+math[publish:]
+  if math.count("*reinterpret_cast<unsigned int*>(buf1+")!=8: raise ValueError("packed Q4 publication store census mismatch")
+  return math
+
 def _partial_store_block(direct_store_block:str, *, store_index:str="alu242", output_stride:int=12288, output_arg:str="data0_6291456") -> str:
   block=direct_store_block
   block=re.sub(rf"int {re.escape(store_index)} = .*?;", f"int {store_index} = ((alu5<<1)+(lidx2<<5)+(alu2*128)+(lidx1*8192));", block, count=1)
@@ -82,7 +110,7 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
                                      double_buffer:bool=False, fragment_load_to_use:bool=False,
                                      shared_load_to_pack:bool|str=False, interleave_wmma_updates:bool=False,
                                      operand_order:str="activation_a_weight_b", logical_transpose_output:bool=False,
-                                     q8_ds4_packed_loads:bool=False) -> str:
+                                     q8_ds4_packed_loads:bool=False, q4_packed_publication:bool=False) -> str:
   """Wrap the compiler-owned Q4_K/Q8 tile body in llama-compatible Stream-K ownership.
 
   The signed-IMMA math and packed input addressing remain compiler emitted.  Only
@@ -209,6 +237,9 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
     helper="__device__ int4 __WMMA_8_16_32_signed_char_int(signed_char16 a, signed_char8 b, int4 c){"
     if source.count(helper)!=1: raise ValueError("Q8 uint2 WMMA helper not found")
     source=source.replace(helper,"__device__ int4 __WMMA_8_16_32_signed_char_int_q8u2(signed_char16 a, uint2 b, int4 c){",1)
+  if q4_packed_publication:
+    if operand_order!="weight_a_activation_b": raise ValueError("packed Q4 publication requires weight in MMA A")
+    math=_pack_q4_publication(math)
   if interleave_wmma_updates:
     # Compute eight IMMA results and their output-column scale values together.
     # Each accumulator expression remains byte-for-byte unchanged, while 24

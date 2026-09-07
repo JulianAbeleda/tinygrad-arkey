@@ -199,7 +199,8 @@ class CompilerQ4StreamKCapture:
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=physical_n//128,tiles_m=physical_m//128,k_blocks=64,
       output_stride=physical_n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use,
       shared_load_to_pack=shared_load_to_pack,interleave_wmma_updates=interleave_wmma_updates,operand_order=base_context.operand_order,
-      logical_transpose_output=coalesced_swapped_output,q8_ds4_packed_loads=getattr(base_context,"q8_ds4_packed_loads",False))
+      logical_transpose_output=coalesced_swapped_output,q8_ds4_packed_loads=getattr(base_context,"q8_ds4_packed_loads",False),
+      q4_packed_publication=getattr(base_context,"q4_packed_publication",False))
     # The transformed runtime ABI is semantic and invariant: weight then record.
     signature=source[source.index(f"{kernel_name}("):source.index(") {",source.index(f"{kernel_name}("))]
     weight_units=base_context.packed_weight.packed_bytes//base_context.packed_weight.storage_width
@@ -212,7 +213,7 @@ class CompilerQ4StreamKCapture:
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
       raise ValueError("Q4 Stream-K map must cover every tile")
     compiler=NVRTCCompiler(dev.arch,ptx=False,
-      cache_key=f"q4_qo_streamk_{physical_m}x{physical_n}_{base_context.operand_order}_co{int(coalesced_swapped_output)}_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_q8p{int(getattr(base_context,'q8_ds4_packed_loads',False))}_v3")
+      cache_key=f"q4_qo_streamk_{physical_m}x{physical_n}_{base_context.operand_order}_co{int(coalesced_swapped_output)}_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_q8p{int(getattr(base_context,'q8_ds4_packed_loads',False))}_q4p{int(getattr(base_context,'q4_packed_publication',False))}_v3")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)

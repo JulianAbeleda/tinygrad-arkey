@@ -112,6 +112,16 @@ def test_compiler_gate_q8_packed_loads_defaults_on_with_rollback(monkeypatch):
   assert model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
   monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q8_PACKED_LOADS":0}))
   assert not model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
+
+def test_compiler_gate_q4_packed_publication_defaults_on_with_rollback(monkeypatch):
+  config=SimpleNamespace()
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:True)
+  monkeypatch.setattr(model,"getenv",_env({}))
+  assert model._nv_compiler_q4_gate_q4_packed_publication_enabled(config)
+  monkeypatch.setattr(model,"getenv",_env({"NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION":0}))
+  assert not model._nv_compiler_q4_gate_q4_packed_publication_enabled(config)
+  monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:False)
+  assert not model._nv_compiler_q4_gate_q4_packed_publication_enabled(config)
   monkeypatch.setattr(model,"getenv",_env({}))
   monkeypatch.setattr(model,"_nv_compiler_q4_gate_streamk_enabled",lambda _:False)
   assert not model._nv_compiler_q4_gate_q8_packed_loads_enabled(config)
