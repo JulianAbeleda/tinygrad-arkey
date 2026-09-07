@@ -1,0 +1,8 @@
+{
+  "schema": "tinygrad.nv_generated_q_q4v_share.v1",
+  "generated_mean_ms": 47.8180565,
+  "shared_ms": 47.783762,
+  "advantage_ms": 0.03429449999999434,
+  "producer_calls_before": 216,
+  "producer_calls_after": 198
+}

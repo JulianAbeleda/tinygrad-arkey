@@ -26,6 +26,7 @@ class _GraphOwnedQOCapture:
   def __init__(self,asset,record_u32):
     self.asset,self.record_u32=asset,record_u32
     self.records,self.outputs,self.cursor=[],[],0
+    self.q_records=[]
 
   @property
   def candidate_identity(self):return self.asset.candidate_identity
@@ -36,7 +37,7 @@ class _GraphOwnedQOCapture:
   @property
   def producer(self):return self.asset.producer
 
-  def begin_trace(self):self.cursor=0
+  def begin_trace(self):self.cursor=0;self.q_records=[]
 
   def project(self,x,words,*,model_family,role,weight_type="Q4_K"):
     if model_family!="qwen3_8b" or role not in ("attn_q","attn_output") or weight_type!="Q4_K" or \
@@ -48,6 +49,7 @@ class _GraphOwnedQOCapture:
     out=Tensor.empty(512*4096,dtype=dtypes.float32,device=x.device)
     self.records.append(record);self.outputs.append(out);self.cursor+=1
     _,record=x.uop_program(record,fxn=lambda *_:self.asset.producer)
+    if role=="attn_q":self.q_records.append(record)
     # The composed override returns a projection and leaves residual addition
     # to the model.  Use the three-buffer plain program for both Q and O;
     # ``main_program`` is the four-buffer fused-residual contract.
@@ -55,6 +57,28 @@ class _GraphOwnedQOCapture:
     # Retain the produced Tensor identities, not the pre-program placeholders.
     self.records[-1],self.outputs[-1]=record,out
     return out.reshape(512,4096)
+
+
+class _SharedQ4VCapture:
+  """Consume Q's compatible flat Q8 record for the 18 Q4 V blocks."""
+  def __init__(self,asset,qo):self.asset,self.qo,self.cursor,self.used=asset,qo,0,set()
+  @property
+  def candidate_identity(self):return self.asset.candidate_identity
+  @property
+  def transform(self):return self.asset.transform
+  def begin_trace(self):self.cursor=0;self.used=set()
+  def project(self,x,words,*,model_family,role,weight_type="Q4_K",wait=False):
+    del wait
+    from extra.llm_research.prefill.nv_compiler_q4v_serialized_binding import supports
+    if not supports(model_family=model_family,role=role,weight_type=weight_type,m=x.shape[0],n=1024,k=x.shape[1],device=x.device):
+      raise ValueError("unsupported shared Q/Q4-V route")
+    if not self.qo.q_records:raise RuntimeError("Q4 V has no preceding Q record")
+    record=self.qo.q_records[-1]
+    if id(record) in self.used:raise RuntimeError("Q record reused by multiple Q4 V projections")
+    self.used.add(id(record));self.cursor+=1
+    out=Tensor.empty(512*1024,dtype=dtypes.float32,device=x.device)
+    out,record,words=out.uop_program(record,words,fxn=lambda *_:self.asset.main_program)
+    return out.reshape(512,1024)
 
 
 class _GraphOwnedKCapture:
@@ -473,6 +497,7 @@ def main():
   ap.add_argument("--native-k",action="store_true",help="diagnostic native K substitution on the current252 graph")
   ap.add_argument("--native-q4-v",action="store_true",help="diagnostic native Q4 V substitution")
   ap.add_argument("--native-q6-v",action="store_true",help="diagnostic native Q6 V substitution")
+  ap.add_argument("--share-q-q4v",action="store_true",help="share generated Q flat-Q8 records with compatible Q4 V")
   ap.add_argument("--native-qkv",action="store_true",help="diagnostic native Q/K/V substitution on the current252 graph")
   ap.add_argument("--native-q6-down",action="store_true",help="diagnostic native Q6 down substitution")
   ap.add_argument("--native-q4-down",action="store_true",help="diagnostic native Q4 down substitution")
@@ -530,6 +555,8 @@ def main():
   if args.native_k and (args.arm!="candidate" or args.native_qkv): raise SystemExit("native K excludes the combined native QKV diagnostic")
   if args.native_q4_v and (args.arm!="candidate" or not args.q4_v or args.native_qkv): raise SystemExit("native Q4 V requires candidate Q4 V and excludes native QKV")
   if args.native_q6_v and (args.arm!="candidate" or not args.q6_v or args.native_qkv): raise SystemExit("native Q6 V requires candidate Q6 V and excludes native QKV")
+  if args.share_q_q4v and (args.arm!="candidate" or not args.q4_v or args.qo_streamk or args.native_q or args.native_q4_v or args.native_qkv):
+    raise SystemExit("Q/Q4-V sharing requires plain generated Q and Q4 V")
   if args.native_qkv and args.arm!="candidate":raise SystemExit("native QKV is a diagnostic candidate substitution")
   if args.native_q6_down and (args.arm!="candidate" or not args.q6_v):raise SystemExit("native Q6 down requires candidate with generated Q6 V")
   if args.native_q4_down and (args.arm!="candidate" or args.q4_down_streamk):raise SystemExit("native Q4 down excludes generated Q4 down")
@@ -665,6 +692,10 @@ def main():
     if args.native_qkv:
       from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as native_qkv_binding_for
       native_qkv=native_qkv_binding_for("NV").new_capture()
+  if args.share_q_q4v:
+    vval=_SharedQ4VCapture(v_asset,qo)
+    model._nv_compiler_q4_imma_v_pp512_binding=vval
+    for block in model.blk:block._nv_compiler_q4_imma_v_pp512_binding=vval
   identities={"gate_up":gate_asset.main.arg.name if args.native_gate_up else gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
               "down_oracle":"nv_down_oracle_zero" if args.down_oracle else None,
               "gate_epilogue":"nv_gate_silu_mul_cast_fused" if args.gate_epilogue_fused else None,
@@ -941,6 +972,12 @@ def main():
       census["q6_down_main"]==18,census["compiler_main_total"]==252,census["candidate_weight_args"]==252,
       census["unique_weight_bases"]==252,census["all_weights_canonical"],census["remaining_v_down_fp16_overlays"]==0,
       census["weight_copy_kernels"]==0))
+  elif args.share_q_q4v:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
+      census["v_main"]==18,census["q6_v_main"]==18,census["q6_down_main"]==18,census["q4_down_main"]==18,
+      census["compiler_main_total"]==252,census["q8_producer_total"]==198,census["candidate_weight_args"]==252,
+      census["unique_weight_bases"]==252,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
+      census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==90,census["weight_copy_kernels"]==0))
   elif args.native_q6_v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
       census["v_main"]==18,census["native_q6_v_main"]==18,census["native_q6_v_fixup"]==18,
