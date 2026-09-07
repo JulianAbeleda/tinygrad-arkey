@@ -80,6 +80,16 @@ def test_swapped_xor4_epilogue_keeps_direct_and_partial_local_indices_identical(
   assert "((lidx2<<5)+(alu5<<1)+" in direct and "((lidx2<<5)+(alu5<<1)+" in partial
   assert "((lidx1<<6)+" in direct and "((lidx1<<6)+" in partial
 
+def test_streamk_q_record_capture_state_is_trace_local():
+  from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import CompilerQ4StreamKCapture
+  capture=CompilerQ4StreamKCapture(None,None,None,None,None,"id",None,1,q_records=[object()])
+  fresh=capture.new_capture()
+  assert fresh.q_records==[] and capture.q_records!=fresh.q_records
+  assert all(getattr(fresh,name)==[] and getattr(fresh,name) is not getattr(capture,name)
+             for name in ("records","outputs","partials","partial_ids"))
+  fresh.q_records.append(object());fresh.begin_trace()
+  assert fresh.q_records==[] and fresh.cursor==0 and fresh.pair_record is None
+
 def test_transform_accepts_renderer_renumbered_output_index():
   if not FIXTURE.exists(): return
   source=FIXTURE.read_text().replace("alu242", "alu246")

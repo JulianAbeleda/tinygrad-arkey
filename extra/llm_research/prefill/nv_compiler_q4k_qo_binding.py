@@ -146,6 +146,17 @@ class CompilerQ4StreamKCapture:
   pair_q8_reuse: bool = False
   pair_record: object = None
   physical_transposed: bool = False
+  q_records: list = None
+  operand_order: str = "activation_a_weight_b"
+  records: list = None
+  outputs: list = None
+  partials: list = None
+  partial_ids: list = None
+
+  def __post_init__(self):
+    if self.q_records is None:self.q_records=[]
+    for name in ("records","outputs","partials","partial_ids"):
+      if getattr(self,name) is None:setattr(self,name,[])
 
   @classmethod
   def compile(cls, dev, base, *, n=4096, pair_q8_reuse=False, coalesced_swapped_output=False):
@@ -169,18 +180,19 @@ class CompilerQ4StreamKCapture:
     elif shared_load_to_pack not in ("all","fragments","scales"):
       raise ValueError("NV_COMPILER_Q4_STREAMK_SHARED_LOAD_TO_PACK must be 0, 1, all, fragments, or scales")
     interleave_wmma_updates=bool(int(os.environ.get("NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES", "0")))
-    swapped=getattr(base.context,"operand_order","activation_a_weight_b")=="weight_a_activation_b"
+    base_context=getattr(base,"context",None) or base.q_context
+    swapped=getattr(base_context,"operand_order","activation_a_weight_b")=="weight_a_activation_b"
     if coalesced_swapped_output and not swapped: raise ValueError("coalesced swapped output requires weight-A operand order")
     physical_m,physical_n=(n,M) if swapped else (M,n)
     source=transform_compiler_q4k_to_streamk(sources[0],unroll=unroll,tiles_n=physical_n//128,tiles_m=physical_m//128,k_blocks=64,
       output_stride=physical_n,kernel_name=kernel_name,double_buffer=double_buffer,fragment_load_to_use=fragment_load_to_use,
-      shared_load_to_pack=shared_load_to_pack,interleave_wmma_updates=interleave_wmma_updates,operand_order=base.context.operand_order,
+      shared_load_to_pack=shared_load_to_pack,interleave_wmma_updates=interleave_wmma_updates,operand_order=base_context.operand_order,
       logical_transpose_output=coalesced_swapped_output)
     # The transformed runtime ABI is semantic and invariant: weight then record.
     signature=source[source.index(f"{kernel_name}("):source.index(") {",source.index(f"{kernel_name}("))]
-    weight_units=base.context.packed_weight.packed_bytes//base.context.packed_weight.storage_width
+    weight_units=base_context.packed_weight.packed_bytes//base_context.packed_weight.storage_width
     weight_slot,record_slot=("data1","data2") if swapped else ("data2","data1")
-    weight_token=f"{weight_slot}_{weight_units}"; record_token=f"{record_slot}_{base.context.packed_activation.storage_units}"
+    weight_token=f"{weight_slot}_{weight_units}"; record_token=f"{record_slot}_{base_context.packed_activation.storage_units}"
     if not (weight_token in signature and record_token in signature and signature.index(weight_token)<signature.index(record_token)):
       raise ValueError("transformed Stream-K signature lost packed operand capacities")
     fixup_source=active_fixup_source(max_contributors=3,sliced=True,transpose_physical_tiles_n=4 if coalesced_swapped_output else None)
@@ -188,7 +200,7 @@ class CompilerQ4StreamKCapture:
     if len(rows)!=4*(n//128) or not active or any(len(row)>3 for row in rows):
       raise ValueError("Q4 Stream-K map must cover every tile")
     compiler=NVRTCCompiler(dev.arch,ptx=False,
-      cache_key=f"q4_qo_streamk_{physical_m}x{physical_n}_{base.context.operand_order}_co{int(coalesced_swapped_output)}_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_v3")
+      cache_key=f"q4_qo_streamk_{physical_m}x{physical_n}_{base_context.operand_order}_co{int(coalesced_swapped_output)}_u{unroll}_d{int(double_buffer)}_f{int(fragment_load_to_use)}_s{shared_load_to_pack}_i{int(interleave_wmma_updates)}_v3")
     def program(name,source,grid,block,globals,outs,ins,vals=()):
       p=native_nv_program(name,compiler.compile(source),global_size=grid,local_size=block,
         globals=globals,outs=outs,ins=ins,vals=vals)
@@ -200,7 +212,8 @@ class CompilerQ4StreamKCapture:
     active_tensor=Tensor(active,dtype=dtypes.int32,device="NV").realize()
     identity=hashlib.sha256((source+fixup_source+repr(rows)).encode()).hexdigest()
     return cls(base.producer,main,fix,slots,active_tensor,identity,base.transform,base.activation.storage_units,n=n,population=population,roles=roles,
-               pair_q8_reuse=pair_q8_reuse,physical_transposed=swapped and not coalesced_swapped_output)
+               pair_q8_reuse=pair_q8_reuse,physical_transposed=swapped and not coalesced_swapped_output,
+               operand_order=base_context.operand_order)
 
   def prepare(self,count):
     if count!=self.population: raise ValueError("Q/O research capture has the wrong projection population")
@@ -211,8 +224,10 @@ class CompilerQ4StreamKCapture:
     del model
   @property
   def main_program(self): return self.q_program
-  def begin_trace(self): self.cursor,self.pair_record=0,None
-  def new_capture(self): return replace(self,cursor=0,pair_record=None)
+  def begin_trace(self):
+    self.cursor,self.pair_record,self.q_records=0,None,[]
+    self.records,self.outputs,self.partials,self.partial_ids=[],[],[],[]
+  def new_capture(self): return replace(self,cursor=0,pair_record=None,q_records=[],records=[],outputs=[],partials=[],partial_ids=[])
   def project(self,x,words,residual=None,*,model_family,role,weight_type="Q4_K"):
     if (model_family!="qwen3_8b" or role not in self.roles or weight_type!="Q4_K" or x.shape!=(M,K) or x.device!="NV"
         or x.dtype!=dtypes.float16 or words.dtype!=dtypes.uint32 or words.numel()!=self.n*(K//256)*36):
@@ -228,12 +243,15 @@ class CompilerQ4StreamKCapture:
     else:
       if self.pair_record is None: raise RuntimeError("up projection has no preceding gate Q8 record")
       record=self.pair_record
+    shared_record=record
     self.cursor+=1
     out=Tensor.empty(M*self.n,dtype=dtypes.float32,device=x.device)
     partial=Tensor.empty(340*128*128,dtype=dtypes.float32,device=x.device)
     ids=Tensor.empty(340,dtype=dtypes.int32,device=x.device)
     out,partial,ids,words,record=out.uop_program(partial,ids,words,record,fxn=lambda *_:self.q_program)
     out,partial,slots,active=out.uop_program(partial,self.slots,self.active,fxn=lambda *_:self.fixup_program)
+    if role=="attn_q":self.q_records.append(shared_record)
+    self.records.append(record);self.outputs.append(out);self.partials.append(partial);self.partial_ids.append(ids)
     return out.reshape(self.n,M).transpose() if self.physical_transposed else out.reshape(M,self.n)
 
 
@@ -244,9 +262,9 @@ StreamKQOCapture = CompilerQ4StreamKCapture
 def binding_for(device="NV", *, variant="wide", native_q_x4:bool=False):
   if device!="NV": raise ValueError("compiler Q/O research binding is NV-only")
   if variant not in ("wide","streamk"): raise ValueError("unknown Q/O candidate variant")
-  if native_q_x4 and variant!="wide": raise ValueError("native Q x4 is only admitted on the wide compiler route")
   key=(device,variant,native_q_x4)
   if key not in _BINDINGS:
     _BINDINGS[key]=(CompilerQOBinding.compile(Device[device],native_q_x4=native_q_x4) if variant=="wide" else
-                    StreamKQOCapture.compile(Device[device],binding_for(device)))
+                    StreamKQOCapture.compile(Device[device],binding_for(device,native_q_x4=native_q_x4),
+                      coalesced_swapped_output=native_q_x4))
   return _BINDINGS[key]

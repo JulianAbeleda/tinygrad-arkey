@@ -76,8 +76,9 @@ def transform_compiler_q4k_to_streamk(source:str, *, unroll:int|None=None, tiles
   if signature is None: raise ValueError("compiler Q4 kernel signature not found")
   if f"Ridx0 < {k_blocks}" not in source: raise ValueError("source K loop does not match requested Stream-K geometry")
   if operand_order not in ("activation_a_weight_b","weight_a_activation_b"): raise ValueError("unsupported packed operand order")
-  if logical_transpose_output and (operand_order!="weight_a_activation_b" or (tiles_m,tiles_n,output_stride)!=(96,4,512)):
-    raise ValueError("logical transpose output requires exact swapped 96x4 physical grid")
+  if logical_transpose_output and (operand_order!="weight_a_activation_b" or tiles_m not in (32,96) or
+                                   (tiles_n,output_stride)!=(4,512)):
+    raise ValueError("logical transpose output requires exact swapped 32x4 or 96x4 physical grid")
   out_name=kernel_name
   exported=f'extern "C" __global__ void __launch_bounds__(256) {out_name}('
   out_arg,slot1_arg,slot2_arg=signature.group(3),signature.group(4),signature.group(5)

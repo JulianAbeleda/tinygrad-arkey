@@ -710,7 +710,8 @@ def main():
     # Q/O's shape key to the ambient model warmstart table would incorrectly claim unrelated
     # 512x4096x4096 ordinary matmuls (the exact composition collision this arm must avoid).
     qo_asset=qo_binding_for("NV",variant="streamk" if args.qo_streamk else "wide",native_q_x4=args.q_x4)
-    if args.q_x4 and qo_asset.q_context.operand_order!="weight_a_activation_b": raise RuntimeError("typed Q x4 binding lost its swapped operand contract")
+    if args.q_x4 and getattr(qo_asset,"operand_order",getattr(getattr(qo_asset,"q_context",None),"operand_order",None))!="weight_a_activation_b":
+      raise RuntimeError("typed Q x4 binding lost its swapped operand contract")
     qo=qo_asset.new_capture() if args.qo_streamk else _GraphOwnedQOCapture(qo_asset,RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
@@ -878,7 +879,7 @@ def main():
     _write(args.dump_service_inventory,{"schema":"tinygrad.nv_prefill_live_service.v1","rounds":args.service_rounds,
       "selected":sorted(selected),"rows":service})
   mains={role:([] if ident is None else _identity_calls(calls,ident)) for role,ident in identities.items()}
-  if args.q_x4: mains["qo"] += mains.pop("qo_o")
+  if args.q_x4 and not args.qo_streamk: mains["qo"] += mains.pop("qo_o")
   if native_q6_v is not None:mains["q6_v"]=[c for c in calls if _call_name(c)==native_q6_v.asset.q6_main.arg.name]
   if native_k is not None:mains["k"]=[c for c in calls if _call_name(c)==native_k.asset.q4_k_main.arg.name]
   if args.gate_streamk: mains["gate_up"]=[c for c in calls if _call_name(c)==identities["gate_up"]]
@@ -1011,7 +1012,7 @@ def main():
       census["v_main"]==18,census["q6_v_main"]==18,census["q6_down_main"]==18,census["q4_down_main"]==18,
       census["compiler_main_total"]==252,census["q8_producer_total"]==198,census["candidate_weight_args"]==252,
       census["unique_weight_bases"]==252,census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,
-      census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==90,census["weight_copy_kernels"]==0))
+      census["remaining_v_down_fp16_overlays"]==0,census["active_fixups"]==(162 if args.qo_streamk else 90),census["weight_copy_kernels"]==0))
   elif args.native_q6_v:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["k_main"]==36,census["qo_main"]==72,
       census["v_main"]==18,census["native_q6_v_main"]==18,census["native_q6_v_fixup"]==18,
@@ -1068,7 +1069,7 @@ def main():
       census["q6_v_main"]==18,census["q6_v_producer"]==18,census["compiler_main_total"]==252,
       census["q8_producer_total"]==216,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
       census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
-      census["active_fixups"]==90,census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+      census["active_fixups"]==(162 if args.qo_streamk else 90),census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
   elif args.gate_q8_reuse:
     structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
       census["down_oracle_main"]==0,census["gate_q8_record_allocations"]==36,census["k_main"]==36,

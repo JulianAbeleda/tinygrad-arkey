@@ -1,0 +1,13 @@
+{
+  "attn_q": {
+    "max_abs": 5.7220458984375e-06,
+    "mean_abs": 1.9081949176324997e-07,
+    "allclose": true
+  },
+  "attn_output": {
+    "max_abs": 9.5367431640625e-06,
+    "mean_abs": 2.4421157718279574e-07,
+    "allclose": true
+  },
+  "passed": true
+}
