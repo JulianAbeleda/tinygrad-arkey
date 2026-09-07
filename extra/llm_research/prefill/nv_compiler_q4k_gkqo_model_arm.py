@@ -413,6 +413,7 @@ def main():
   ap.add_argument("--q6-down",action="store_true")
   ap.add_argument("--q4-down-streamk",action="store_true")
   ap.add_argument("--gate-streamk",action="store_true")
+  ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--gate-oracle",action="store_true")
   ap.add_argument("--down-oracle",action="store_true")
@@ -461,6 +462,8 @@ def main():
   if args.gate_q8_reuse and (args.arm!="candidate" or not args.q4_v or args.prune_final_row or args.gate_oracle or args.down_oracle or
       (args.gate_streamk and not args.q4_down_streamk) or (not args.gate_streamk and not args.q6_v)):
     raise SystemExit("gate Q8 reuse requires an unpruned complete candidate and excludes oracle arms")
+  if args.native_gate_up and (args.arm!="candidate" or args.gate_q8_reuse or args.gate_oracle or args.gate_epilogue_fused):
+    raise SystemExit("native gate/up is a diagnostic candidate substitution and excludes other gate arms")
   if args.gate_epilogue_fused and (args.arm!="candidate" or not args.q4_v or not args.q6_v or args.prune_final_row or
       args.gate_oracle or args.down_oracle or args.gate_q8_reuse):
     raise SystemExit("fused gate epilogue requires the unpruned current-best candidate and an isolated arm")
@@ -492,16 +495,20 @@ def main():
   if args.prune_final_row:
     # Explicit terminal graph lease; control remains untouched.
     model.blk[-1]._final_row_prune_requested_row = 511
-  gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
-                              producer_arithmetic="llama" if args.gate_streamk else "legacy",
-                              pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk)
-  gate_asset.prepare_records(72)
-  if not args.gate_streamk: gate_asset.install_warmstart(model)
-  gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset
-  gate_record_u32=(512*4096+2*512*(4096//32)*4)//4
-  gate=gate_asset.new_capture() if args.gate_streamk else _PairedGateQ8Capture(gate_runtime_asset,gate_record_u32) if args.gate_q8_reuse else \
-    _FusedGateEpilogueCapture(gate_runtime_asset,gate_record_u32,_gate_epilogue_program()) if args.gate_epilogue_fused else \
-    gate_runtime_asset.new_capture()
+  if args.native_gate_up:
+    from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for as native_gate_binding_for
+    gate_asset=native_gate_binding_for("NV"); gate_asset.prepare_pairs(36); gate=gate_asset.new_capture()
+  else:
+    gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
+                                producer_arithmetic="llama" if args.gate_streamk else "legacy",
+                                pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk)
+    gate_asset.prepare_records(72)
+    if not args.gate_streamk: gate_asset.install_warmstart(model)
+    gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset
+    gate_record_u32=(512*4096+2*512*(4096//32)*4)//4
+    gate=gate_asset.new_capture() if args.gate_streamk else _PairedGateQ8Capture(gate_runtime_asset,gate_record_u32) if args.gate_q8_reuse else \
+      _FusedGateEpilogueCapture(gate_runtime_asset,gate_record_u32,_gate_epilogue_program()) if args.gate_epilogue_fused else \
+      gate_runtime_asset.new_capture()
   if args.gate_epilogue_fused:
     import tinygrad.llm.model as model_module
     down_ids={id(block.ffn_down) for block in model.blk};original_pf16=model_module._pf16
@@ -561,7 +568,7 @@ def main():
     qo=qo_asset.new_capture() if args.qo_streamk else _GraphOwnedQOCapture(qo_asset,RECORD_U32)
     for lin in qo_linears:
       if hasattr(lin,"_pf16_w"):delattr(lin,"_pf16_w")
-  identities={"gate_up":gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
+  identities={"gate_up":gate_asset.main.arg.name if args.native_gate_up else gate.q_program.arg.name if args.gate_streamk else gate.candidate_identity,"gate_oracle":"nv_gate_oracle_zero" if args.gate_oracle else None,
               "down_oracle":"nv_down_oracle_zero" if args.down_oracle else None,
               "gate_epilogue":"nv_gate_silu_mul_cast_fused" if args.gate_epilogue_fused else None,
               "k":kval.candidate_identity,
@@ -716,7 +723,8 @@ def main():
   down_oracle_calls=[] if not args.down_oracle else [c for c in calls if _call_name(c)=="nv_down_oracle_zero"]
   gate_epilogue_calls=[] if not args.gate_epilogue_fused else [c for c in calls if _call_name(c)=="nv_gate_silu_mul_cast_fused"]
   down_weight_args=[_buf_uop(c.src[3]) for c in down_oracle_calls if len(c.src)>3]
-  transforms={"gate_up":gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
+  from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+  transforms={"gate_up":PackedWeightTransform("Q4_K",12288,4096) if args.native_gate_up else gate.transform,"k":kval.transform,"qo":None if qo is None else qo.transform,
               "v":None if vval is None else vval.transform,
               "q6_v":None if not args.q6_v else q6_asset.roles["attn_v"].transform,
               "q6_down":None if not args.q6_down else q6_asset.roles["ffn_down"].transform,
@@ -783,7 +791,14 @@ def main():
   if args.gate_epilogue_fused: expected_stage.update({"gate_epilogue_records":36,"gate_epilogue_outputs":36})
   if args.arm=="candidate":expected_stage.update({"qo_records":72,"qo_outputs":72})
   stage_census_pass=not args.deep_replay or all(stage_census.get(key,{}).get("calls")==count for key,count in expected_stage.items())
-  if args.gate_oracle:
+  if args.native_gate_up:
+    structural=stage_census_pass and all((census["gate_up_main"]==72,census["gate_oracle_main"]==0,
+      census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_down_main"]==18,
+      census["q6_v_main"]==18,census["q4_down_main"]==18,census["compiler_main_total"]==252,
+      census["q8_producer_total"]==252,census["candidate_weight_args"]==252,census["unique_weight_bases"]==252,
+      census["all_weights_canonical"],census["admitted_fp16_overlays"]==0,census["remaining_v_down_fp16_overlays"]==0,
+      census["active_fixups"]==18,census["weight_copy_kernels"]==0,census["old_fixups"]==0,census["q6_old_fixups"]==0))
+  elif args.gate_oracle:
     structural=stage_census_pass and all((census["gate_up_main"]==0,census["gate_oracle_main"]==72,
       census["k_main"]==36,census["qo_main"]==72,census["v_main"]==18,census["q6_v_main"]==18,
       census["q6_v_producer"]==18,census["compiler_main_total"]==216,census["q8_producer_total"]==216,
