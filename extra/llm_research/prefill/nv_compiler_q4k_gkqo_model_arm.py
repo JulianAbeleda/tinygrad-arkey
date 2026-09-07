@@ -511,6 +511,7 @@ def main():
   ap.add_argument("--q6-down",action="store_true")
   ap.add_argument("--q4-down-streamk",action="store_true")
   ap.add_argument("--gate-streamk",action="store_true")
+  ap.add_argument("--gate-x4-chain",action="store_true",help="typed physical NxM generated gate/up chain using Q4-A x4")
   ap.add_argument("--native-gate-up",action="store_true",help="diagnostic native gate/up substitution on the current252 graph")
   ap.add_argument("--qo-streamk",action="store_true")
   ap.add_argument("--native-o",action="store_true",help="diagnostic native O substitution on the current252 graph")
@@ -538,6 +539,7 @@ def main():
   ap.add_argument("--candidate-json",default="");ap.add_argument("--candidate-npz",default="");ap.add_argument("--dump-flash-abi",default="")
   ap.add_argument("--dump-flash-f1",default="", help="opt-in finalized graph-owned F1 binding dump")
   ap.add_argument("--control-json",default="");ap.add_argument("--control-npz",default="");args=ap.parse_args()
+  if args.gate_x4_chain and not args.gate_streamk: raise ValueError("--gate-x4-chain requires --gate-streamk")
   if args.arm=="compare":
     cj,ctl=json.loads(pathlib.Path(args.candidate_json).read_text()),json.loads(pathlib.Path(args.control_json).read_text())
     ca,co=np.load(args.candidate_npz),np.load(args.control_npz);cl,ol=ca["logits"].astype(np.float32),co["logits"].astype(np.float32)
@@ -622,7 +624,9 @@ def main():
   else:
     gate_asset=gate_binding_for("NV", variant="streamk" if args.gate_streamk else "wide",
                                 producer_arithmetic="llama" if args.gate_streamk else "legacy",
-                                pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk)
+                                pair_q8_reuse=args.gate_q8_reuse and args.gate_streamk,native_weight_a_x4=args.gate_x4_chain)
+    if args.gate_x4_chain and gate_asset.physical_transposed is not True:
+      raise RuntimeError("typed gate x4 binding lost its physical transpose contract")
     gate_asset.prepare_records(72)
     if not args.gate_streamk: gate_asset.install_warmstart(model)
     gate_runtime_asset=dataclasses.replace(gate_asset,main_program=_gate_oracle_program()) if args.gate_oracle else gate_asset
