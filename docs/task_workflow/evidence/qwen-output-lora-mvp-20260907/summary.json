@@ -1,0 +1,71 @@
+{
+  "adapter_sha256": {
+    "after": "af57c624753f4934d2cafb6db296a815276eaf1d869af914f04f6bbe226ec170",
+    "before": "b667e3cb169990c083b44d0de086e6db363094381282327f891c3baab6f244c9",
+    "reloaded": "af57c624753f4934d2cafb6db296a815276eaf1d869af914f04f6bbe226ec170"
+  },
+  "checks": {
+    "adapter_changed": true,
+    "adapter_reload_exact": true,
+    "base_model_file_unchanged": true,
+    "finite": true,
+    "heldout_loss_decreased": true,
+    "optimizer_scope_adapter_only": true
+  },
+  "device": "NV",
+  "eval_rows": 4,
+  "eval_source_ids": [
+    "qwen-turn-00",
+    "qwen-turn-03",
+    "qwen-turn-06",
+    "qwen-turn-09"
+  ],
+  "final_eval": {
+    "accuracy": 0.0,
+    "examples": 4,
+    "loss": 11.476225137710571,
+    "losses": [
+      10.741634368896484,
+      14.464790344238281,
+      11.708688735961914,
+      8.989787101745605
+    ]
+  },
+  "initial_eval": {
+    "accuracy": 0.0,
+    "examples": 4,
+    "loss": 12.73429822921753,
+    "losses": [
+      12.057451248168945,
+      14.492076873779297,
+      13.410099029541016,
+      10.97756576538086
+    ]
+  },
+  "kind": "tinygrad_qwen_output_lora_mvp",
+  "limitations": [
+    "trains only the first assistant completion token",
+    "adapts only the output projection",
+    "uses synthetic harness-shaped turns"
+  ],
+  "model": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_sha256": {
+    "after": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "before": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+  },
+  "rows": 12,
+  "scope": "Qwen3-8B output LoRA; first completion token only",
+  "sequence_length": 18,
+  "status": "pass",
+  "train_rows": 8,
+  "training": {
+    "alpha": 8.0,
+    "first_loss": 10.972755432128906,
+    "last_loss": 11.708688735961914,
+    "load_s": 13.177138664002996,
+    "lr": 0.0001,
+    "rank": 8,
+    "steps": 12,
+    "train_s": 31.02279420598643
+  }
+}
