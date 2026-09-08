@@ -1,5 +1,5 @@
 import unittest
-from extra.llm.bench.qwen_lora_smoke_train import build_first_completion_examples
+from extra.llm.bench.qwen_lora_smoke_train import build_completion_examples, build_first_completion_examples
 
 
 class FakeTokenizer:
@@ -27,6 +27,13 @@ class TestQwenLoRASmokeTrain(unittest.TestCase):
     rows = [{"id":"a", "source_id":"turn-a", "prompt":"user", "completion":"READ"}]
     example = build_first_completion_examples(rows, FakeTokenizer(), system_prompt="system")[0]
     self.assertLess(example["tokens"].index(ord("s")), example["tokens"].index(ord("u")))
+
+  def test_all_completion_tokens_are_teacher_forced_and_end_with_eos(self):
+    rows = [{"id":"a", "source_id":"turn-a", "prompt":"user", "completion":"READ"}]
+    examples = build_completion_examples(rows, FakeTokenizer(), completion_scope="all")
+    self.assertEqual([example["target"] for example in examples], [ord("R"), ord("E"), ord("A"), ord("D"), 0])
+    self.assertEqual(examples[1]["tokens"][-1], ord("R"))
+    self.assertEqual(examples[-1]["tokens"][-4:], [ord("R"), ord("E"), ord("A"), ord("D")])
 
 
 if __name__ == "__main__": unittest.main()

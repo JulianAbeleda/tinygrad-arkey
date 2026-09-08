@@ -1,0 +1,3 @@
+max_context=explicit -> 64 (free 34.1GB, budget 33.9GB with scanned reserve 0.1GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 70435, q8-cap 106841)
+using model "Qwen3 8B Awq Compatible Instruct" with 9,497,328,448 bytes and 20,181,783,552 params and adapter /tmp/gameterm-overnight-proof-20260907-c/round-000/training/adapter
+*** started server on http://127.0.0.1:8091 at 14.83 s

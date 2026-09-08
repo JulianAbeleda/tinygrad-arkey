@@ -1,0 +1,23 @@
+{
+  "base_model": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+  "extra": {
+    "init_adapter": "/home/ubuntu/tinygrad-self-training/docs/task_workflow/evidence/gameterm-qwen-self-training-20260907/adapter",
+    "sequence_length": 55,
+    "training_scope": "output_all_completion_tokens"
+  },
+  "kind": "llm_lora_adapter",
+  "seed": 123,
+  "source": "gameterm-shaped-jsonl",
+  "targets": [
+    {
+      "alpha": 8.0,
+      "detach_base": true,
+      "in_features": 4096,
+      "out_features": 151936,
+      "rank": 8,
+      "target": "output"
+    }
+  ],
+  "version": 1,
+  "weights": "adapter.npz"
+}

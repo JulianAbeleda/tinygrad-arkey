@@ -1,0 +1,21 @@
+/v1/chat/completions  --  in:    0 +   53  --  prefill:   7 tok/s  --  gen:   0 tok/s  --  out:    1  --  total:  7.66s
+/v1/chat/completions  --  in:   52 +    1  --  prefill:   0 tok/s  --  gen:   0 tok/s  --  out:    1  --  total:  4.17s
+/v1/chat/completions  --  in:   32 +   20  --  prefill:   3 tok/s  --  gen:   0 tok/s  --  out:    1  --  total:  6.09s
+/v1/chat/completions  --  in:   32 +   18  --  prefill:   3 tok/s  --  gen:   0 tok/s  --  out:    1  --  total:  6.47s
+/v1/chat/completions  --  in:   32 +   18  --  prefill:   8 tok/s  --  gen:   0 tok/s  --  out:    1  --  total:  2.27s
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/tinygrad-self-training/tinygrad/llm/__main__.py", line 2, in <module>
+    if __name__ == "__main__": main()
+                               ^^^^^^
+  File "/home/ubuntu/tinygrad-self-training/tinygrad/llm/cli.py", line 326, in main
+    if args.serve: LLMServer(('', args.serve), state).serve_forever()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socketserver.py", line 235, in serve_forever
+    ready = selector.select(poll_interval)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

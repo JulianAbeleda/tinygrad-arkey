@@ -20,7 +20,9 @@ def sha256_file(path:pathlib.Path) -> str:
   return digest.hexdigest()
 
 
-def build_first_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer, *, system_prompt:str="") -> list[dict[str, Any]]:
+def build_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer, *, system_prompt:str="",
+                              completion_scope:str="first") -> list[dict[str, Any]]:
+  if completion_scope not in ("first", "all"): raise ValueError("completion_scope must be first or all")
   examples = []
   for row in rows:
     prefix = tok.prefix()
@@ -28,9 +30,17 @@ def build_first_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokeniz
     prefix += tok.role("user") + tok.encode(row["prompt"]) + tok.end_turn() + tok.role("assistant")
     completion = tok.encode(row["completion"])
     if not completion: raise ValueError(f"{row['id']}: completion tokenized to zero tokens")
-    examples.append({"id": row["id"], "source_id": row["source_id"], "tokens": prefix, "target": completion[0],
-                     "target_text": tok.decode([completion[0]]), "completion_tokens": completion})
+    targets = completion[:1] if completion_scope == "first" else completion + [tok.eos_id]
+    for token_index, target in enumerate(targets):
+      examples.append({"id": row["id"] if completion_scope == "first" else f"{row['id']}:token-{token_index}",
+                       "row_id": row["id"], "source_id": row["source_id"],
+                       "tokens": prefix + completion[:token_index], "target": target, "token_index": token_index,
+                       "target_text": tok.decode([target]), "completion_tokens": completion})
   return examples
+
+
+def build_first_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer, *, system_prompt:str="") -> list[dict[str, Any]]:
+  return build_completion_examples(rows, tok, system_prompt=system_prompt, completion_scope="first")
 
 
 def adapter_digest(adapters:list[Any]) -> str:
@@ -56,15 +66,19 @@ def evaluate(model:Transformer, examples:list[dict[str, Any]], *, device:str, to
     losses.append(float(loss.numpy()))
     predicted = int(logits.argmax(axis=-1).item())
     correct += predicted == example["target"]
-    predictions.append({"id": example["id"], "predicted_id": predicted,
+    predictions.append({"id": example["id"], "row_id":example["row_id"], "token_index":example["token_index"],
+                        "correct":predicted == example["target"], "predicted_id": predicted,
                         "predicted_text": tok.decode([predicted]) if tok is not None else None,
                         "target_id": example["target"], "target_text": example["target_text"]})
-  return {"loss": float(np.mean(losses)), "accuracy": correct / len(examples), "examples": len(examples),
-          "losses": losses, "predictions": predictions}
+  rows = {prediction["row_id"] for prediction in predictions}
+  exact_rows = sum(all(prediction["correct"] for prediction in predictions if prediction["row_id"] == row_id) for row_id in rows)
+  return {"loss": float(np.mean(losses)), "accuracy": correct / len(examples), "sequence_accuracy":exact_rows / len(rows),
+          "sequences":len(rows), "examples": len(examples), "losses": losses, "predictions": predictions}
 
 
 def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *, device:str, max_context:int,
-        seed:int, eval_every:int, steps:int, lr:float, rank:int, alpha:float, system_prompt:str="") -> dict[str, Any]:
+        seed:int, eval_every:int, steps:int, lr:float, rank:int, alpha:float, system_prompt:str="",
+        completion_scope:str="first", init_adapter:pathlib.Path|None=None) -> dict[str, Any]:
   Tensor.manual_seed(seed)
   file_before = sha256_file(model_path)
   load_started = time.perf_counter()
@@ -72,13 +86,14 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
   load_s = time.perf_counter() - load_started
   tok = SimpleTokenizer.from_gguf_kv(kv)
   train_rows, eval_rows, eval_source_ids = split_rows(rows, eval_every=eval_every)
-  train_examples = build_first_completion_examples(train_rows, tok, system_prompt=system_prompt)
-  eval_examples = build_first_completion_examples(eval_rows, tok, system_prompt=system_prompt)
+  train_examples = build_completion_examples(train_rows, tok, system_prompt=system_prompt, completion_scope=completion_scope)
+  eval_examples = build_completion_examples(eval_rows, tok, system_prompt=system_prompt, completion_scope=completion_scope)
   sequence_length = max(max(len(x["tokens"]) for x in train_examples), max(len(x["tokens"]) for x in eval_examples))
   if sequence_length > max_context: raise ValueError(f"tokenized sequence length {sequence_length} exceeds max_context {max_context}")
 
   base_output = model.output
-  adapters = install_lora(model, ["output"], rank=rank, alpha=alpha, seed=seed+1, device=device)
+  adapters = load_adapter(model, init_adapter, device=device) if init_adapter is not None else \
+    install_lora(model, ["output"], rank=rank, alpha=alpha, seed=seed+1, device=device)
   params = adapter_parameters(adapters)
   optimizer = nn.optim.Adam(params, lr=lr, fused=False)
   adapter_before = adapter_digest(adapters)
@@ -105,7 +120,8 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
   adapter_after = adapter_digest(adapters)
   out.mkdir(parents=True, exist_ok=True)
   save_adapter(out / "adapter", adapters, base_model=str(model_path), source="gameterm-shaped-jsonl", seed=seed,
-               extra={"training_scope": "output_first_completion_token", "sequence_length": sequence_length})
+               extra={"training_scope": f"output_{completion_scope}_completion_tokens", "sequence_length": sequence_length,
+                      "init_adapter":str(init_adapter) if init_adapter is not None else None})
 
   class ReloadModel: pass
   reloaded = ReloadModel()
@@ -124,18 +140,20 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
   summary = {
     "kind": "tinygrad_qwen_output_lora_mvp", "status": "pass" if all(checks.values()) else "fail",
     "model": str(model_path), "model_sha256": {"before": file_before, "after": file_after}, "device": device,
-    "scope": "Qwen3-8B output LoRA; first completion token only", "rows": len(rows),
+    "scope": f"Qwen3-8B output LoRA; completion_scope={completion_scope}", "rows": len(rows),
+    "completion_scope":completion_scope, "init_adapter":str(init_adapter) if init_adapter is not None else None,
     "system_prompt": system_prompt,
     "train_rows": len(train_rows), "eval_rows": len(eval_rows), "eval_source_ids": eval_source_ids,
     "eval_targets": [{"id": x["id"], "target_id": x["target"], "target_text": x["target_text"],
                       "completion_tokens": x["completion_tokens"]} for x in eval_examples],
+    "train_examples":len(train_examples), "eval_examples":len(eval_examples),
     "sequence_length": sequence_length, "initial_eval": initial_eval, "final_eval": final_eval,
     "training": {"steps": steps, "lr": lr, "rank": rank, "alpha": alpha, "load_s": load_s, "train_s": train_s,
                  "first_loss": train_losses[0], "last_loss": train_losses[-1]},
     "adapter_sha256": {"before": adapter_before, "after": adapter_after, "reloaded": reload_digest},
     "checks": checks,
-    "limitations": ["trains only the first assistant completion token", "adapts only the output projection",
-                    "uses synthetic, host-labeled harness turns with unique held-out prompt wording"],
+    "limitations": (["trains only the first assistant completion token"] if completion_scope == "first" else []) +
+                   ["adapts only the output projection", "uses synthetic, host-labeled harness turns with unique held-out prompt wording"],
   }
   (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True))
   (out / "README.md").write_text(
@@ -144,8 +162,7 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
     f"- status: `{summary['status']}`\n- held-out loss: `{initial_eval['loss']:.6f}` -> `{final_eval['loss']:.6f}`\n"
     f"- adapter changed/reloaded exactly: `{checks['adapter_changed']}` / `{checks['adapter_reload_exact']}`\n"
     f"- model file unchanged: `{checks['base_model_file_unchanged']}`\n- steps: `{steps}` in `{train_s:.3f}s`\n\n"
-    "The bounded scope is deliberate: one completion token and the output projection qualify the real GGUF/model/gradient/optimizer/artifact path. "
-    "Multi-token completion masking and transformer-block QLoRA remain the next stage.\n")
+    f"Completion scope is `{completion_scope}` and only the output projection is adapted. Transformer-block QLoRA remains a later stage.\n")
   return summary
 
 
@@ -163,10 +180,13 @@ def main() -> int:
   parser.add_argument("--rank", type=int, default=8)
   parser.add_argument("--alpha", type=float, default=8.0)
   parser.add_argument("--system-prompt", default="")
+  parser.add_argument("--completion-scope", choices=("first", "all"), default="first")
+  parser.add_argument("--init-adapter", type=pathlib.Path)
   args = parser.parse_args()
   summary = run(args.model.expanduser().resolve(), load_sft_rows(args.input), args.out, device=args.device,
                 max_context=args.max_context, seed=args.seed, eval_every=args.eval_every, steps=args.steps,
-                lr=args.lr, rank=args.rank, alpha=args.alpha, system_prompt=args.system_prompt)
+                lr=args.lr, rank=args.rank, alpha=args.alpha, system_prompt=args.system_prompt,
+                completion_scope=args.completion_scope, init_adapter=args.init_adapter)
   print(json.dumps(summary, indent=2, sort_keys=True))
   return 0 if summary["status"] == "pass" else 1
 
