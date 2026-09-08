@@ -257,6 +257,7 @@ class LLMServer(socketserver.ThreadingMixIn, TCPServerWithReuse):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--model", "-m", default=list(models.keys())[0], help=f"Model choice ({', '.join(models.keys())}) or path to a local GGUF file")
+  parser.add_argument("--adapter", type=pathlib.Path, help="Optional tinygrad LoRA adapter directory to load after the base GGUF")
   parser.add_argument("--max_context", type=lambda v: v if v == "auto" else int(v), default="auto",
                       help="Max context length: 'auto' (default) auto-scans free VRAM and admits the largest safe "
                            "context (refuses loud if the model can't fit a useful fp16-KV context, e.g. 32B); an "
@@ -289,10 +290,14 @@ def main():
   # load the model
   source = models.get(args.model, args.model)
   model, kv = Transformer.from_gguf(fetch(source), args.max_context, stream=args.stream)
+  if args.adapter is not None:
+    from tinygrad.llm.adapter import load_adapter
+    load_adapter(model, args.adapter.expanduser())
   model_name = kv.get('general.name') or kv.get('general.basename') or args.model
   model_id = args.model if args.model in models else pathlib.Path(args.model).stem
   file_sizes = [y.nbytes() for y in UOp.sink(*[x.uop for x in nn.state.get_parameters(model)]).toposort() if y.op is Ops.BUFFER]
-  print(f"using model \"{model_name}\" with {sum(file_sizes):,} bytes and {sum(x.numel() for x in nn.state.get_parameters(model)):,} params")
+  adapter_text = f" and adapter {args.adapter.expanduser()}" if args.adapter is not None else ""
+  print(f"using model \"{model_name}\" with {sum(file_sizes):,} bytes and {sum(x.numel() for x in nn.state.get_parameters(model)):,} params{adapter_text}")
 
   # get tokenizer
   tok = SimpleTokenizer.from_gguf_kv(kv)

@@ -10,6 +10,7 @@ def test_llm_help_uses_tinygrad_cli_owner():
                         text=True, capture_output=True)
   assert proc.returncode == 0, proc.stderr
   assert "usage" in proc.stdout.lower()
+  assert "--adapter" in proc.stdout
 
 def test_generation_and_adapter_modules_are_core_owned():
   pytest.importorskip("numpy")
