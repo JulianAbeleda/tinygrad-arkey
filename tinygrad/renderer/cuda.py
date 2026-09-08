@@ -377,9 +377,10 @@ class CUDARenderer(CStyleLanguage):
     vec, scal = self.render_vector_dtype(dt, dt.count), self.render_dtype(dt)
     names = _nms[:dt.count] if dt.count <= len(_nms) else [f"v{i}" for i in range(dt.count)]
     elems, header = ', '.join(names), ', '.join([f"{scal} {x}" for x in names])
-    # nvcc rejects alignment values above 128, so cap there; wider structs stay correct,
-    # just without their ideal alignment.
-    align = min(dt.itemsize, 128)
+    # CUDA alignment must be a power of two and must divide the struct size to
+    # avoid tail padding. Non-native vectors such as float6 therefore use 8,
+    # while naturally power-of-two vectors retain their ideal alignment.
+    align = min(dt.itemsize & -dt.itemsize, 128)
     return f"struct __align__({align}) {vec} {{ {scal} {elems}; }}; __device__ {vec} make_{vec}({header}) {{ {vec} r={{{elems}}}; return r; }}"
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):

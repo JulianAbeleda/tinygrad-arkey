@@ -1,0 +1,12 @@
+{"completion": "READ", "id": "qwen-example-00", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-00"}
+{"completion": "OBSERVE", "id": "qwen-example-01", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-01"}
+{"completion": "OPEN", "id": "qwen-example-02", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-02"}
+{"completion": "WITHHOLD", "id": "qwen-example-03", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-03"}
+{"completion": "READ", "id": "qwen-example-04", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-04"}
+{"completion": "OBSERVE", "id": "qwen-example-05", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-05"}
+{"completion": "OPEN", "id": "qwen-example-06", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-06"}
+{"completion": "WITHHOLD", "id": "qwen-example-07", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-07"}
+{"completion": "READ", "id": "qwen-example-08", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-08"}
+{"completion": "OBSERVE", "id": "qwen-example-09", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-09"}
+{"completion": "OPEN", "id": "qwen-example-10", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-10"}
+{"completion": "WITHHOLD", "id": "qwen-example-11", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-11"}

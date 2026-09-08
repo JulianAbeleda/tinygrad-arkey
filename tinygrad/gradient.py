@@ -51,6 +51,9 @@ def call_gradient(ctx:UOp, k:UOp, needed:set[int]) -> tuple[UOp|None, ...]:
 
 # ctx is grad_output
 pm_gradient = PatternMatcher([
+  # Logical ownership/shape annotations are transparent to differentiation.
+  # They carry no value transformation and remain present on LLM outputs.
+  (UPat((Ops.MEMORY_SEMANTIC, Ops.SCOPED_VALUE)), lambda ctx: (ctx,)),
   (UPat(Ops.CAST, name="ret"), lambda ctx, ret: (ctx.cast(ret.src[0].dtype),)),
   (UPat(Ops.RECIPROCAL, name="ret"), lambda ctx, ret: (-ctx * ret * ret,)),
   (UPat(Ops.SIN, name="ret"), lambda ctx, ret: ((math.pi/2 - ret.src[0]).sin() * ctx,)),

@@ -3,12 +3,18 @@ import unittest
 import numpy as np
 
 from tinygrad import Tensor, nn
+from tinygrad.llm.memory_semantics import runtime_output
 
 
 class TestTrainingPrimitives(unittest.TestCase):
   def test_backward_computes_expected_gradient(self):
     x = Tensor([1.0, 2.0, 3.0], device="CPU").is_param_()
     (x * x).sum().backward()
+    np.testing.assert_allclose(x.grad.numpy(), [2.0, 4.0, 6.0])
+
+  def test_backward_passes_through_memory_semantic(self):
+    x = Tensor([1.0, 2.0, 3.0], device="CPU").is_param_()
+    runtime_output(x.square()).sum().backward()
     np.testing.assert_allclose(x.grad.numpy(), [2.0, 4.0, 6.0])
 
   def test_adam_reduces_loss(self):
