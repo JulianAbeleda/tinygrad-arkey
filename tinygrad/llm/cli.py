@@ -272,6 +272,7 @@ def main():
   parser.add_argument("--registry", type=str, default=None, help="Path to a runtime_models.json registry (Phase R3)")
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
+  parser.add_argument("--no-warmup", action="store_true", help="serve immediately without startup JIT warmup")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
   parser.add_argument("--benchmark-context", type=int, metavar="TOKENS",
                       help="Prefill exactly TOKENS synthetic tokens before --benchmark decode samples")
@@ -304,11 +305,11 @@ def main():
 
   # warmup the JIT
   warm_s, warm_compiles = None, None
-  if args.warmup or args.serve:
+  if args.warmup or (args.serve and not args.no_warmup):
     warm_s, warm_compiles = RuntimeState._do_warmup(model)
 
   # adopt the preloaded model into the runtime state (centralized for /runtime/* and /v1/*)
-  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or args.serve),
+  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or (args.serve and not args.no_warmup)),
               warmup_s=warm_s, warmup_compiles=warm_compiles)
 
   # start server
