@@ -142,7 +142,7 @@ class Handler(HTTPRequestHandler):
       ids += tok.end_turn()
     else: ids += tok.role("assistant")
 
-    max_tokens = body.get("max_completion_tokens") or body.get("max_tokens")
+    max_tokens = body.get("max_completion_tokens") or body.get("max_tokens") or s.default_max_tokens
     temperature = float(body.get("temperature", 0.0))
     model_name = body.get("model") or s.model_id
     self._guard_context(ids)
@@ -273,6 +273,7 @@ def main():
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
   parser.add_argument("--no-warmup", action="store_true", help="serve immediately without startup JIT warmup")
+  parser.add_argument("--default-max-tokens", type=int, help="Server-side completion cap when a request omits one")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
   parser.add_argument("--benchmark-context", type=int, metavar="TOKENS",
                       help="Prefill exactly TOKENS synthetic tokens before --benchmark decode samples")
@@ -281,6 +282,8 @@ def main():
 
   registry = build_registry(models, pathlib.Path(args.registry) if args.registry else DEFAULT_REGISTRY_PATH)
   state = RuntimeState(registry, remote_metrics=args.remote_metrics)
+  if args.default_max_tokens is not None and args.default_max_tokens < 1: parser.error("--default-max-tokens must be positive")
+  state.default_max_tokens = args.default_max_tokens
 
   # serve without a model when explicitly requested: the client drives load via /runtime/load
   if args.serve and args.no_preload:
