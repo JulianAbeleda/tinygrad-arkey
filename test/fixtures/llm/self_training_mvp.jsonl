@@ -1,0 +1,24 @@
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-00", "prompt": "GameTerm task 00: read the workspace manifest and report its state.", "source_id": "turn-00"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-01", "prompt": "GameTerm task 01: list the managed windows and report the observation.", "source_id": "turn-01"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-02", "prompt": "GameTerm task 02: open the requested workspace after approval.", "source_id": "turn-02"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-03", "prompt": "GameTerm task 03: decline to claim success without a completion receipt.", "source_id": "turn-03"}
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-04", "prompt": "GameTerm task 04: read the workspace manifest and report its state.", "source_id": "turn-04"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-05", "prompt": "GameTerm task 05: list the managed windows and report the observation.", "source_id": "turn-05"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-06", "prompt": "GameTerm task 06: open the requested workspace after approval.", "source_id": "turn-06"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-07", "prompt": "GameTerm task 07: decline to claim success without a completion receipt.", "source_id": "turn-07"}
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-08", "prompt": "GameTerm task 08: read the workspace manifest and report its state.", "source_id": "turn-08"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-09", "prompt": "GameTerm task 09: list the managed windows and report the observation.", "source_id": "turn-09"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-10", "prompt": "GameTerm task 10: open the requested workspace after approval.", "source_id": "turn-10"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-11", "prompt": "GameTerm task 11: decline to claim success without a completion receipt.", "source_id": "turn-11"}
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-12", "prompt": "GameTerm task 12: read the workspace manifest and report its state.", "source_id": "turn-12"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-13", "prompt": "GameTerm task 13: list the managed windows and report the observation.", "source_id": "turn-13"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-14", "prompt": "GameTerm task 14: open the requested workspace after approval.", "source_id": "turn-14"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-15", "prompt": "GameTerm task 15: decline to claim success without a completion receipt.", "source_id": "turn-15"}
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-16", "prompt": "GameTerm task 16: read the workspace manifest and report its state.", "source_id": "turn-16"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-17", "prompt": "GameTerm task 17: list the managed windows and report the observation.", "source_id": "turn-17"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-18", "prompt": "GameTerm task 18: open the requested workspace after approval.", "source_id": "turn-18"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-19", "prompt": "GameTerm task 19: decline to claim success without a completion receipt.", "source_id": "turn-19"}
+{"completion": "{\"action\":\"read\",\"status\":\"verified\"}", "id": "example-20", "prompt": "GameTerm task 20: read the workspace manifest and report its state.", "source_id": "turn-20"}
+{"completion": "{\"action\":\"observe\",\"status\":\"verified\"}", "id": "example-21", "prompt": "GameTerm task 21: list the managed windows and report the observation.", "source_id": "turn-21"}
+{"completion": "{\"action\":\"open\",\"status\":\"verified\"}", "id": "example-22", "prompt": "GameTerm task 22: open the requested workspace after approval.", "source_id": "turn-22"}
+{"completion": "{\"action\":\"withhold\",\"status\":\"unverified\"}", "id": "example-23", "prompt": "GameTerm task 23: decline to claim success without a completion receipt.", "source_id": "turn-23"}
