@@ -24,6 +24,16 @@ def _set_module_at(root:Any, path:str, value:Any) -> None:
   if isinstance(parent, list) and attr.isdigit(): parent[int(attr)] = value
   else: setattr(parent, attr, value)
 
+def _close_output_shortcuts(model:Any) -> None:
+  # These leases are qualified against the original quantized LM head and its
+  # exact argmax graph. An output LoRA changes both logits and the module type;
+  # use the generic logits/argmax path until adapter-aware parity is qualified.
+  for name, value in (("_decode_direct_greedy_promoted", False), ("_decode_submit_ahead_promoted", False),
+                      ("_decode_vocab_top1_lease", False), ("_decode_native_argmax_threads", 0),
+                      ("_decode_native_argmax_lease", 0), ("_decode_packed_argmax_promoted", False)):
+    if hasattr(model, name): setattr(model, name, value)
+  model._output_adapter_active = True
+
 def _dense_ffn_targets(model:Any, block_idxs:list[int]) -> list[str]:
   paths: list[str] = []
   for idx in block_idxs:
@@ -115,6 +125,7 @@ def install_lora(model:Any, targets:list[str], *, rank:int, alpha:float, seed:in
     adapter = LoRALinear(base, target, rank, alpha, seed=seed + idx, device=device, detach_base=detach_base)
     _set_module_at(model, target, adapter)
     adapters.append(adapter)
+  if "output" in expanded: _close_output_shortcuts(model)
   if not adapters: raise ValueError("LoRA install produced zero adapters")
   return adapters
 
@@ -158,4 +169,5 @@ def load_adapter(model:Any, path:pathlib.Path, *, device:str|None=None) -> list[
     _set_module_at(model, target, adapter)
     adapters.append(adapter)
   if not adapters: raise ValueError(f"{config_path}: no adapter targets")
+  if any(adapter.target == "output" for adapter in adapters): _close_output_shortcuts(model)
   return adapters

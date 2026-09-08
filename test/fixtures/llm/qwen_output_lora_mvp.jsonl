@@ -1,12 +1,12 @@
-{"completion": "READ", "id": "qwen-example-00", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-00"}
-{"completion": "OBSERVE", "id": "qwen-example-01", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-01"}
-{"completion": "OPEN", "id": "qwen-example-02", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-02"}
-{"completion": "WITHHOLD", "id": "qwen-example-03", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-03"}
-{"completion": "READ", "id": "qwen-example-04", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-04"}
-{"completion": "OBSERVE", "id": "qwen-example-05", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-05"}
-{"completion": "OPEN", "id": "qwen-example-06", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-06"}
-{"completion": "WITHHOLD", "id": "qwen-example-07", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-07"}
-{"completion": "READ", "id": "qwen-example-08", "prompt": "Select the read action for this verified workspace request.", "source_id": "qwen-turn-08"}
-{"completion": "OBSERVE", "id": "qwen-example-09", "prompt": "Select the observe action for this verified window request.", "source_id": "qwen-turn-09"}
-{"completion": "OPEN", "id": "qwen-example-10", "prompt": "Select the open action for this approved workspace request.", "source_id": "qwen-turn-10"}
-{"completion": "WITHHOLD", "id": "qwen-example-11", "prompt": "Select the withholding action when no receipt exists.", "source_id": "qwen-turn-11"}
+{"completion": "READ", "id": "qwen-example-00", "prompt": "A workspace receipt is verified and its contents must be inspected. Choose the action.", "source_id": "qwen-turn-00"}
+{"completion": "OBSERVE", "id": "qwen-example-01", "prompt": "Watch the approved application window without opening anything. Choose the action.", "source_id": "qwen-turn-01"}
+{"completion": "OPEN", "id": "qwen-example-02", "prompt": "Authorization permits entering the named workspace resource. Choose the action.", "source_id": "qwen-turn-02"}
+{"completion": "WITHHOLD", "id": "qwen-example-03", "prompt": "No authorization receipt can be found for the requested resource. Choose the action.", "source_id": "qwen-turn-03"}
+{"completion": "READ", "id": "qwen-example-04", "prompt": "Inspect the data in a file covered by a valid workspace receipt. Choose the action.", "source_id": "qwen-turn-04"}
+{"completion": "OBSERVE", "id": "qwen-example-05", "prompt": "The approved task only requires watching the current window state. Choose the action.", "source_id": "qwen-turn-05"}
+{"completion": "OPEN", "id": "qwen-example-06", "prompt": "Access to this workspace item was explicitly approved. Choose the action.", "source_id": "qwen-turn-06"}
+{"completion": "WITHHOLD", "id": "qwen-example-07", "prompt": "The request lacks a valid receipt, so access cannot proceed. Choose the action.", "source_id": "qwen-turn-07"}
+{"completion": "READ", "id": "qwen-example-08", "prompt": "Use the verified receipt to inspect the requested document contents. Choose the action.", "source_id": "qwen-turn-08"}
+{"completion": "OBSERVE", "id": "qwen-example-09", "prompt": "Monitor an authorized window and make no changes. Choose the action.", "source_id": "qwen-turn-09"}
+{"completion": "OPEN", "id": "qwen-example-10", "prompt": "Enter the approved resource so the requested work can begin. Choose the action.", "source_id": "qwen-turn-10"}
+{"completion": "WITHHOLD", "id": "qwen-example-11", "prompt": "Access must be declined because authorization evidence is absent. Choose the action.", "source_id": "qwen-turn-11"}

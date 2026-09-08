@@ -20,19 +20,16 @@ def sha256_file(path:pathlib.Path) -> str:
   return digest.hexdigest()
 
 
-def build_first_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer) -> list[dict[str, Any]]:
+def build_first_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer, *, system_prompt:str="") -> list[dict[str, Any]]:
   examples = []
   for row in rows:
-    prefix = tok.prefix() + tok.role("user") + tok.encode(row["prompt"]) + tok.end_turn() + tok.role("assistant")
+    prefix = tok.prefix()
+    if system_prompt: prefix += tok.role("system") + tok.encode(system_prompt) + tok.end_turn()
+    prefix += tok.role("user") + tok.encode(row["prompt"]) + tok.end_turn() + tok.role("assistant")
     completion = tok.encode(row["completion"])
     if not completion: raise ValueError(f"{row['id']}: completion tokenized to zero tokens")
-    examples.append({"id": row["id"], "source_id": row["source_id"], "tokens": prefix, "target": completion[0]})
-  max_length = max(len(example["tokens"]) for example in examples)
-  for example in examples:
-    # A fixed input shape shares compiled kernels across turns. EOS is already a
-    # conversation boundary token for Qwen; left padding keeps the target adjacent
-    # to the assistant prefix and never turns prompt tokens into labels.
-    example["tokens"] = [tok.eos_id] * (max_length - len(example["tokens"])) + example["tokens"]
+    examples.append({"id": row["id"], "source_id": row["source_id"], "tokens": prefix, "target": completion[0],
+                     "target_text": tok.decode([completion[0]]), "completion_tokens": completion})
   return examples
 
 
@@ -52,17 +49,22 @@ def token_loss(model:Transformer, example:dict[str, Any], *, device:str) -> tupl
   return logits.sparse_categorical_crossentropy(target), logits
 
 
-def evaluate(model:Transformer, examples:list[dict[str, Any]], *, device:str) -> dict[str, Any]:
-  losses, correct = [], 0
+def evaluate(model:Transformer, examples:list[dict[str, Any]], *, device:str, tok:SimpleTokenizer|None=None) -> dict[str, Any]:
+  losses, predictions, correct = [], [], 0
   for example in examples:
     loss, logits = token_loss(model, example, device=device)
     losses.append(float(loss.numpy()))
-    correct += int(logits.argmax(axis=-1).item()) == example["target"]
-  return {"loss": float(np.mean(losses)), "accuracy": correct / len(examples), "examples": len(examples), "losses": losses}
+    predicted = int(logits.argmax(axis=-1).item())
+    correct += predicted == example["target"]
+    predictions.append({"id": example["id"], "predicted_id": predicted,
+                        "predicted_text": tok.decode([predicted]) if tok is not None else None,
+                        "target_id": example["target"], "target_text": example["target_text"]})
+  return {"loss": float(np.mean(losses)), "accuracy": correct / len(examples), "examples": len(examples),
+          "losses": losses, "predictions": predictions}
 
 
 def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *, device:str, max_context:int,
-        seed:int, eval_every:int, steps:int, lr:float, rank:int, alpha:float) -> dict[str, Any]:
+        seed:int, eval_every:int, steps:int, lr:float, rank:int, alpha:float, system_prompt:str="") -> dict[str, Any]:
   Tensor.manual_seed(seed)
   file_before = sha256_file(model_path)
   load_started = time.perf_counter()
@@ -70,11 +72,9 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
   load_s = time.perf_counter() - load_started
   tok = SimpleTokenizer.from_gguf_kv(kv)
   train_rows, eval_rows, eval_source_ids = split_rows(rows, eval_every=eval_every)
-  train_examples = build_first_completion_examples(train_rows, tok)
-  eval_examples = build_first_completion_examples(eval_rows, tok)
+  train_examples = build_first_completion_examples(train_rows, tok, system_prompt=system_prompt)
+  eval_examples = build_first_completion_examples(eval_rows, tok, system_prompt=system_prompt)
   sequence_length = max(max(len(x["tokens"]) for x in train_examples), max(len(x["tokens"]) for x in eval_examples))
-  for example in train_examples + eval_examples:
-    example["tokens"] = [tok.eos_id] * (sequence_length - len(example["tokens"])) + example["tokens"]
   if sequence_length > max_context: raise ValueError(f"tokenized sequence length {sequence_length} exceeds max_context {max_context}")
 
   base_output = model.output
@@ -82,7 +82,7 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
   params = adapter_parameters(adapters)
   optimizer = nn.optim.Adam(params, lr=lr, fused=False)
   adapter_before = adapter_digest(adapters)
-  initial_eval = evaluate(model, eval_examples, device=device)
+  initial_eval = evaluate(model, eval_examples, device=device, tok=tok)
 
   rng = np.random.default_rng(seed+2)
   train_losses = []
@@ -101,7 +101,7 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
     Tensor.training = previous_training
   train_s = time.perf_counter() - started
 
-  final_eval = evaluate(model, eval_examples, device=device)
+  final_eval = evaluate(model, eval_examples, device=device, tok=tok)
   adapter_after = adapter_digest(adapters)
   out.mkdir(parents=True, exist_ok=True)
   save_adapter(out / "adapter", adapters, base_model=str(model_path), source="gameterm-shaped-jsonl", seed=seed,
@@ -125,13 +125,17 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
     "kind": "tinygrad_qwen_output_lora_mvp", "status": "pass" if all(checks.values()) else "fail",
     "model": str(model_path), "model_sha256": {"before": file_before, "after": file_after}, "device": device,
     "scope": "Qwen3-8B output LoRA; first completion token only", "rows": len(rows),
+    "system_prompt": system_prompt,
     "train_rows": len(train_rows), "eval_rows": len(eval_rows), "eval_source_ids": eval_source_ids,
+    "eval_targets": [{"id": x["id"], "target_id": x["target"], "target_text": x["target_text"],
+                      "completion_tokens": x["completion_tokens"]} for x in eval_examples],
     "sequence_length": sequence_length, "initial_eval": initial_eval, "final_eval": final_eval,
     "training": {"steps": steps, "lr": lr, "rank": rank, "alpha": alpha, "load_s": load_s, "train_s": train_s,
                  "first_loss": train_losses[0], "last_loss": train_losses[-1]},
     "adapter_sha256": {"before": adapter_before, "after": adapter_after, "reloaded": reload_digest},
     "checks": checks,
-    "limitations": ["trains only the first assistant completion token", "adapts only the output projection", "uses synthetic harness-shaped turns"],
+    "limitations": ["trains only the first assistant completion token", "adapts only the output projection",
+                    "uses synthetic, host-labeled harness turns with unique held-out prompt wording"],
   }
   (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True))
   (out / "README.md").write_text(
@@ -158,10 +162,11 @@ def main() -> int:
   parser.add_argument("--lr", type=float, default=0.0001)
   parser.add_argument("--rank", type=int, default=8)
   parser.add_argument("--alpha", type=float, default=8.0)
+  parser.add_argument("--system-prompt", default="")
   args = parser.parse_args()
   summary = run(args.model.expanduser().resolve(), load_sft_rows(args.input), args.out, device=args.device,
                 max_context=args.max_context, seed=args.seed, eval_every=args.eval_every, steps=args.steps,
-                lr=args.lr, rank=args.rank, alpha=args.alpha)
+                lr=args.lr, rank=args.rank, alpha=args.alpha, system_prompt=args.system_prompt)
   print(json.dumps(summary, indent=2, sort_keys=True))
   return 0 if summary["status"] == "pass" else 1
 

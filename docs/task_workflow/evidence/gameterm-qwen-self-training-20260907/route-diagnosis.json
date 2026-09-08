@@ -1,0 +1,18 @@
+{
+  "full_forward": {
+    "text": "READ",
+    "token_id": 9560
+  },
+  "kind": "output_adapter_serving_route_diagnosis",
+  "prompt_tokens": 56,
+  "resolution": [
+    "close quantized-output shortcut leases when output LoRA is active",
+    "use concrete full-prompt logits for bounded greedy adapter prefill",
+    "disable cross-request prefix reuse until adapter continuation parity is qualified"
+  ],
+  "symbolic_chunk32": {
+    "text": " ._",
+    "token_id": 66290
+  },
+  "usage_bug": "Server passed the prompt list by reference to generate, which appended completion tokens and inflated prompt usage; serving now passes a copy."
+}

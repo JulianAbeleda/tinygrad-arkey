@@ -85,7 +85,10 @@ class Handler(HTTPRequestHandler):
     dec = tok.stream_decoder()
     if s.remote_metrics: RemotePCIDevice.reset_stats()
     prefill_snap = None
-    for next_id in model.generate(ids, temperature=temperature, expected_output_tokens=max_tokens):
+    # Transformer.generate appends completion tokens to its list. Keep the request
+    # prompt immutable so usage and runtime metrics report input tokens only.
+    for next_id in model.generate(list(ids), chunk_size=s.prefill_chunk_size,
+                                  temperature=temperature, expected_output_tokens=max_tokens):
       if len(out) == 0:
         pt = time.perf_counter()
         pf = prefill_tokens / (pt - st) if pt > st else 0.0
@@ -274,6 +277,8 @@ def main():
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
   parser.add_argument("--no-warmup", action="store_true", help="serve immediately without startup JIT warmup")
   parser.add_argument("--default-max-tokens", type=int, help="Server-side completion cap when a request omits one")
+  parser.add_argument("--prefill-chunk-size", type=int, default=32,
+                      help="Maximum prompt tokens per model prefill call (default 32)")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
   parser.add_argument("--benchmark-context", type=int, metavar="TOKENS",
                       help="Prefill exactly TOKENS synthetic tokens before --benchmark decode samples")
@@ -283,7 +288,9 @@ def main():
   registry = build_registry(models, pathlib.Path(args.registry) if args.registry else DEFAULT_REGISTRY_PATH)
   state = RuntimeState(registry, remote_metrics=args.remote_metrics)
   if args.default_max_tokens is not None and args.default_max_tokens < 1: parser.error("--default-max-tokens must be positive")
+  if args.prefill_chunk_size < 1: parser.error("--prefill-chunk-size must be positive")
   state.default_max_tokens = args.default_max_tokens
+  state.prefill_chunk_size = args.prefill_chunk_size
 
   # serve without a model when explicitly requested: the client drives load via /runtime/load
   if args.serve and args.no_preload:

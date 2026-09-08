@@ -3025,6 +3025,11 @@ class Transformer:
                                       .reshape(1, self.max_context))
     # recompute start_pos from what's currently valid in the caches
     start_pos = self.get_start_pos(tokens)
+    if getattr(self, "_output_adapter_active", False) and temperature == 0.0 and len(tokens) <= chunk_size and start_pos:
+      # Prefix reuse would resume through the unqualified symbolic adapter path. Recompute the bounded prompt from
+      # zero until adapter-aware continuation parity is established.
+      self.reset_generation_state()
+      start_pos = 0
     if start_pos < len(self._cached_tokens) and (resets := [r for b in self.blk for r in b._state_reset_ops()]): Tensor.realize(*resets)
     # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
@@ -3063,7 +3068,14 @@ class Transformer:
     read_tok = None
     while _ring or len(tokens) < self.max_context:   # ring: unbounded logical context (caller controls when to stop)
       ubatch = self.config.prefill_ubatch
-      if self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
+      if getattr(self, "_output_adapter_active", False) and temperature == 0.0 and start_pos == 0 and prompt_len <= chunk_size:
+        # Output adapters are trained and qualified against the concrete full-prompt logits path. The symbolic
+        # short-prefill JIT is not adapter-parity-qualified, so use the same concrete path for the first token while
+        # still populating the ordinary KV cache. Subsequent one-token decode continues through the normal loop.
+        prompt = Tensor([tokens[:prompt_len]], dtype=dtypes.int32, device=self.token_embd.weight.device)
+        out = self.logits(prompt, 0)[:, -1, :].argmax(-1, keepdim=True).realize()
+        ntv = prompt_len
+      elif self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).

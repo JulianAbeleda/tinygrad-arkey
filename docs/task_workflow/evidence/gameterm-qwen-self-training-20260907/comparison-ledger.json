@@ -1,0 +1,37 @@
+{
+  "adapted_score": {
+    "exact_accuracy": 0.25,
+    "exact_correct": 1,
+    "total": 4
+  },
+  "adapter_sha256": "caf4c689cbc9a5b33102a0cd3a20f8d0408e3a8b5ce1997e577915b91e723d27",
+  "base_model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+  "base_score": {
+    "exact_accuracy": 0.0,
+    "exact_correct": 0,
+    "total": 4
+  },
+  "checks": {
+    "adapter_changed": true,
+    "adapter_reload_exact": true,
+    "base_model_file_unchanged": true,
+    "finite": true,
+    "heldout_loss_decreased": true,
+    "optimizer_scope_adapter_only": true
+  },
+  "claim": "A frozen Qwen3-8B base improved from 0/4 to 1/4 exact completions after tinygrad output-LoRA training and serving through the real GameTerm harness.",
+  "delta_exact_correct": 1,
+  "kind": "gameterm_qwen_self_training_comparison",
+  "limits": [
+    "Host-provided synthetic labels; the model does not grade itself.",
+    "First completion token only.",
+    "Four held-out prompts are a smoke suite, not proof of complete harness understanding."
+  ],
+  "offline_heldout": {
+    "first_token_accuracy_after": 0.25,
+    "first_token_accuracy_before": 0.0,
+    "loss_after": 1.631391480565071,
+    "loss_before": 13.283193588256836
+  },
+  "status": "pass"
+}

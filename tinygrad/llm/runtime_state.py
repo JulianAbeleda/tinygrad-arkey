@@ -197,6 +197,7 @@ class RuntimeState:
     self.request_count = 0
     self.last_error: str|None = None
     self.default_max_tokens: int|None = None
+    self.prefill_chunk_size = 32
     # gen_lock serializes generation AND lifecycle mutation: the server is threaded (so /runtime/status and
     # /runtime/cancel stay responsive during generation), and a single shared model/KV cache must never be
     # touched by two requests at once. Non-blocking acquire -> runtime_busy.
