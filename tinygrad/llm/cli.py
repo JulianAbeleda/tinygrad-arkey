@@ -7,6 +7,7 @@ from tinygrad.helpers import DEBUG, Timing, GlobalCounters, stderr_log, colored,
 from tinygrad.runtime.support.system import RemotePCIDevice
 from tinygrad.viz.serve import TCPServerWithReuse, HTTPRequestHandler
 from tinygrad.llm.model import Transformer
+from tinygrad.llm.chat import ChatError, NativeChat, native_request
 from tinygrad.llm.runtime_state import (SimpleTokenizer, models, _quant_from_name, _device_target,
                                         DEFAULT_REGISTRY_PATH, build_registry, RuntimeFault, RuntimeState)
 
@@ -20,6 +21,7 @@ RUNTIME_ERROR_STATUS = {
   "runtime_busy": 429,
   "invalid_request": 400,
   "internal_runtime_error": 500,
+  "invalid_model_output": 502,
 }
 
 def remote_pressure_snapshot() -> dict[str, typing.Any]:
@@ -131,19 +133,28 @@ class Handler(HTTPRequestHandler):
     s = self.server.state
     if not s.loaded: raise RuntimeFault("model_not_loaded", "no model loaded; POST /runtime/load first")
     tok = s.tok
-    ids: list[int] = tok.prefix()
-    for i, msg in enumerate(body["messages"]):
-      ids += tok.role(msg["role"])
-      content = msg["content"]
-      if isinstance(content, str): ids += tok.encode(content)
-      elif isinstance(content, list):
-        for c in content:
-          if c["type"] == "text": ids += tok.encode(c["text"])
-          else: raise RuntimeFault("invalid_request", f"unhandled content part type: {c['type']}")
-      else: raise RuntimeFault("invalid_request", f"unknown content type: {type(content)}")
-      if msg["role"] == "assistant" and i == len(body["messages"]) - 1: break
-      ids += tok.end_turn()
-    else: ids += tok.role("assistant")
+    if not isinstance(body.get('messages'), list) or not body['messages'] or any(not isinstance(m, dict) for m in body['messages']):
+      raise RuntimeFault("invalid_request", "messages must be a nonempty list of objects")
+    protocol = None
+    try:
+      if native_request(body):
+        protocol = NativeChat(tok)
+        ids = protocol.prompt(body)
+      else:
+        ids: list[int] = tok.prefix()
+        for i, msg in enumerate(body["messages"]):
+          ids += tok.role(msg["role"])
+          content = msg["content"]
+          if isinstance(content, str): ids += tok.encode(content)
+          elif isinstance(content, list):
+            for c in content:
+              if c["type"] == "text": ids += tok.encode(c["text"])
+              else: raise RuntimeFault("invalid_request", f"unhandled content part type: {c['type']}")
+          else: raise RuntimeFault("invalid_request", f"unknown content type: {type(content)}")
+          if msg["role"] == "assistant" and i == len(body["messages"]) - 1: break
+          ids += tok.end_turn()
+        else: ids += tok.role("assistant")
+    except ChatError as exc: raise RuntimeFault("invalid_request", str(exc)) from exc
 
     max_tokens = body.get("max_completion_tokens") or body.get("max_tokens") or s.default_max_tokens
     temperature = float(body.get("temperature", 0.0))
@@ -163,6 +174,25 @@ class Handler(HTTPRequestHandler):
 
     self._acquire_gen()
     try:
+      if protocol is not None:
+        # Tool-enabled output is buffered: never expose a partial call as executable evidence.
+        parts, finish = [], "stop"
+        for kind, payload in self._stream_tokens(ids, max_tokens, temperature):
+          if kind == "delta": parts.append(payload)
+          else: finish = payload
+        if s.cancel_event.is_set(): raise RuntimeFault("generation_cancelled", "tool generation cancelled")
+        try: message = protocol.parse("".join(parts), body.get("tools", []), finish)
+        except ChatError as exc: raise RuntimeFault("invalid_model_output", str(exc)) from exc
+        if "tool_calls" in message: finish = "tool_calls"
+        if not stream:
+          return self._send_json({**tmpl, "object": "chat.completion",
+            "choices": [{"index": 0, "message": message, "finish_reason": finish}], "usage": self._usage(ids)})
+        delta = dict(message)
+        if "tool_calls" in delta: delta["tool_calls"] = [dict(call, index=i) for i, call in enumerate(delta["tool_calls"])]
+        response = [{**tmpl, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+                    {**tmpl, "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]}]
+        if include_usage: response.append({**tmpl, "choices": [], "usage": self._usage(ids)})
+        return self.stream_json(iter(response))
       if stream: return self.stream_json(chunks())
       out, finish = [], "stop"
       for c in chunks():

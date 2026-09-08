@@ -54,6 +54,7 @@ tinygrad = ["py.typed"]
 
 
 [project.optional-dependencies]
+llm = ["jinja2>=3.1.6,<4"]
 # Cross-machine cost-model + core work deps (Mac + Ubuntu). Install with
 # `uv sync --extra costmodel` (or pip install -e .[costmodel]). torch is a
 # reference-comparison dep and lives in testing_minimal, not here.

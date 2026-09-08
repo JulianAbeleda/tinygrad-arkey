@@ -9,6 +9,7 @@ import numpy as np
 from tinygrad import Device, Tensor, nn
 from tinygrad.llm.adapter import adapter_parameters, install_lora, load_adapter, save_adapter
 from tinygrad.llm.model import Transformer
+from tinygrad.llm.chat import NativeChat
 from tinygrad.llm.runtime_state import SimpleTokenizer
 from extra.llm.bench.sft_smoke_train import load_sft_rows, split_rows
 
@@ -25,12 +26,18 @@ def build_completion_examples(rows:list[dict[str, Any]], tok:SimpleTokenizer, *,
   if completion_scope not in ("first", "all"): raise ValueError("completion_scope must be first or all")
   examples = []
   for row in rows:
-    prefix = tok.prefix()
-    if system_prompt: prefix += tok.role("system") + tok.encode(system_prompt) + tok.end_turn()
-    prefix += tok.role("user") + tok.encode(row["prompt"]) + tok.end_turn() + tok.role("assistant")
-    completion = tok.encode(row["completion"])
-    if not completion: raise ValueError(f"{row['id']}: completion tokenized to zero tokens")
-    targets = completion[:1] if completion_scope == "first" else completion + [tok.eos_id]
+    if 'messages' in row:
+      if system_prompt: raise ValueError('native rows own their system message; system_prompt must be empty')
+      if completion_scope != 'all': raise ValueError('native tool training requires completion_scope=all')
+      prefix, targets = NativeChat(tok).training(row['messages'], row.get('tools', []))
+      completion = targets
+    else:
+      prefix = tok.prefix()
+      if system_prompt: prefix += tok.role("system") + tok.encode(system_prompt) + tok.end_turn()
+      prefix += tok.role("user") + tok.encode(row["prompt"]) + tok.end_turn() + tok.role("assistant")
+      completion = tok.encode(row["completion"])
+      if not completion: raise ValueError(f"{row['id']}: completion tokenized to zero tokens")
+      targets = completion[:1] if completion_scope == "first" else completion + [tok.eos_id]
     for token_index, target in enumerate(targets):
       examples.append({"id": row["id"] if completion_scope == "first" else f"{row['id']}:token-{token_index}",
                        "row_id": row["id"], "source_id": row["source_id"],
@@ -141,6 +148,7 @@ def run(model_path:pathlib.Path, rows:list[dict[str, Any]], out:pathlib.Path, *,
     "kind": "tinygrad_qwen_output_lora_mvp", "status": "pass" if all(checks.values()) else "fail",
     "model": str(model_path), "model_sha256": {"before": file_before, "after": file_after}, "device": device,
     "scope": f"Qwen3-8B output LoRA; completion_scope={completion_scope}", "rows": len(rows),
+    "chat_protocol": NativeChat(tok).identity if any("messages" in row for row in rows) else {"dialect":"legacy-role"},
     "completion_scope":completion_scope, "init_adapter":str(init_adapter) if init_adapter is not None else None,
     "system_prompt": system_prompt,
     "train_rows": len(train_rows), "eval_rows": len(eval_rows), "eval_source_ids": eval_source_ids,
@@ -183,7 +191,7 @@ def main() -> int:
   parser.add_argument("--completion-scope", choices=("first", "all"), default="first")
   parser.add_argument("--init-adapter", type=pathlib.Path)
   args = parser.parse_args()
-  summary = run(args.model.expanduser().resolve(), load_sft_rows(args.input), args.out, device=args.device,
+  summary = run(args.model.expanduser().resolve(), load_sft_rows(args.input, native=True), args.out, device=args.device,
                 max_context=args.max_context, seed=args.seed, eval_every=args.eval_every, steps=args.steps,
                 lr=args.lr, rank=args.rank, alpha=args.alpha, system_prompt=args.system_prompt,
                 completion_scope=args.completion_scope, init_adapter=args.init_adapter)

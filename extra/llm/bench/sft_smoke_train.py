@@ -17,10 +17,17 @@ def _load_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   return rows
 
 
-def load_sft_rows(path:pathlib.Path) -> list[dict[str, Any]]:
+def load_sft_rows(path:pathlib.Path, *, native:bool=False) -> list[dict[str, Any]]:
   rows = _load_jsonl(path)
   for idx, row in enumerate(rows):
-    for key in ("prompt", "completion", "source_id"):
+    if native and 'messages' in row:
+      from tinygrad.llm.chat import validate_messages
+      if 'prompt' in row or 'completion' in row: raise ValueError('ambiguous legacy and native training row')
+      validate_messages(row['messages'], row.get('tools', []), target=True)
+      if row['messages'][-1]['role'] != 'assistant': raise ValueError('native row requires final assistant target')
+      required = ('source_id',)
+    else: required = ('prompt', 'completion', 'source_id')
+    for key in required:
       if not isinstance(row.get(key), str) or not row[key]: raise ValueError(f"{path}: row {idx} missing string {key}")
   return rows
 
