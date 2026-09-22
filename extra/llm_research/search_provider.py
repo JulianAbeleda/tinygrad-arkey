@@ -1018,12 +1018,18 @@ def main() -> int:
   parser = argparse.ArgumentParser(description="tinygrad target-neutral search provider")
   parser.add_argument("--backend", help="tinygrad device to serve, e.g. METAL, NV, CUDA; omitted = the GPU tinygrad opens by default")
   parser.add_argument("--live-generated", action="store_true", help="enable live tinygrad primitive-plan compile/check/measure")
+  parser.add_argument("--live-flash", action="store_true", help="compile, check and time flash candidates on the opened GPU")
   args = parser.parse_args()
   device = args.backend
   if device is None:
     from tinygrad.device import Device
     device = Device.DEFAULT
   native = _native_adapter(device.split(":", 1)[0].upper(), args.live_generated)
-  return serve(adapter=DeviceRouter(flash=FlashAdapter(device), native=native))
+  if args.live_flash:
+    from extra.llm_research.flash_live import LiveFlash
+    live = LiveFlash(device)
+    flash = FlashAdapter(device, live_backend=True, compile_fn=live.compile, check_fn=live.check, measure_fn=live.measure)
+  else: flash = FlashAdapter(device)
+  return serve(adapter=DeviceRouter(flash=flash, native=native))
 
 if __name__ == "__main__": raise SystemExit(main())
