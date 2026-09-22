@@ -20,7 +20,13 @@ from extra.llm_research.search_provider import ProtocolError
 
 CONTROL_SPLIT = 48  # the production tile (nv_flash_geometry_search.py CONTROL_NAME) is the check oracle
 CHECK_TOLERANCE = {"atol": 2e-3, "rtol": 2e-3}  # the geometry search's tolerance against the control
-FLUSH_MODES = {True: "device_invalidate_caches", False: "4MiB_write_fallback"}
+NO_FLUSH_FALLBACK = "4MiB_write_fallback"  # time_call's own fallback when a device has no invalidate_caches
+
+
+def flush_mode(device: Any) -> str:
+  """What clear_l2 does on this device, named so a result never claims a flush the device cannot do."""
+  if not hasattr(device, "invalidate_caches"): return NO_FLUSH_FALLBACK
+  return str(getattr(device, "invalidate_caches_mode", "device_invalidate_caches"))
 
 
 def context_tokens(payload: Mapping[str, Any]) -> int:
@@ -164,17 +170,17 @@ class LiveFlash:
       raise ProtocolError("admission_rejected", "samples must be 1..100")
     if warmups != 0: raise ProtocolError("admission_rejected", "flash measure is cold: warmups must be 0")
     call, _program, spec = self.compiled_tile(payload, descriptor)
-    device_flush = hasattr(Device[self.device], "invalidate_caches")
     samples_ns = [int(time_call(call, clear_l2=True) * 1e9) for _ in range(samples)]
+    device_flush = flush_mode(Device[self.device])
     tile = spec.tile
     operations = 4 * tile.Hq * tile.Hd * context_tokens(payload)
     bytes_ = 2 * context_tokens(payload) * tile.Hd * 2 * (tile.Hq // tile.Hkv) + tile.Hq * (tile.Hd + 2) * 4
     return {"timing_mode": "device_timestamps_wait_true", "synchronized": True, "warmups": 0, "samples_ns": samples_ns,
-            "l2_discipline": FLUSH_MODES[device_flush], "flush_between_launches": True,
+            "l2_discipline": device_flush, "flush_between_launches": True,
             "summary_ns": {"min": min(samples_ns), "mean": sum(samples_ns) / len(samples_ns), "max": max(samples_ns),
                            "median": statistics.median(samples_ns), "range": max(samples_ns) - min(samples_ns)},
             "work_bytes": {"status": "estimated", "operations": operations, "bytes": bytes_,
                            "provenance": "modeled flash decode traffic at context_tokens (score+PV flops, KV fp16 reads); physical cache traffic unobserved"}}
 
 
-__all__ = ["CHECK_TOLERANCE", "CONTROL_SPLIT", "FLUSH_MODES", "LiveFlash", "context_tokens"]
+__all__ = ["CHECK_TOLERANCE", "CONTROL_SPLIT", "NO_FLUSH_FALLBACK", "LiveFlash", "context_tokens", "flush_mode"]

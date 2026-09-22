@@ -49,6 +49,30 @@ class MetalDevice(Compiled):
       functools.partial(MetalProgram, self), MetalGraph if 'virtual' not in from_ns_str(self.sysdevice.name()).lower() else None,
       arch=metal.enum_MTLGPUFamily[check_family("Apple") or check_family("Mac")][12:])
 
+  # Metal exposes no cache control, so a cold-cache measurement evicts by streaming: a blit fill and copy over
+  # two buffers of this size, larger than any Apple system level cache (M3 8 MiB, M3 Max 48 MiB, Ultra 96 MiB
+  # published by Apple), so every line the next kernel reads comes from DRAM. Same contract as
+  # NVDevice.invalidate_caches, which time_call(clear_l2=True) looks for by name.
+  CACHE_SCRUB_BYTES = 128 << 20
+  invalidate_caches_mode = "blit_scrub_128MiB_fill_and_copy"
+
+  def invalidate_caches(self):
+    self.synchronize()
+    if not hasattr(self, "_scrub"):
+      self._scrub = [self.sysdevice.newBufferWithLength_options(self.CACHE_SCRUB_BYTES, metal.MTLResourceStorageModePrivate) for _ in range(2)]
+      if any(buf.value is None for buf in self._scrub): raise MemoryError(f"Metal OOM while allocating the {self.CACHE_SCRUB_BYTES} byte cache scrub")
+      self._scrub_pass = 0
+    self._scrub_pass += 1
+    cbuf = self.mtl_queue.commandBuffer().retained()
+    encoder = cbuf.blitCommandEncoder().retained()
+    # The fill value changes each pass, so no pass can be skipped as a repeat of the last one.
+    encoder.fillBuffer_range_value(self._scrub[0], metal.NSRange(0, self.CACHE_SCRUB_BYTES), self._scrub_pass & 0xff)
+    encoder.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(self._scrub[0], 0, self._scrub[1], 0, self.CACHE_SCRUB_BYTES)
+    encoder.endEncoding()
+    cbuf.setLabel(to_ns_str("CACHE SCRUB"))
+    cbuf.commit()
+    wait_check(cbuf)
+
   def synchronize(self):
     for cbuf in self.mtl_buffers_in_flight:
       wait_check(cbuf)
