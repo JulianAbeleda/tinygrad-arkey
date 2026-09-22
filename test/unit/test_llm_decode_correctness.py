@@ -58,11 +58,54 @@ def test_generate_jit_replay_matches_full_prefix_greedy_oracle():
       expected.append(token)
       reference_tokens.append(token)
 
-    # First request warms/captures; the second replays the same decode JIT from
-    # an independent prompt-side input and exercises prefix/cache recovery.
-    for _ in range(2):
+    # First request warms/captures; the later requests replay the same decode JIT
+    # from independent prompt-side inputs and exercise prefix/cache recovery. The
+    # three-pass shape also guards the capture-time schedule prune: pruning before
+    # TinyJit capture dropped the block-output seed feeding the LM head, so the
+    # replay omitted its KV-cache readers and sampled from a non-attention input.
+    for _ in range(3):
       got = [token for _, token in zip(range(4), model.generate(prompt.copy(), chunk_size=3, temperature=0.0))]
       assert got == expected
+    assert model.rollout_jit.captured is not None
+
+
+def test_capture_schedule_prune_is_active_during_jit_capture(monkeypatch):
+  import tinygrad.schedule as schedule
+
+  pruned_during_capture: list[bool] = []
+  real_prune = schedule._drop_dead_schedule_items
+
+  def spy_prune(linear, call_args):
+    # `capturing` is the active JIT capture stack; `CAPTURING` is its boolean
+    # mirror. The regression skipped this prune while either was set, which left
+    # dead capture kernels in the replayed graph.
+    pruned_during_capture.append(bool(schedule.capturing) and schedule.CAPTURING)
+    return real_prune(linear, call_args)
+
+  monkeypatch.setattr(schedule, "_drop_dead_schedule_items", spy_prune)
+  with Context(DEV="CPU", JIT=1):
+    _, model, state = _models_with_shared_weights()
+    for _ in range(2):
+      [token for _, token in zip(range(4), model.generate([1, 2, 3], chunk_size=3, temperature=0.0))]
+
+  assert pruned_during_capture and any(pruned_during_capture)
+
+
+def test_decode_with_logits_is_a_closed_diagnostic_tap():
+  with Context(DEV="CPU", JIT=1):
+    _, model, state = _models_with_shared_weights()
+    reference = Transformer(_config())
+    nn.state.load_state_dict(reference, state, verbose=False)
+    token, temp = Tensor([[1]], dtype="int32"), Tensor([0.0])
+    # Three calls cover ignore/capture/replay.  Position zero is deliberately
+    # repeated here: the assertion is about the returned full-logit value and
+    # the tap's route contract, not generation-cache semantics.
+    for _ in range(3): sampled, logits = model.decode_with_logits(token, 0, temp)
+    expected = reference.logits(token, 0)[:, -1, :].realize().numpy()
+    np.testing.assert_allclose(logits.realize().numpy(), expected, rtol=1e-5, atol=1e-5)
+    assert sampled.shape == (1, 1)
+    with pytest.raises(ValueError, match="one-token"):
+      model.decode_with_logits(Tensor([[1, 2]], dtype="int32"), 0, temp)
 
 
 def test_model_benchmark_decode_correctness_qualification_passes():

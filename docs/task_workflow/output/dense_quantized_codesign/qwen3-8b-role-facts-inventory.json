@@ -1,0 +1,4605 @@
+{
+  "artifact": "dense-role-facts-inventory",
+  "dense_verified": true,
+  "git": {
+    "commit": "b8b21e02fc4a125c1db14bc226cc609565a37c30"
+  },
+  "model_facts": {
+    "architecture": "qwen3",
+    "head_dim": 128,
+    "hidden_size": 4096,
+    "intermediate_size": 12288,
+    "n_heads": 32,
+    "n_kv_heads": 8
+  },
+  "model_path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_size_bytes": 5027783488,
+  "source_helpers": [
+    "tinygrad.llm.gguf.gguf_load_metadata",
+    "tinygrad.llm.model_facts.model_facts_from_gguf_metadata",
+    "tinygrad.llm.model_route_plan.build_model_route_plan"
+  ],
+  "summary": {
+    "quant_counts": {
+      "Q4_K": 217,
+      "Q6_K": 37
+    },
+    "role_counts": {
+      "attn_kv": 72,
+      "attn_qo": 72,
+      "ffn_down": 36,
+      "ffn_gate_up": 72,
+      "lm_head": 1,
+      "unresolved": 1
+    },
+    "route_plan_entry_count": 253,
+    "tensor_count": 254
+  },
+  "tensors": [
+    {
+      "cols": 4096,
+      "gguf_offset": 5956416,
+      "inferred_role": "lm_head",
+      "packed_bytes": 510504960,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 151936,
+      "tensor_name": "output.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 516477760,
+      "inferred_role": null,
+      "packed_bytes": 350060544,
+      "quant_type": "Q4_K",
+      "route_plan": null,
+      "rows": 151936,
+      "tensor_name": "token_embd.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 866538304,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.0.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 868914496,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.0.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 878351680,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.0.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 887789376,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.0.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 891230016,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.0.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 932517696,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.0.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 960845632,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.0.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 989157184,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.1.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 991533376,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.1.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1000970560,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.1.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1010408256,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.1.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1013848896,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.1.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1055136576,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.1.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1083464512,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.1.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1111776064,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.2.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1114152256,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.2.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1123589440,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.2.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1133027136,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.2.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1136467776,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.2.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1177755456,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.2.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1206083392,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.2.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1234394944,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.3.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1236771136,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.3.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1246208320,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.3.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1255646016,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.3.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1259086656,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.3.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1300374336,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.3.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1328702272,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.3.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1357013824,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.4.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1359390016,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.4.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1368827200,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.4.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1378264896,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.4.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1380624192,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.4.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1408935744,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.4.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1437263680,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.4.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1465575232,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.5.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1467951424,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.5.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1477388608,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.5.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1486826304,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.5.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1489185600,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.5.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1517497152,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.5.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1545825088,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.5.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1574136640,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.6.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1576512832,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.6.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1585950016,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.6.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1595387712,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.6.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1598828352,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.6.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1640116032,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.6.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1668443968,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.6.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1696755520,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.7.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1699131712,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.7.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1708568896,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.7.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1718006592,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.7.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1720365888,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.7.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1748677440,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.7.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1777005376,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.7.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1805316928,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.8.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1807693120,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.8.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1817130304,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.8.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1826568000,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.8.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1828927296,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.8.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1857238848,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.8.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1885566784,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.8.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1913878336,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.9.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1916254528,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.9.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1925691712,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.9.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1935129408,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.9.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 1938570048,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.9.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 1979857728,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.9.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2008185664,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.9.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2036497216,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.10.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2038873408,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.10.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2048310592,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.10.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2057748288,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.10.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2060107584,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.10.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2088419136,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.10.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2116747072,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.10.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2145058624,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.11.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2147434816,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.11.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2156872000,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.11.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2166309696,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.11.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2168668992,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.11.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2196980544,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.11.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2225308480,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.11.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2253620032,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.12.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2255996224,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.12.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2265433408,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.12.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2274871104,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.12.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2278311744,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.12.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2319599424,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.12.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2347927360,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.12.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2376238912,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.13.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2378615104,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.13.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2388052288,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.13.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2397489984,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.13.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2399849280,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.13.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2428160832,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.13.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2456488768,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.13.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2484800320,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.14.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2487176512,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.14.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2496613696,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.14.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2506051392,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.14.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2508410688,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.14.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2536722240,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.14.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2565050176,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.14.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2593361728,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.15.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2595737920,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.15.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2605175104,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.15.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2614612800,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.15.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2618053440,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.15.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2659341120,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.15.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2687669056,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.15.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2715980608,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.16.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2718356800,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.16.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2727793984,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.16.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2737231680,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.16.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2739590976,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.16.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2767902528,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.16.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2796230464,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.16.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2824542016,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.17.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2826918208,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.17.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2836355392,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.17.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2845793088,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.17.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2848152384,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.17.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2876463936,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.17.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2904791872,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.17.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2933103424,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.18.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2935479616,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.18.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2944916800,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.18.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2954354496,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.18.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 2957795136,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.18.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 2999082816,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.18.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3027410752,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.18.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3055722304,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.19.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3058098496,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.19.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3067535680,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.19.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3076973376,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.19.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3079332672,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.19.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3107644224,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.19.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3135972160,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.19.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3164283712,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.20.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3166659904,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.20.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3176097088,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.20.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3185534784,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.20.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3187894080,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.20.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3216205632,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.20.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3244533568,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.20.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3272845120,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.21.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3275221312,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.21.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3284658496,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.21.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3294096192,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.21.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3297536832,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.21.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3338824512,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.21.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3367152448,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.21.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3395464000,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.22.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3397840192,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.22.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3407277376,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.22.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3416715072,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.22.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3419074368,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.22.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3447385920,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.22.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3475713856,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.22.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3504025408,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.23.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3506401600,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.23.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3515838784,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.23.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3525276480,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.23.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3527635776,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.23.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3555947328,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.23.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3584275264,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.23.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3612586816,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.24.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3614963008,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.24.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3624400192,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.24.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3633837888,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.24.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3637278528,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.24.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3678566208,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.24.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3706894144,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.24.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3735205696,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.25.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3737581888,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.25.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3747019072,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.25.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3756456768,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.25.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3758816064,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.25.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3787127616,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.25.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3815455552,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.25.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3843767104,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.26.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3846143296,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.26.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3855580480,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.26.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3865018176,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.26.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3867377472,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.26.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3895689024,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.26.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3924016960,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.26.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3952328512,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.27.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3954704704,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.27.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3964141888,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.27.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 3973579584,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.27.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 3977020224,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.27.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4018307904,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.27.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4046635840,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.27.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4074947392,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.28.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4077323584,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.28.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4086760768,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.28.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4096198464,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.28.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4098557760,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.28.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4126869312,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.28.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4155197248,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.28.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4183508800,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.29.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4185884992,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.29.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4195322176,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.29.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4204759872,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.29.attn_v.weight",
+      "typ": 12
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4207119168,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 4096,
+      "tensor_name": "blk.29.ffn_down.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4235430720,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.29.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4263758656,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.29.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4292070208,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.30.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4294446400,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.30.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4303883584,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.30.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4313321280,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.30.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4316761920,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.30.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4358049600,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.30.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4386377536,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.30.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4414689088,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.31.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4417065280,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.31.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4426502464,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.31.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4435940160,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.31.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4439380800,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.31.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4480668480,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.31.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4508996416,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.31.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4537307968,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.32.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4539684160,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.32.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4549121344,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.32.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4558559040,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.32.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4561999680,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.32.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4603287360,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.32.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4631615296,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.32.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4659926848,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.33.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4662303040,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.33.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4671740224,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.33.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4681177920,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.33.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4684618560,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.33.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4725906240,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.33.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4754234176,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.33.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4782545728,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.34.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4784921920,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.34.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4794359104,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.34.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4803796800,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.34.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4807237440,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.34.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4848525120,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.34.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4876853056,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.34.ffn_up.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4905164608,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 2359296,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 1024,
+      "tensor_name": "blk.35.attn_k.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4907540800,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.35.attn_output.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4916977984,
+      "inferred_role": "attn_qo",
+      "packed_bytes": 9437184,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.35.attn_q.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4926415680,
+      "inferred_role": "attn_kv",
+      "packed_bytes": 3440640,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4
+      },
+      "rows": 1024,
+      "tensor_name": "blk.35.attn_v.weight",
+      "typ": 14
+    },
+    {
+      "cols": 12288,
+      "gguf_offset": 4929856320,
+      "inferred_role": "ffn_down",
+      "packed_bytes": 41287680,
+      "quant_type": "Q6_K",
+      "route_plan": {
+        "family": "q6_k_packed_u16",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 4096,
+      "tensor_name": "blk.35.ffn_down.weight",
+      "typ": 14
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4971144000,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.35.ffn_gate.weight",
+      "typ": 12
+    },
+    {
+      "cols": 4096,
+      "gguf_offset": 4999471936,
+      "inferred_role": "ffn_gate_up",
+      "packed_bytes": 28311552,
+      "quant_type": "Q4_K",
+      "route_plan": {
+        "family": "q4_k_packed_u32",
+        "kernel_mode": "partial",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1
+      },
+      "rows": 12288,
+      "tensor_name": "blk.35.ffn_up.weight",
+      "typ": 12
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "schema": "tinygrad.nv_flash_counter_ab.v1",
+  "date": "2026-08-21",
+  "branch": "nvidia-bringup-20260731",
+  "git_head": "6570abc025514273faa100c66b979e531585a1e1",
+  "device": {
+    "name": "NVIDIA GeForce RTX 5090",
+    "compute_capability": "12.0",
+    "driver": "595.84",
+    "ncu_version": "2026.2.1.0",
+    "nvcc_version": "13.2.86"
+  },
+  "method": {
+    "purpose": "Determine whether the flash score body is DRAM-bandwidth-bound, SM/compute-bound, or occupancy/latency-bound at the production d512 decode shape.",
+    "tool": "Nsight Compute CLI under passwordless sudo (RmProfilingAdminOnly=1 requires admin counters)",
+    "cache_control": "all",
+    "metrics": [
+      "dram__bytes.sum",
+      "dram__bytes_op_read.sum",
+      "dram__bytes_op_write.sum",
+      "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+      "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+      "sm__warps_active.avg.pct_of_peak_sustained_active",
+      "gpu__time_duration.sum",
+      "lts__t_bytes.sum",
+      "l1tex__t_bytes.sum",
+      "smsp__inst_executed.sum"
+    ]
+  },
+  "tinygrad_probe": {
+    "source": "extra/llm_research/microbench/flash_score_tile_peak_cuda.cu",
+    "kernel": "flash_score_tile_peak<32,4,16,1,2,16,8>",
+    "shape": "d512 production tile: LANES=32, WARPS=4, TK=16, SW=1, MODE=2, LPER=16, nvalid=11, qhoist=0, grid=(48,8,1), block=(32,4,1)",
+    "build": "/usr/local/cuda/bin/nvcc -O3 -arch=sm_120 extra/llm_research/microbench/flash_score_tile_peak_cuda.cu -o /tmp/nv-flash-counters/flash_score_tile_peak_cuda",
+    "cold_profile_note": "ncu profiled the harness warmup launch, which runs 64 internal iterations. DRAM/L2 byte totals are dominated by the first (cold) iteration; instruction and L1 totals were divided by 64 for per-pass values."
+  },
+  "llama_probe": {
+    "source": "extra/llm_research/microbench/llama_fattn_vec_iso.cu",
+    "kernel": "flash_attn_ext_vec<128,1,F16,F16,false>",
+    "shape": "d512 installed: grid=(1,4,32), block=(32,4,1), Hd=128, Hq=32, Hkv=8, Tc=512, fp16 K/V",
+    "build": "/usr/local/cuda/bin/nvcc -O3 -std=c++17 --generate-code=arch=compute_120a,code=[compute_120a,sm_120a] -I/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/.. -I/home/ubuntu/env/llama.cpp/ggml/src/../include -isystem /usr/local/cuda/targets/x86_64-linux/include extra/llm_research/microbench/llama_fattn_vec_iso.cu -o /tmp/nv-flash-counters/llama_fattn_vec_iso"
+  },
+  "cold": {
+    "tinygrad": {
+      "dram_read_bytes": 2195456,
+      "dram_write_bytes": 0,
+      "dram_throughput_pct": 0.76,
+      "lts_bytes": 2998912,
+      "l1tex_bytes_per_pass": 2949120,
+      "warp_instructions_per_pass": 1601304,
+      "sm_throughput_pct": 59.79,
+      "occupancy_pct": 18.79,
+      "raw_gpu_duration_ns": 162752,
+      "raw_inst_executed": 102483456,
+      "raw_l1tex_bytes": 188743680,
+      "warmup_iterations": 64
+    },
+    "llama": {
+      "dram_read_bytes": 286720,
+      "dram_write_bytes": 0,
+      "dram_throughput_pct": 3.19,
+      "lts_bytes": 8908512,
+      "l1tex_bytes": 8982528,
+      "warp_instructions": 596480,
+      "sm_throughput_pct": 6.73,
+      "occupancy_pct": 8.30,
+      "gpu_duration_ns": 5120
+    }
+  },
+  "warm_cross_check": {
+    "tinygrad": {
+      "dram_read_bytes": 2218240,
+      "dram_throughput_pct": 0.05,
+      "lts_bytes": 3690528,
+      "l1tex_bytes_per_pass": 2949120,
+      "warp_instructions_per_pass": 1597687,
+      "sm_throughput_pct": 61.80,
+      "occupancy_pct": 18.80,
+      "iterations": 1000
+    },
+    "llama": {
+      "dram_read_bytes": 286720,
+      "dram_throughput_pct": 3.20,
+      "lts_bytes": 8906048,
+      "l1tex_bytes": 8982528,
+      "warp_instructions": 596480,
+      "sm_throughput_pct": 6.80,
+      "occupancy_pct": 8.30
+    }
+  },
+  "conclusion": {
+    "flash_body_is_dram_bound": false,
+    "tinygrad_flash_binding": "SM/compute-bound at ~60% pipe utilization with only ~19% occupancy",
+    "llama_flash_binding": "latency/occupancy-bound at ~7% SM utilization and ~8% occupancy",
+    "wall_gap_cause_from_flash_counters": "not DRAM traffic; the in-window flash_score exposure gap is a timeline exposure difference, not a bandwidth-limited body"
+  },
+  "labels": {
+    "observed": [
+      "all ncu counter values and percentages in cold and warm profiles",
+      "kernel names, grid/block shapes, and compute capability"
+    ],
+    "inferred": [
+      "per-pass tinygrad instruction and L1 traffic by dividing the 64-iteration warmup launch",
+      "binding classification from sm__throughput, occupancy, and dram__throughput percentages"
+    ],
+    "unmeasured": [
+      "full-token per-family DRAM attribution for the 5.04 vs 4.70 GB/token ledger",
+      "flash_combine hardware counters",
+      "production installed launch cold-start overhead and its interaction with surrounding graph traffic"
+    ]
+  }
+}

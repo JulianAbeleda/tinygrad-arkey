@@ -1,0 +1,93 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_production_gate.v1",
+  "shape": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.ffn_gate.weight"
+  },
+  "identity": "145d44669b31b39f0bcf7d157da1d1a2f309b640b37340875338879bf7797203",
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 6291456,
+    "max_abs": 0.000213623046875,
+    "mean_abs": 8.06683692644583e-06,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "compiler": {
+    "ordinary_matmul": true,
+    "expanded_global_weight_allocation": false,
+    "programs": 1,
+    "signed_imma": true,
+    "candidate_identity_exact": true,
+    "source": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_k32_final.cu",
+    "sass": {
+      "path": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_k32_final.sass",
+      "imma": 16,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0
+    }
+  },
+  "timing": {
+    "generated_us": {
+      "min": 749.41,
+      "median": 759.959,
+      "samples": [
+        788.483,
+        765.68,
+        762.665,
+        759.959,
+        756.223,
+        749.41,
+        760.711,
+        757.124,
+        759.449
+      ]
+    },
+    "v4_static_oracle_us": {
+      "min": 1259.52,
+      "median": 1259.84,
+      "samples": [
+        1259.52,
+        1259.84,
+        1259.616,
+        1260.16,
+        1260.416,
+        1260.384,
+        1259.68,
+        1259.68,
+        1260.0
+      ]
+    },
+    "v4_qualified_chain_us": {
+      "min": 463.00800000000004,
+      "median": 464.256,
+      "samples": [
+        464.32,
+        464.25600000000003,
+        464.63999999999993,
+        464.096,
+        464.736,
+        464.256,
+        464.03200000000004,
+        463.00800000000004,
+        464.0
+      ]
+    },
+    "generated_over_v4_min": 1.618568145690787
+  },
+  "passed_correctness": true,
+  "passed_performance": false,
+  "passed": false
+}

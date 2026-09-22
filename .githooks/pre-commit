@@ -2,6 +2,13 @@
 # Working-agreement enforcement (nv-decode-working-agreement-20260808.md):
 #  1. authored-line budget via sz.py (only where sz.py exists; older branches may lack it)
 #  2. a code fix carries a test change in the same commit (agreement Rule 2)
+#  3. a decode fusion harness carries the predicted-wall-delta contract
+#     (COST_PREDICTION + validate_cost_prediction, nv_fusion_cost_model.py):
+#     no harness commits without the llama-shaped arithmetic that its wall
+#     bracket must CONFIRM or EXPLAIN before the campaign can book.
+# Rules 2 and 3 judge what this commit authors. In a merge, a file taken as-is
+# from either parent was committed on that branch, so only files that differ
+# from both parents are checked. Rule 1 always checks the whole tree.
 # Bypass a single commit with: git commit --no-verify
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
@@ -9,11 +16,35 @@ if [ -f sz.py ]; then
   python3 sz.py > /dev/null || { echo; echo "line budget exceeded — run 'python3 sz.py' for the breakdown"; exit 1; }
 fi
 
-code_changed=$(git diff --cached --name-only | grep -E '^tinygrad/.*\.py$' || true)
-test_changed=$(git diff --cached --name-only | grep -E '^test/' || true)
+authored=$(git diff --cached --name-only)
+if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+  from_head=$(mktemp) || exit 1
+  printf '%s\n' "$authored" > "$from_head"
+  authored=$(git diff --cached --name-only MERGE_HEAD | grep -Fx -f "$from_head" || true)
+  rm -f "$from_head"
+fi
+
+code_changed=$(printf '%s\n' "$authored" | grep -E '^tinygrad/.*\.py$' || true)
+test_changed=$(printf '%s\n' "$authored" | grep -E '^test/' || true)
 if [ -n "$code_changed" ] && [ -z "$test_changed" ]; then
   echo "pre-commit: code changes without a test change (working agreement Rule 2)" >&2
   echo "  staged code: $(echo "$code_changed" | head -5 | tr '\n' ' ')" >&2
   echo "  add a regression test, or bypass with: git commit --no-verify" >&2
   exit 1
+fi
+
+harness_changed=$(printf '%s\n' "$authored" | grep -E '^extra/llm_research/decode/nv_.*_ab\.py$' || true)
+if [ -n "$harness_changed" ]; then
+  for f in $harness_changed; do
+    body=$(git show ":$f" 2>/dev/null)
+    case "$body" in
+      *COST_PREDICTION*validate_cost_prediction*) ;;
+      *)
+        echo "pre-commit: decode harness without the predicted-wall-delta contract (agreement Rule 3)" >&2
+        echo "  staged harness: $f" >&2
+        echo "  COST_PREDICTION + validate_cost_prediction are required (nv_fusion_cost_model.py); bypass with: git commit --no-verify" >&2
+        exit 1
+        ;;
+    esac
+  done
 fi

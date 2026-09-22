@@ -1,0 +1,143 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "count": 8,
+      "depth": 4096,
+      "max_context": 4352,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.798244125,
+          4.805806,
+          4.8122455
+        ],
+        "external_contention_high_limit_ms": 5.055806,
+        "median_ms_per_token": 4.805806,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.798244125,
+          4.805806,
+          4.8122455
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "count": 8,
+      "depth": 4096,
+      "max_context": 4352,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.399271875,
+          4.408129875,
+          4.406013375
+        ],
+        "external_contention_high_limit_ms": 4.656013375,
+        "median_ms_per_token": 4.406013375,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.399271875,
+          4.408129875,
+          4.406013375
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    },
+    {
+      "arm": "control_c",
+      "count": 8,
+      "depth": 4096,
+      "max_context": 4352,
+      "reps": 3,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          4.801999625,
+          4.806006,
+          4.812483125
+        ],
+        "external_contention_high_limit_ms": 5.056006,
+        "median_ms_per_token": 4.806006,
+        "prelude_token": 34208,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          4.801999625,
+          4.806006,
+          4.812483125
+        ],
+        "timed_token_count": 24,
+        "token_hashes": [
+          "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a",
+          "faf6becf355abfb3e205616ec6b89b045e0ab34702848f223d525e2ffed91891",
+          "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+        ],
+        "token_stream_hash": "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f",
+        "warmup_tokens": [
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208
+        ]
+      }
+    }
+  ],
+  "count": 8,
+  "depth": 4096,
+  "max_context": 4352,
+  "mode": "reverse-bracket-unprofiled",
+  "reps": 3,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_wall.v1",
+  "token_stream_hashes": [
+    "e8a4d53f4b96389ee1a3eda00decbf75c22826806136cef60072ef2cf5b8804f"
+  ],
+  "tokens_per_second": {
+    "candidate": 226.96254298138624,
+    "candidate_delta": 18.88523144012845,
+    "control_midpoint": 208.07731154125779
+  },
+  "walls_us_per_token": {
+    "candidate": 4406.0133749999995,
+    "candidate_delta": -399.8926250000004,
+    "control_a": 4805.806,
+    "control_c": 4806.006,
+    "control_midpoint": 4805.906
+  }
+}

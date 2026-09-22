@@ -13,6 +13,14 @@ ScalarIndex: TypeAlias = int | UOp
 LoadSource: TypeAlias = UOp | Callable[[ScalarIndex], UOp]
 
 
+def _check_k32_fragment_boundary(k_base:ScalarIndex, width:int, *, label:str) -> None:
+  """Fail closed unless every represented fragment stays inside one K32 metadata group."""
+  within = k_base % 32
+  maximum = within if isinstance(within, int) else within.simplify().vmax
+  if maximum + width > 32:
+    raise ValueError(f"{label} fragment crosses a K32 metadata boundary: k_base%32 vmax={maximum}, width={width}")
+
+
 @dataclass(frozen=True)
 class PackedOperandComponent:
   """One named, typed byte range produced or consumed by a packed operand transform."""
@@ -112,6 +120,435 @@ class PackedWeightTile:
     if self.width not in (8, 16): raise ValueError(f"packed tile width must be 8 or 16, got {self.width}")
     if self.value.dtype != dtypes.half.vec(self.width):
       raise TypeError(f"packed tile value must be half.vec({self.width}), got {self.value.dtype}")
+
+
+@dataclass(frozen=True)
+class PackedInt8Fragment:
+  """One direct-packed int8 tensor-core fragment with logical row/K ownership.
+
+  Unlike :class:`PackedWeightTile`, this carrier is not a dequantized weight.
+  It contains the unsigned Q4 code (0..15) in a signed-int8 carrier, exactly as
+  consumed by NVIDIA's ``s8 x s8 -> s32`` IMMA instruction.  ``row`` and
+  ``k_base`` deliberately survive on the typed value: a tensor-core range
+  permutation may choose physical lanes only *after* these logical coordinates
+  have selected the Q4 low/high nibble.
+  """
+  value: UOp
+  row: ScalarIndex
+  k_base: ScalarIndex
+  width: Literal[8, 16]
+  logical_shape: tuple[int, int]
+  block_scale: UOp
+  block_minimum: UOp
+  group_scale: UOp
+  group_minimum: UOp
+  logical_group: ScalarIndex
+  abi: str = "q4_k.logical_nk_to_s8.v1"
+
+  def __post_init__(self) -> None:
+    if self.width not in (8, 16): raise ValueError(f"packed int8 fragment width must be 8 or 16, got {self.width}")
+    if self.value.dtype != dtypes.char.vec(self.width):
+      raise TypeError(f"packed int8 fragment value must be char.vec({self.width}), got {self.value.dtype}")
+    if (not isinstance(self.logical_shape, tuple) or len(self.logical_shape) != 2 or
+        not all(isinstance(x, int) and x > 0 for x in self.logical_shape)):
+      raise ValueError("packed int8 fragment logical_shape must be a positive (N,K) pair")
+    if self.block_scale.dtype != dtypes.float or self.block_minimum.dtype != dtypes.float:
+      raise TypeError("packed int8 fragment block scale/minimum must be float32")
+    if self.group_scale.dtype.scalar() not in (dtypes.uint, dtypes.int) or self.group_minimum.dtype.scalar() not in (dtypes.uint, dtypes.int):
+      raise TypeError("packed int8 fragment group scale/minimum must be integer scalars")
+
+
+@dataclass(frozen=True)
+class Q4KInt8FragmentProvider:
+  """Typed logical ``(N,K) -> int8`` provider for canonical Q4_K storage.
+
+  This is intentionally narrower than arbitrary ALU-DAG substitution.  The
+  provider owns one exact :class:`PackedWeightTransform`, accepts logical row
+  and K coordinates, and only then extracts the corresponding nibble.  That
+  ordering is the contract which prevents the observed postrange bug where a
+  permuted K range changed low/high-nibble parity.
+
+  The produced values are *codes*, not complete affine Q4_K weights.  Q4_K
+  scale/min correction is a separate typed accumulator contract; callers must
+  not treat a raw IMMA reduction across multiple 32-value groups as a complete
+  Q4_K projection.
+  """
+  transform: "PackedWeightTransform"
+  abi: str = "q4_k.logical_nk_to_s8.v1"
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.transform, PackedWeightTransform):
+      raise TypeError("Q4_K int8 fragment provider requires a PackedWeightTransform")
+    if self.transform.quant_format is not Q4_K:
+      raise ValueError("Q4_K int8 fragment provider requires canonical Q4_K storage")
+
+  @property
+  def logical_shape(self) -> tuple[int, int]: return self.transform.rows, self.transform.k
+
+  def _code(self, source:LoadSource, row:ScalarIndex, k:ScalarIndex) -> UOp:
+    self.transform._check_coords(row, k)
+    within = k % self.transform.block_elems
+    group, pos = within // 32, within % 32
+    block = row * self.transform.blocks_per_row + k // self.transform.block_elems
+    base = block * self.transform.units_per_block
+    qword = self.transform._load(source, base + 4 + (group//2)*8 + pos//4)
+    # 0..15 is representable by signed int8.  Cast only after logical group
+    # parity has selected the low/high nibble.
+    return qword.rshift((pos%4)*8 + (group%2)*4).bitwise_and(15).cast(dtypes.char)
+
+  def fragment(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex,
+               width:Literal[8, 16]=16) -> PackedInt8Fragment:
+    if width not in (8, 16): raise ValueError(f"packed int8 fragment width must be 8 or 16, got {width}")
+    self.transform._check_coords(row, k_base)
+    if isinstance(k_base, int) and k_base + width > self.transform.k:
+      raise IndexError(f"fragment [{k_base}, {k_base+width}) is outside [0, {self.transform.k})")
+    _check_k32_fragment_boundary(k_base, width, label="Q4_K")
+    requested: list[ScalarIndex] = []
+    def collect(index:ScalarIndex) -> UOp:
+      requested.append(index.simplify() if isinstance(index, UOp) else index)
+      return UOp.const(self.transform.storage_dtype, 0)
+    for i in range(width): self._code(collect, row, k_base+i)
+    block = row * self.transform.blocks_per_row + k_base // self.transform.block_elems
+    unit_base, logical_group = block*self.transform.units_per_block, (k_base%self.transform.block_elems)//32
+    self.transform._q4_params(collect, unit_base, logical_group)
+    cached_load = self.transform._tile_loads(source, tuple(requested))
+    lanes = tuple(self._code(cached_load, row, k_base+i) for i in range(width))
+    block_scale, block_minimum, group_scale, group_minimum = self.transform._q4_params(cached_load, unit_base, logical_group)
+    return PackedInt8Fragment(UOp(Ops.STACK, dtypes.char.vec(width), lanes), row, k_base, width, self.logical_shape,
+      block_scale, block_minimum, group_scale, group_minimum, logical_group, self.abi)
+
+  def metadata(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex) -> tuple[UOp, UOp, UOp, UOp, ScalarIndex]:
+    """Return the affine Q4_K metadata owned by the logical K32 group.
+
+    This is the accumulator-side half of :meth:`fragment`: callers can obtain
+    the correction factors without constructing a throwaway code vector.  The
+    logical ``k_base`` is interpreted before any tensor-core permutation, just
+    like fragment nibble selection.
+    """
+    self.transform._check_coords(row, k_base)
+    block = row * self.transform.blocks_per_row + k_base // self.transform.block_elems
+    logical_group = (k_base % self.transform.block_elems) // 32
+    d, dmin, scale, minimum = self.transform._q4_params(source, block*self.transform.units_per_block, logical_group)
+    return d, dmin, scale, minimum, logical_group
+
+  @property
+  def identity(self) -> tuple[str, tuple[int, int], tuple[tuple[str, object], ...]]:
+    return self.abi, self.logical_shape, tuple(sorted(self.transform.to_json().items()))
+
+
+@dataclass(frozen=True)
+class Q6KInt8Fragment:
+  """One signed Q6_K code fragment with exact K16 scale ownership."""
+  value: UOp
+  row: ScalarIndex
+  k_base: ScalarIndex
+  width: Literal[8, 16]
+  logical_shape: tuple[int, int]
+  block_scale: UOp
+  subgroup_scale: UOp
+  logical_subgroup: ScalarIndex
+  abi: str = "q6_k.logical_nk_to_s8_k16.v1"
+
+  def __post_init__(self) -> None:
+    if self.width not in (8, 16) or self.value.dtype != dtypes.char.vec(self.width):
+      raise TypeError("Q6_K int8 fragment must be a char vector of width 8 or 16")
+    if self.block_scale.dtype != dtypes.float:
+      raise TypeError("Q6_K block scale must be float32")
+    if self.subgroup_scale.dtype.scalar() not in (dtypes.char, dtypes.int):
+      raise TypeError("Q6_K K16 subgroup scale must be a signed integer scalar")
+
+
+@dataclass(frozen=True)
+class Q6KInt8FragmentProvider:
+  """Typed logical ``(N,K) -> signed int8`` provider for canonical Q6_K.
+
+  Q6_K's scale ownership is K16, narrower than NVIDIA signed IMMA's K32.
+  Fragments therefore fail closed at K16 boundaries and retain their exact
+  subgroup identity.  The paired-subtotal accumulator below is the only
+  admissible way to combine two such halves into one K32 tensor-core step.
+  """
+  transform: "PackedWeightTransform"
+  abi: str = "q6_k.logical_nk_to_s8_k16.v1"
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.transform, PackedWeightTransform):
+      raise TypeError("Q6_K int8 fragment provider requires a PackedWeightTransform")
+    if self.transform.quant_format is not Q6_K:
+      raise ValueError("Q6_K int8 fragment provider requires canonical Q6_K storage")
+
+  @property
+  def logical_shape(self) -> tuple[int, int]: return self.transform.rows, self.transform.k
+
+  def _code(self, source:LoadSource, row:ScalarIndex, k:ScalarIndex) -> UOp:
+    self.transform._check_coords(row, k)
+    within = k % self.transform.block_elems
+    subgroup, pos = within // 16, within % 16
+    half, payload_group = subgroup // 8, subgroup % 8
+    block = row*self.transform.blocks_per_row+k//self.transform.block_elems
+    base = block*self.transform.units_per_block
+    byte = self.transform._byte_loader(source, base, 2)
+    ql_shift = 4 if isinstance(payload_group, int) and payload_group >= 4 else 0 if isinstance(payload_group, int) else \
+      (payload_group >= 4).where(4, 0)
+    ql = byte(half*64+(payload_group%4)*16+pos).rshift(ql_shift).bitwise_and(15)
+    qh = byte(128+half*32+(payload_group%2)*16+pos).rshift((payload_group//2)*2).bitwise_and(3).lshift(4)
+    return (ql.bitwise_or(qh).cast(dtypes.int)-32).cast(dtypes.char)
+
+  def metadata(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex) -> tuple[UOp, UOp, ScalarIndex]:
+    self.transform._check_coords(row, k_base)
+    block = row*self.transform.blocks_per_row+k_base//self.transform.block_elems
+    base = block*self.transform.units_per_block
+    subgroup = (k_base%self.transform.block_elems)//16
+    byte = self.transform._byte_loader(source, base, 2)
+    scale = byte(192+subgroup).cast(dtypes.uint8).bitcast(dtypes.char).cast(dtypes.int)
+    d = self.transform._load(source, base+104).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float)
+    return d, scale, subgroup
+
+  def k32_metadata(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex) -> tuple[UOp, UOp, UOp, ScalarIndex]:
+    """Return D and both independently-owned K16 scales for one K32 step."""
+    within = k_base % 32
+    if (within if isinstance(within, int) else within.simplify().vmax) != 0:
+      raise ValueError("Q6_K paired metadata requires a K32-aligned base")
+    d0, scale0, subgroup0 = self.metadata(source, row, k_base)
+    d1, scale1, subgroup1 = self.metadata(source, row, k_base+16)
+    if isinstance(subgroup0, int) and isinstance(subgroup1, int) and subgroup1 != subgroup0+1:
+      raise ValueError("Q6_K paired metadata does not own adjacent K16 subgroups")
+    # Both halves are in one K32 and therefore one K256 block.
+    return d0, scale0, scale1, subgroup0
+
+  def fragment(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex,
+               width:Literal[8, 16]=16) -> Q6KInt8Fragment:
+    if width not in (8, 16): raise ValueError(f"Q6_K int8 fragment width must be 8 or 16, got {width}")
+    self.transform._check_coords(row, k_base)
+    if isinstance(k_base, int) and k_base+width > self.transform.k:
+      raise IndexError(f"fragment [{k_base}, {k_base+width}) is outside [0, {self.transform.k})")
+    within = k_base % 16
+    maximum = within if isinstance(within, int) else within.simplify().vmax
+    if maximum+width > 16:
+      raise ValueError(f"Q6_K fragment crosses a K16 scale boundary: k_base%16 vmax={maximum}, width={width}")
+    requested:list[ScalarIndex] = []
+    def collect(index:ScalarIndex) -> UOp:
+      requested.append(index.simplify() if isinstance(index, UOp) else index)
+      return UOp.const(self.transform.storage_dtype, 0)
+    for i in range(width): self._code(collect, row, k_base+i)
+    self.metadata(collect, row, k_base)
+    cached_load = self.transform._tile_loads(source, tuple(requested))
+    values = tuple(self._code(cached_load, row, k_base+i) for i in range(width))
+    d, scale, subgroup = self.metadata(cached_load, row, k_base)
+    return Q6KInt8Fragment(UOp(Ops.STACK, dtypes.char.vec(width), values), row, k_base, width,
+                          self.logical_shape, d, scale, subgroup, self.abi)
+
+  @property
+  def identity(self) -> tuple[str, tuple[int, int], tuple[tuple[str, object], ...]]:
+    return self.abi, self.logical_shape, tuple(sorted(self.transform.to_json().items()))
+
+
+@dataclass(frozen=True)
+class Q8ActivationRecordTransform:
+  """Compact compiler-owned Q8 activation record used by grouped IMMA.
+
+  One uint32 backing buffer owns row-major signed-int8 values followed by FP32
+  K32 scales and raw sums.  Keeping those components in one typed PARAM lets an
+  ordinary two-operand matmul retain every correction input without a global
+  ``[groups,M,N]`` intermediate.
+  """
+  rows: int
+  k: int
+  group_elems: int = 32
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.rows, int) or self.rows <= 0 or not isinstance(self.k, int) or self.k <= 0:
+      raise ValueError("Q8 activation rows and K must be positive integers")
+    if self.group_elems != 32 or self.k % self.group_elems:
+      raise ValueError("Q8 activation K must be aligned to 32-value groups")
+
+  @property
+  def storage_dtype(self): return dtypes.uint32
+  @property
+  def storage_width(self) -> int: return 4
+  @property
+  def groups_per_row(self) -> int: return self.k//self.group_elems
+  @property
+  def values_bytes(self) -> int: return self.rows*self.k
+  @property
+  def metadata_elems(self) -> int: return self.rows*self.groups_per_row
+  @property
+  def scales_offset_words(self) -> int: return self.values_bytes//4
+  @property
+  def sums_offset_words(self) -> int: return self.scales_offset_words+self.metadata_elems
+  @property
+  def packed_bytes(self) -> int: return self.values_bytes+2*self.metadata_elems*4
+  @property
+  def storage_units(self) -> int: return self.packed_bytes//4
+  @property
+  def logical_shape(self) -> tuple[int, int]: return self.rows, self.k
+
+  def _check_coords(self, row:ScalarIndex, k:ScalarIndex) -> None:
+    if isinstance(row, int) and not 0 <= row < self.rows: raise IndexError(f"row={row} is outside [0, {self.rows})")
+    if isinstance(k, int) and not 0 <= k < self.k: raise IndexError(f"k={k} is outside [0, {self.k})")
+    if not isinstance(row, (int, UOp)) or not isinstance(k, (int, UOp)):
+      raise TypeError("Q8 logical row/K must be integers or UOps")
+
+  @staticmethod
+  def _load(source:LoadSource, index:ScalarIndex) -> UOp:
+    return source(index) if callable(source) else source[index]
+
+  def value(self, source:LoadSource, row:ScalarIndex, k:ScalarIndex) -> UOp:
+    self._check_coords(row, k)
+    byte_index = row*self.k+k
+    word = self._load(source, byte_index//4)
+    return word.rshift((byte_index%4)*8).bitwise_and(0xff).cast(dtypes.uint8).bitcast(dtypes.char)
+
+  def metadata(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex) -> tuple[UOp, UOp, ScalarIndex]:
+    self._check_coords(row, k_base)
+    group = k_base//self.group_elems
+    index = row*self.groups_per_row+group
+    scale = self._load(source, self.scales_offset_words+index).bitcast(dtypes.float)
+    raw_sum = self._load(source, self.sums_offset_words+index).bitcast(dtypes.float)
+    return scale, raw_sum, group
+
+  def to_json(self) -> dict[str, int|str]:
+    return {"abi":"q8_1.compact_record.v1", "rows":self.rows, "k":self.k, "group_elems":self.group_elems,
+            "values_bytes":self.values_bytes, "metadata_elems":self.metadata_elems, "packed_bytes":self.packed_bytes,
+            "storage_dtype":self.storage_dtype.name}
+
+
+@dataclass(frozen=True)
+class Q8Int8Fragment:
+  value: UOp
+  row: ScalarIndex
+  k_base: ScalarIndex
+  width: Literal[8, 16]
+  scale: UOp
+  raw_sum: UOp
+  logical_group: ScalarIndex
+  abi: str = "q8_1.logical_mk_to_s8.v1"
+
+  def __post_init__(self) -> None:
+    if self.width not in (8, 16) or self.value.dtype != dtypes.char.vec(self.width):
+      raise TypeError("Q8 int8 fragment must be a char vector of width 8 or 16")
+    if self.scale.dtype != dtypes.float or self.raw_sum.dtype != dtypes.float:
+      raise TypeError("Q8 int8 fragment scale/raw_sum must be float32")
+
+
+@dataclass(frozen=True)
+class Q8Int8FragmentProvider:
+  transform: Q8ActivationRecordTransform
+  abi: str = "q8_1.logical_mk_to_s8.v1"
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.transform, Q8ActivationRecordTransform):
+      raise TypeError("Q8 int8 fragment provider requires a Q8ActivationRecordTransform")
+
+  @property
+  def logical_shape(self) -> tuple[int, int]: return self.transform.logical_shape
+
+  def fragment(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex,
+               width:Literal[8, 16]=16) -> Q8Int8Fragment:
+    if width not in (8, 16): raise ValueError(f"Q8 int8 fragment width must be 8 or 16, got {width}")
+    self.transform._check_coords(row, k_base)
+    if isinstance(k_base, int) and k_base+width > self.transform.k:
+      raise IndexError(f"Q8 fragment [{k_base}, {k_base+width}) is outside [0, {self.transform.k})")
+    _check_k32_fragment_boundary(k_base, width, label="Q8_1")
+    values = tuple(self.transform.value(source, row, k_base+i) for i in range(width))
+    scale, raw_sum, group = self.transform.metadata(source, row, k_base)
+    return Q8Int8Fragment(UOp(Ops.STACK, dtypes.char.vec(width), values), row, k_base, width, scale, raw_sum, group, self.abi)
+
+  @property
+  def identity(self) -> tuple[str, tuple[tuple[str, object], ...]]:
+    return self.abi, tuple(sorted(self.transform.to_json().items()))
+
+
+@dataclass(frozen=True)
+class Q4KQ8GroupAccumulatorContract:
+  """Typed K32 correction ABI consumed after one signed-int8 IMMA."""
+  weight: Q4KInt8FragmentProvider
+  activation: Q8Int8FragmentProvider
+  abi: str = "q4_k_q8_1.k32_fp32_accumulator.v1"
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.weight, Q4KInt8FragmentProvider) or not isinstance(self.activation, Q8Int8FragmentProvider):
+      raise TypeError("group accumulator requires typed Q4_K and Q8 fragment providers")
+    if self.weight.transform.k != self.activation.transform.k:
+      raise ValueError("Q4_K/Q8 group accumulator K ownership must match")
+
+  def correct(self, weight_source:LoadSource, activation_source:LoadSource, *, row:ScalarIndex, column:ScalarIndex,
+              k_base:ScalarIndex, integer_dot:UOp) -> UOp:
+    """Turn one exact K32 ``s8*s8->s32`` dot into its Q4_K/Q8_1 contribution.
+
+    The half round-trips are part of the ABI, not an optimization accident:
+    they match the proven composite emitter's packed ``half2`` metadata staging
+    before its FP32 accumulator update.
+    """
+    if integer_dot.dtype.scalar() not in (dtypes.int, dtypes.uint) or integer_dot.dtype.count != 1:
+      raise TypeError(f"group accumulator requires one integer scalar dot, got {integer_dot.dtype}")
+    d, dmin, scale, minimum, weight_group = self.weight.metadata(weight_source, column, k_base)
+    activation_scale, raw_sum, activation_group = self.activation.transform.metadata(activation_source, row, k_base)
+    # Concrete mismatches are programming errors. Symbolic equality is guarded
+    # by the shared logical k_base and the providers' identical K32 grouping.
+    if isinstance(weight_group, int) and isinstance(activation_group, int) and weight_group != activation_group % 8:
+      raise ValueError("Q4_K and Q8 metadata do not own the same logical K32 group")
+    weight_code_scale = (d * scale.cast(dtypes.float)).cast(dtypes.half).cast(dtypes.float)
+    weight_minimum = (-dmin * minimum.cast(dtypes.float)).cast(dtypes.half).cast(dtypes.float)
+    activation_scale = activation_scale.cast(dtypes.half).cast(dtypes.float)
+    raw_sum = raw_sum.cast(dtypes.half).cast(dtypes.float)
+    return weight_code_scale * activation_scale * integer_dot.cast(dtypes.float) + weight_minimum * raw_sum
+
+  @staticmethod
+  def combine_staged(integer_dot:UOp, weight_metadata:UOp, activation_metadata:UOp) -> UOp:
+    """Consume the proven ``half2`` metadata packets after cooperative LDS staging."""
+    if integer_dot.dtype.scalar() not in (dtypes.int, dtypes.uint) or integer_dot.dtype.count != 1:
+      raise TypeError(f"group accumulator requires one integer scalar dot, got {integer_dot.dtype}")
+    if weight_metadata.dtype != dtypes.half.vec(2) or activation_metadata.dtype != dtypes.half.vec(2):
+      raise TypeError("staged group metadata must be two exact half2 packets")
+    wc0, wc1 = weight_metadata.gep(0).cast(dtypes.float), weight_metadata.gep(1).cast(dtypes.float)
+    yc0, yc1 = activation_metadata.gep(0).cast(dtypes.float), activation_metadata.gep(1).cast(dtypes.float)
+    return wc0 * yc0 * integer_dot.cast(dtypes.float) + wc1 * yc1
+
+
+@dataclass(frozen=True)
+class Q6KQ8SubgroupAccumulatorContract:
+  """Typed paired-K16 correction ABI for one NVIDIA K32 IMMA step.
+
+  ``integer_dots`` must contain independently masked low/high K16 subtotals.
+  Accepting a single K32 dot would lose Q6_K's two distinct scales and is
+  deliberately not part of this ABI.
+  """
+  weight: Q6KInt8FragmentProvider
+  activation: Q8Int8FragmentProvider
+  abi: str = "q6_k_q8_1.k16_pair_fp32_accumulator.v1"
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.weight, Q6KInt8FragmentProvider) or not isinstance(self.activation, Q8Int8FragmentProvider):
+      raise TypeError("subgroup accumulator requires typed Q6_K and Q8 fragment providers")
+    if self.weight.transform.k != self.activation.transform.k:
+      raise ValueError("Q6_K/Q8 subgroup accumulator K ownership must match")
+
+  @staticmethod
+  def _dots(integer_dots:tuple[UOp, UOp]) -> tuple[UOp, UOp]:
+    if not isinstance(integer_dots, tuple) or len(integer_dots) != 2:
+      raise TypeError("Q6_K subgroup accumulator requires separate low/high K16 integer dots")
+    if any(x.dtype.scalar() not in (dtypes.int, dtypes.uint) or x.dtype.count != 1 for x in integer_dots):
+      raise TypeError("Q6_K subgroup accumulator requires two integer scalar dots")
+    return integer_dots
+
+  def correct(self, weight_source:LoadSource, activation_source:LoadSource, *, row:ScalarIndex, column:ScalarIndex,
+              k_base:ScalarIndex, integer_dots:tuple[UOp, UOp]) -> UOp:
+    dot0, dot1 = self._dots(integer_dots)
+    d, scale0, scale1, _ = self.weight.k32_metadata(weight_source, column, k_base)
+    activation_scale, _, _ = self.activation.transform.metadata(activation_source, row, k_base)
+    wc0 = (d*scale0.cast(dtypes.float)).cast(dtypes.half).cast(dtypes.float)
+    wc1 = (d*scale1.cast(dtypes.float)).cast(dtypes.half).cast(dtypes.float)
+    yc = activation_scale.cast(dtypes.half).cast(dtypes.float)
+    return yc*(wc0*dot0.cast(dtypes.float)+wc1*dot1.cast(dtypes.float))
+
+  @classmethod
+  def combine_staged(cls, integer_dots:tuple[UOp, UOp], weight_metadata:UOp, activation_metadata:UOp) -> UOp:
+    dot0, dot1 = cls._dots(integer_dots)
+    if weight_metadata.dtype != dtypes.half.vec(2) or activation_metadata.dtype != dtypes.half.vec(2):
+      raise TypeError("staged subgroup metadata must be two exact half2 packets")
+    wc0, wc1 = weight_metadata.gep(0).cast(dtypes.float), weight_metadata.gep(1).cast(dtypes.float)
+    yc = activation_metadata.gep(0).cast(dtypes.float)
+    return yc*(wc0*dot0.cast(dtypes.float)+wc1*dot1.cast(dtypes.float))
 
 
 @dataclass(frozen=True)
@@ -280,6 +717,13 @@ class PackedWeightTransform:
 
   def _dequant_q4(self, source:LoadSource, base:ScalarIndex, within:ScalarIndex) -> UOp:
     group, pos = within // 32, within % 32
+    d, dmin, scale, minimum = self._q4_params(source, base, group)
+    qword = self._load(source, base + 4 + (group//2)*8 + pos//4)
+    q = qword.rshift((pos%4)*8 + (group%2)*4).bitwise_and(15)
+    return (d * scale.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * minimum.cast(dtypes.float32)).cast(dtypes.float16)
+
+  def _q4_params(self, source:LoadSource, base:ScalarIndex, group:ScalarIndex) -> tuple[UOp, UOp, UOp, UOp]:
+    """Return canonical Q4_K ``D,Dmin,scale,min`` for one logical K32 group."""
     word0 = self._load(source, base)
     d = word0.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
     dmin = word0.rshift(16).bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
@@ -299,9 +743,7 @@ class PackedWeightTransform:
       high_scale = high.bitwise_and(15).bitwise_or(byte(high_group).rshift(6).lshift(4))
       high_minimum = high.rshift(4).bitwise_or(byte(4+high_group).rshift(6).lshift(4))
       scale, minimum = (group < 4).where(low_scale, high_scale), (group < 4).where(low_minimum, high_minimum)
-    qword = self._load(source, base + 4 + (group//2)*8 + pos//4)
-    q = qword.rshift((pos%4)*8 + (group%2)*4).bitwise_and(15)
-    return (d * scale.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * minimum.cast(dtypes.float32)).cast(dtypes.float16)
+    return d, dmin, scale, minimum
 
   def _dequant_q6(self, source:LoadSource, base:ScalarIndex, within:ScalarIndex) -> UOp:
     group, pos = within // 16, within % 16

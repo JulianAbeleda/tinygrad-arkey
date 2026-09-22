@@ -1,0 +1,26 @@
+{
+  "attn_v_0": {
+    "max": 0.0,
+    "mean": 0.0,
+    "finite": true,
+    "alternate": null
+  },
+  "attn_v_1": {
+    "max": 0.0,
+    "mean": 0.0,
+    "finite": true,
+    "alternate": false
+  },
+  "ffn_down_0": {
+    "max": 0.0,
+    "mean": 0.0,
+    "finite": true,
+    "alternate": null
+  },
+  "ffn_down_1": {
+    "max": 0.0,
+    "mean": 0.0,
+    "finite": true,
+    "alternate": false
+  }
+}

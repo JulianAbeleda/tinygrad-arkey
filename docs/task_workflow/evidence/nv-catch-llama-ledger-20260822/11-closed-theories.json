@@ -1,0 +1,61 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.closed_theories.v1",
+  "phase": 5,
+  "status": "COMPLETE",
+  "closed": [
+    {
+      "theory": "one-pass reduce_output_rmsnorm boundary fusion closes the reduce/residual gap",
+      "verdict": "NO_GO_WALL",
+      "wall_delta_us": 59.602,
+      "evidence": "nv-third-party-theory-audit-result-20260822.md probe 1",
+      "reason": "the fused boundary row regressed node_sum +69.440us and wall +59.602us; residual is already absorbed in O/down epilogues"
+    },
+    {
+      "theory": "submit-ahead graph submission recovers the locked +100.648us host gap",
+      "verdict": "WALL_NEUTRAL",
+      "wall_delta_us": -3.690,
+      "evidence": "nv-third-party-theory-audit-result-20260822.md probe 6",
+      "reason": "fresh host gap is now -72.016us in tinygrad's favor, so there is no host amount to recover; the submission change is inside bracket drift"
+    },
+    {
+      "theory": "forcing Q->O support onto a second GPFIFO creates overlap",
+      "verdict": "NO_GO_WALL",
+      "wall_delta_us": 656.9,
+      "evidence": "nv-concurrency-ceiling-probe-result-20260821.md",
+      "reason": "S1 support is a serial data-dependency chain, not independent idle work; moving it adds cross-queue handoff cost"
+    },
+    {
+      "theory": "removing or moving the landed K/V ready-placement pin recovers wall",
+      "verdict": "NO_GO_WALL",
+      "wall_delta_tok_s": -3.018,
+      "evidence": "nv-kv-overlap-result-20260822.md",
+      "reason": "ready_placement=1 already captures the small real overlap; ready_placement=0 regresses"
+    },
+    {
+      "theory": "edge-aware PDL split-phase arm converts launch-ahead into unprofiled wall recovery",
+      "verdict": "WALL_NEUTRAL",
+      "wall_delta_us": 14.645,
+      "evidence": "phase5/control-A.json, phase5/candidate.json, phase5/control-B.json",
+      "reason": "the candidate is slower than control A and sits inside the 54.2us control spread; the current 83-edge conservative arm does not reproduce llama's full programmatic chain"
+    },
+    {
+      "theory": "exact four-warp Q4_K attention-K route moves wall",
+      "verdict": "WALL_NEUTRAL",
+      "evidence": "nv-q4k-k-four-warp-route-result-20260822.md",
+      "reason": "isolated body improved but full wall was neutral; off-path node mass is not wall"
+    },
+    {
+      "theory": "production-NV real DRAM bytes are approximately 5.04 GB and match llama",
+      "verdict": "UNMEASURED",
+      "evidence": "nv-third-party-theory-audit-result-20260822.md probe 5",
+      "reason": "the accounting estimate is not a hardware counter; the CUDA fallback is cross-backend and cannot replace the missing production-NV byte total"
+    },
+    {
+      "theory": "llama overlap mass is simultaneous useful execution",
+      "verdict": "REFUTED",
+      "evidence": "nv-third-party-theory-audit-result-20260822.md probes 4 and the corrected useful identity",
+      "reason": "PDL on/off changes overlap by ~1122.7us while union changes only ~7.7us and bytes change 4352; the overlap is mostly dependency-wait shadow, and useful_body remains UNMEASURED"
+    }
+  ],
+  "reopen_rule": "reopen only with the exact changed fact: commit, route, geometry, dependency edge, quant stratum, profiler defect, or prior classification error"
+}

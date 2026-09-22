@@ -1,0 +1,85 @@
+{
+  "call_census": {
+    "fixup": 72,
+    "main": 72,
+    "producer": 72
+  },
+  "computed_input": {
+    "owned_without_adapter": true,
+    "producer_input_ops": {
+      "SLICE": 72
+    },
+    "producer_input_physical_bases": 36
+  },
+  "device_profile": {
+    "by_name": {},
+    "device_ms": 0,
+    "kernel_count": 0,
+    "schema": "prefill-device-profile-range-summary.v1"
+  },
+  "ordered_workspace": {
+    "bounded_bytes": 22283600,
+    "id_physical_bases": 1,
+    "old_72_workspace_bytes": 1604419200,
+    "partial_physical_bases": 1,
+    "saved_bytes": 1582135600
+  },
+  "program_names": {
+    "E_1024_8_16_4_0474917d69356f3fb88ab57e908ee4f28ade9b7ce4aba40fce75ec61ac8f072d": 36,
+    "E_1024_8_16_4_869e848bb5316270adcd4bf13e8090a251cc6d2bf0836f27b4319c893157eb2c": 36,
+    "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f": 1,
+    "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": 36,
+    "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": 36,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_03180df0efeb598bc45a49b92d84c58a8484f4dcd609cd4d3e4aacad5d583fce": 36,
+    "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7": 1,
+    "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": 36,
+    "E_4_32_32_4_2_2_2_8_2_127_2_9e9fe095ccae4c757b96799f928901747e2ec817b074f802dfba07b1b95c4fa6": 72,
+    "E_4_32_32_4_2_2_2_8_2_383_2_e1b756a0093f26f96af0ea5db74fc3b41e6a44ae02968e01214c238e807d7a9e": 36,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_4_8_32_4_2_2_2_8_2_127_2_5b25908519df16d6540959b859dfc9b1b3da90428dede53099326cb17b2798b0": 72,
+    "E_512_16_8_2_4_4_7ba8bb6e17db46be97b12bb14aa0061205f501e4d34840e5e9a887084bd05ccc": 1,
+    "E_512_4_2_8_16_4_90bc800eaf9a6441acd8c7bf4e4ce6b36ec829b5916985f2e916b5d9931bd5af": 36,
+    "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": 36,
+    "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5": 36,
+    "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c": 36,
+    "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": 36,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 1,
+    "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": 35,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 36,
+    "E_64_64_8_16_4_6fbbb79c268af5049ba63c1085bc9fceeed2ba0dfed78a06bb342965de3c6d85": 36,
+    "E_73728_32_3_c81631061fb6bc9bbfa2c6c6e9d2e39116b6103d26b3711633b9886187464d4e": 72,
+    "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": 36,
+    "E_8_64_2_8_16_4_e106c4030a9d21cac72ff0bb3b8aa5e9a622cb2894412277e2f90534cf3f0e2e": 36,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "q4k_imma_fixup": 72,
+    "q4k_imma_stream": 72,
+    "q8_compact_fp16": 72,
+    "r_1187_32_4_16_2_2_2_4_8_e17beda74552b81ddd907659cb1d36a2d7d3085514fc8c74a45a4c460a4aee27": 1,
+    "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5": 1,
+    "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c": 1,
+    "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f": 1,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 73,
+    "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": 36,
+    "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": 36
+  },
+  "route": {
+    "default_enabled": false,
+    "fail_closed": true,
+    "required_env": "NV_Q4_IMMA_PP512=1"
+  },
+  "schema": "tinygrad.nv_q4_imma_ordered_model_gate.v1",
+  "status": "PASS",
+  "wall": {
+    "candidate_min_ms": 99.7053,
+    "candidate_minus_fp16_ms": 15.9123,
+    "candidate_tok_s": 5135.14,
+    "fp16_reference_ms": 83.793,
+    "fp16_reference_tok_s": 6110.3,
+    "samples_ms": [
+      99.7053,
+      99.7065,
+      99.7057
+    ]
+  }
+}

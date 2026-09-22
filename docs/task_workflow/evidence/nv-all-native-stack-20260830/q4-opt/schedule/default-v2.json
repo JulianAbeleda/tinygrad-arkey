@@ -1,0 +1,42 @@
+{
+  "compiler_gate_capture_count": 1,
+  "error": "AttributeError(\"'TransformerBlock' object has no attribute '_nv_llama_packed_q6k_down_pp512_binding'\")",
+  "full_packed_enabled": true,
+  "llama_pair_asset_count": 1,
+  "schema": "tinygrad.nv_compiler_q4_gate_only_model_arm.v1",
+  "selector": {
+    "device": "NV",
+    "env": "1",
+    "expected_tuple": [
+      512,
+      36,
+      4096,
+      12288,
+      32,
+      8,
+      128,
+      0
+    ],
+    "gate_shape": [
+      12288,
+      4096
+    ],
+    "gate_type": "Q4KPrimitiveLinear",
+    "prefill_v2": true,
+    "qualified_tuple": [
+      512,
+      36,
+      4096,
+      12288,
+      32,
+      8,
+      128,
+      0
+    ],
+    "weight_type": null
+  },
+  "stage": "exception",
+  "status": "FAIL",
+  "trace": "Traceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4_schedule_sweep.py\", line 48, in main\n    for _ in range(3): _call_and_sync(run,chunk,temp)\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4k_model_gate.py\", line 58, in _call_and_sync\n    out = jit(chunk, temp)\n          ^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/jit.py\", line 640, in __call__\n    ret = self.fxn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/prefill/nv_compiler_q4_schedule_sweep.py\", line 45, in run\n    def run(tokens, temperature): return model.forward_greedy_with_logits(tokens, 0, temperature)\n                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py\", line 1814, in forward_greedy_with_logits\n    _logits = self.logits(tokens, start_pos)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py\", line 1733, in logits\n    for block in self.blk: x = block(x, start_pos)\n                               ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py\", line 996, in __call__\n    return _prefill_semantic(True, prefill_activation, (h + self._feed_forward(normed_h)).contiguous())\n                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/llm/model.py\", line 760, in _feed_forward\n    return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(\n                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'TransformerBlock' object has no attribute '_nv_llama_packed_q6k_down_pp512_binding'\n",
+  "untouched_fp16_overlays": 36
+}

@@ -1,0 +1,1401 @@
+{
+  "captured": [
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138525955392
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138617886528
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138648574272
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138740505408
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138771193152
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138863124288
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138893812032
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            },
+            {
+              "size": 16384,
+              "va_addr": 138985743168
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 6632,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/E_32_32_4_8eeb0be1271d29e75036577a0f78604299ce04d3c87461b79b0e8e5b78f540f4.cubin",
+      "cubin_sha256": "d9db53d22440f0adaa9637a2e302c83d19f19f847db71a81dab14ef6b0ad63f2",
+      "lcmem_usage": 576,
+      "max_threads": 2688,
+      "name": "E_32_32_4_8eeb0be1271d29e75036577a0f78604299ce04d3c87461b79b0e8e5b78f540f4",
+      "regs_usage": 24,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142857994240
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858010624
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858047488
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858055680
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858072064
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858080256
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858096640
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 142858104832
+            },
+            {
+              "size": 8192,
+              "va_addr": 142686027776
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 6112,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/E_32_32_4_754efa125a4186de196d591a52274307faebf8f3b7cce694e5a62499996fa352.cubin",
+      "cubin_sha256": "2156443bc073bac882b8e9eadd51e1c4c2f4cc5dca154b482625473f56c7c18d",
+      "lcmem_usage": 576,
+      "max_threads": 4096,
+      "name": "E_32_32_4_754efa125a4186de196d591a52274307faebf8f3b7cce694e5a62499996fa352",
+      "regs_usage": 10,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157971333120
+            },
+            {
+              "size": 16384,
+              "va_addr": 157971308544
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157972361216
+            },
+            {
+              "size": 16384,
+              "va_addr": 157972332544
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157973491712
+            },
+            {
+              "size": 16384,
+              "va_addr": 157973463040
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157974519808
+            },
+            {
+              "size": 16384,
+              "va_addr": 157974503424
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157975547904
+            },
+            {
+              "size": 16384,
+              "va_addr": 157975531520
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157976600576
+            },
+            {
+              "size": 16384,
+              "va_addr": 157976584192
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157977657344
+            },
+            {
+              "size": 16384,
+              "va_addr": 157977640960
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 4,
+              "va_addr": 157978685440
+            },
+            {
+              "size": 16384,
+              "va_addr": 157978669056
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            16,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 12968,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc.cubin",
+      "cubin_sha256": "d15723e0f5fe0ba1535e28d9c4a7ed49f5dd85c999f7647e3f87dd1d26947707",
+      "lcmem_usage": 576,
+      "max_threads": 768,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "regs_usage": 76,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157971333376
+            },
+            {
+              "size": 16384,
+              "va_addr": 157971308544
+            },
+            {
+              "size": 4,
+              "va_addr": 157971333120
+            },
+            {
+              "size": 16384,
+              "va_addr": 138525955392
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157972361472
+            },
+            {
+              "size": 16384,
+              "va_addr": 157972332544
+            },
+            {
+              "size": 4,
+              "va_addr": 157972361216
+            },
+            {
+              "size": 16384,
+              "va_addr": 138617886528
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157973491968
+            },
+            {
+              "size": 16384,
+              "va_addr": 157973463040
+            },
+            {
+              "size": 4,
+              "va_addr": 157973491712
+            },
+            {
+              "size": 16384,
+              "va_addr": 138740505408
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157974520064
+            },
+            {
+              "size": 16384,
+              "va_addr": 157974503424
+            },
+            {
+              "size": 4,
+              "va_addr": 157974519808
+            },
+            {
+              "size": 16384,
+              "va_addr": 138863124288
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157975548160
+            },
+            {
+              "size": 16384,
+              "va_addr": 157975531520
+            },
+            {
+              "size": 4,
+              "va_addr": 157975547904
+            },
+            {
+              "size": 16384,
+              "va_addr": 138985743168
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157976600832
+            },
+            {
+              "size": 16384,
+              "va_addr": 157976584192
+            },
+            {
+              "size": 4,
+              "va_addr": 157976600576
+            },
+            {
+              "size": 16384,
+              "va_addr": 139094304576
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157977657600
+            },
+            {
+              "size": 16384,
+              "va_addr": 157977640960
+            },
+            {
+              "size": 4,
+              "va_addr": 157977657344
+            },
+            {
+              "size": 16384,
+              "va_addr": 139202865984
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157978685696
+            },
+            {
+              "size": 16384,
+              "va_addr": 157978669056
+            },
+            {
+              "size": 4,
+              "va_addr": 157978685440
+            },
+            {
+              "size": 16384,
+              "va_addr": 139325484864
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 4,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 7072,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077.cubin",
+      "cubin_sha256": "52c701a0bc8c78081144884976cc263fde3ee2806d6aba2cbdfe46a09bf7e161",
+      "lcmem_usage": 576,
+      "max_threads": 2048,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "regs_usage": 28,
+      "shmem_usage": 1024
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157972447232
+            },
+            {
+              "size": 16384,
+              "va_addr": 157972418560
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858915840
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157973544960
+            },
+            {
+              "size": 16384,
+              "va_addr": 157973528576
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858924032
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157974573056
+            },
+            {
+              "size": 16384,
+              "va_addr": 157974556672
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858932224
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157975601152
+            },
+            {
+              "size": 16384,
+              "va_addr": 157975584768
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858940416
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157976666112
+            },
+            {
+              "size": 16384,
+              "va_addr": 157976637440
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858948608
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157977710592
+            },
+            {
+              "size": 16384,
+              "va_addr": 157977694208
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858956800
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157978738688
+            },
+            {
+              "size": 16384,
+              "va_addr": 157978722304
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858964992
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157979783168
+            },
+            {
+              "size": 16384,
+              "va_addr": 157979766784
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858973184
+            }
+          ],
+          "global_size": [
+            8,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 12040,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/rmsnorm_q8_1_llama_provider_4096.cubin",
+      "cubin_sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+      "lcmem_usage": 576,
+      "max_threads": 2048,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "regs_usage": 30,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157984972800
+            },
+            {
+              "size": 16384,
+              "va_addr": 157984956416
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858342400
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157991124992
+            },
+            {
+              "size": 16384,
+              "va_addr": 157991108608
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858489856
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157992071168
+            },
+            {
+              "size": 16384,
+              "va_addr": 157992054784
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858514432
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157993017344
+            },
+            {
+              "size": 16384,
+              "va_addr": 157993000960
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858539008
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157993963520
+            },
+            {
+              "size": 16384,
+              "va_addr": 157993947136
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858563584
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157994909696
+            },
+            {
+              "size": 16384,
+              "va_addr": 157994893312
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858588160
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157995855872
+            },
+            {
+              "size": 16384,
+              "va_addr": 157995839488
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858612736
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        },
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 157996802048
+            },
+            {
+              "size": 16384,
+              "va_addr": 157996785664
+            },
+            {
+              "size": 8192,
+              "va_addr": 142858637312
+            }
+          ],
+          "global_size": [
+            1,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            16,
+            1
+          ],
+          "n_bufs": 3,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 13880,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/reduce_output_rmsnorm_1_4096.cubin",
+      "cubin_sha256": "134a288c715c54bbc3e46e3bff1d3d46d2719395a12c6fb46c81b309fb33823d",
+      "lcmem_usage": 576,
+      "max_threads": 1536,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "regs_usage": 40,
+      "shmem_usage": 2176
+    },
+    {
+      "calls": [
+        {
+          "buf_meta": [
+            {
+              "size": 8192,
+              "va_addr": 158007238656
+            },
+            {
+              "size": 16384,
+              "va_addr": 158007209984
+            }
+          ],
+          "global_size": [
+            32,
+            1,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "n_bufs": 2,
+          "vals": []
+        }
+      ],
+      "cubin_bytes": 6240,
+      "cubin_path": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase9/E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798.cubin",
+      "cubin_sha256": "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+      "lcmem_usage": 576,
+      "max_threads": 4096,
+      "name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "regs_usage": 14,
+      "shmem_usage": 1024
+    }
+  ],
+  "depth": 512,
+  "prefixes": [
+    "reduce_output_rmsnorm_1_4096",
+    "r_16_256",
+    "E_32_32_4",
+    "rmsnorm_q8_1_llama_provider_4096"
+  ],
+  "schema": "tinygrad.nv_cubin_capture.v1",
+  "verdict": "CAPTURED"
+}

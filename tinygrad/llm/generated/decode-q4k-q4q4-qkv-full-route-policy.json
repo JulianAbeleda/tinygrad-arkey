@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_q4q4_qkv_full",
+  "description": "Closed after installed-policy validation. The research composition recovered 6.867 us/token, but the equal-allocation load-time isolated rollback was flat/negative at -0.862 us/token and did not beat both controls. The implementation remains reproducible but promotes no target.",
+  "promoted_targets": []
+}

@@ -1,0 +1,6199 @@
+{
+  "arm": "candidate",
+  "armed_pairs": {
+    "by_bucket": {
+      "other->q4k": 36
+    },
+    "data_edge": 36,
+    "incidental": 0,
+    "incidental_by_bucket": {},
+    "median_launch_shadow_us": 4.25,
+    "median_overlap_us": 0.0,
+    "positive_overlap_count": 0,
+    "real_by_bucket": {
+      "other->q4k": 36
+    },
+    "total": 36
+  },
+  "assignments": [
+    {
+      "group": 0,
+      "id": 0,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 1,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 2,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 3,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 4,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 5,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 6,
+      "name": "E_32_32_4_3b0fcfbc759ce0c3a9554ce8d29ef99b4ac84deafb2deb375f7e73793901c862",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 7,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 8,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 9,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 10,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 11,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 12,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 13,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 14,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 15,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 16,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 17,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 18,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 19,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 20,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 21,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 22,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 0,
+      "id": 23,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 24,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 25,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 26,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 27,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 28,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 29,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 30,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 0,
+      "id": 31,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 32,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 33,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 34,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 35,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 36,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 37,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 38,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 39,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 40,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 41,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 42,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 43,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 44,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 45,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 46,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 47,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 48,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 49,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 50,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 51,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 52,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 53,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 54,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 55,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 56,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 57,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 58,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 59,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 60,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 61,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 62,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 63,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 64,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 65,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 66,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 67,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 68,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 69,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 70,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 71,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 72,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 73,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 74,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 75,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 76,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 77,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 78,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 79,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 80,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 81,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 82,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 83,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 84,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 85,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 86,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 87,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 88,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 1,
+      "id": 89,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 90,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 91,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 92,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 93,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 94,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 1,
+      "id": 95,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 96,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 97,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 98,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 99,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 100,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 101,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 102,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 103,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 104,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 105,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 106,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 107,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 108,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 109,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 110,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 111,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 112,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 113,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 114,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 115,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 116,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 117,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 118,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 119,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 120,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 121,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 122,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 123,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 124,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 125,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 126,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 127,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 128,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 129,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 130,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 131,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 132,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 133,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 134,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 135,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 136,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 137,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 138,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 139,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 140,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 141,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 142,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 143,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 144,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 145,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 146,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 147,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 148,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 149,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 150,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 151,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 152,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 153,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 154,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 155,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 156,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 157,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 158,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 159,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 160,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 161,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 162,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 163,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 164,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 165,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 166,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 167,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 168,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 169,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 170,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 171,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 172,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 173,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 174,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 175,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 176,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 177,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 178,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 179,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 180,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 181,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 182,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 183,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 184,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 185,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 186,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 187,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 188,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 189,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 190,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 191,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 192,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 193,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 194,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 195,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 196,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 197,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 198,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 199,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 200,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 201,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 202,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 203,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 204,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 205,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 206,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 207,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 208,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 209,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 210,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 211,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 212,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 213,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 214,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 215,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 216,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 217,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 218,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 219,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 220,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 2,
+      "id": 221,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 222,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 2,
+      "id": 223,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 224,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 225,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 226,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 227,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 228,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 229,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 230,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 231,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 232,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 233,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 234,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 235,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 236,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 237,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 238,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 239,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 240,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 241,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 242,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 243,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 244,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 245,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 246,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 247,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 248,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 249,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 250,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 251,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 252,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 253,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 254,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 255,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 256,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 257,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 258,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 259,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 260,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 261,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 262,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 263,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 264,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 265,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 266,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 267,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 268,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 269,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 270,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 271,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 272,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 273,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 274,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 275,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 276,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 277,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 278,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 279,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 280,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 281,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 282,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 283,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 284,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 285,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 286,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 287,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 288,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 289,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 290,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 291,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 292,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 293,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 294,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 295,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 296,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 297,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 298,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 299,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 300,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 301,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 302,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 303,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 304,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 305,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 306,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 307,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 308,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 309,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 310,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 311,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 312,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 313,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 314,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 315,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 316,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 317,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 318,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 319,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 320,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 321,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 322,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 323,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 324,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 325,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 326,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 327,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 328,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 329,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 330,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 331,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 332,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 333,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 334,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 335,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 336,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 337,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 338,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 339,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 340,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 341,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 342,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 343,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 344,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 345,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 346,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 347,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 348,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 349,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 350,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 351,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 352,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 353,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 354,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 355,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 356,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 357,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 358,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 359,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 360,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 361,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 362,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 363,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 364,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 365,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 366,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 367,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 368,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 369,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 370,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 371,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 372,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 373,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 374,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 375,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 376,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 377,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 378,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 379,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 380,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 381,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 382,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 383,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 384,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 385,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 386,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 387,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 388,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 389,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 390,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 391,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 392,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 393,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 394,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 395,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 396,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 397,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 398,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 399,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 400,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 401,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 402,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 403,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 404,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 405,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 406,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 407,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 408,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 409,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 410,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 411,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 412,
+      "name": "rmsnorm_native_1_4096",
+      "queue": 0
+    },
+    {
+      "group": 3,
+      "id": 413,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 414,
+      "name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 415,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 416,
+      "name": "E_1187_32_4_8c978b620f9c49480ac0eb05ba9e92fb742fac375e8a835bf98b19a7c6c6cadf",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 417,
+      "name": "native_finite_fp32_argmax_151936_t1024",
+      "queue": 1
+    },
+    {
+      "group": 3,
+      "id": 418,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "queue": 1
+    }
+  ],
+  "commit": "f411be0f1f5c938acfaf6029739ad055dd94e5e4",
+  "depth": 512,
+  "endpoint_wall_note": "endpoint wall is the prior same-session nv-pdl-queue-theories bracket (2q -11.641 us, 1q -8.201 us); this record is the construction census",
+  "env": {
+    "HCQ_NUM_COMPUTE": "2",
+    "NV_PDL_CONSUMER_PROGRAMS": "prefix:q4k_,prefix:q6k_",
+    "NV_PDL_PRODUCER_PROGRAMS": "rmsnorm_native_1_4096",
+    "NV_PDL_TRIGGER_POSITION": "start",
+    "PROFILE": "1"
+  },
+  "graph_group_mapping": {
+    "0": 5,
+    "1": 6,
+    "2": 7,
+    "3": 8
+  },
+  "invocation_by_group": {
+    "0": 6,
+    "1": 6,
+    "2": 6,
+    "3": 6
+  },
+  "max_context": 1024,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "node_count": 419,
+  "nodes": [
+    {
+      "end_us": 1.75,
+      "group_id": 0,
+      "id": 0,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "start_us": 0.0
+    },
+    {
+      "end_us": 2.25,
+      "group_id": 0,
+      "id": 1,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "start_us": 0.25
+    },
+    {
+      "end_us": 7.5,
+      "group_id": 0,
+      "id": 2,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "start_us": 1.75
+    },
+    {
+      "end_us": 4.75,
+      "group_id": 0,
+      "id": 3,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "start_us": 2.25
+    },
+    {
+      "end_us": 11.75,
+      "group_id": 0,
+      "id": 4,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "start_us": 7.5
+    },
+    {
+      "end_us": 16.0,
+      "group_id": 0,
+      "id": 5,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 11.75
+    },
+    {
+      "end_us": 17.0,
+      "group_id": 0,
+      "id": 6,
+      "name": "E_32_32_4_3b0fcfbc759ce0c3a9554ce8d29ef99b4ac84deafb2deb375f7e73793901c862",
+      "start_us": 16.0
+    },
+    {
+      "end_us": 25.75,
+      "group_id": 0,
+      "id": 7,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 17.0
+    },
+    {
+      "end_us": 32.5,
+      "group_id": 0,
+      "id": 8,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 28.25
+    },
+    {
+      "end_us": 37.25,
+      "group_id": 0,
+      "id": 9,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 32.5
+    },
+    {
+      "end_us": 27.75,
+      "group_id": 0,
+      "id": 10,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 25.75
+    },
+    {
+      "end_us": 39.25,
+      "group_id": 0,
+      "id": 11,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 37.25
+    },
+    {
+      "end_us": 49.5,
+      "group_id": 0,
+      "id": 12,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 43.0
+    },
+    {
+      "end_us": 52.5,
+      "group_id": 0,
+      "id": 13,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 49.5
+    },
+    {
+      "end_us": 61.25,
+      "group_id": 0,
+      "id": 14,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 52.5
+    },
+    {
+      "end_us": 65.75,
+      "group_id": 0,
+      "id": 15,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 61.25
+    },
+    {
+      "end_us": 101.0,
+      "group_id": 0,
+      "id": 16,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 65.75
+    },
+    {
+      "end_us": 128.75,
+      "group_id": 0,
+      "id": 17,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 101.0
+    },
+    {
+      "end_us": 130.75,
+      "group_id": 0,
+      "id": 18,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 128.75
+    },
+    {
+      "end_us": 139.0,
+      "group_id": 0,
+      "id": 19,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 130.75
+    },
+    {
+      "end_us": 148.0,
+      "group_id": 0,
+      "id": 20,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 142.0
+    },
+    {
+      "end_us": 141.25,
+      "group_id": 0,
+      "id": 21,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 139.0
+    },
+    {
+      "end_us": 149.75,
+      "group_id": 0,
+      "id": 22,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 148.0
+    },
+    {
+      "end_us": 160.25,
+      "group_id": 0,
+      "id": 23,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 153.5
+    },
+    {
+      "end_us": 163.0,
+      "group_id": 0,
+      "id": 24,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 160.25
+    },
+    {
+      "end_us": 172.0,
+      "group_id": 0,
+      "id": 25,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 163.0
+    },
+    {
+      "end_us": 176.0,
+      "group_id": 0,
+      "id": 26,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 172.0
+    },
+    {
+      "end_us": 211.0,
+      "group_id": 0,
+      "id": 27,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 176.0
+    },
+    {
+      "end_us": 238.5,
+      "group_id": 0,
+      "id": 28,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 211.0
+    },
+    {
+      "end_us": 240.25,
+      "group_id": 0,
+      "id": 29,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 238.5
+    },
+    {
+      "end_us": 248.5,
+      "group_id": 0,
+      "id": 30,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 240.25
+    },
+    {
+      "end_us": 254.75,
+      "group_id": 0,
+      "id": 31,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 248.75
+    },
+    {
+      "end_us": 478.75,
+      "group_id": 1,
+      "id": 32,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 476.25
+    },
+    {
+      "end_us": 479.0,
+      "group_id": 1,
+      "id": 33,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 476.25
+    },
+    {
+      "end_us": 490.5,
+      "group_id": 1,
+      "id": 34,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 484.0
+    },
+    {
+      "end_us": 493.25,
+      "group_id": 1,
+      "id": 35,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 490.5
+    },
+    {
+      "end_us": 502.0,
+      "group_id": 1,
+      "id": 36,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 493.25
+    },
+    {
+      "end_us": 506.25,
+      "group_id": 1,
+      "id": 37,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 502.0
+    },
+    {
+      "end_us": 541.5,
+      "group_id": 1,
+      "id": 38,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 506.25
+    },
+    {
+      "end_us": 569.5,
+      "group_id": 1,
+      "id": 39,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 541.5
+    },
+    {
+      "end_us": 571.5,
+      "group_id": 1,
+      "id": 40,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 569.5
+    },
+    {
+      "end_us": 579.75,
+      "group_id": 1,
+      "id": 41,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 571.5
+    },
+    {
+      "end_us": 588.5,
+      "group_id": 1,
+      "id": 42,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 582.0
+    },
+    {
+      "end_us": 581.75,
+      "group_id": 1,
+      "id": 43,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 579.75
+    },
+    {
+      "end_us": 590.5,
+      "group_id": 1,
+      "id": 44,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 588.5
+    },
+    {
+      "end_us": 599.25,
+      "group_id": 1,
+      "id": 45,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 592.75
+    },
+    {
+      "end_us": 602.0,
+      "group_id": 1,
+      "id": 46,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 599.25
+    },
+    {
+      "end_us": 610.75,
+      "group_id": 1,
+      "id": 47,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 602.0
+    },
+    {
+      "end_us": 615.25,
+      "group_id": 1,
+      "id": 48,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 610.75
+    },
+    {
+      "end_us": 650.0,
+      "group_id": 1,
+      "id": 49,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 615.25
+    },
+    {
+      "end_us": 677.25,
+      "group_id": 1,
+      "id": 50,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 650.0
+    },
+    {
+      "end_us": 678.75,
+      "group_id": 1,
+      "id": 51,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 677.25
+    },
+    {
+      "end_us": 687.0,
+      "group_id": 1,
+      "id": 52,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 678.75
+    },
+    {
+      "end_us": 695.0,
+      "group_id": 1,
+      "id": 53,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 689.75
+    },
+    {
+      "end_us": 689.0,
+      "group_id": 1,
+      "id": 54,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 687.0
+    },
+    {
+      "end_us": 697.0,
+      "group_id": 1,
+      "id": 55,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 695.0
+    },
+    {
+      "end_us": 705.5,
+      "group_id": 1,
+      "id": 56,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 699.25
+    },
+    {
+      "end_us": 708.25,
+      "group_id": 1,
+      "id": 57,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 705.5
+    },
+    {
+      "end_us": 716.75,
+      "group_id": 1,
+      "id": 58,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 708.25
+    },
+    {
+      "end_us": 721.0,
+      "group_id": 1,
+      "id": 59,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 716.75
+    },
+    {
+      "end_us": 755.5,
+      "group_id": 1,
+      "id": 60,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 721.0
+    },
+    {
+      "end_us": 776.0,
+      "group_id": 1,
+      "id": 61,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 755.5
+    },
+    {
+      "end_us": 777.5,
+      "group_id": 1,
+      "id": 62,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 776.0
+    },
+    {
+      "end_us": 785.75,
+      "group_id": 1,
+      "id": 63,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 777.5
+    },
+    {
+      "end_us": 793.75,
+      "group_id": 1,
+      "id": 64,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 788.25
+    },
+    {
+      "end_us": 787.75,
+      "group_id": 1,
+      "id": 65,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 785.75
+    },
+    {
+      "end_us": 795.5,
+      "group_id": 1,
+      "id": 66,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 793.75
+    },
+    {
+      "end_us": 803.25,
+      "group_id": 1,
+      "id": 67,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 797.0
+    },
+    {
+      "end_us": 806.0,
+      "group_id": 1,
+      "id": 68,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 803.25
+    },
+    {
+      "end_us": 814.5,
+      "group_id": 1,
+      "id": 69,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 806.0
+    },
+    {
+      "end_us": 819.0,
+      "group_id": 1,
+      "id": 70,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 814.5
+    },
+    {
+      "end_us": 853.75,
+      "group_id": 1,
+      "id": 71,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 819.0
+    },
+    {
+      "end_us": 873.75,
+      "group_id": 1,
+      "id": 72,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 853.75
+    },
+    {
+      "end_us": 875.5,
+      "group_id": 1,
+      "id": 73,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 873.75
+    },
+    {
+      "end_us": 883.75,
+      "group_id": 1,
+      "id": 74,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 875.5
+    },
+    {
+      "end_us": 892.25,
+      "group_id": 1,
+      "id": 75,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 886.5
+    },
+    {
+      "end_us": 885.5,
+      "group_id": 1,
+      "id": 76,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 883.75
+    },
+    {
+      "end_us": 894.0,
+      "group_id": 1,
+      "id": 77,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 892.25
+    },
+    {
+      "end_us": 904.25,
+      "group_id": 1,
+      "id": 78,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 898.0
+    },
+    {
+      "end_us": 907.0,
+      "group_id": 1,
+      "id": 79,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 904.25
+    },
+    {
+      "end_us": 915.5,
+      "group_id": 1,
+      "id": 80,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 907.0
+    },
+    {
+      "end_us": 920.0,
+      "group_id": 1,
+      "id": 81,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 915.5
+    },
+    {
+      "end_us": 954.75,
+      "group_id": 1,
+      "id": 82,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 920.0
+    },
+    {
+      "end_us": 981.5,
+      "group_id": 1,
+      "id": 83,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 954.75
+    },
+    {
+      "end_us": 983.25,
+      "group_id": 1,
+      "id": 84,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 981.5
+    },
+    {
+      "end_us": 991.0,
+      "group_id": 1,
+      "id": 85,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 983.25
+    },
+    {
+      "end_us": 998.25,
+      "group_id": 1,
+      "id": 86,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 993.25
+    },
+    {
+      "end_us": 993.0,
+      "group_id": 1,
+      "id": 87,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 991.0
+    },
+    {
+      "end_us": 1000.0,
+      "group_id": 1,
+      "id": 88,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 998.25
+    },
+    {
+      "end_us": 1007.75,
+      "group_id": 1,
+      "id": 89,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1001.5
+    },
+    {
+      "end_us": 1010.5,
+      "group_id": 1,
+      "id": 90,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1007.75
+    },
+    {
+      "end_us": 1018.75,
+      "group_id": 1,
+      "id": 91,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1010.5
+    },
+    {
+      "end_us": 1023.0,
+      "group_id": 1,
+      "id": 92,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1018.75
+    },
+    {
+      "end_us": 1057.75,
+      "group_id": 1,
+      "id": 93,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1023.0
+    },
+    {
+      "end_us": 1077.75,
+      "group_id": 1,
+      "id": 94,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1057.75
+    },
+    {
+      "end_us": 1079.5,
+      "group_id": 1,
+      "id": 95,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1077.75
+    },
+    {
+      "end_us": 1273.25,
+      "group_id": 2,
+      "id": 96,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1264.5
+    },
+    {
+      "end_us": 1281.0,
+      "group_id": 2,
+      "id": 97,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1275.5
+    },
+    {
+      "end_us": 1275.25,
+      "group_id": 2,
+      "id": 98,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1273.25
+    },
+    {
+      "end_us": 1283.0,
+      "group_id": 2,
+      "id": 99,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1281.0
+    },
+    {
+      "end_us": 1292.75,
+      "group_id": 2,
+      "id": 100,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1286.25
+    },
+    {
+      "end_us": 1295.75,
+      "group_id": 2,
+      "id": 101,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1292.75
+    },
+    {
+      "end_us": 1304.25,
+      "group_id": 2,
+      "id": 102,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1295.75
+    },
+    {
+      "end_us": 1309.0,
+      "group_id": 2,
+      "id": 103,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1304.25
+    },
+    {
+      "end_us": 1344.0,
+      "group_id": 2,
+      "id": 104,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1309.0
+    },
+    {
+      "end_us": 1364.25,
+      "group_id": 2,
+      "id": 105,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1344.0
+    },
+    {
+      "end_us": 1366.25,
+      "group_id": 2,
+      "id": 106,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1364.25
+    },
+    {
+      "end_us": 1374.5,
+      "group_id": 2,
+      "id": 107,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1366.25
+    },
+    {
+      "end_us": 1383.25,
+      "group_id": 2,
+      "id": 108,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1377.25
+    },
+    {
+      "end_us": 1376.5,
+      "group_id": 2,
+      "id": 109,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1374.5
+    },
+    {
+      "end_us": 1385.0,
+      "group_id": 2,
+      "id": 110,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1383.25
+    },
+    {
+      "end_us": 1394.75,
+      "group_id": 2,
+      "id": 111,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1388.25
+    },
+    {
+      "end_us": 1397.5,
+      "group_id": 2,
+      "id": 112,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1394.75
+    },
+    {
+      "end_us": 1406.0,
+      "group_id": 2,
+      "id": 113,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1397.5
+    },
+    {
+      "end_us": 1410.5,
+      "group_id": 2,
+      "id": 114,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1406.0
+    },
+    {
+      "end_us": 1445.5,
+      "group_id": 2,
+      "id": 115,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1410.5
+    },
+    {
+      "end_us": 1473.0,
+      "group_id": 2,
+      "id": 116,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 1445.5
+    },
+    {
+      "end_us": 1474.5,
+      "group_id": 2,
+      "id": 117,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1473.0
+    },
+    {
+      "end_us": 1482.5,
+      "group_id": 2,
+      "id": 118,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1474.5
+    },
+    {
+      "end_us": 1490.0,
+      "group_id": 2,
+      "id": 119,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1484.75
+    },
+    {
+      "end_us": 1484.5,
+      "group_id": 2,
+      "id": 120,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1482.5
+    },
+    {
+      "end_us": 1492.0,
+      "group_id": 2,
+      "id": 121,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1490.0
+    },
+    {
+      "end_us": 1501.25,
+      "group_id": 2,
+      "id": 122,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1495.0
+    },
+    {
+      "end_us": 1504.0,
+      "group_id": 2,
+      "id": 123,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1501.25
+    },
+    {
+      "end_us": 1512.5,
+      "group_id": 2,
+      "id": 124,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1504.0
+    },
+    {
+      "end_us": 1516.75,
+      "group_id": 2,
+      "id": 125,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1512.5
+    },
+    {
+      "end_us": 1551.5,
+      "group_id": 2,
+      "id": 126,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1516.75
+    },
+    {
+      "end_us": 1571.75,
+      "group_id": 2,
+      "id": 127,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1551.5
+    },
+    {
+      "end_us": 1573.25,
+      "group_id": 2,
+      "id": 128,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1571.75
+    },
+    {
+      "end_us": 1581.5,
+      "group_id": 2,
+      "id": 129,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1573.25
+    },
+    {
+      "end_us": 1589.25,
+      "group_id": 2,
+      "id": 130,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1584.0
+    },
+    {
+      "end_us": 1583.25,
+      "group_id": 2,
+      "id": 131,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1581.5
+    },
+    {
+      "end_us": 1591.25,
+      "group_id": 2,
+      "id": 132,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1589.25
+    },
+    {
+      "end_us": 1599.0,
+      "group_id": 2,
+      "id": 133,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1592.5
+    },
+    {
+      "end_us": 1602.0,
+      "group_id": 2,
+      "id": 134,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1599.0
+    },
+    {
+      "end_us": 1610.5,
+      "group_id": 2,
+      "id": 135,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1602.0
+    },
+    {
+      "end_us": 1615.0,
+      "group_id": 2,
+      "id": 136,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1610.5
+    },
+    {
+      "end_us": 1649.75,
+      "group_id": 2,
+      "id": 137,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1615.0
+    },
+    {
+      "end_us": 1669.75,
+      "group_id": 2,
+      "id": 138,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1649.75
+    },
+    {
+      "end_us": 1671.75,
+      "group_id": 2,
+      "id": 139,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1669.75
+    },
+    {
+      "end_us": 1679.5,
+      "group_id": 2,
+      "id": 140,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1671.75
+    },
+    {
+      "end_us": 1688.25,
+      "group_id": 2,
+      "id": 141,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1682.25
+    },
+    {
+      "end_us": 1681.5,
+      "group_id": 2,
+      "id": 142,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1679.5
+    },
+    {
+      "end_us": 1690.25,
+      "group_id": 2,
+      "id": 143,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1688.25
+    },
+    {
+      "end_us": 1699.5,
+      "group_id": 2,
+      "id": 144,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1693.5
+    },
+    {
+      "end_us": 1702.25,
+      "group_id": 2,
+      "id": 145,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1699.5
+    },
+    {
+      "end_us": 1711.0,
+      "group_id": 2,
+      "id": 146,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1702.25
+    },
+    {
+      "end_us": 1715.25,
+      "group_id": 2,
+      "id": 147,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1711.0
+    },
+    {
+      "end_us": 1750.25,
+      "group_id": 2,
+      "id": 148,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1715.25
+    },
+    {
+      "end_us": 1777.25,
+      "group_id": 2,
+      "id": 149,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 1750.25
+    },
+    {
+      "end_us": 1784.5,
+      "group_id": 2,
+      "id": 150,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 1777.25
+    },
+    {
+      "end_us": 1792.75,
+      "group_id": 2,
+      "id": 151,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 1784.5
+    },
+    {
+      "end_us": 1801.0,
+      "group_id": 2,
+      "id": 152,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 1795.0
+    },
+    {
+      "end_us": 1794.5,
+      "group_id": 2,
+      "id": 153,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1792.75
+    },
+    {
+      "end_us": 1802.75,
+      "group_id": 2,
+      "id": 154,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1801.0
+    },
+    {
+      "end_us": 1811.75,
+      "group_id": 2,
+      "id": 155,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1805.5
+    },
+    {
+      "end_us": 1814.5,
+      "group_id": 2,
+      "id": 156,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1811.75
+    },
+    {
+      "end_us": 1823.0,
+      "group_id": 2,
+      "id": 157,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1814.5
+    },
+    {
+      "end_us": 1827.25,
+      "group_id": 2,
+      "id": 158,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1823.0
+    },
+    {
+      "end_us": 1861.75,
+      "group_id": 2,
+      "id": 159,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1827.25
+    },
+    {
+      "end_us": 1881.75,
+      "group_id": 2,
+      "id": 160,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1861.75
+    },
+    {
+      "end_us": 1883.75,
+      "group_id": 2,
+      "id": 161,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1881.75
+    },
+    {
+      "end_us": 1892.0,
+      "group_id": 2,
+      "id": 162,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1883.75
+    },
+    {
+      "end_us": 1899.75,
+      "group_id": 2,
+      "id": 163,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1894.25
+    },
+    {
+      "end_us": 1894.0,
+      "group_id": 2,
+      "id": 164,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1892.0
+    },
+    {
+      "end_us": 1901.75,
+      "group_id": 2,
+      "id": 165,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1899.75
+    },
+    {
+      "end_us": 1910.75,
+      "group_id": 2,
+      "id": 166,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 1904.25
+    },
+    {
+      "end_us": 1913.5,
+      "group_id": 2,
+      "id": 167,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 1910.75
+    },
+    {
+      "end_us": 1922.25,
+      "group_id": 2,
+      "id": 168,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 1913.5
+    },
+    {
+      "end_us": 1926.5,
+      "group_id": 2,
+      "id": 169,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 1922.25
+    },
+    {
+      "end_us": 1961.0,
+      "group_id": 2,
+      "id": 170,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 1926.5
+    },
+    {
+      "end_us": 1981.25,
+      "group_id": 2,
+      "id": 171,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 1961.0
+    },
+    {
+      "end_us": 1983.0,
+      "group_id": 2,
+      "id": 172,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 1981.25
+    },
+    {
+      "end_us": 1991.0,
+      "group_id": 2,
+      "id": 173,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 1983.0
+    },
+    {
+      "end_us": 1999.5,
+      "group_id": 2,
+      "id": 174,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 1993.5
+    },
+    {
+      "end_us": 1993.0,
+      "group_id": 2,
+      "id": 175,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 1991.0
+    },
+    {
+      "end_us": 2001.5,
+      "group_id": 2,
+      "id": 176,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 1999.5
+    },
+    {
+      "end_us": 2010.5,
+      "group_id": 2,
+      "id": 177,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2004.25
+    },
+    {
+      "end_us": 2013.25,
+      "group_id": 2,
+      "id": 178,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2010.5
+    },
+    {
+      "end_us": 2021.5,
+      "group_id": 2,
+      "id": 179,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2013.25
+    },
+    {
+      "end_us": 2025.75,
+      "group_id": 2,
+      "id": 180,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2021.5
+    },
+    {
+      "end_us": 2060.5,
+      "group_id": 2,
+      "id": 181,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2025.75
+    },
+    {
+      "end_us": 2088.0,
+      "group_id": 2,
+      "id": 182,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 2060.5
+    },
+    {
+      "end_us": 2089.75,
+      "group_id": 2,
+      "id": 183,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 2088.0
+    },
+    {
+      "end_us": 2098.0,
+      "group_id": 2,
+      "id": 184,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 2089.75
+    },
+    {
+      "end_us": 2105.0,
+      "group_id": 2,
+      "id": 185,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 2100.25
+    },
+    {
+      "end_us": 2099.75,
+      "group_id": 2,
+      "id": 186,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2098.0
+    },
+    {
+      "end_us": 2107.0,
+      "group_id": 2,
+      "id": 187,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2105.0
+    },
+    {
+      "end_us": 2114.75,
+      "group_id": 2,
+      "id": 188,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2108.75
+    },
+    {
+      "end_us": 2117.5,
+      "group_id": 2,
+      "id": 189,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2114.75
+    },
+    {
+      "end_us": 2126.0,
+      "group_id": 2,
+      "id": 190,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2117.5
+    },
+    {
+      "end_us": 2130.5,
+      "group_id": 2,
+      "id": 191,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2126.0
+    },
+    {
+      "end_us": 2165.25,
+      "group_id": 2,
+      "id": 192,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2130.5
+    },
+    {
+      "end_us": 2185.0,
+      "group_id": 2,
+      "id": 193,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2165.25
+    },
+    {
+      "end_us": 2186.75,
+      "group_id": 2,
+      "id": 194,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 2185.0
+    },
+    {
+      "end_us": 2195.0,
+      "group_id": 2,
+      "id": 195,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 2186.75
+    },
+    {
+      "end_us": 2202.5,
+      "group_id": 2,
+      "id": 196,
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 2197.5
+    },
+    {
+      "end_us": 2197.0,
+      "group_id": 2,
+      "id": 197,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2195.0
+    },
+    {
+      "end_us": 2204.5,
+      "group_id": 2,
+      "id": 198,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2202.5
+    },
+    {
+      "end_us": 2214.0,
+      "group_id": 2,
+      "id": 199,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2207.5
+    },
+    {
+      "end_us": 2216.75,
+      "group_id": 2,
+      "id": 200,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2214.0
+    },
+    {
+      "end_us": 2225.5,
+      "group_id": 2,
+      "id": 201,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2216.75
+    },
+    {
+      "end_us": 2230.0,
+      "group_id": 2,
+      "id": 202,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2225.5
+    },
+    {
+      "end_us": 2264.5,
+      "group_id": 2,
+      "id": 203,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2230.0
+    },
+    {
+      "end_us": 2284.5,
+      "group_id": 2,
+      "id": 204,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2264.5
+    },
+    {
+      "end_us": 2286.25,
+      "group_id": 2,
+      "id": 205,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "start_us": 2284.5
+    },
+    {
+      "end_us": 2294.25,
+      "group_id": 2,
+      "id": 206,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "start_us": 2286.25
+    },
+    {
+      "end_us": 2302.25,
+      "group_id": 2,
+      "id": 207,
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "start_us": 2296.5
+    },
+    {
+      "end_us": 2296.0,
+      "group_id": 2,
+      "id": 208,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2294.25
+    },
+    {
+      "end_us": 2304.25,
+      "group_id": 2,
+      "id": 209,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2302.25
+    },
+    {
+      "end_us": 2313.25,
+      "group_id": 2,
+      "id": 210,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2307.0
+    },
+    {
+      "end_us": 2316.0,
+      "group_id": 2,
+      "id": 211,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2313.25
+    },
+    {
+      "end_us": 2324.25,
+      "group_id": 2,
+      "id": 212,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2316.0
+    },
+    {
+      "end_us": 2329.0,
+      "group_id": 2,
+      "id": 213,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2324.25
+    },
+    {
+      "end_us": 2363.75,
+      "group_id": 2,
+      "id": 214,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2329.0
+    },
+    {
+      "end_us": 2391.0,
+      "group_id": 2,
+      "id": 215,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 2363.75
+    },
+    {
+      "end_us": 2397.75,
+      "group_id": 2,
+      "id": 216,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2391.0
+    },
+    {
+      "end_us": 2405.75,
+      "group_id": 2,
+      "id": 217,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2397.75
+    },
+    {
+      "end_us": 2415.0,
+      "group_id": 2,
+      "id": 218,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 2408.25
+    },
+    {
+      "end_us": 2407.75,
+      "group_id": 2,
+      "id": 219,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2405.75
+    },
+    {
+      "end_us": 2417.25,
+      "group_id": 2,
+      "id": 220,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2415.0
+    },
+    {
+      "end_us": 2425.0,
+      "group_id": 2,
+      "id": 221,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2418.5
+    },
+    {
+      "end_us": 2428.0,
+      "group_id": 2,
+      "id": 222,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2425.0
+    },
+    {
+      "end_us": 2436.25,
+      "group_id": 2,
+      "id": 223,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2428.0
+    },
+    {
+      "end_us": 2444.5,
+      "group_id": 3,
+      "id": 224,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2439.5
+    },
+    {
+      "end_us": 2479.25,
+      "group_id": 3,
+      "id": 225,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2444.5
+    },
+    {
+      "end_us": 2499.0,
+      "group_id": 3,
+      "id": 226,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2479.25
+    },
+    {
+      "end_us": 2505.75,
+      "group_id": 3,
+      "id": 227,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2499.0
+    },
+    {
+      "end_us": 2515.0,
+      "group_id": 3,
+      "id": 228,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2505.75
+    },
+    {
+      "end_us": 2523.25,
+      "group_id": 3,
+      "id": 229,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 2517.25
+    },
+    {
+      "end_us": 2517.0,
+      "group_id": 3,
+      "id": 230,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2515.0
+    },
+    {
+      "end_us": 2525.25,
+      "group_id": 3,
+      "id": 231,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2523.25
+    },
+    {
+      "end_us": 2534.75,
+      "group_id": 3,
+      "id": 232,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2528.0
+    },
+    {
+      "end_us": 2537.75,
+      "group_id": 3,
+      "id": 233,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2534.75
+    },
+    {
+      "end_us": 2546.25,
+      "group_id": 3,
+      "id": 234,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2537.75
+    },
+    {
+      "end_us": 2550.5,
+      "group_id": 3,
+      "id": 235,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2546.25
+    },
+    {
+      "end_us": 2585.0,
+      "group_id": 3,
+      "id": 236,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2550.5
+    },
+    {
+      "end_us": 2605.25,
+      "group_id": 3,
+      "id": 237,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2585.0
+    },
+    {
+      "end_us": 2612.0,
+      "group_id": 3,
+      "id": 238,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2605.25
+    },
+    {
+      "end_us": 2620.25,
+      "group_id": 3,
+      "id": 239,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2612.0
+    },
+    {
+      "end_us": 2626.75,
+      "group_id": 3,
+      "id": 240,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 2622.5
+    },
+    {
+      "end_us": 2631.5,
+      "group_id": 3,
+      "id": 241,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 2626.75
+    },
+    {
+      "end_us": 2622.0,
+      "group_id": 3,
+      "id": 242,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2620.25
+    },
+    {
+      "end_us": 2633.25,
+      "group_id": 3,
+      "id": 243,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2631.5
+    },
+    {
+      "end_us": 2643.0,
+      "group_id": 3,
+      "id": 244,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2636.75
+    },
+    {
+      "end_us": 2645.75,
+      "group_id": 3,
+      "id": 245,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2643.0
+    },
+    {
+      "end_us": 2654.25,
+      "group_id": 3,
+      "id": 246,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2645.75
+    },
+    {
+      "end_us": 2658.5,
+      "group_id": 3,
+      "id": 247,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2654.25
+    },
+    {
+      "end_us": 2693.25,
+      "group_id": 3,
+      "id": 248,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2658.5
+    },
+    {
+      "end_us": 2720.5,
+      "group_id": 3,
+      "id": 249,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 2693.25
+    },
+    {
+      "end_us": 2727.0,
+      "group_id": 3,
+      "id": 250,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2720.5
+    },
+    {
+      "end_us": 2735.5,
+      "group_id": 3,
+      "id": 251,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2727.0
+    },
+    {
+      "end_us": 2743.5,
+      "group_id": 3,
+      "id": 252,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 2738.0
+    },
+    {
+      "end_us": 2737.25,
+      "group_id": 3,
+      "id": 253,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2735.5
+    },
+    {
+      "end_us": 2745.5,
+      "group_id": 3,
+      "id": 254,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2743.5
+    },
+    {
+      "end_us": 2755.0,
+      "group_id": 3,
+      "id": 255,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2748.75
+    },
+    {
+      "end_us": 2757.75,
+      "group_id": 3,
+      "id": 256,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2755.0
+    },
+    {
+      "end_us": 2766.0,
+      "group_id": 3,
+      "id": 257,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2757.75
+    },
+    {
+      "end_us": 2770.25,
+      "group_id": 3,
+      "id": 258,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2766.0
+    },
+    {
+      "end_us": 2804.75,
+      "group_id": 3,
+      "id": 259,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2770.25
+    },
+    {
+      "end_us": 2824.75,
+      "group_id": 3,
+      "id": 260,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2804.75
+    },
+    {
+      "end_us": 2831.5,
+      "group_id": 3,
+      "id": 261,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2824.75
+    },
+    {
+      "end_us": 2839.75,
+      "group_id": 3,
+      "id": 262,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2831.5
+    },
+    {
+      "end_us": 2847.75,
+      "group_id": 3,
+      "id": 263,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 2842.25
+    },
+    {
+      "end_us": 2841.5,
+      "group_id": 3,
+      "id": 264,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2839.75
+    },
+    {
+      "end_us": 2849.5,
+      "group_id": 3,
+      "id": 265,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2847.75
+    },
+    {
+      "end_us": 2858.0,
+      "group_id": 3,
+      "id": 266,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2851.75
+    },
+    {
+      "end_us": 2860.75,
+      "group_id": 3,
+      "id": 267,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2858.0
+    },
+    {
+      "end_us": 2869.25,
+      "group_id": 3,
+      "id": 268,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2860.75
+    },
+    {
+      "end_us": 2873.5,
+      "group_id": 3,
+      "id": 269,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2869.25
+    },
+    {
+      "end_us": 2907.75,
+      "group_id": 3,
+      "id": 270,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2873.5
+    },
+    {
+      "end_us": 2928.0,
+      "group_id": 3,
+      "id": 271,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 2907.75
+    },
+    {
+      "end_us": 2934.75,
+      "group_id": 3,
+      "id": 272,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 2928.0
+    },
+    {
+      "end_us": 2943.25,
+      "group_id": 3,
+      "id": 273,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 2934.75
+    },
+    {
+      "end_us": 2949.75,
+      "group_id": 3,
+      "id": 274,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 2945.5
+    },
+    {
+      "end_us": 2954.25,
+      "group_id": 3,
+      "id": 275,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 2949.75
+    },
+    {
+      "end_us": 2945.25,
+      "group_id": 3,
+      "id": 276,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 2943.25
+    },
+    {
+      "end_us": 2956.0,
+      "group_id": 3,
+      "id": 277,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 2954.25
+    },
+    {
+      "end_us": 2965.0,
+      "group_id": 3,
+      "id": 278,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 2958.75
+    },
+    {
+      "end_us": 2967.75,
+      "group_id": 3,
+      "id": 279,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 2965.0
+    },
+    {
+      "end_us": 2976.0,
+      "group_id": 3,
+      "id": 280,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 2967.75
+    },
+    {
+      "end_us": 2980.25,
+      "group_id": 3,
+      "id": 281,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 2976.0
+    },
+    {
+      "end_us": 3015.25,
+      "group_id": 3,
+      "id": 282,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 2980.25
+    },
+    {
+      "end_us": 3042.75,
+      "group_id": 3,
+      "id": 283,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 3015.25
+    },
+    {
+      "end_us": 3049.5,
+      "group_id": 3,
+      "id": 284,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3042.75
+    },
+    {
+      "end_us": 3057.5,
+      "group_id": 3,
+      "id": 285,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3049.5
+    },
+    {
+      "end_us": 3065.25,
+      "group_id": 3,
+      "id": 286,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 3059.75
+    },
+    {
+      "end_us": 3059.5,
+      "group_id": 3,
+      "id": 287,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3057.5
+    },
+    {
+      "end_us": 3067.25,
+      "group_id": 3,
+      "id": 288,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3065.25
+    },
+    {
+      "end_us": 3076.5,
+      "group_id": 3,
+      "id": 289,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3070.25
+    },
+    {
+      "end_us": 3079.25,
+      "group_id": 3,
+      "id": 290,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3076.5
+    },
+    {
+      "end_us": 3087.25,
+      "group_id": 3,
+      "id": 291,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3079.25
+    },
+    {
+      "end_us": 3091.5,
+      "group_id": 3,
+      "id": 292,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3087.25
+    },
+    {
+      "end_us": 3126.25,
+      "group_id": 3,
+      "id": 293,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3091.5
+    },
+    {
+      "end_us": 3146.0,
+      "group_id": 3,
+      "id": 294,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 3126.25
+    },
+    {
+      "end_us": 3152.75,
+      "group_id": 3,
+      "id": 295,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3146.0
+    },
+    {
+      "end_us": 3161.0,
+      "group_id": 3,
+      "id": 296,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3152.75
+    },
+    {
+      "end_us": 3168.75,
+      "group_id": 3,
+      "id": 297,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 3163.25
+    },
+    {
+      "end_us": 3162.75,
+      "group_id": 3,
+      "id": 298,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3161.0
+    },
+    {
+      "end_us": 3170.5,
+      "group_id": 3,
+      "id": 299,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3168.75
+    },
+    {
+      "end_us": 3179.5,
+      "group_id": 3,
+      "id": 300,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3173.25
+    },
+    {
+      "end_us": 3182.25,
+      "group_id": 3,
+      "id": 301,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3179.5
+    },
+    {
+      "end_us": 3190.5,
+      "group_id": 3,
+      "id": 302,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3182.25
+    },
+    {
+      "end_us": 3194.75,
+      "group_id": 3,
+      "id": 303,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3190.5
+    },
+    {
+      "end_us": 3229.5,
+      "group_id": 3,
+      "id": 304,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3194.75
+    },
+    {
+      "end_us": 3249.75,
+      "group_id": 3,
+      "id": 305,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 3229.5
+    },
+    {
+      "end_us": 3256.5,
+      "group_id": 3,
+      "id": 306,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3249.75
+    },
+    {
+      "end_us": 3264.5,
+      "group_id": 3,
+      "id": 307,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3256.5
+    },
+    {
+      "end_us": 3271.0,
+      "group_id": 3,
+      "id": 308,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 3266.75
+    },
+    {
+      "end_us": 3275.25,
+      "group_id": 3,
+      "id": 309,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3271.0
+    },
+    {
+      "end_us": 3266.25,
+      "group_id": 3,
+      "id": 310,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3264.5
+    },
+    {
+      "end_us": 3277.25,
+      "group_id": 3,
+      "id": 311,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3275.25
+    },
+    {
+      "end_us": 3285.5,
+      "group_id": 3,
+      "id": 312,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3279.25
+    },
+    {
+      "end_us": 3288.0,
+      "group_id": 3,
+      "id": 313,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3285.5
+    },
+    {
+      "end_us": 3296.5,
+      "group_id": 3,
+      "id": 314,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3288.0
+    },
+    {
+      "end_us": 3300.75,
+      "group_id": 3,
+      "id": 315,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3296.5
+    },
+    {
+      "end_us": 3335.75,
+      "group_id": 3,
+      "id": 316,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3300.75
+    },
+    {
+      "end_us": 3362.75,
+      "group_id": 3,
+      "id": 317,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 3335.75
+    },
+    {
+      "end_us": 3370.0,
+      "group_id": 3,
+      "id": 318,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3362.75
+    },
+    {
+      "end_us": 3378.0,
+      "group_id": 3,
+      "id": 319,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3370.0
+    },
+    {
+      "end_us": 3385.75,
+      "group_id": 3,
+      "id": 320,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 3380.25
+    },
+    {
+      "end_us": 3379.75,
+      "group_id": 3,
+      "id": 321,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3378.0
+    },
+    {
+      "end_us": 3387.5,
+      "group_id": 3,
+      "id": 322,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3385.75
+    },
+    {
+      "end_us": 3397.0,
+      "group_id": 3,
+      "id": 323,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3390.75
+    },
+    {
+      "end_us": 3399.75,
+      "group_id": 3,
+      "id": 324,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3397.0
+    },
+    {
+      "end_us": 3408.0,
+      "group_id": 3,
+      "id": 325,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3399.75
+    },
+    {
+      "end_us": 3412.0,
+      "group_id": 3,
+      "id": 326,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3408.0
+    },
+    {
+      "end_us": 3447.25,
+      "group_id": 3,
+      "id": 327,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3412.0
+    },
+    {
+      "end_us": 3467.0,
+      "group_id": 3,
+      "id": 328,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 3447.25
+    },
+    {
+      "end_us": 3474.0,
+      "group_id": 3,
+      "id": 329,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3467.0
+    },
+    {
+      "end_us": 3482.25,
+      "group_id": 3,
+      "id": 330,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3474.0
+    },
+    {
+      "end_us": 3490.0,
+      "group_id": 3,
+      "id": 331,
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "start_us": 3484.5
+    },
+    {
+      "end_us": 3484.0,
+      "group_id": 3,
+      "id": 332,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3482.25
+    },
+    {
+      "end_us": 3492.0,
+      "group_id": 3,
+      "id": 333,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3490.0
+    },
+    {
+      "end_us": 3501.5,
+      "group_id": 3,
+      "id": 334,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3495.25
+    },
+    {
+      "end_us": 3504.25,
+      "group_id": 3,
+      "id": 335,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3501.5
+    },
+    {
+      "end_us": 3512.25,
+      "group_id": 3,
+      "id": 336,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3504.25
+    },
+    {
+      "end_us": 3516.25,
+      "group_id": 3,
+      "id": 337,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3512.25
+    },
+    {
+      "end_us": 3551.0,
+      "group_id": 3,
+      "id": 338,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3516.25
+    },
+    {
+      "end_us": 3571.0,
+      "group_id": 3,
+      "id": 339,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "start_us": 3551.0
+    },
+    {
+      "end_us": 3578.25,
+      "group_id": 3,
+      "id": 340,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3571.0
+    },
+    {
+      "end_us": 3586.0,
+      "group_id": 3,
+      "id": 341,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3578.25
+    },
+    {
+      "end_us": 3593.0,
+      "group_id": 3,
+      "id": 342,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 3588.75
+    },
+    {
+      "end_us": 3597.5,
+      "group_id": 3,
+      "id": 343,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3593.0
+    },
+    {
+      "end_us": 3588.0,
+      "group_id": 3,
+      "id": 344,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3586.0
+    },
+    {
+      "end_us": 3599.5,
+      "group_id": 3,
+      "id": 345,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3597.5
+    },
+    {
+      "end_us": 3608.5,
+      "group_id": 3,
+      "id": 346,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3602.25
+    },
+    {
+      "end_us": 3611.25,
+      "group_id": 3,
+      "id": 347,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3608.5
+    },
+    {
+      "end_us": 3619.75,
+      "group_id": 3,
+      "id": 348,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3611.25
+    },
+    {
+      "end_us": 3624.0,
+      "group_id": 3,
+      "id": 349,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3619.75
+    },
+    {
+      "end_us": 3659.0,
+      "group_id": 3,
+      "id": 350,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3624.0
+    },
+    {
+      "end_us": 3686.25,
+      "group_id": 3,
+      "id": 351,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 3659.0
+    },
+    {
+      "end_us": 3693.5,
+      "group_id": 3,
+      "id": 352,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3686.25
+    },
+    {
+      "end_us": 3701.5,
+      "group_id": 3,
+      "id": 353,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3693.5
+    },
+    {
+      "end_us": 3708.0,
+      "group_id": 3,
+      "id": 354,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 3703.75
+    },
+    {
+      "end_us": 3712.5,
+      "group_id": 3,
+      "id": 355,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3708.0
+    },
+    {
+      "end_us": 3703.5,
+      "group_id": 3,
+      "id": 356,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3701.5
+    },
+    {
+      "end_us": 3714.25,
+      "group_id": 3,
+      "id": 357,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3712.5
+    },
+    {
+      "end_us": 3722.75,
+      "group_id": 3,
+      "id": 358,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3716.25
+    },
+    {
+      "end_us": 3725.5,
+      "group_id": 3,
+      "id": 359,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3722.75
+    },
+    {
+      "end_us": 3734.0,
+      "group_id": 3,
+      "id": 360,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3725.5
+    },
+    {
+      "end_us": 3738.25,
+      "group_id": 3,
+      "id": 361,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3734.0
+    },
+    {
+      "end_us": 3773.25,
+      "group_id": 3,
+      "id": 362,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3738.25
+    },
+    {
+      "end_us": 3800.25,
+      "group_id": 3,
+      "id": 363,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 3773.25
+    },
+    {
+      "end_us": 3807.25,
+      "group_id": 3,
+      "id": 364,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3800.25
+    },
+    {
+      "end_us": 3815.25,
+      "group_id": 3,
+      "id": 365,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3807.25
+    },
+    {
+      "end_us": 3821.75,
+      "group_id": 3,
+      "id": 366,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 3817.5
+    },
+    {
+      "end_us": 3826.25,
+      "group_id": 3,
+      "id": 367,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3821.75
+    },
+    {
+      "end_us": 3817.25,
+      "group_id": 3,
+      "id": 368,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3815.25
+    },
+    {
+      "end_us": 3828.25,
+      "group_id": 3,
+      "id": 369,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3826.25
+    },
+    {
+      "end_us": 3837.75,
+      "group_id": 3,
+      "id": 370,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3831.0
+    },
+    {
+      "end_us": 3840.5,
+      "group_id": 3,
+      "id": 371,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3837.75
+    },
+    {
+      "end_us": 3849.0,
+      "group_id": 3,
+      "id": 372,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3840.5
+    },
+    {
+      "end_us": 3853.25,
+      "group_id": 3,
+      "id": 373,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3849.0
+    },
+    {
+      "end_us": 3888.5,
+      "group_id": 3,
+      "id": 374,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3853.25
+    },
+    {
+      "end_us": 3915.75,
+      "group_id": 3,
+      "id": 375,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 3888.5
+    },
+    {
+      "end_us": 3922.75,
+      "group_id": 3,
+      "id": 376,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 3915.75
+    },
+    {
+      "end_us": 3931.25,
+      "group_id": 3,
+      "id": 377,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 3922.75
+    },
+    {
+      "end_us": 3937.5,
+      "group_id": 3,
+      "id": 378,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 3933.5
+    },
+    {
+      "end_us": 3941.75,
+      "group_id": 3,
+      "id": 379,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 3937.5
+    },
+    {
+      "end_us": 3933.0,
+      "group_id": 3,
+      "id": 380,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 3931.25
+    },
+    {
+      "end_us": 3943.75,
+      "group_id": 3,
+      "id": 381,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 3941.75
+    },
+    {
+      "end_us": 3952.0,
+      "group_id": 3,
+      "id": 382,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 3945.75
+    },
+    {
+      "end_us": 3954.75,
+      "group_id": 3,
+      "id": 383,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 3952.0
+    },
+    {
+      "end_us": 3963.25,
+      "group_id": 3,
+      "id": 384,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 3954.75
+    },
+    {
+      "end_us": 3967.75,
+      "group_id": 3,
+      "id": 385,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 3963.25
+    },
+    {
+      "end_us": 4002.5,
+      "group_id": 3,
+      "id": 386,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 3967.75
+    },
+    {
+      "end_us": 4029.5,
+      "group_id": 3,
+      "id": 387,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 4002.5
+    },
+    {
+      "end_us": 4036.0,
+      "group_id": 3,
+      "id": 388,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4029.5
+    },
+    {
+      "end_us": 4044.25,
+      "group_id": 3,
+      "id": 389,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 4036.0
+    },
+    {
+      "end_us": 4050.75,
+      "group_id": 3,
+      "id": 390,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 4046.5
+    },
+    {
+      "end_us": 4055.0,
+      "group_id": 3,
+      "id": 391,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 4050.75
+    },
+    {
+      "end_us": 4046.25,
+      "group_id": 3,
+      "id": 392,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 4044.25
+    },
+    {
+      "end_us": 4056.75,
+      "group_id": 3,
+      "id": 393,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 4055.0
+    },
+    {
+      "end_us": 4065.25,
+      "group_id": 3,
+      "id": 394,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4059.0
+    },
+    {
+      "end_us": 4068.0,
+      "group_id": 3,
+      "id": 395,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4065.25
+    },
+    {
+      "end_us": 4076.5,
+      "group_id": 3,
+      "id": 396,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 4068.0
+    },
+    {
+      "end_us": 4080.75,
+      "group_id": 3,
+      "id": 397,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 4076.5
+    },
+    {
+      "end_us": 4115.25,
+      "group_id": 3,
+      "id": 398,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 4080.75
+    },
+    {
+      "end_us": 4142.25,
+      "group_id": 3,
+      "id": 399,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 4115.25
+    },
+    {
+      "end_us": 4149.0,
+      "group_id": 3,
+      "id": 400,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4142.25
+    },
+    {
+      "end_us": 4157.5,
+      "group_id": 3,
+      "id": 401,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "start_us": 4149.0
+    },
+    {
+      "end_us": 4164.25,
+      "group_id": 3,
+      "id": 402,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "start_us": 4160.25
+    },
+    {
+      "end_us": 4168.5,
+      "group_id": 3,
+      "id": 403,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "start_us": 4164.25
+    },
+    {
+      "end_us": 4159.25,
+      "group_id": 3,
+      "id": 404,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "start_us": 4157.5
+    },
+    {
+      "end_us": 4170.25,
+      "group_id": 3,
+      "id": 405,
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "start_us": 4168.5
+    },
+    {
+      "end_us": 4180.0,
+      "group_id": 3,
+      "id": 406,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "start_us": 4173.75
+    },
+    {
+      "end_us": 4182.75,
+      "group_id": 3,
+      "id": 407,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "start_us": 4180.0
+    },
+    {
+      "end_us": 4190.75,
+      "group_id": 3,
+      "id": 408,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "start_us": 4182.75
+    },
+    {
+      "end_us": 4195.0,
+      "group_id": 3,
+      "id": 409,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 4190.75
+    },
+    {
+      "end_us": 4229.75,
+      "group_id": 3,
+      "id": 410,
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "start_us": 4195.0
+    },
+    {
+      "end_us": 4256.5,
+      "group_id": 3,
+      "id": 411,
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "start_us": 4229.75
+    },
+    {
+      "end_us": 4261.0,
+      "group_id": 3,
+      "id": 412,
+      "name": "rmsnorm_native_1_4096",
+      "start_us": 4256.5
+    },
+    {
+      "end_us": 4267.25,
+      "group_id": 3,
+      "id": 413,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "start_us": 4261.25
+    },
+    {
+      "end_us": 4268.25,
+      "group_id": 3,
+      "id": 414,
+      "name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "start_us": 4267.25
+    },
+    {
+      "end_us": 4581.75,
+      "group_id": 3,
+      "id": 415,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "start_us": 4268.25
+    },
+    {
+      "end_us": 4584.0,
+      "group_id": 3,
+      "id": 416,
+      "name": "E_1187_32_4_8c978b620f9c49480ac0eb05ba9e92fb742fac375e8a835bf98b19a7c6c6cadf",
+      "start_us": 4581.75
+    },
+    {
+      "end_us": 4592.5,
+      "group_id": 3,
+      "id": 417,
+      "name": "native_finite_fp32_argmax_151936_t1024",
+      "start_us": 4584.0
+    },
+    {
+      "end_us": 4593.75,
+      "group_id": 3,
+      "id": 418,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "start_us": 4592.5
+    }
+  ],
+  "pairs": [
+    {
+      "consumer_end_us": 101.0,
+      "consumer_id": 16,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 65.75,
+      "group": 0,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 65.75,
+      "producer_id": 15,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 61.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 211.0,
+      "consumer_id": 27,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 176.0,
+      "group": 0,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.0,
+      "overlap_us": 0.0,
+      "producer_end_us": 176.0,
+      "producer_id": 26,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 172.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 541.5,
+      "consumer_id": 38,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 506.25,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 506.25,
+      "producer_id": 37,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 502.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 650.0,
+      "consumer_id": 49,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 615.25,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 615.25,
+      "producer_id": 48,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 610.75,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 755.5,
+      "consumer_id": 60,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 721.0,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 721.0,
+      "producer_id": 59,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 716.75,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 853.75,
+      "consumer_id": 71,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 819.0,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 819.0,
+      "producer_id": 70,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 814.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 954.75,
+      "consumer_id": 82,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 920.0,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 920.0,
+      "producer_id": 81,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 915.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1057.75,
+      "consumer_id": 93,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1023.0,
+      "group": 1,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 1023.0,
+      "producer_id": 92,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1018.75,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1344.0,
+      "consumer_id": 104,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1309.0,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.75,
+      "overlap_us": 0.0,
+      "producer_end_us": 1309.0,
+      "producer_id": 103,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1304.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1445.5,
+      "consumer_id": 115,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1410.5,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 1410.5,
+      "producer_id": 114,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1406.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1551.5,
+      "consumer_id": 126,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1516.75,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 1516.75,
+      "producer_id": 125,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1512.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1649.75,
+      "consumer_id": 137,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1615.0,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 1615.0,
+      "producer_id": 136,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1610.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1750.25,
+      "consumer_id": 148,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1715.25,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 1715.25,
+      "producer_id": 147,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1711.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1861.75,
+      "consumer_id": 159,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1827.25,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 1827.25,
+      "producer_id": 158,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1823.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1961.0,
+      "consumer_id": 170,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 1926.5,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 1926.5,
+      "producer_id": 169,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 1922.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2060.5,
+      "consumer_id": 181,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2025.75,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2025.75,
+      "producer_id": 180,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2021.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2165.25,
+      "consumer_id": 192,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2130.5,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 2130.5,
+      "producer_id": 191,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2126.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2264.5,
+      "consumer_id": 203,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2230.0,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 2230.0,
+      "producer_id": 202,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2225.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2363.75,
+      "consumer_id": 214,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2329.0,
+      "group": 2,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.75,
+      "overlap_us": 0.0,
+      "producer_end_us": 2329.0,
+      "producer_id": 213,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2324.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2479.25,
+      "consumer_id": 225,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2444.5,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 5.0,
+      "overlap_us": 0.0,
+      "producer_end_us": 2444.5,
+      "producer_id": 224,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2439.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2585.0,
+      "consumer_id": 236,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2550.5,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2550.5,
+      "producer_id": 235,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2546.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2693.25,
+      "consumer_id": 248,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2658.5,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2658.5,
+      "producer_id": 247,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2654.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2804.75,
+      "consumer_id": 259,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2770.25,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2770.25,
+      "producer_id": 258,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2766.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 2907.75,
+      "consumer_id": 270,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2873.5,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2873.5,
+      "producer_id": 269,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2869.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3015.25,
+      "consumer_id": 282,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 2980.25,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 2980.25,
+      "producer_id": 281,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 2976.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3126.25,
+      "consumer_id": 293,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3091.5,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3091.5,
+      "producer_id": 292,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3087.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3229.5,
+      "consumer_id": 304,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3194.75,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3194.75,
+      "producer_id": 303,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3190.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3335.75,
+      "consumer_id": 316,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3300.75,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3300.75,
+      "producer_id": 315,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3296.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3447.25,
+      "consumer_id": 327,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3412.0,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.0,
+      "overlap_us": 0.0,
+      "producer_end_us": 3412.0,
+      "producer_id": 326,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3408.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3551.0,
+      "consumer_id": 338,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3516.25,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.0,
+      "overlap_us": 0.0,
+      "producer_end_us": 3516.25,
+      "producer_id": 337,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3512.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3659.0,
+      "consumer_id": 350,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3624.0,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3624.0,
+      "producer_id": 349,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3619.75,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3773.25,
+      "consumer_id": 362,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3738.25,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3738.25,
+      "producer_id": 361,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3734.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 3888.5,
+      "consumer_id": 374,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3853.25,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 3853.25,
+      "producer_id": 373,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3849.0,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 4002.5,
+      "consumer_id": 386,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 3967.75,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.5,
+      "overlap_us": 0.0,
+      "producer_end_us": 3967.75,
+      "producer_id": 385,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 3963.25,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 4115.25,
+      "consumer_id": 398,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 4080.75,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 4080.75,
+      "producer_id": 397,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 4076.5,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 4229.75,
+      "consumer_id": 410,
+      "consumer_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "consumer_start_us": 4195.0,
+      "group": 3,
+      "has_data_edge": true,
+      "launch_shadow_us": 4.25,
+      "overlap_us": 0.0,
+      "producer_end_us": 4195.0,
+      "producer_id": 409,
+      "producer_name": "rmsnorm_native_1_4096",
+      "producer_start_us": 4190.75,
+      "queue": 0,
+      "wait_exit_note": "not instrumented in decode body; static wait position is consumer instruction 0",
+      "wait_exit_us": null
+    }
+  ],
+  "pdl_placements": {
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": {
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_g3_lanemap_gemv_pair_vec_1024_4096": {
+      "name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_g3_lanemap_gemv_vec_1024_4096": {
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_g3_lanemap_gemv_vec_4096_4096": {
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": {
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096": {
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": {
+      "name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd": {
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "wait_index": 0,
+      "wait_instruction": "asm volatile(\"griddepcontrol.wait;\");"
+    },
+    "rmsnorm_native_1_4096": {
+      "name": "rmsnorm_native_1_4096",
+      "trigger_index": 0,
+      "trigger_instruction": "asm volatile(\"griddepcontrol.launch_dependents;\");"
+    }
+  },
+  "profile_records_total": 94,
+  "profiled_host_per_token_us": {
+    "median": 6107.343,
+    "note": "PROFILE=1 instrumentation tax included; not an endpoint wall"
+  },
+  "queues": 2,
+  "schema": "tinygrad.nv_pdl_phase_b.v1",
+  "timed_node_count": 419,
+  "token_evidence": {
+    "count": 9,
+    "first_token_ids": [
+      13876,
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876,
+      38835,
+      34208
+    ],
+    "sha256": "323f407295a70421c78d02bb0954c20dffc76a0020ce52f7bdba0e0901ba8332"
+  },
+  "token_span_us": 4593.75
+}

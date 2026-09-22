@@ -1,0 +1,115 @@
+{
+  "arm": "candidate",
+  "census": {
+    "all_weights_canonical": true,
+    "candidate_weight_args": 72,
+    "compiler_generated_main": 72,
+    "expanded_fp16_weight_bytes": 0,
+    "old_fixup": 0,
+    "partial_workspace_bytes": 0,
+    "q8_producer": 72,
+    "q8_records": 72,
+    "qo_fp16_overlays": 0,
+    "unique_weight_bases": 72
+  },
+  "device_profile": {},
+  "program_names": {
+    "E_1024_8_16_4_4ced06f31da0eabe570638d198fefadeda8393d5412c5bf6d719e1e4fa0a123c": 36,
+    "E_1024_8_16_4_951f50b9c4cef7fd01f9487b7fcf8bac80056e3d09f6fc0b26203dd711b30d9c": 36,
+    "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": 2,
+    "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": 72,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_543de0e006d74d8dcb569035cfc5364ea9406ba19e03559f5dc7160a1638f065": 36,
+    "E_32_16_2_8_16_4_4_92835f632441c3fec3dc836c82ac95d56874ada4f189a323c7bd556288c46000": 36,
+    "E_4_32_32_4_2_2_2_8_2_383_2_4d350ae5af611dd29cc9bccf1b519b45127a4516166c2f578ff0eb387e90a220": 36,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_4_8_32_4_2_2_2_8_2_127_2_a934a87fe7281846514bbe669e42a7ad50618310719409ea103464368a9f7810": 72,
+    "E_4_96_32_4_2_2_2_8_2_127_2_0711af9046138a5bb5e4638aac0ba624d4cb4e1d6d1426be57fa3affd7d84235": 72,
+    "E_512_16_8_2_4_4_2e162bdabfe040283cb257ced27118633de4e59e1679a9699f9c54996923a749": 1,
+    "E_512_4_2_8_16_4_284de8f2c9c98fcb873331166e5366c16b6d3ea5594fe638257749ba7f83929d": 36,
+    "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": 36,
+    "E_64_192_8_16_4_640bf817cadb0a8147e90971f99a6347b79860af34aa6133d67935af68c02254": 36,
+    "E_64_192_8_16_4_9116f1cfc2bb8151b919afd023142993ccca4d58ee934e2f0087282e617f94da": 36,
+    "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": 36,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 72,
+    "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": 144,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 108,
+    "E_64_64_8_16_4_5bc003bfaade3a24f90582ce2da294e6345924b878539c124bfd295799fbb848": 36,
+    "E_64_64_8_16_4_dfb4f4f505716533c80c2fbef495f94d8affe282e39b40d96f3fdc5b8649c948": 36,
+    "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": 36,
+    "E_8_64_2_8_16_4_e106c4030a9d21cac72ff0bb3b8aa5e9a622cb2894412277e2f90534cf3f0e2e": 36,
+    "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+    "native_finite_fp32_argmax_151936_t1024": 1,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "q8_compact_record_fp16": 72,
+    "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": 1,
+    "r_2_512_8_4_4_16_b17914008932ba19317731d2df1ce96ef3bd1e77dd7e329b26bc33993dd8991a": 36,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 72,
+    "r_4_32_32_2_4_2_2_4_4_64_2_2_2_36d9855ff0c162ed869a34e6d61659608d899de3c60b3d9665f8600009fcd56b": 72,
+    "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": 36
+  },
+  "replay": {
+    "cycles": [
+      {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "same_activation_exact": true,
+        "same_token": true
+      }
+    ],
+    "distinct_activation_output": true,
+    "finite": true,
+    "same_activation_allclose": true,
+    "same_activation_exact": true,
+    "same_activation_max_abs": 0.0,
+    "same_activation_mean_abs": 0.0,
+    "same_token": true
+  },
+  "route": {
+    "candidate_identity": "fc3b6e588b4dc162749e50ef060e3e2312f8560463e8a7219bcc99cc7fb0627a",
+    "default_enabled": false
+  },
+  "schema": "tinygrad.nv_compiler_q4k_qo_model_arm.v1",
+  "stage_replay": {
+    "main_output_max_abs_by_id": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "main_outputs_exact_by_id": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "probe_ids": [
+      0,
+      1,
+      70,
+      71
+    ],
+    "q8_record_changed_u32_by_id": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "q8_records_exact_by_id": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "status": "PASS",
+  "token": 198,
+  "wall": {
+    "median_ms": 81.449882,
+    "min_ms": 81.449882,
+    "samples_ms": [
+      81.449882
+    ],
+    "tok_s": 6286.074177492363
+  }
+}

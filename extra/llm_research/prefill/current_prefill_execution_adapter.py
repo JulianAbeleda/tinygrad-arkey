@@ -30,6 +30,12 @@ _ARGUMENT_ORDER = ("output", "a", "b")
 _COMPILE_DEVICE = "AMD"
 _RUNTIME_DEVICE = "AMD"
 
+# Non-AMD compile evidence emits the AMD-ELF-only manifest fields as explicit "not applicable"
+# instead of dropping them: the named discriminator keeps "this target has no ISA disassembler"
+# distinguishable from "nobody looked" (same discipline as the AMD path's unknown_row_count /
+# missing_evidence discriminators).
+NON_AMD_ISA_MANIFEST_REASON = "not_applicable_no_isa_disassembler_for_target"
+
 
 def _runtime_alive() -> bool:
   """The guarded child already owns a live runtime; independent health is probed separately."""
@@ -103,6 +109,16 @@ def compile_current_prefill_program(payload: dict[str, Any], canonical_identity:
 
 
 def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity: str, *, device: str = _COMPILE_DEVICE):
+  """Compile evidence for one exact candidate on one declared device.
+
+  The branch is on ``device`` only -- never on "the compiled binary looks like an AMD ELF" --
+  so a box without the ROCm toolchain never reaches ``disassemble_amdgpu``. AMD produces the
+  full ISA manifest (disassembly, operand attribution, resource summary, packed-WMMA compile
+  gate) exactly as before; every other declared target produces the same minimal evidence the
+  probe lane already builds, with the AMD-only fields present but explicitly not applicable.
+  """
+  if device != _COMPILE_DEVICE:
+    return _prepare_current_prefill_compile_minimal(payload, canonical_identity, device=device)
   from extra.llm_research.amd_isa_proof import capture_amd_isa_proof_manifest
   try:
     with capture_amd_isa_proof_manifest(max_rows=DEFAULT_MAX_ROWS) as proof_rows:
@@ -224,6 +240,53 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
       "canonical_identity": canonical_identity, "source_sha256": source_sha, "binary_sha256": binary_sha,
       "target": target, "compile_target": device})
   if packed_gate is not None: evidence["packed_wmma_compile_gate"] = packed_gate
+  return program, evidence
+
+
+def _prepare_current_prefill_compile_minimal(payload: dict[str, Any], canonical_identity: str, *, device: str):
+  """Non-AMD compile evidence through the same producer: minimal, no ISA manifest fabrication.
+
+  No ``wmma_families`` are invented from a SASS parse until a real CUDA disassembler exists; the
+  AMD-only fields are present and null with a named reason so "not applicable on this target"
+  and "nobody looked" do not render identically.
+  """
+  program, admission = compile_current_prefill_program(payload, canonical_identity, device=device)
+  schedule = admission.normalized_payload["schedule"]
+  canonical_identity = admission.canonical_identity
+  workload = full_kernel_workload(admission.normalized_payload)
+  transform = admission.context.packed_weight
+  evidence = compile_transport_evidence(program, transport=capability_transport(admission.capability),
+    canonical_identity=canonical_identity,
+    schedule={"threads": schedule["threads"], "lds_bytes": admission.active_lds_bytes,
+              "tile": dict(schedule["tile"]), "pipeline": dict(schedule["pipeline"])},
+    surface={"source_kind": "tinygrad_scheduler", "consumer": "packed_dequant_wmma" if transform else "dense_gemm",
+             "role": workload.role},
+    runtime_binding=dict(admission.normalized_payload["workload"]))
+  if evidence.get("passed") is not True: raise ValueError("current prefill compile evidence failed")
+  source = next((u.arg for u in program.src if u.op.name == "SOURCE" and isinstance(u.arg, str)), None)
+  binary = next((u.arg for u in program.src if u.op.name == "BINARY" and isinstance(u.arg, bytes)), None)
+  compiled_target = next((u.arg for u in program.src if u.op.name == "DEVICE"), None)
+  if not source or not binary or not isinstance(compiled_target, str):
+    raise ValueError("final compile identity inputs are unavailable")
+  if tuple(program.arg.globals) != (0, 1, 2) or tuple(program.arg.outs) != (0,) or tuple(program.arg.ins) != (1, 2):
+    raise ValueError("compiled PROGRAM ABI differs from output,a,b execution contract")
+  source_sha, binary_sha = hashlib.sha256(source.encode()).hexdigest(), hashlib.sha256(binary).hexdigest()
+  if binary_sha != evidence.get("binary_sha256"): raise ValueError("compile evidence binary identity mismatch")
+  evidence.update(source_sha256=source_sha, binary_sha256=binary_sha,
+    target_id=workload.target_id, target=workload.target["arch"],
+    compiled_device=compiled_target, compile_target=device,
+    canonical_identity=canonical_identity,
+    final_isa_manifest=None, final_isa_manifest_reason=NON_AMD_ISA_MANIFEST_REASON,
+    final_isa=None, final_isa_reason=NON_AMD_ISA_MANIFEST_REASON,
+    resource_summary=None, resource_summary_reason=NON_AMD_ISA_MANIFEST_REASON,
+    isa_structure=None, isa_structure_reason=NON_AMD_ISA_MANIFEST_REASON,
+    artifacts={"final_isa": {"status": "not_applicable", "reason": NON_AMD_ISA_MANIFEST_REASON},
+      "final_isa_manifest": {"status": "not_applicable", "reason": NON_AMD_ISA_MANIFEST_REASON},
+      "resource_summary": {"status": "not_applicable", "reason": NON_AMD_ISA_MANIFEST_REASON}},
+    executed_binary_matches_compile=True,
+    child_recompile_binary_identity_contract={"enabled": True, "reject_sha256_mismatch_before_dispatch": True,
+      "canonical_identity": canonical_identity, "source_sha256": source_sha, "binary_sha256": binary_sha,
+      "target": workload.target["arch"], "compile_target": device})
   return program, evidence
 
 

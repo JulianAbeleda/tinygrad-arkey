@@ -1,0 +1,38 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "candidate",
+  "status": "PASS",
+  "token": 198,
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 36,
+    "main": 72,
+    "fixup": 72,
+    "q6_down_producer": 18,
+    "q6_down_main": 18,
+    "q6_down_fixup": 18,
+    "q4_down_producer": 18,
+    "q4_down_main": 18,
+    "q4_down_fixup": 18
+  },
+  "wall": {
+    "samples_ms": [
+      50.448593,
+      50.403448,
+      50.571574,
+      50.565754,
+      50.363963,
+      50.379262,
+      50.60141,
+      50.160121,
+      50.797469
+    ],
+    "min_ms": 50.160121,
+    "median_ms": 50.448593,
+    "tok_s": 10207.311900224484
+  }
+}

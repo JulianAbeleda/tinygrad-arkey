@@ -1,0 +1,32 @@
+{
+  "replays": 1000,
+  "rows": [
+    {
+      "bit_exact_to_w1": true,
+      "kernel": "rmsnorm_native_1_4096_w1",
+      "warps": 1
+    },
+    {
+      "bit_exact_to_w1": true,
+      "kernel": "rmsnorm_native_1_4096_w2",
+      "warps": 2
+    },
+    {
+      "bit_exact_to_w1": true,
+      "kernel": "rmsnorm_native_1_4096_w4",
+      "warps": 4
+    },
+    {
+      "bit_exact_to_w1": true,
+      "kernel": "rmsnorm_native_1_4096_w8",
+      "warps": 8
+    },
+    {
+      "bit_exact_to_w1": true,
+      "kernel": "rmsnorm_native_1_4096_w16",
+      "warps": 16
+    }
+  ],
+  "schema": "tinygrad.nv_rmsnorm_native_geometry.v1",
+  "warmup": 50
+}

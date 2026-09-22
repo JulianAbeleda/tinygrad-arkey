@@ -1,0 +1,29 @@
+{
+  "atol": 0.02,
+  "cubin_sha256": "57c0a9caeee467316fc295b9447a61873d5578eb2a5a28b36e58f237e605bd88",
+  "finite": true,
+  "guards_ok": true,
+  "kernel_time_us": 4.352,
+  "max_abs": 3.5762786865234375e-06,
+  "mean_abs": 7.605412974953651e-07,
+  "metadata": {
+    "constant0_size": 1040,
+    "function_symbol_index": 355,
+    "image_bytes": 3047424,
+    "parameter_base": 896,
+    "parameter_count": 19,
+    "parameter_size": 144,
+    "register_count": 48,
+    "relocation_types": [2],
+    "shared_section_bytes": 1408,
+    "stack_bytes": 0,
+    "symbol": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+    "text_bytes": 5120
+  },
+  "numerical_ok": true,
+  "pass": true,
+  "schema": "tinygrad.nv_llama_cubin_bridge_gate.v1",
+  "seed": 202608056,
+  "shape": [1024, 4096],
+  "verdict": "PASS"
+}

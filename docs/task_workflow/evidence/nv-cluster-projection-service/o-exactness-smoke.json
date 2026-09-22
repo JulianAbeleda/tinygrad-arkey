@@ -1,0 +1,42 @@
+{
+  "commit": "f37279e3b983c7727e9816b3bb9243eadf269051",
+  "median": {
+    "atomic_half_us": 26.419201,
+    "direct_us": 1.75616,
+    "scratch_exact_tax_us": 1.73056,
+    "scratch_exact_us": 3.48672
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function '_Z11atomic_halfP6__halfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z11atomic_halfP6__halfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 6.787 ms\nptxas info    : Compiling entry function '_Z13combine_exactPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13combine_exactPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 39 registers, used 0 barriers\nptxas info    : Compile time = 2.956 ms\nptxas info    : Compiling entry function '_Z13write_scratchPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z13write_scratchPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 14 registers, used 0 barriers\nptxas info    : Compile time = 1.024 ms\nptxas info    : Compiling entry function '_Z12direct_exactPfPKf' for 'sm_120a'\nptxas info    : Function properties for _Z12direct_exactPfPKf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 39 registers, used 0 barriers\nptxas info    : Compile time = 2.474 ms\n",
+  "samples": [
+    {
+      "atomic_half_us": 26.419201,
+      "direct_us": 1.7768,
+      "rep": 0,
+      "scratch_exact_us": 3.52304
+    },
+    {
+      "atomic_half_us": 26.419201,
+      "direct_us": 1.75616,
+      "rep": 1,
+      "scratch_exact_us": 3.48672
+    },
+    {
+      "atomic_half_us": 26.439681,
+      "direct_us": 1.74592,
+      "rep": 2,
+      "scratch_exact_us": 3.45088
+    }
+  ],
+  "schema": "tinygrad.nv_clusterfusion_o_exactness_gate.v1",
+  "shape": {
+    "heads": 32,
+    "partial_bytes": 524288,
+    "rows": 4096
+  },
+  "stdout": "validate exact_bitwise=1 atomic_max_abs=0.00390625 atomic_rel_l2=0.000371081574\nsample rep=0 direct_us=1.776800 scratch_exact_us=3.523040 atomic_half_us=26.419201\nsample rep=1 direct_us=1.756160 scratch_exact_us=3.486720 atomic_half_us=26.419201\nsample rep=2 direct_us=1.745920 scratch_exact_us=3.450880 atomic_half_us=26.439681\n",
+  "validation": {
+    "atomic_half_max_abs": 0.00390625,
+    "atomic_half_rel_l2": 0.000371081574,
+    "exact_scratch_bitwise": true
+  }
+}

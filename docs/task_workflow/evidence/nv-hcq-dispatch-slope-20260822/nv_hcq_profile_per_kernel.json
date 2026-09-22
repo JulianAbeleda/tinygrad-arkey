@@ -1,0 +1,176 @@
+{
+  "block": [
+    2,
+    16,
+    1
+  ],
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cubin_sha256": "de0a8e53c34ce5f5d8ced7848e016f838ae03606795803c194a61c82d48b90b5",
+  "grid": [
+    8,
+    1,
+    1
+  ],
+  "method": "exact production reduce_output_rmsnorm_8_128 cubin, N chained QMDs, two distinct timestamp signals per kernel (HCQ profile replica), read end.timestamp - start.timestamp",
+  "reference_production_profile_duration_us": 2.5,
+  "reps": 3,
+  "rows": [
+    {
+      "drain_us_median": 34.615,
+      "duration_us_max": 2.272,
+      "duration_us_mean": 1.752,
+      "duration_us_median_of_medians": 1.696,
+      "duration_us_min": 1.664,
+      "n": 8,
+      "samples": [
+        {
+          "drain_us": 34.615,
+          "duration_us_max": 2.176,
+          "duration_us_mean": 1.748,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.664
+        },
+        {
+          "drain_us": 36.398,
+          "duration_us_max": 2.272,
+          "duration_us_mean": 1.752,
+          "duration_us_median": 1.68,
+          "duration_us_min": 1.664
+        },
+        {
+          "drain_us": 32.641,
+          "duration_us_max": 2.144,
+          "duration_us_mean": 1.756,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.664
+        }
+      ]
+    },
+    {
+      "drain_us_median": 40.336,
+      "duration_us_max": 2.4,
+      "duration_us_mean": 1.9006666666666667,
+      "duration_us_median_of_medians": 1.856,
+      "duration_us_min": 1.792,
+      "n": 16,
+      "samples": [
+        {
+          "drain_us": 40.126,
+          "duration_us_max": 2.4,
+          "duration_us_mean": 1.902,
+          "duration_us_median": 1.856,
+          "duration_us_min": 1.856
+        },
+        {
+          "drain_us": 41.037,
+          "duration_us_max": 2.4,
+          "duration_us_mean": 1.912,
+          "duration_us_median": 1.888,
+          "duration_us_min": 1.824
+        },
+        {
+          "drain_us": 40.336,
+          "duration_us_max": 2.368,
+          "duration_us_mean": 1.8880000000000001,
+          "duration_us_median": 1.856,
+          "duration_us_min": 1.792
+        }
+      ]
+    },
+    {
+      "drain_us_median": 68.058,
+      "duration_us_max": 2.336,
+      "duration_us_mean": 1.8079999999999998,
+      "duration_us_median_of_medians": 1.824,
+      "duration_us_min": 1.664,
+      "n": 32,
+      "samples": [
+        {
+          "drain_us": 68.058,
+          "duration_us_max": 2.336,
+          "duration_us_mean": 1.818,
+          "duration_us_median": 1.824,
+          "duration_us_min": 1.664
+        },
+        {
+          "drain_us": 66.585,
+          "duration_us_max": 2.336,
+          "duration_us_mean": 1.771,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.664
+        },
+        {
+          "drain_us": 69.09,
+          "duration_us_max": 2.336,
+          "duration_us_mean": 1.835,
+          "duration_us_median": 1.856,
+          "duration_us_min": 1.664
+        }
+      ]
+    },
+    {
+      "drain_us_median": 122.44,
+      "duration_us_max": 2.368,
+      "duration_us_mean": 1.735,
+      "duration_us_median_of_medians": 1.696,
+      "duration_us_min": 1.632,
+      "n": 64,
+      "samples": [
+        {
+          "drain_us": 122.86,
+          "duration_us_max": 2.368,
+          "duration_us_mean": 1.7289999999999999,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.632
+        },
+        {
+          "drain_us": 121.939,
+          "duration_us_max": 2.336,
+          "duration_us_mean": 1.724,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.632
+        },
+        {
+          "drain_us": 122.44,
+          "duration_us_max": 2.368,
+          "duration_us_mean": 1.752,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.632
+        }
+      ]
+    },
+    {
+      "drain_us_median": 234.33,
+      "duration_us_max": 2.432,
+      "duration_us_mean": 1.7124166666666667,
+      "duration_us_median_of_medians": 1.696,
+      "duration_us_min": 1.6,
+      "n": 128,
+      "samples": [
+        {
+          "drain_us": 232.015,
+          "duration_us_max": 2.336,
+          "duration_us_mean": 1.7117499999999999,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.632
+        },
+        {
+          "drain_us": 234.33,
+          "duration_us_max": 2.304,
+          "duration_us_mean": 1.7049999999999998,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.6
+        },
+        {
+          "drain_us": 235.442,
+          "duration_us_max": 2.432,
+          "duration_us_mean": 1.7205,
+          "duration_us_median": 1.696,
+          "duration_us_min": 1.632
+        }
+      ]
+    }
+  ],
+  "schema": "tinygrad.nv_hcq_profile_per_kernel.v1",
+  "warmup": 1
+}

@@ -1,0 +1,66 @@
+{
+  "ceiling_us": 96.12,
+  "decomposition": {
+    "K": {
+      "B": 1.196,
+      "D": 0.502,
+      "P": 2.496,
+      "R": 0.798
+    },
+    "Q": {
+      "B": 1.19,
+      "D": 0.508,
+      "P": 2.56,
+      "R": 0.862
+    }
+  },
+  "legal_shapes": {
+    "combined_qk_support": {
+      "body_that_must_move_us": 85.896,
+      "deleted_command_us": 186.944,
+      "note": "both norms' D+R, single survivor kernel",
+      "recoverable_dispatch_residual_us": 96.12
+    },
+    "k_completion_norm_rope_store": {
+      "body_that_must_move_us": 43.056,
+      "deleted_command_us": 90.208,
+      "note": "norm D+R only; rope/store body still runs in survivor",
+      "recoverable_dispatch_residual_us": 46.8
+    },
+    "q_completion_norm_rope": {
+      "body_that_must_move_us": 42.84,
+      "deleted_command_us": 96.736,
+      "note": "norm D+R only; rope/completion body still runs in survivor",
+      "recoverable_dispatch_residual_us": 49.32
+    }
+  },
+  "nodes": {
+    "k_norm": {
+      "median": 2.464,
+      "n": 36,
+      "sum": 90.208
+    },
+    "k_rope_store": {
+      "median": 1.44,
+      "n": 36,
+      "sum": 49.44
+    },
+    "q_completion": {
+      "median": 1.344,
+      "n": 17,
+      "sum": 23.808
+    },
+    "q_norm": {
+      "median": 2.592,
+      "n": 36,
+      "sum": 96.736
+    },
+    "q_rope": {
+      "median": 1.808,
+      "n": 36,
+      "sum": 64.83200000000001
+    }
+  },
+  "schema": "tinygrad.nv_qk_wall_sensitivity.v1",
+  "tok_s_at_ceiling": 213.9
+}

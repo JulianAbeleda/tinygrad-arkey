@@ -1,0 +1,25 @@
+{
+  "block": [
+    4,
+    8,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    16384,
+    4096
+  ],
+  "cubin": "/tmp/reduce_output_rmsnorm_32_128.cubin",
+  "cubin_sha256": "2bf8934ba5633fa670fc4c9c2ebdaa446cf2ac86f224b18cea8c44d44c2a99fc",
+  "grid": [
+    32,
+    1,
+    1
+  ],
+  "n_bufs": 3,
+  "reps": 2000,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "reduce_output_rmsnorm_32_128",
+  "verdict": "CUDA_LAUNCH_OK"
+}

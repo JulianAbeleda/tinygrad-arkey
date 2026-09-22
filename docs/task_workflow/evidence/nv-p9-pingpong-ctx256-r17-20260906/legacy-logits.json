@@ -1,0 +1,33 @@
+{
+  "argmax_tokens": [
+    13,
+    279,
+    3974,
+    13876
+  ],
+  "arm": "legacy",
+  "callify_redirect": 0,
+  "contract": null,
+  "execution": "captured",
+  "logits_sha256": "b20052eef1b4b8014c8746ef83a0231842acf81f5e1acca85c1c1e89015c6dc4",
+  "mode": "logits",
+  "route_still_promoted": false,
+  "sample_argmax_match": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_jits": [
+    "rollout_logits_jit"
+  ],
+  "selected_pair": null,
+  "selector_state": "active_horizon_prewarm_completed",
+  "shape": [
+    4,
+    1,
+    151936
+  ],
+  "tokens": [
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

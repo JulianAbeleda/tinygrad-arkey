@@ -1,0 +1,79 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_production_gate.v1",
+  "shape": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.ffn_gate.weight"
+  },
+  "identity": "57f3e511c385363b01996f5f4bd1e539cd7ab27df993011e5a29564d217e38ed",
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 6291456,
+    "max_abs": 0.000213623046875,
+    "mean_abs": 8.06683692644583e-06,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "compiler": {
+    "ordinary_matmul": true,
+    "expanded_global_weight_allocation": false,
+    "programs": 1,
+    "signed_imma": true,
+    "candidate_identity_exact": true,
+    "source": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_k64.cu"
+  },
+  "timing": {
+    "generated_us": {
+      "min": 2237.78,
+      "median": 2885.84,
+      "samples": [
+        2237.78,
+        2974.637,
+        2885.84,
+        2240.766,
+        2969.407,
+        2888.224,
+        2250.334
+      ]
+    },
+    "v4_static_oracle_us": {
+      "min": 1433.92,
+      "median": 1438.176,
+      "samples": [
+        1437.824,
+        1446.208,
+        1435.104,
+        1433.92,
+        1438.4,
+        1438.176,
+        1440.256
+      ]
+    },
+    "v4_qualified_chain_us": {
+      "min": 586.9759999999999,
+      "median": 591.52,
+      "samples": [
+        591.5519999999999,
+        590.816,
+        591.52,
+        586.9759999999999,
+        587.168,
+        594.368,
+        591.52
+      ]
+    },
+    "generated_over_v4_min": 3.8123875592869227
+  },
+  "passed_correctness": true,
+  "passed_performance": false,
+  "passed": false
+}

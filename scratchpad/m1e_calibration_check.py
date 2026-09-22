@@ -4,7 +4,7 @@ exact same dispatch before trusting it for the Part 2 sweep. Not part of the swe
 import sys, time, json
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
 
 
 def main() -> None:

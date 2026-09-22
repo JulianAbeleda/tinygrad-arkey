@@ -85,7 +85,7 @@ class Handler(HTTPRequestHandler):
     dec = tok.stream_decoder()
     if s.remote_metrics: RemotePCIDevice.reset_stats()
     prefill_snap = None
-    for next_id in model.generate(ids, temperature=temperature):
+    for next_id in model.generate(ids, temperature=temperature, expected_output_tokens=max_tokens):
       if len(out) == 0:
         pt = time.perf_counter()
         pf = prefill_tokens / (pt - st) if pt > st else 0.0

@@ -1,0 +1,319 @@
+{
+  "schema": "tinygrad.nv_q6_binary_delta_audit.fixup.v1",
+  "date": "2026-08-31",
+  "scope": "read-only binary, launch, layout, and timing audit",
+  "shape": {
+    "m": 512,
+    "n": 4096,
+    "k": 12288,
+    "tiles": 128,
+    "tile_elements": 16384,
+    "owners": 170,
+    "segments": 294,
+    "predecessor_segments": 166,
+    "final_segments": 128,
+    "contributors_per_tile": {
+      "2": 90,
+      "3": 38
+    }
+  },
+  "candidate": {
+    "policy": "all_partials_ascending",
+    "main": {
+      "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cu",
+      "source_sha256": "40cca7e5d0b11d37c7df5843206eaf0a27cbb128dd556f879f7b4f43ace324d3",
+      "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin",
+      "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+      "grid": [170, 1, 1],
+      "block": [256, 1, 1],
+      "instructions": 5136,
+      "registers_per_thread": 255,
+      "stack_bytes_per_thread": 0,
+      "static_shared_bytes": 1024,
+      "static_families": {
+        "IMMA": 256,
+        "LDSM": 32,
+        "LDG": 109,
+        "STG": 64,
+        "STS": 73,
+        "BAR": 4,
+        "LDL": 0,
+        "STL": 0
+      }
+    },
+    "fixup": {
+      "definition": "extra/llm_research/prefill/nv_q6_oracle_reduction_policy.py:225",
+      "launch": "extra/llm_research/prefill/bench_nv_q6_oracle_reduction_policy.py:202",
+      "source": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/fixup_all_partials_ascending.cu",
+      "source_bytes": 25261,
+      "source_sha256": "232cdd9fd88d51326419983712f08fdf2962f75fec77119a3faf14bfc7d582a4",
+      "cubin": "docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/fixup_all_partials_ascending/fixup_all_partials_ascending.cubin",
+      "cubin_bytes": 20760,
+      "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+      "text_bytes": 10752,
+      "symbol": "nv_q6_ordered_fixup_all_partials",
+      "grid": [128, 1, 1],
+      "block": [256, 1, 1],
+      "physical_blocks": 128,
+      "active_blocks": 128,
+      "warps_per_block": 8,
+      "active_warps": 1024,
+      "outputs_per_thread": 64,
+      "instructions": 672,
+      "registers_per_thread": 255,
+      "stack_bytes_per_thread": 16,
+      "static_shared_bytes": 0,
+      "static_local_bytes": 0,
+      "static_families": {
+        "BRA": 10,
+        "CS2R": 121,
+        "FADD": 192,
+        "IADD": 2,
+        "IMAD": 8,
+        "ISETP": 8,
+        "LDG": 196,
+        "LDL": 4,
+        "STG": 64,
+        "STL": 8
+      },
+      "inputs": ["fp32_destination", "fp32_partials", "int32_slot_map", "int32_counts"],
+      "synchronization": "standalone launch after main; no BAR, ATOM, or MEMBAR in fixup"
+    },
+    "allocations": {
+      "scratch_slots": 340,
+      "active_scratch_slots": 294,
+      "scratch_bytes": 22282240,
+      "active_scratch_bytes": 19267584,
+      "unused_scratch_bytes": 3014656,
+      "destination_bytes": 8388608,
+      "slot_map_bytes": 1536,
+      "counts_bytes": 512
+    },
+    "address_mapping": {
+      "scratch_index": "slot*16384 + z",
+      "z": "threadIdx.x + 256*i, i in [0,64)",
+      "destination_index": "(mt*128 + mc)*4096 + nt*128 + wr, wr=z/128, mc=z%128",
+      "warp_destination_stride_bytes": 16384,
+      "warp_destination_address_shape": "32 distinct rows for a single store issue"
+    }
+  },
+  "llama": {
+    "commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "source": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+    "source_sha256": "6d153a9d6f293a4ff5f11e7886a48bf765b21d74075d73b2097a2b2a9149de6f",
+    "binding": "extra/llm_research/prefill/nv_llama_packed_q6k_down_pp512_binding.py",
+    "main": {
+      "cubin": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+      "cubin_sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "grid": [170, 1, 1],
+      "block": [32, 8, 1]
+    },
+    "fixup": {
+      "source_lines": "mmq.cuh:3785",
+      "launch_lines": "mmq.cuh:4013",
+      "cubin": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-fixup-dense.sm_120a.cubin",
+      "cubin_bytes": 51640,
+      "cubin_sha256": "d301a14086b54feab53f9d0dd65d49d9b4fb6564830b8f7684e50e7720feffcb",
+      "text_bytes_including_internal_div_helpers": 12032,
+      "symbol": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type14ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "grid": [170, 4, 1],
+      "block": [32, 4, 1],
+      "physical_blocks": 680,
+      "active_blocks": 512,
+      "early_exit_blocks": 168,
+      "warps_per_block": 4,
+      "active_warps": 2048,
+      "outputs_per_active_thread": 32,
+      "section_instructions_including_internal_div_helpers": 752,
+      "entry_instructions_before_internal_div_helpers": 606,
+      "registers_per_thread": 84,
+      "stack_bytes_per_thread": 0,
+      "static_shared_bytes": 0,
+      "static_local_bytes": 0,
+      "entry_static_families": {
+        "BRA": 8,
+        "CALL": 3,
+        "CS2R": 15,
+        "FADD": 64,
+        "IADD": 89,
+        "IMAD": 67,
+        "ISETP": 49,
+        "LDG": 64,
+        "STG": 32
+      },
+      "runtime_loader_allocation_report": {
+        "shared_bytes": 1024,
+        "local_bytes_per_thread": 576,
+        "note": "loader allocation floors; cuobjdump reports zero static shared/local/stack"
+      },
+      "inputs": ["null_ids", "null_expert_bounds", "fp32_destination", "fp32_last_tile_scratch", "fixed_fastdiv_and_stride_values"],
+      "synchronization": "standalone launch after main; source null-ids path has no barrier; normalized SASS has no BAR, ATOM, or MEMBAR"
+    },
+    "allocations": {
+      "scratch_slots": 170,
+      "active_scratch_slots": 166,
+      "scratch_bytes": 11141120,
+      "active_scratch_bytes": 10878976,
+      "unused_scratch_bytes": 262144,
+      "destination_bytes": 8388608,
+      "descriptor_bytes": 0
+    },
+    "address_mapping": {
+      "scratch_index": "bidx*16384 + j*128 + i",
+      "i": "blockIdx.y*32 + threadIdx.x",
+      "j": "threadIdx.y + 4*j_iter, j_iter in [0,32)",
+      "destination_index": "j*512 + i within the selected tile",
+      "warp_destination_stride_bytes": 4,
+      "warp_destination_address_shape": "32 consecutive float32 values, 128 bytes"
+    }
+  },
+  "fold_and_traffic": {
+    "fold_order": "nonfinal contributors in descending owner order, then final contributor",
+    "candidate_execution": "zero plus all scratch contributors in frozen descriptor order",
+    "llama_execution": "final contribution already in destination; predecessor scratch is visited by descending owner and then added to destination",
+    "candidate_logical_bytes": {
+      "main_scratch_write": 19267584,
+      "main_destination_write": 0,
+      "fixup_scratch_read": 19267584,
+      "fixup_destination_read": 0,
+      "fixup_destination_write": 8388608,
+      "fixup_descriptor_thread_load_payload": 524288,
+      "fixup_total": 28180480,
+      "route_total": 47448064
+    },
+    "llama_logical_bytes": {
+      "main_scratch_write": 10878976,
+      "main_destination_write": 8388608,
+      "fixup_scratch_read": 10878976,
+      "fixup_destination_read": 8388608,
+      "fixup_destination_write": 8388608,
+      "fixup_descriptor_thread_load_payload": 0,
+      "fixup_total": 27656192,
+      "route_total": 46923776
+    },
+    "logical_fixup_delta_bytes": 524288,
+    "logical_route_delta_bytes": 524288,
+    "note": "logical payload excludes cache-line and sector amplification; candidate destination address dispersion is therefore materially more important than the 0.5 MiB payload delta"
+  },
+  "timing_us": {
+    "candidate_r31": {
+      "main_median": 231.232,
+      "fixup_min": 24.672,
+      "fixup_median": 25.056,
+      "fixup_max": 25.344,
+      "reset_median": 0.0,
+      "total_median": 256.256
+    },
+    "llama_pinned": {
+      "main": 201.216,
+      "fixup": 8.64,
+      "reset": 0.0,
+      "total": 209.856
+    },
+    "reset_inclusive_residual": {
+      "main": 30.016,
+      "fixup": 16.416,
+      "total": 46.4,
+      "fixup_ratio": 2.9,
+      "fixup_share_of_total_residual": 0.35379310344827586
+    },
+    "low_register_control": {
+      "source": "docs/task_workflow/evidence/nv-q6-oracle-streamk-single-body-packed-20260831/artifacts/plane_major_fixup.cu",
+      "source_sha256": "a388cdee4b01b3260aca92ae53bcca99e6da74cb5cf8911b690fd581ef5513ce",
+      "cubin_sha256": "d01460d8179c04fae41bc61db24cfc9988977108bc04eafd8789d812e49f6d70",
+      "instructions": 192,
+      "registers_per_thread": 30,
+      "stack_bytes_per_thread": 0,
+      "r31_median": 25.088,
+      "caveat": "historical all-partials map order differs from the frozen descending-predecessor order; launch, payload, and destination mapping are equivalent"
+    }
+  },
+  "classification": {
+    "launch_floor": {
+      "verdict": "ruled_out_as_dominant",
+      "label": "proven",
+      "basis": "both routes use one standalone post-main launch and llama completes nontrivial fixup work in 8.640 us"
+    },
+    "logical_traffic_volume": {
+      "verdict": "ruled_out_as_sole_or_dominant_delta",
+      "label": "proven_for_payload_inferred_for_hardware_cost",
+      "basis": "fixup payload differs by only 0.5 MiB and full main-plus-fixup route payload differs by only 0.5 MiB"
+    },
+    "fold_order": {
+      "verdict": "ruled_out_as_dominant",
+      "label": "proven_contract",
+      "basis": "both visit nonfinal owners in descending order and place the final contribution last; direct-final generated controls were bit exact but slower"
+    },
+    "compiler_spill": {
+      "verdict": "unlikely_to_be_material",
+      "label": "strong_inference",
+      "basis": "30-register zero-stack historical control with equivalent launch/payload/address mapping remains at 25.088 us versus current 25.056 us"
+    },
+    "scalar_address_control": {
+      "verdict": "not_supported_as_dominant",
+      "label": "inference",
+      "basis": "llama has substantially more static integer/control work yet is faster; descriptor payload is small"
+    },
+    "destination_coalescing": {
+      "verdict": "highest_ranked_cause",
+      "label": "proven_address_shape_inferred_timing_dominance",
+      "basis": "candidate warp stores touch 32 locations 16 KiB apart while llama warp stores one contiguous 128-byte span"
+    },
+    "grid_parallelism": {
+      "verdict": "second_ranked_cause",
+      "label": "proven_structure_inferred_timing_dominance",
+      "basis": "candidate exposes 1024 active warps in 128 blocks, llama exposes 2048 active warps in 512 active blocks on the 170-SM target"
+    },
+    "overall": "25.056 us is not a launch-floor, fold-order, raw-byte-volume, or spill result. It is most consistent with destination transaction amplification plus insufficient grid granularity; their individual shares are not yet causally separated."
+  },
+  "next_experiments_ranked": [
+    {
+      "rank": 1,
+      "name": "geometry_only_4slice_scatter_control",
+      "change": "keep all-partials ABI, descriptor buffers, fold order, scratch layout, and scattered destination mapping; partition each tile into four disjoint z slices and launch grid (128,4,1), block (128,1,1), 32 outputs per thread",
+      "purpose": "isolate the twofold active-warp and fourfold block-granularity delta without changing addresses or logical traffic",
+      "hard_gates": [
+        "bit-exact scratch input and final output against admitted A",
+        "identical 294-slot descriptor order and exactly one destination writer per element",
+        "zero ATOM, MEMBAR, spin, counter, and reset cost",
+        "stack 0 and LDL/STL 0; registers at most 84 per thread",
+        "R9 screen paired fixup improvement at least 3.0 us with at least 7 of 9 wins",
+        "R31 promotion paired total improvement at least max(3.0 us, 3*paired_MAD) with at least 24 of 31 wins"
+      ]
+    },
+    {
+      "rank": 2,
+      "name": "coalescing_only_shared_transpose_control",
+      "change": "retain grid (128,1,1), block (256,1,1), descriptors, and fold; reduce coalesced scratch values into a tile-local shared transpose and emit destination-contiguous stores",
+      "purpose": "isolate destination address dispersion while holding block population fixed",
+      "hard_gates": [
+        "bit-exact output against admitted A",
+        "one barrier lifecycle with no atomics or inter-CTA communication",
+        "scratch-read and destination-write logical byte counts unchanged",
+        "R9 and R31 timing gates identical to rank 1"
+      ]
+    },
+    {
+      "rank": 3,
+      "name": "combined_4slice_shared_transpose",
+      "change": "combine only the separately qualified geometry and coalescing mechanisms",
+      "purpose": "approach llama's 512-active-block, contiguous-load/store fixup shape while retaining the all-partials main ABI",
+      "hard_gates": [
+        "both isolated parents must first pass",
+        "bit-exact output and zero reset",
+        "R31 paired promotion rule from rank 1",
+        "reject if main binary, scratch ABI, or fold descriptors drift"
+      ]
+    }
+  ],
+  "commands": [
+    "jq '{resources,timing,compiler,ownership,reset_contract}' docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/result.json",
+    "/usr/local/cuda-13.2/bin/cuobjdump --dump-resource-usage <cubin>",
+    "/usr/local/cuda-13.2/bin/cuobjdump --dump-elf <cubin>",
+    ".venv/lib/python3.12/site-packages/triton/backends/nvidia/bin/nvdisasm -c -fun 3 docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-fixup-dense.sm_120a.cubin",
+    "git -C /home/ubuntu/env/llama.cpp show ac4cddeb0dbd778f650bf568f6f08344a06abe3a:ggml/src/ggml-cuda/mmq.cuh",
+    "sha256sum <candidate and llama source/cubin paths>"
+  ]
+}

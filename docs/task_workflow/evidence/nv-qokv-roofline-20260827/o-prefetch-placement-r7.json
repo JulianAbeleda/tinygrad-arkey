@@ -1,0 +1,247 @@
+{
+  "arms": [
+    "control",
+    "prefetch1_late",
+    "prefetch2_late",
+    "prefetch4_late",
+    "prefetch2_early"
+  ],
+  "bitwise_identical": true,
+  "commit": "ed9044079d43724ecf15a5ed07d33266b832a1b3",
+  "median": {
+    "control": {
+      "cold_us": 16.858,
+      "hot_us": 5.834496
+    },
+    "prefetch1_late": {
+      "cold_us": 16.44,
+      "hot_us": 5.85504
+    },
+    "prefetch2_early": {
+      "cold_us": 16.336,
+      "hot_us": 5.975616
+    },
+    "prefetch2_late": {
+      "cold_us": 16.386,
+      "hot_us": 5.916096
+    },
+    "prefetch4_late": {
+      "cold_us": 16.342,
+      "hot_us": 6.10176
+    }
+  },
+  "ptxas": "/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:13: warning: \"INFINITY\" redefined\n   13 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:14: warning: \"NAN\" redefined\n   14 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:13: warning: \"INFINITY\" redefined\n   13 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:14: warning: \"NAN\" redefined\n   14 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \n/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:13: warning: \"INFINITY\" redefined\n   13 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \n/tmp/nv_flash_o_prefetch_ho0n8smk/gate.cu:14: warning: \"NAN\" redefined\n   14 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 10.086 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf2early' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf2early\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 30 registers, used 0 barriers\nptxas info    : Compile time = 5.238 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf4' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf4\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.609 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf2' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf2\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.477 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf1' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_regw_opf1\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.977 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_regw' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_regw\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers, used 0 barriers\nptxas info    : Compile time = 4.336 ms",
+  "samples": [
+    {
+      "arm": 0,
+      "cold_us": 16.754,
+      "hot_us": 5.829248,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.344,
+      "hot_us": 5.84896,
+      "rep": 0
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.52,
+      "hot_us": 5.915776,
+      "rep": 0
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.548,
+      "hot_us": 6.098496,
+      "rep": 0
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.146,
+      "hot_us": 5.973568,
+      "rep": 0
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.63,
+      "hot_us": 5.973568,
+      "rep": 1
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.126,
+      "hot_us": 6.10176,
+      "rep": 1
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.386,
+      "hot_us": 5.914304,
+      "rep": 1
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.44,
+      "hot_us": 5.847872,
+      "rep": 1
+    },
+    {
+      "arm": 0,
+      "cold_us": 17.16,
+      "hot_us": 5.832064,
+      "rep": 1
+    },
+    {
+      "arm": 0,
+      "cold_us": 16.858,
+      "hot_us": 5.830272,
+      "rep": 2
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.446,
+      "hot_us": 5.844672,
+      "rep": 2
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.378,
+      "hot_us": 5.910144,
+      "rep": 2
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.25,
+      "hot_us": 6.089344,
+      "rep": 2
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.336,
+      "hot_us": 5.975616,
+      "rep": 2
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.112,
+      "hot_us": 5.969472,
+      "rep": 3
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.244,
+      "hot_us": 6.09344,
+      "rep": 3
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.134,
+      "hot_us": 5.916096,
+      "rep": 3
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.522,
+      "hot_us": 5.85504,
+      "rep": 3
+    },
+    {
+      "arm": 0,
+      "cold_us": 17.172,
+      "hot_us": 5.834496,
+      "rep": 3
+    },
+    {
+      "arm": 0,
+      "cold_us": 16.566,
+      "hot_us": 5.840576,
+      "rep": 4
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.0,
+      "hot_us": 5.856896,
+      "rep": 4
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.526,
+      "hot_us": 5.920448,
+      "rep": 4
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.518,
+      "hot_us": 6.110336,
+      "rep": 4
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.386,
+      "hot_us": 5.982464,
+      "rep": 4
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.148,
+      "hot_us": 5.987968,
+      "rep": 5
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.342,
+      "hot_us": 6.11072,
+      "rep": 5
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.47,
+      "hot_us": 5.929792,
+      "rep": 5
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.258,
+      "hot_us": 5.85696,
+      "rep": 5
+    },
+    {
+      "arm": 0,
+      "cold_us": 16.99,
+      "hot_us": 5.836608,
+      "rep": 5
+    },
+    {
+      "arm": 0,
+      "cold_us": 16.798,
+      "hot_us": 5.838336,
+      "rep": 6
+    },
+    {
+      "arm": 1,
+      "cold_us": 16.536,
+      "hot_us": 5.859008,
+      "rep": 6
+    },
+    {
+      "arm": 2,
+      "cold_us": 16.38,
+      "hot_us": 5.937984,
+      "rep": 6
+    },
+    {
+      "arm": 3,
+      "cold_us": 16.512,
+      "hot_us": 6.11008,
+      "rep": 6
+    },
+    {
+      "arm": 4,
+      "cold_us": 16.61,
+      "hot_us": 5.987776,
+      "rep": 6
+    }
+  ],
+  "schema": "tinygrad.nv_flash_combine_o_successor_prefetch.v1"
+}

@@ -1,0 +1,750 @@
+{
+  "brackets": {
+    "edge_1q_end_entry": {
+      "candidate": {
+        "label": "observed",
+        "mad_us": 45.125,
+        "max_us": 2401.5,
+        "median_us": 2306.0,
+        "min_us": 2233.5,
+        "n": 4,
+        "spread_us": 168.0
+      },
+      "candidate_all_us": [
+        2233.5,
+        2288.25,
+        2323.75,
+        2401.5
+      ],
+      "control": {
+        "label": "observed",
+        "mad_us": 133.25,
+        "max_us": 2386.75,
+        "median_us": 2162.5,
+        "min_us": 1958.5,
+        "n": 8,
+        "spread_us": 428.25
+      },
+      "control_all_us": [
+        1958.5,
+        2041.25,
+        2054.75,
+        2110.5,
+        2214.5,
+        2307.75,
+        2357.75,
+        2386.75
+      ],
+      "verdict": "refuted",
+      "verdict_reason": "S1 delta +-143.5us; control per-token spread 428.25us (gate 150.0us) so the arm is not separable from control noise"
+    },
+    "edge_2q_end_entry": {
+      "candidate": {
+        "label": "observed",
+        "mad_us": 87.375,
+        "max_us": 2458.5,
+        "median_us": 2360.125,
+        "min_us": 2207.0,
+        "n": 4,
+        "spread_us": 251.5
+      },
+      "candidate_all_us": [
+        2207.0,
+        2283.75,
+        2436.5,
+        2458.5
+      ],
+      "control": {
+        "label": "observed",
+        "mad_us": 65.75,
+        "max_us": 2539.75,
+        "median_us": 2154.0,
+        "min_us": 2051.75,
+        "n": 8,
+        "spread_us": 488.0
+      },
+      "control_all_us": [
+        2051.75,
+        2110.5,
+        2114.5,
+        2145.0,
+        2163.0,
+        2242.0,
+        2385.0,
+        2539.75
+      ],
+      "verdict": "refuted",
+      "verdict_reason": "S1 delta +-206.125us; control per-token spread 488.0us (gate 150.0us) so the arm is not separable from control noise"
+    },
+    "edge_2q_end_prologue": {
+      "candidate": {
+        "label": "unmeasured",
+        "mad_us": null,
+        "max_us": null,
+        "median_us": null,
+        "min_us": null,
+        "n": 0,
+        "spread_us": null
+      },
+      "candidate_all_us": [],
+      "control": {
+        "label": "observed",
+        "mad_us": 169.875,
+        "max_us": 2541.5,
+        "median_us": 2245.375,
+        "min_us": 2011.0,
+        "n": 8,
+        "spread_us": 530.5
+      },
+      "control_all_us": [
+        2011.0,
+        2021.25,
+        2072.0,
+        2121.75,
+        2369.0,
+        2379.5,
+        2411.75,
+        2541.5
+      ],
+      "verdict": "unmeasured",
+      "verdict_reason": "missing control or candidate per-token S1"
+    },
+    "edge_2q_start_entry": {
+      "candidate": {
+        "label": "observed",
+        "mad_us": 78.75,
+        "max_us": 2468.5,
+        "median_us": 2378.375,
+        "min_us": 2259.5,
+        "n": 4,
+        "spread_us": 209.0
+      },
+      "candidate_all_us": [
+        2259.5,
+        2311.0,
+        2445.75,
+        2468.5
+      ],
+      "control": {
+        "label": "observed",
+        "mad_us": 56.0,
+        "max_us": 2529.5,
+        "median_us": 2418.625,
+        "min_us": 2342.25,
+        "n": 8,
+        "spread_us": 187.25
+      },
+      "control_all_us": [
+        2342.25,
+        2357.25,
+        2368.0,
+        2407.5,
+        2429.75,
+        2436.25,
+        2500.5,
+        2529.5
+      ],
+      "verdict": "refuted",
+      "verdict_reason": "S1 delta +40.25us; control per-token spread 187.25us (gate 150.0us) so the arm is not separable from control noise"
+    },
+    "off": {
+      "candidate": {
+        "label": "observed",
+        "mad_us": 56.75,
+        "max_us": 2581.0,
+        "median_us": 2443.5,
+        "min_us": 2371.75,
+        "n": 4,
+        "spread_us": 209.25
+      },
+      "candidate_all_us": [
+        2371.75,
+        2401.75,
+        2485.25,
+        2581.0
+      ],
+      "control": {
+        "label": "observed",
+        "mad_us": 47.875,
+        "max_us": 2616.5,
+        "median_us": 2548.5,
+        "min_us": 2426.25,
+        "n": 8,
+        "spread_us": 190.25
+      },
+      "control_all_us": [
+        2426.25,
+        2463.75,
+        2511.0,
+        2541.75,
+        2555.25,
+        2577.0,
+        2606.75,
+        2616.5
+      ],
+      "verdict": "refuted",
+      "verdict_reason": "S1 delta +105.0us; control per-token spread 190.25us (gate 150.0us) so the arm is not separable from control noise"
+    },
+    "one_graph_best_prior": {
+      "candidate": {
+        "label": "observed",
+        "mad_us": 18.0,
+        "max_us": 2459.5,
+        "median_us": 2432.625,
+        "min_us": 2364.75,
+        "n": 4,
+        "spread_us": 94.75
+      },
+      "candidate_all_us": [
+        2364.75,
+        2423.5,
+        2441.75,
+        2459.5
+      ],
+      "control": {
+        "label": "observed",
+        "mad_us": 181.875,
+        "max_us": 2549.5,
+        "median_us": 2229.0,
+        "min_us": 1978.75,
+        "n": 8,
+        "spread_us": 570.75
+      },
+      "control_all_us": [
+        1978.75,
+        2036.25,
+        2107.25,
+        2150.0,
+        2308.0,
+        2409.75,
+        2412.0,
+        2549.5
+      ],
+      "verdict": "refuted",
+      "verdict_reason": "S1 delta +-203.625us; control per-token spread 570.75us (gate 150.0us) so the arm is not separable from control noise"
+    }
+  },
+  "decode_signature": [
+    32,
+    64,
+    128,
+    256,
+    116
+  ],
+  "evidence_dir": "docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821",
+  "gate_us": 150.0,
+  "per_file": {
+    "stage4_edge_1q_end_entry_candidate_1.profile.jsonl": {
+      "all_s1_us": [
+        223737.75,
+        2525.0,
+        2401.5,
+        2323.75,
+        2288.25,
+        2233.5
+      ],
+      "arm": "edge_1q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 101.75,
+        "max_us": 223737.75,
+        "median_us": 2362.625,
+        "min_us": 2233.5,
+        "n": 6,
+        "spread_us": 221504.25
+      },
+      "role": "candidate",
+      "settled": {
+        "label": "observed",
+        "mad_us": 45.125,
+        "max_us": 2401.5,
+        "median_us": 2306.0,
+        "min_us": 2233.5,
+        "n": 4,
+        "spread_us": 168.0
+      }
+    },
+    "stage4_edge_1q_end_entry_control_0.profile.jsonl": {
+      "all_s1_us": [
+        212870.0,
+        2537.0,
+        2110.5,
+        2041.25,
+        2054.75,
+        1958.5
+      ],
+      "arm": "edge_1q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 82.75,
+        "max_us": 212870.0,
+        "median_us": 2082.625,
+        "min_us": 1958.5,
+        "n": 6,
+        "spread_us": 210911.5
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 34.625,
+        "max_us": 2110.5,
+        "median_us": 2048.0,
+        "min_us": 1958.5,
+        "n": 4,
+        "spread_us": 152.0
+      }
+    },
+    "stage4_edge_1q_end_entry_control_2.profile.jsonl": {
+      "all_s1_us": [
+        217451.75,
+        2662.25,
+        2386.75,
+        2357.75,
+        2307.75,
+        2214.5
+      ],
+      "arm": "edge_1q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 111.125,
+        "max_us": 217451.75,
+        "median_us": 2372.25,
+        "min_us": 2214.5,
+        "n": 6,
+        "spread_us": 215237.25
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 39.5,
+        "max_us": 2386.75,
+        "median_us": 2332.75,
+        "min_us": 2214.5,
+        "n": 4,
+        "spread_us": 172.25
+      }
+    },
+    "stage4_edge_2q_end_entry_candidate_1.profile.jsonl": {
+      "all_s1_us": [
+        230233.0,
+        2603.75,
+        2436.5,
+        2458.5,
+        2283.75,
+        2207.0
+      ],
+      "arm": "edge_2q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 160.0,
+        "max_us": 230233.0,
+        "median_us": 2447.5,
+        "min_us": 2207.0,
+        "n": 6,
+        "spread_us": 228026.0
+      },
+      "role": "candidate",
+      "settled": {
+        "label": "observed",
+        "mad_us": 87.375,
+        "max_us": 2458.5,
+        "median_us": 2360.125,
+        "min_us": 2207.0,
+        "n": 4,
+        "spread_us": 251.5
+      }
+    },
+    "stage4_edge_2q_end_entry_control_0.profile.jsonl": {
+      "all_s1_us": [
+        216681.0,
+        2701.75,
+        2539.75,
+        2242.0,
+        2145.0,
+        2110.5
+      ],
+      "arm": "edge_2q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 263.125,
+        "max_us": 216681.0,
+        "median_us": 2390.875,
+        "min_us": 2110.5,
+        "n": 6,
+        "spread_us": 214570.5
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 65.75,
+        "max_us": 2539.75,
+        "median_us": 2193.5,
+        "min_us": 2110.5,
+        "n": 4,
+        "spread_us": 429.25
+      }
+    },
+    "stage4_edge_2q_end_entry_control_2.profile.jsonl": {
+      "all_s1_us": [
+        214803.75,
+        2630.0,
+        2385.0,
+        2163.0,
+        2051.75,
+        2114.5
+      ],
+      "arm": "edge_2q_end_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 190.875,
+        "max_us": 214803.75,
+        "median_us": 2274.0,
+        "min_us": 2051.75,
+        "n": 6,
+        "spread_us": 212752.0
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 55.625,
+        "max_us": 2385.0,
+        "median_us": 2138.75,
+        "min_us": 2051.75,
+        "n": 4,
+        "spread_us": 333.25
+      }
+    },
+    "stage4_edge_2q_end_prologue_control_0.profile.jsonl": {
+      "all_s1_us": [
+        216485.0,
+        2705.25,
+        2541.5,
+        2411.75,
+        2379.5,
+        2369.0
+      ],
+      "arm": "edge_2q_end_prologue",
+      "raw": {
+        "label": "observed",
+        "mad_us": 102.375,
+        "max_us": 216485.0,
+        "median_us": 2476.625,
+        "min_us": 2369.0,
+        "n": 6,
+        "spread_us": 214116.0
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 21.375,
+        "max_us": 2541.5,
+        "median_us": 2395.625,
+        "min_us": 2369.0,
+        "n": 4,
+        "spread_us": 172.5
+      }
+    },
+    "stage4_edge_2q_end_prologue_control_2.profile.jsonl": {
+      "all_s1_us": [
+        214521.25,
+        2609.75,
+        2121.75,
+        2072.0,
+        2011.0,
+        2021.25
+      ],
+      "arm": "edge_2q_end_prologue",
+      "raw": {
+        "label": "observed",
+        "mad_us": 80.75,
+        "max_us": 214521.25,
+        "median_us": 2096.875,
+        "min_us": 2011.0,
+        "n": 6,
+        "spread_us": 212510.25
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 30.5,
+        "max_us": 2121.75,
+        "median_us": 2046.625,
+        "min_us": 2011.0,
+        "n": 4,
+        "spread_us": 110.75
+      }
+    },
+    "stage4_edge_2q_start_entry_candidate_1.profile.jsonl": {
+      "all_s1_us": [
+        233453.75,
+        2693.5,
+        2468.5,
+        2445.75,
+        2311.0,
+        2259.5
+      ],
+      "arm": "edge_2q_start_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 171.875,
+        "max_us": 233453.75,
+        "median_us": 2457.125,
+        "min_us": 2259.5,
+        "n": 6,
+        "spread_us": 231194.25
+      },
+      "role": "candidate",
+      "settled": {
+        "label": "observed",
+        "mad_us": 78.75,
+        "max_us": 2468.5,
+        "median_us": 2378.375,
+        "min_us": 2259.5,
+        "n": 4,
+        "spread_us": 209.0
+      }
+    },
+    "stage4_edge_2q_start_entry_control_0.profile.jsonl": {
+      "all_s1_us": [
+        215304.25,
+        2684.25,
+        2500.5,
+        2407.5,
+        2368.0,
+        2357.25
+      ],
+      "arm": "edge_2q_start_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 91.375,
+        "max_us": 215304.25,
+        "median_us": 2454.0,
+        "min_us": 2357.25,
+        "n": 6,
+        "spread_us": 212947.0
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 25.125,
+        "max_us": 2500.5,
+        "median_us": 2387.75,
+        "min_us": 2357.25,
+        "n": 4,
+        "spread_us": 143.25
+      }
+    },
+    "stage4_edge_2q_start_entry_control_2.profile.jsonl": {
+      "all_s1_us": [
+        219328.0,
+        2763.75,
+        2529.5,
+        2429.75,
+        2436.25,
+        2342.25
+      ],
+      "arm": "edge_2q_start_entry",
+      "raw": {
+        "label": "observed",
+        "mad_us": 96.875,
+        "max_us": 219328.0,
+        "median_us": 2482.875,
+        "min_us": 2342.25,
+        "n": 6,
+        "spread_us": 216985.75
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 47.0,
+        "max_us": 2529.5,
+        "median_us": 2433.0,
+        "min_us": 2342.25,
+        "n": 4,
+        "spread_us": 187.25
+      }
+    },
+    "stage4_off_candidate_1.profile.jsonl": {
+      "all_s1_us": [
+        220667.75,
+        2668.75,
+        2581.0,
+        2485.25,
+        2371.75,
+        2401.75
+      ],
+      "arm": "off",
+      "raw": {
+        "label": "observed",
+        "mad_us": 133.5,
+        "max_us": 220667.75,
+        "median_us": 2533.125,
+        "min_us": 2371.75,
+        "n": 6,
+        "spread_us": 218296.0
+      },
+      "role": "candidate",
+      "settled": {
+        "label": "observed",
+        "mad_us": 56.75,
+        "max_us": 2581.0,
+        "median_us": 2443.5,
+        "min_us": 2371.75,
+        "n": 4,
+        "spread_us": 209.25
+      }
+    },
+    "stage4_off_control_0.profile.jsonl": {
+      "all_s1_us": [
+        215237.0,
+        2981.0,
+        2606.75,
+        2555.25,
+        2426.25,
+        2463.75
+      ],
+      "arm": "off",
+      "raw": {
+        "label": "observed",
+        "mad_us": 136.0,
+        "max_us": 215237.0,
+        "median_us": 2581.0,
+        "min_us": 2426.25,
+        "n": 6,
+        "spread_us": 212810.75
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 64.5,
+        "max_us": 2606.75,
+        "median_us": 2509.5,
+        "min_us": 2426.25,
+        "n": 4,
+        "spread_us": 180.5
+      }
+    },
+    "stage4_off_control_2.profile.jsonl": {
+      "all_s1_us": [
+        215312.25,
+        2886.5,
+        2616.5,
+        2541.75,
+        2577.0,
+        2511.0
+      ],
+      "arm": "off",
+      "raw": {
+        "label": "observed",
+        "mad_us": 70.375,
+        "max_us": 215312.25,
+        "median_us": 2596.75,
+        "min_us": 2511.0,
+        "n": 6,
+        "spread_us": 212801.25
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 33.0,
+        "max_us": 2616.5,
+        "median_us": 2559.375,
+        "min_us": 2511.0,
+        "n": 4,
+        "spread_us": 105.5
+      }
+    },
+    "stage4_one_graph_best_prior_candidate_1.profile.jsonl": {
+      "all_s1_us": [
+        233750.0,
+        2677.25,
+        2459.5,
+        2423.5,
+        2364.75,
+        2441.75
+      ],
+      "arm": "one_graph_best_prior",
+      "raw": {
+        "label": "observed",
+        "mad_us": 56.5,
+        "max_us": 233750.0,
+        "median_us": 2450.625,
+        "min_us": 2364.75,
+        "n": 6,
+        "spread_us": 231385.25
+      },
+      "role": "candidate",
+      "settled": {
+        "label": "observed",
+        "mad_us": 18.0,
+        "max_us": 2459.5,
+        "median_us": 2432.625,
+        "min_us": 2364.75,
+        "n": 4,
+        "spread_us": 94.75
+      }
+    },
+    "stage4_one_graph_best_prior_control_0.profile.jsonl": {
+      "all_s1_us": [
+        215259.75,
+        2619.25,
+        2150.0,
+        2107.25,
+        2036.25,
+        1978.75
+      ],
+      "arm": "one_graph_best_prior",
+      "raw": {
+        "label": "observed",
+        "mad_us": 121.125,
+        "max_us": 215259.75,
+        "median_us": 2128.625,
+        "min_us": 1978.75,
+        "n": 6,
+        "spread_us": 213281.0
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 56.875,
+        "max_us": 2150.0,
+        "median_us": 2071.75,
+        "min_us": 1978.75,
+        "n": 4,
+        "spread_us": 171.25
+      }
+    },
+    "stage4_one_graph_best_prior_control_2.profile.jsonl": {
+      "all_s1_us": [
+        221823.5,
+        2738.0,
+        2549.5,
+        2412.0,
+        2409.75,
+        2308.0
+      ],
+      "arm": "one_graph_best_prior",
+      "raw": {
+        "label": "observed",
+        "mad_us": 121.875,
+        "max_us": 221823.5,
+        "median_us": 2480.75,
+        "min_us": 2308.0,
+        "n": 6,
+        "spread_us": 219515.5
+      },
+      "role": "control",
+      "settled": {
+        "label": "observed",
+        "mad_us": 52.0,
+        "max_us": 2549.5,
+        "median_us": 2410.875,
+        "min_us": 2308.0,
+        "n": 4,
+        "spread_us": 241.5
+      }
+    }
+  },
+  "schema": "tinygrad.nv_endpoint_per_token_s1.v1",
+  "settle": 2
+}

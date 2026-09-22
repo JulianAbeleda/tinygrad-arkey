@@ -1,0 +1,38 @@
+{
+  "schema": "tinygrad.nv_ranked_parity_campaign_final_ledger.v1",
+  "date": "2026-08-24",
+  "tinygrad_commit": "7a18a43ff",
+  "tinygrad": {
+    "wall_us_per_token": 4355.02321875,
+    "tok_per_s": 229.61990092145248,
+    "nodes": 452,
+    "node_sum_us": 4191.232,
+    "device_union_us": 4187.750,
+    "overlap_us": 3.482,
+    "token_stream_hash": "5c5cf4663e71d8db6185228722625f9572e95c550a8413e410d2f041f3d2b98b"
+  },
+  "llama_retained_same_binary": {
+    "wall_us_per_token": 4048.3246,
+    "tok_per_s_reciprocal": 247.01576548481316,
+    "nodes": 762,
+    "node_sum_us": 5011.035,
+    "device_union_us": 3888.240,
+    "overlap_us": 1122.329
+  },
+  "comparison": {
+    "wall_gap_us_per_token": 306.69861875,
+    "tok_per_s_gap": 17.395864563360675,
+    "device_union_gap_us": 299.510,
+    "headroom_above_227_us": 50.263124862334735,
+    "headroom_above_227_tok_per_s": 2.6199009214524835,
+    "remaining_to_240_us": 188.35655208333264,
+    "remaining_to_llama_us": 306.69861875
+  },
+  "conservative_booked": {
+    "wall_us_per_token": 4448.33384375,
+    "tok_per_s": 224.80327132034404,
+    "remaining_to_227_us": 43.04750013766534
+  },
+  "measurement_note": "unprofiled wall and profiled union are separate authorities; no cross-domain host-gap residual is claimed",
+  "verdict": "FRESH_DEFAULT_EXCEEDS_227_LLAMA_PARITY_NOT_REACHED"
+}

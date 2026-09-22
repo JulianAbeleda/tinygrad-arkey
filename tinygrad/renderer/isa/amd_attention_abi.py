@@ -4,11 +4,11 @@ The prefill fused-attention kernel does not go through generic instruction
 selection alone. It carries six renderer-specific Ops whose meaning is fixed by
 typed descriptors in tinygrad/uop/ops.py:
 
-    Ops.AMD_PACKED_FRAGMENT_LOAD    (AMDPackedFragmentLoopSpec) Q/K/V fragment addressing
-    Ops.AMD_ROW_SOFTMAX_REPACK      (AMDRowSoftmaxRepackSpec)   QK-C -> P -> PV-A bridge
-    Ops.AMD_ROW_SOFTMAX_SLOT                                    projection of the above
+    Ops.PACKED_FRAGMENT_LOAD    (PackedFragmentLoopSpec) Q/K/V fragment addressing
+    Ops.NATIVE_ROW_SOFTMAX_REPACK      (NativeRowSoftmaxRepackSpec)   QK-C -> P -> PV-A bridge
+    Ops.ROW_SOFTMAX_SLOT                                    projection of the above
     Ops.AMD_PV_C_LANE               (AMDPVCLaneSpec)            PV accumulator lane view
-    Ops.AMD_ATTENTION_LOOP_STATE    (AMDLoopStateSpec)          loop-carried m/l/acc
+    Ops.ATTENTION_LOOP_STATE    (LoopStateSpec)          loop-carried m/l/acc
     (plus StateHandle-based generic phase publication)
 
 This module is the whole lowering surface for them: descriptor -> ordinary UOps,
@@ -31,17 +31,81 @@ instruction encoder.
 """
 from __future__ import annotations
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
-from tinygrad.dtype import dtypes, AddrSpace
+from tinygrad.dtype import dtypes, AddrSpace, PtrDType
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
 from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE
+from tinygrad.codegen.late.warp_reduce import warp_bpermute
+
+def lower_cooperative_tile_load(x:UOp) -> UOp:
+  from tinygrad.uop.ops import CooperativeTileLoadSpec
+  if x.op is not Ops.COOPERATIVE_TILE_LOAD or not isinstance(x.arg, CooperativeTileLoadSpec): raise ValueError("invalid cooperative tile load")
+  x.arg.validate(); owner, tile_base = x.src
+  if owner.op is not Ops.PARAM or not isinstance(owner.dtype, PtrDType) or owner.ptrdtype.base is not dtypes.half: raise ValueError("cooperative tile owner must be fp16 global PARAM")
+  # stage_generation is part of the allocation identity. K and V may have the
+  # same shape, slot count, and phase ABI while remaining simultaneously live;
+  # collapsing their DEFINE_LOCAL nodes aliases the two tiles and lets V
+  # publication overwrite K before QK consumes it.
+  thread=UOp.special(128, "lidx0"); tile_elements=16*128; shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(tile_elements*x.arg.slots,AddrSpace.LOCAL),arg=("nv2a_shared",x.arg.phase_abi,x.arg.slots,x.arg.stage_generation))
+  pre=UOp(Ops.BARRIER,dtypes.void,(UOp.group(),),arg=("nv2a_pre_tile_barrier",x.arg.phase_abi)) if x.arg.pre_barrier else None
+  stores=[]
+  for i in range(16):
+    idx=thread.alu(Ops.ADD,UOp.const(dtypes.weakint,i*128))
+    src=owner.index(tile_base+idx).load(); src=src.after(pre) if pre is not None else src
+    stores.append(shared.index(x.arg.slot_index*tile_elements+idx,ptr=True).store(src))
+  barrier=UOp(Ops.BARRIER,dtypes.void,(UOp.group(*stores),),arg=("nv2a_tile_barrier",x.arg.phase_abi))
+  from tinygrad.uop.ops import SharedTileOwnerSpec
+  return shared.after(barrier).replace(tag=SharedTileOwnerSpec(phase_token=x.arg.phase_abi,
+    loop_axis=x.arg.loop_axis, stage_generation=x.arg.stage_generation,
+    end_barrier_token=x.arg.end_barrier_token, slots=x.arg.slots, slot_index=x.arg.slot_index))
+
+def lower_cooperative_stage_begin(x:UOp) -> UOp:
+  from tinygrad.uop.ops import CooperativeStageBeginSpec
+  if x.op is not Ops.COOPERATIVE_STAGE_BEGIN or not isinstance(x.arg, CooperativeStageBeginSpec):
+    raise ValueError("invalid cooperative stage begin")
+  x.arg.validate()
+  if len(x.src) != 2 or x.src[0] != x.arg.loop_axis: raise ValueError("stage begin axis mismatch")
+  # The barrier is deliberately independent of lane/load predicates. Its arg is
+  # the typed ordering token consumed by the staged shared-tile owner.
+  return UOp(Ops.BARRIER, dtypes.void, (UOp.group(),), arg=("nv_sm120_cooperative_stage_begin_v1", x.arg.ordering_token, x.arg.loop_axis, x.arg.stage_generation))
+
+def _shared_tile_owner(owner:UOp) -> tuple[UOp,UOp]:
+  """Validate and return the single-buffer local tile with its publication edge."""
+  from tinygrad.uop.ops import SharedTileOwnerSpec
+  if owner.op is not Ops.AFTER or not isinstance(owner.tag, SharedTileOwnerSpec):
+    raise ValueError("shared packed fragment requires tagged AFTER owner")
+  owner.tag.validate()
+  if len(owner.src) != 2 or owner.src[0].op is not Ops.DEFINE_LOCAL or owner.src[1].op is not Ops.BARRIER:
+    raise ValueError("shared tile owner must be DEFINE_LOCAL AFTER matching BARRIER")
+  local, barrier = owner.src
+  if local.dtype != dtypes.half.ptr(2048*owner.tag.slots, AddrSpace.LOCAL) or barrier.arg != ("nv2a_tile_barrier", owner.tag.phase_token):
+    raise ValueError("shared tile owner has invalid local tile or barrier")
+  if len(barrier.src) != 1 or barrier.src[0].op not in {Ops.GROUP, Ops.STORE}:
+    raise ValueError("shared tile owner barrier must publish one store group")
+  return local, barrier
+
+def lower_cooperative_q_rope_stage(q:UOp, freqs:UOp, group:UOp, lane:UOp, warp:UOp, loop_axis:UOp, spec) -> UOp:
+  from tinygrad.uop.ops import CooperativeQRoPEStageSpec, SharedTileOwnerSpec
+  if not isinstance(spec,CooperativeQRoPEStageSpec) or spec.validate() is not spec: raise ValueError("invalid Q-RoPE stage spec")
+  if q.op is not Ops.PARAM or q.ptrdtype.base is not dtypes.float or q.ptrdtype.size != 32*512*128: raise ValueError("Q-RoPE stage requires fp32 Q")
+  if freqs.op is not Ops.PARAM or freqs.ptrdtype.base is not dtypes.float or freqs.ptrdtype.size != 512*128: raise ValueError("Q-RoPE stage requires fp32 frequencies")
+  shared=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(spec.warps*spec.tile_elements,AddrSpace.LOCAL),arg=("nv_q_rope_stage",spec.native_abi))
+  qhead=group//32; qtile=group%32; stores=[]
+  for i in range(64):
+    j=lane+UOp.const(lane.dtype,i*32); row=j//UOp.const(lane.dtype,128); dim=j%UOp.const(lane.dtype,128); lo=dim%UOp.const(lane.dtype,64)
+    base=(qhead*512+qtile*16+row)*128; x1=q.index(base+lo).load(); x2=q.index(base+lo+64).load()
+    fbase=(qtile*16+row)*128; c=freqs.index(fbase+lo).load(); s=freqs.index(fbase+lo+64).load()
+    val=(dim<64).where(x1*c-x2*s,x2*c+x1*s).cast(dtypes.half)
+    stores.append(shared.index(warp*spec.tile_elements+j,ptr=True).store(val))
+  barrier=UOp(Ops.BARRIER,dtypes.void,(UOp.group(*stores),),arg=("nv2a_tile_barrier","single_buffer_barrier_v1"))
+  return shared.after(barrier).replace(tag=SharedTileOwnerSpec(loop_axis=loop_axis,stage_generation=2,slots=4,slot_index=warp))
 
 
 def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
   """Register-level encoding of one C-fragment drain store, derived from the spec authority.
 
   The wave32 drain lane convention lives in exactly one place --
-  ``AMDAttentionOutputDrainSpec.drain_lane_coeffs`` -- and this function is how
+  ``AttentionOutputDrainSpec.drain_lane_coeffs`` -- and this function is how
   the AMD:ISA encoder consumes it, rather than restating the same 128/256/2048
   constants as shifts and immediates (which is how the HIP and ISA paths were
   free to drift apart from each other and from the declared ``address_expr``).
@@ -54,8 +118,8 @@ def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tu
   ``c_col == 1`` and ``c_e == 2*c_halfwave`` are required because the encoder
   folds ``col`` in with no scale and encodes ``c_halfwave`` as a left shift.
   """
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  c_e, c_half, c_j, c_col = AMDAttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  c_e, c_half, c_j, c_col = AttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
   if c_col != 1 or c_half & (c_half-1):
     raise ValueError("AMD:ISA attention drain encoder needs a unit column stride and a power-of-two halfwave stride")
   # NOTE (unresolved, pre-existing): group_row_stride is added to a BYTE address while the HIP path adds
@@ -74,13 +138,13 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
             c.tag[:1] in {("amd_gfx1100_fragment_load_v1",),("amd_gfx1100_fragment_load_hd128_v1",),("amd_gfx1100_fragment_load_hd128_loop_v1",)} and
             all(v.op is Ops.LOAD and v.dtype==dtypes.half for v in c.src)): continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_loop_v1":
-      from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+      from tinygrad.uop.ops import PackedFragmentLoopSpec
       _,role,hd_block,*payload=c.tag
-      if payload and isinstance(payload[0], AMDPackedFragmentLoopSpec): spec,*fragment_src=payload
+      if payload and isinstance(payload[0], PackedFragmentLoopSpec): spec,*fragment_src=payload
       else:
         owner,lane,col,rng=payload
-        spec,fragment_src=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
-      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),tuple(fragment_src),arg=spec)
+        spec,fragment_src=PackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
+      src[pos]=UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(spec.fragment_lanes),tuple(fragment_src),arg=spec)
       changed=True
       continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_v1": _,role,tile,hd_block,owner,lane,col=c.tag
@@ -89,7 +153,7 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
     if role == "Q" and pos != 0 or role == "K" and pos != 1 or role == "V" and pos != 1: raise ValueError("fragment role/WMMA operand mismatch")
     abi="amd_gfx1100_packed_fragment_hd128_v1" if hd_block is not None else "amd_gfx1100_packed_fragment_v1"
     arg=(abi,role,tile,hd_block) if hd_block is not None else (abi,role,tile)
-    src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=arg)
+    src[pos]=UOp(Ops.PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=arg)
     changed=True
   return x.replace(src=tuple(src)) if changed else None
 
@@ -101,9 +165,13 @@ def expand_loop_fragment(x:UOp) -> UOp:
   Its tag retains the owner and RANGE identity; the normal late opaque pass
   turns this back into a physical AMD carrier after index lowering.
   """
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
-  if not isinstance(x.arg, AMDPackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
+  from tinygrad.uop.ops import PackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
+  if not isinstance(x.arg, PackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
   x.arg.validate(); role,block=x.arg.role,x.arg.head_block
+  shared_storage = x.arg.storage == "shared"
+  if shared_storage:
+    shared_local, shared_barrier = _shared_tile_owner(x.src[0])
+    shared_owner = x.src[0]
   if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
     owner,lane,wave_id,col,rng,*grid_src=x.src
@@ -123,7 +191,9 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # fixed grid-less kv64_hd128_loop kernel (no head_dim kwarg exists there, per P-B2) -- hd stays the
   # literal 128 constant for that specific kernel family, not derived.
   hd = x.arg.grid.head_dim if x.arg.grid is not None else 128
+  if shared_storage: grid_src=[]
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
+  if shared_storage: gbase=UOp.const(dtypes.weakint,0) if x.src[0].tag.slots == 1 else x.src[0].tag.slot_index*2048
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
@@ -162,7 +232,52 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # instruction-for-instruction identical to the pre-fix baseline.
   grid_kv_tokens=x.arg.grid.kv_tokens if x.arg.grid is not None else None
   def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
-  if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
+  model=getattr(x.arg,"fragment_model",None)
+  if shared_storage:
+    if role not in {"Q", "K", "V"}: raise ValueError("shared packed fragments require Q/K/V role")
+    if model is not None:
+      lanes=model.fragment_lanes(role)
+      call_off=x.arg.call*model.tc.dims[0] if x.arg.call else 0
+      if role == "Q":
+        offs=tuple(model.operand_row(0,i,lane)*128+block*16+model.operand_k(0,i,lane) for i in range(lanes))
+      elif role == "K":
+        row=model.operand_row(1,0,lane)+UOp.const(dtypes.weakint,call_off) if call_off else model.operand_row(1,0,lane)
+        offs=tuple((row*128 + block*16 + model.operand_k(1,i,lane)) for i in range(lanes))
+      else:
+        row=model.operand_row(1,0,lane)+UOp.const(dtypes.weakint,call_off) if call_off else model.operand_row(1,0,lane)
+        offs=tuple((model.operand_k(1,i,lane)*128 + block*16 + row) for i in range(lanes))
+    else:
+      offs=tuple(col*128 + block*16+i for i in range(16))
+    return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),
+      tuple(shared_owner.index(gbase+off).load() for off in offs),
+      tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
+  if model is not None:
+    # Fragment-model path: per-element load addresses derive from the target's own operand lane
+    # layouts. The call offset is added only when this fragment belongs to a later WMMA call of a
+    # multi-call tile (call 0 stays node-identical with the literal AMD tree).
+    lanes=model.fragment_lanes(role)
+    call_off=x.arg.call*model.tc.dims[0] if x.arg.call else 0
+    if role=="Q":
+      offs=tuple(gbase+model.operand_row(0,i,lane)*hd+block*16+model.operand_k(0,i,lane) for i in range(lanes))
+    elif role=="K":
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+row)  # one KV row for the whole fragment
+      offs=tuple(gbase+rng*16*hd+row*hd+block*16+model.operand_k(1,i,lane) for i in range(lanes))
+      if row_ok is not None: offs=tuple(o.valid(row_ok) for o in offs)
+    elif getenv("PREFILL_V_TRANSPOSED") and x.arg.grid is not None:
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      offs=tuple(gbase+(block*16+row)*x.arg.grid.kv_tokens+rng*16+model.operand_k(1,i,lane) for i in range(lanes))
+      row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+model.operand_k(1,i,lane)) for i in range(lanes))
+      offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
+    else:
+      row=model.operand_row(1,0,lane)
+      if call_off: row=row.alu(Ops.ADD,UOp.const(dtypes.weakint,call_off))
+      offs=tuple(gbase+rng*16*hd+block*16+model.operand_k(1,i,lane)*hd+row for i in range(lanes))
+      row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+model.operand_k(1,i,lane)) for i in range(lanes))
+      offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
+  elif role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
   elif role=="K":
     row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+col)  # same KV row for all 16 lanes of this fragment
     offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
@@ -183,13 +298,13 @@ def expand_loop_fragment(x:UOp) -> UOp:
     offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
     row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
     offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
-  return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
+  return UOp(Ops.STACK,dtypes.half.vec(model.fragment_lanes(role) if model is not None else 16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec, AMDMultiWaveAttentionGridSpec
-  if not isinstance(x.arg, AMDRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
+  from tinygrad.uop.ops import NativeRowSoftmaxRepackSpec, AMDMultiWaveAttentionGridSpec
+  if not isinstance(x.arg, NativeRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
   x.arg.validate()
   initial_state = x.arg.mode == "initial_state_v1"
   if initial_state:
@@ -200,29 +315,36 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     if len(x.src) != expected: raise ValueError("row-softmax transition repack requires score/m/l and its declared tile source")
     score, m, l, *tile_src = x.src
     if x.arg.dynamic_kv_v1 and tile_src[0].op is not Ops.RANGE: raise ValueError("dynamic repack tile source must be RANGE")
-  if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
-    raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
+  # A single-call tile carries the raw QK WMMA; a multi-call tile carries the
+  # per-call C fragments concatenated into one STACK (both float.vec(8)).
+  if not (score.op is Ops.WMMA and score.dtype == dtypes.float.vec(8)) and not \
+      (score.op is Ops.STACK and score.dtype == dtypes.float.vec(8) and len(score.src) == 8 and
+       all(s.dtype == dtypes.float for s in score.src)):
+    raise ValueError("row-softmax repack requires one QK score carrier of float.vec(8)")
   stateful = x.arg.mode in {"initial_state_v1", "stateful_unnormalized_v1", "loop_state_v1"}
   native_state = native_state and x.arg.mode != "loop_state_v1"
   state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
   if not initial_state and any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
     raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
   multiwave = isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec)
-  tid = UOp.special(x.arg.grid.local_size if multiwave else 32, "lidx0")
+  nv_grouped = getattr(x.arg, "native_abi", "").startswith("nv_sm120_") and getattr(x.arg.grid, "local_size", 32) == 128
+  tid = UOp.special(128 if nv_grouped else (x.arg.grid.local_size if multiwave else 32), "lidx0")
   lane = tid.alu(Ops.AND, UOp.const(dtypes.weakint, 31)) if multiwave else tid
-  wave_id = tid.alu(Ops.SHR, UOp.const(dtypes.weakint, 5)) if multiwave else UOp.const(dtypes.weakint, 0)
+  wave_id = tid.alu(Ops.SHR, UOp.const(dtypes.weakint, 5)) if (multiwave or nv_grouped) else UOp.const(dtypes.weakint, 0)
   wave_base = wave_id.alu(Ops.MUL, UOp.const(dtypes.weakint, 256))
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
-  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(512 if multiwave else 256, AddrSpace.LOCAL), arg=next(ctx))
+  lds_size = (1024 if nv_grouped else 512) if multiwave or nv_grouped else 256
+  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(lds_size, AddrSpace.LOCAL), arg=next(ctx))
   state_owner = next(ctx) if stateful and native_state else None
   state_writes_m, state_writes_l, state_writes_alpha = [], [], []
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
-  for e in range(8):
-    old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
-    row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+  model=getattr(x.arg,"fragment_model",None)
+  def _score_value(e:int, row:UOp, col:UOp):
+    """Masked, scaled score element at (row, col); validity is not published here."""
     valid = None
     fused_causal = False
+    kv = qrow = None
     if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
       fused_causal = x.arg.validity_mode == "causal_v1" and x.arg.grid is not None and \
         x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens
@@ -249,52 +371,124 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
        x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens:
       value=UOp(Ops.CUSTOMI,dtypes.float,(value,kv,qrow),"(({1}<={2})?{0}:-INFINITY)")
     if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
-    if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
-    # THEORY 6 (measured, 2026-07-24) -- the two butterflies below are exactly the two the algorithm
-    # needs, but on the SHIPPED HIP path they used to cost THREE cross-lane traversals per row. Neither
-    # extra traversal is emitted here; both are artifacts of how this expression tree is RENDERED, and
-    # both are addressed by PREFILL_SOFTMAX_REDUCE_FUSE in tinygrad/renderer/cstyle.py:
-    #   (a) Ops.CUSTOMI is inlined unconditionally by the C renderer, ignoring child_count. Every rung of
-    #       these ladders has two consumers (the next fmaxf AND the next bpermute), so the emitted C grows
-    #       as 2^n: a 4-step ladder renders as 15 textual bpermutes, 272 across the 8-row repack where
-    #       only 64 are distinct.
-    #   (b) `new_m = max(old_m, row_max)` below is not a native HIP op, so decompositions.py rewrites it
-    #       to (a<b).where(b,a) -- inlining the whole ladder twice more, and lowering to an exec-masked
-    #       v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross, so a third ladder is
-    #       REMATERIALIZED inside the guard.
-    # Result was 96 ds_bpermute_b32 + 97 mandatory s_waitcnt lgkmcnt(0) + 135 v_max_f32 per KV tile,
-    # against 64 bpermute for the two real reductions. Do not "simplify" this by hoisting row_max into a
-    # Python temp -- it already is one; the duplication is in the renderer, not here.
-    row_max = value
-    for mask in x.arg.xor_masks:
-      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
-    new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
-    weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
-    if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
-    if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
-    row_sum = weight
-    for mask in x.arg.xor_masks:
-      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
-      row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
-    raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
-      (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
-    alpha = raw_alpha
-    new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
-    if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
-    alphas.append(alpha)
-    normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
-    published_row = lds.index(wave_base.alu(Ops.ADD,
-      row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col))).store(normalized)
-    # Serialize row publication so eight independent butterfly/exp/CVT trees
-    # do not become simultaneously live before the barrier.
-    if stateful and native_state:
-      mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
-      lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
-      aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
-      state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
-      stores.append(UOp.group(published_row, mw, lw, aw))
-    else: stores.append(published_row)
+    return value, valid, fused_causal, kv, qrow
+  if model is not None and model.reduction_within_lane:
+    # DEFERRED reduction (NV-shaped tiles): element steps combine the lane's own
+    # score elements pairwise, so no value may be reduced incrementally while its
+    # pair is still live. Two passes over the ladder keep every step reading the
+    # previous step's values: row-max first, then row-sum over the weights.
+    n = model.score_elements
+    raw = [_score_value(e, model.c_row_uop(e, lane), model.c_col_uop(e, lane)) for e in range(n)]
+    row_maxs = [r[0] for r in raw]
+    for kind, bit in model.col_reduction:
+      if kind == "element":
+        mask = 1 << bit
+        for e in range(n):
+          if e & mask == 0:
+            partner = e | mask
+            combined = row_maxs[e].alu(Ops.MAX, row_maxs[partner])
+            row_maxs[e] = row_maxs[partner] = combined
+      else:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, 1 << bit)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        for e in range(n): row_maxs[e] = row_maxs[e].alu(Ops.MAX, warp_bpermute(addr, row_maxs[e]))
+    weights = []
+    for e in range(n):
+      value, valid, fused_causal, kv, qrow = raw[e]
+      new_m = row_maxs[e] if initial_state else m.gep(e).alu(Ops.MAX, row_maxs[e])
+      weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+      if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
+      if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
+      new_ms.append(new_m); weights.append(weight)
+    row_sums = list(weights)
+    for kind, bit in model.col_reduction:
+      if kind == "element":
+        mask = 1 << bit
+        for e in range(n):
+          if e & mask == 0:
+            partner = e | mask
+            combined = row_sums[e].alu(Ops.ADD, row_sums[partner])
+            row_sums[e] = row_sums[partner] = combined
+      else:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, 1 << bit)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        for e in range(n): row_sums[e] = row_sums[e].alu(Ops.ADD, warp_bpermute(addr, row_sums[e]))
+    state_rows = []
+    for e in range(n):
+      old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
+      new_m = new_ms[e]
+      raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sums[e].ne(UOp.const(dtypes.float, 0)).where(
+        (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
+      alpha = raw_alpha
+      new_l = row_sums[e] if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sums[e])
+      if not stateful or not native_state: new_ls.append(new_l)
+      alphas.append(alpha)
+      state_rows.append((new_m, new_l, alpha))
+    # Publish every element at its C-fragment position; the PV-A reload below
+    # transposes through LDS exactly as the interleaved path does.
+    for e in range(n):
+      new_m, new_l, alpha = state_rows[e]
+      normalized = (weights[e] if stateful else weights[e] / new_l).cast(dtypes.half)
+      row, col_e = model.c_row_uop(e, lane), model.c_col_uop(e, lane)
+      published_row = lds.index(wave_base.alu(Ops.ADD,
+        row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col_e))).store(normalized)
+      if stateful and native_state:
+        mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
+        lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
+        aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
+        state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
+        stores.append(UOp.group(published_row, mw, lw, aw))
+      else: stores.append(published_row)
+  else:
+    for e in range(model.score_elements if model is not None else 8):
+      old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
+      row = model.c_row_uop(e, lane) if model is not None else UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+      col_e = model.c_col_uop(0, lane) if model is not None else col
+      value, valid, fused_causal, kv, qrow = _score_value(e, row, col_e)
+      if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+      # THEORY 6 (measured, 2026-07-24) -- the two butterflies below are exactly the two the algorithm
+      # needs, but on the SHIPPED HIP path they used to cost THREE cross-lane traversals per row. Neither
+      # extra traversal is emitted here; both are artifacts of how this expression tree is RENDERED, and
+      # both are addressed by PREFILL_SOFTMAX_REDUCE_FUSE in tinygrad/renderer/cstyle.py:
+      #   (a) Ops.CUSTOMI is inlined unconditionally by the C renderer, ignoring child_count. Every rung of
+      #       these ladders has two consumers (the next fmaxf AND the next bpermute), so the emitted C grows
+      #       as 2^n: a 4-step ladder renders as 15 textual bpermutes, 272 across the 8-row repack where
+      #       only 64 are distinct.
+      #   (b) `new_m = max(old_m, row_max)` below is not a native HIP op, so decompositions.py rewrites it
+      #       to (a<b).where(b,a) -- inlining the whole ladder twice more, and lowering to an exec-masked
+      #       v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross, so a third ladder is
+      #       REMATERIALIZED inside the guard.
+      # Result was 96 ds_bpermute_b32 + 97 mandatory s_waitcnt lgkmcnt(0) + 135 v_max_f32 per KV tile,
+      # against 64 bpermute for the two real reductions. Do not "simplify" this by hoisting row_max into a
+      # Python temp -- it already is one; the duplication is in the renderer, not here.
+      row_max = value
+      for mask in x.arg.xor_masks:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        row_max = row_max.alu(Ops.MAX, warp_bpermute(addr, row_max))
+      new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
+      weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+      if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
+      if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
+      row_sum = weight
+      for mask in x.arg.xor_masks:
+        addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+        row_sum = row_sum.alu(Ops.ADD, warp_bpermute(addr, row_sum))
+      raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
+        (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
+      alpha = raw_alpha
+      new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
+      if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
+      alphas.append(alpha)
+      normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
+      published_row = lds.index(wave_base.alu(Ops.ADD,
+        row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col))).store(normalized)
+      # Serialize row publication so eight independent butterfly/exp/CVT trees
+      # do not become simultaneously live before the barrier.
+      if stateful and native_state:
+        mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
+        lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
+        aw = UOp(Ops.CUSTOMI, dtypes.void, (alpha,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "alpha", e))
+        state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
+        stores.append(UOp.group(published_row, mw, lw, aw))
+      else: stores.append(published_row)
   # A workgroup barrier is necessary unless the launch descriptor proves that
   # the complete workgroup is one gfx1100 wave.  In that exact case wave issue
   # order plus lgkmcnt(0) publishes all P stores before any PV-A reload without
@@ -310,12 +504,20 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   else: ready = UOp.barrier(UOp.group(*stores))
   reload_row = wave_base.alu(Ops.ADD, col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)))
   published = lds.after(ready)
-  vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
+  if model is not None:
+    # PV-A reload reads the A-operand positions of the target's own layout; the
+    # LDS transpose from the C positions published above is the same move the
+    # literal AMD path makes (there, A row == col and A k == element index).
+    vals = [published.index(wave_base.alu(Ops.ADD,
+      model.operand_row(0, i, lane).alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD,
+      model.operand_k(0, i, lane)))).load() for i in range(model.pv_a_lanes)]
+  else: vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
   if stateful and native_state:
     new_ms = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_m[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "m", i)) for i in range(8)]
     new_ls = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_l[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "l", i)) for i in range(8)]
     alphas = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_alpha[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "alpha", i)) for i in range(8)]
-  p = UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
+  p = UOp(Ops.STACK, dtypes.half.vec(model.pv_a_lanes if model is not None else 16), tuple(vals),
+    tag=("amd_gfx1100_pv_a_reload_v1",))
   # Each physical accumulator element owns one row. These vector states stay
   # replicated in the native C layout until a descriptor-owned final store.
   alpha_owner = x
@@ -391,11 +593,12 @@ def lower_state_phase_reload_gep(x:UOp, carrier:UOp) -> UOp|None:
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
-  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
+  (UPat(Ops.ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
-native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
+native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
+native_stage_begin_matcher=PatternMatcher([(UPat(Ops.COOPERATIVE_STAGE_BEGIN,name="x"),lower_cooperative_stage_begin)])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
   x.arg.validate()
@@ -405,8 +608,8 @@ def lower_native_pv_c_lane(x:UOp) -> UOp:
   return x.src[0].gep(e)
 
 def lower_amd_attention_loop_state(x:UOp) -> UOp:
-  from tinygrad.uop.ops import AMDLoopStateSpec
-  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
+  from tinygrad.uop.ops import LoopStateSpec
+  if not isinstance(x.arg, LoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
   # The physical VGPR map is contained in amd_register_contracts.AMD_ATTENTION_LOOP_STATE; see its
   # docstring for the invariant, the caller list, and the negative result that came of it being a bare dict.
   x.arg.validate(); base=AMD_ATTENTION_LOOP_STATE.base(x.arg.role, x.arg.block if x.arg.role=="acc" else 0)
@@ -421,5 +624,5 @@ native_state_lane_matcher = PatternMatcher([
 ])
 
 native_loop_state_matcher = PatternMatcher([
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), lower_amd_attention_loop_state),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), lower_amd_attention_loop_state),
 ])

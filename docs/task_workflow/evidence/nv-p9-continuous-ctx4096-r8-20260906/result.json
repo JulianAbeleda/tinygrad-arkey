@@ -1,0 +1,307 @@
+{
+  "created_unix_ns": 1788670761393058960,
+  "device": {
+    "runtime_type": "NVDevice",
+    "tinygrad_device": "NV"
+  },
+  "median_ms_per_token": 4.6095462021185085,
+  "median_tok_s": 216.94109488270416,
+  "model": {
+    "identity_sha256": "ddaa2f07ee1176ba8175ee247b874cb838740d76441b078b4c802605d1ffb731",
+    "mtime_ns": 1781138912862342896,
+    "path": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488
+  },
+  "prefill_token_evidence": {
+    "count": 1,
+    "first_token_ids": [
+      34208
+    ],
+    "sha256": "6b52e544981213b2dcf309613a2eeab3b8882e816c44aaa4886db357a234c567",
+    "token_ids": [
+      34208
+    ]
+  },
+  "process_elapsed_s": 225.63366313499864,
+  "programs_per_token_by_selected_jit": {
+    "rollout_jit_flash_live[34]": 418
+  },
+  "reps": [
+    {
+      "elapsed_s": 0.0460741110437084,
+      "gpu_state_after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "119.18",
+        "power.draw.instant": "250.31",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "36",
+        "temperature.memory": "N/A"
+      },
+      "gpu_state_before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "88.65",
+        "power.draw.instant": "145.14",
+        "pstate": "P0",
+        "temperature.gpu": "48",
+        "temperature.gpu.tlimit": "38",
+        "temperature.memory": "N/A"
+      },
+      "per_token_ms": [
+        4.8101720021804795,
+        4.5988950005266815,
+        4.585921007674187,
+        4.583867004839703,
+        4.5818330108886585,
+        4.585970993502997,
+        4.574239006615244,
+        4.591431003063917,
+        4.5786770060658455,
+        4.583105008350685
+      ],
+      "rep": 0,
+      "tok_s": 217.04162648984064,
+      "token_evidence": {
+        "count": 10,
+        "first_token_ids": [
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13
+        ],
+        "sha256": "6df5c32b1e8123f2f03f752499144a42a699fc8998ccf769e2bd1e195c298928",
+        "token_ids": [
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13
+        ]
+      },
+      "window_end_context_exclusive": 4109,
+      "window_start_context": 4099
+    },
+    {
+      "elapsed_s": 0.046095462021185085,
+      "gpu_state_after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "131.20",
+        "power.draw.instant": "251.36",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "38",
+        "temperature.memory": "N/A"
+      },
+      "gpu_state_before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "119.18",
+        "power.draw.instant": "250.31",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "36",
+        "temperature.memory": "N/A"
+      },
+      "per_token_ms": [
+        4.821283000637777,
+        4.590329001075588,
+        4.5850890019210055,
+        4.585661008604802,
+        4.589366988511756,
+        4.572464997181669,
+        4.575680999550968,
+        4.5889760076534,
+        4.609175011864863,
+        4.577436004183255
+      ],
+      "rep": 1,
+      "tok_s": 216.94109488270416,
+      "token_evidence": {
+        "count": 10,
+        "first_token_ids": [
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "5139fb221f7cfeb5c39b5b11431792610c085b20d052f347eb7a8ea4a9b5713e",
+        "token_ids": [
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ]
+      },
+      "window_end_context_exclusive": 4119,
+      "window_start_context": 4109
+    },
+    {
+      "elapsed_s": 0.046130967981298454,
+      "gpu_state_after": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "141.24",
+        "power.draw.instant": "251.72",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "37",
+        "temperature.memory": "N/A"
+      },
+      "gpu_state_before": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "131.20",
+        "power.draw.instant": "251.36",
+        "pstate": "P0",
+        "temperature.gpu": "49",
+        "temperature.gpu.tlimit": "38",
+        "temperature.memory": "N/A"
+      },
+      "per_token_ms": [
+        4.833024999243207,
+        4.595649996190332,
+        4.5941059943288565,
+        4.586971990647726,
+        4.582745008519851,
+        4.598493993398733,
+        4.580551001708955,
+        4.5908199972473085,
+        4.582864989060909,
+        4.585740010952577
+      ],
+      "rep": 2,
+      "tok_s": 216.7741202407461,
+      "token_evidence": {
+        "count": 10,
+        "first_token_ids": [
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974
+        ],
+        "sha256": "1aeabc4f3c8f4f9e32da819ab74acb741b4ac69b222708c942baf12c5afc1a38",
+        "token_ids": [
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974
+        ]
+      },
+      "window_end_context_exclusive": 4129,
+      "window_start_context": 4119
+    }
+  ],
+  "route": "flash",
+  "schema": "tinygrad.decode.continuous_context_coverage.v1",
+  "selected_jits": [
+    "rollout_jit_flash_live[34]"
+  ],
+  "tool": {
+    "argv": [
+      "extra/llm_research/decode/decode_continuous_context_coverage.py",
+      "--depth",
+      "4096",
+      "--max-context",
+      "4608",
+      "--nmeas",
+      "10",
+      "--reps",
+      "3",
+      "--warmup-decode",
+      "3",
+      "--gpu-state",
+      "--request-scoped-prewarm",
+      "--census-out",
+      "/tmp/nv-p9-cont4096-m4608-r8-census.json",
+      "--out",
+      "/tmp/nv-p9-cont4096-m4608-r8.json"
+    ],
+    "path": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_continuous_context_coverage.py"
+  },
+  "warmup_token_evidence": {
+    "count": 3,
+    "first_token_ids": [
+      13,
+      279,
+      3974
+    ],
+    "sha256": "7e2cde6da7bf3bf9f2e666a69dc35a65dcb2f202d8a313e1e0c5d5bc9f48b2bc",
+    "token_ids": [
+      13,
+      279,
+      3974
+    ]
+  },
+  "workload": {
+    "chunk_size": 32,
+    "depth": 4096,
+    "max_context": 4608,
+    "measurement_scope": "three sequential windows after excluded capture/warmup in one continuous request",
+    "nmeas": 10,
+    "reps": 3,
+    "request_scoped_prewarm": true,
+    "warmup_decode": 3
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "tinygrad.decode.isolated_compiler_cache.v1",
+  "path": "/tmp/nv_decode_empty_cache_20260907/cache.db",
+  "scope": "unique isolated cache namespace; normal cache untouched",
+  "final_size_bytes": 1818624,
+  "tables": {"compile_nv_sm_120_22": 80}
+}

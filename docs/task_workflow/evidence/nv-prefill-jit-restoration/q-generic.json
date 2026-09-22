@@ -1,0 +1,27 @@
+{
+  "schema": "tinygrad.nv_prefill_candidate_projection.v1",
+  "arm": "generic",
+  "role": "attn_qo",
+  "candidate_identity": "c45a763ae5c9670c8487face4b4e20a015b239ee60a2ad1520cde4ede6ef36c2",
+  "warmstart_key": "(frozenset({512, 4096}), 4096, frozenset())",
+  "opts": [
+    "Opt(op=OptOps.TC, axis=0, arg=(-1, 2, 1))",
+    "Opt(op=OptOps.UPCAST, axis=1, arg=4)",
+    "Opt(op=OptOps.UPCAST, axis=0, arg=2)"
+  ],
+  "context_installed": false,
+  "output": {
+    "shape": [
+      1,
+      512,
+      4096
+    ],
+    "dtype": "float16",
+    "finite": true,
+    "nan": 0,
+    "inf": 0,
+    "min": -0.671875,
+    "max": 1.0498046875,
+    "sha256": "214f2f2917e5b34856f1f965f8c00b856b417e57ee9f0ee9355c654db159915b"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "tinygrad.nv_decode_predispatch_ab.compact.v1",
+  "evidence": "NATIVE_NV_REVERSE_BRACKET",
+  "route": "DEV=NV",
+  "depth": 512,
+  "steady_samples_per_arm": 30,
+  "exact_token_stream_all_arms": true,
+  "token_stream_sha256": "4c0986e6f829832e9133df0d47007396473dcaaa0a1d91e42aa394583c265b9d",
+  "results": {
+    "structural_signature_cache": {
+      "control_midpoint_us": 5616.477,
+      "candidate_us": 5550.9415,
+      "delta_us": -65.5355,
+      "delta_pct": -1.16684,
+      "prepare_control_a_us": 78.0945,
+      "prepare_candidate_us": 28.092,
+      "prepare_control_b_us": 75.8405,
+      "cache_hits": 33,
+      "cache_lookups": 36
+    },
+    "reused_feedback_shadow": {
+      "control_midpoint_us": 5607.17075,
+      "candidate_us": 5578.799,
+      "delta_us": -28.37175,
+      "delta_pct": -0.50599,
+      "preserved_copy_us": 89.2255
+    },
+    "combined": {
+      "control_midpoint_us": 5599.0535,
+      "candidate_us": 5529.888,
+      "delta_us": -69.1655,
+      "delta_pct": -1.23531,
+      "prepare_us": 27.987,
+      "preserved_copy_us": 88.3235
+    }
+  },
+  "raw_artifact": "/tmp/nv_decode_predispatch_ab_20260805.json",
+  "raw_sha256": "c5e8f3371b7b314ec89eaffd68cb18a7296d87b86906f4e983845b6967da1841",
+  "promotion": "NONE"
+}

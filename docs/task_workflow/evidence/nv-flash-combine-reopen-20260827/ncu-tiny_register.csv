@@ -1,0 +1,8 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==PROF== Connected to process 2788897 (/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-flash-combine-reopen-20260827/native-ab-artifacts/ab)
+rep=0 tiny_shared=44.054718 tiny_register=43.918079 llama=44.178566
+==PROF== Disconnected from process 2788897
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","2788897","ab","127.0.0.1","flash_fused_gmax_combine_f16_32_128_s6_lw128_regw","1","7","(128, 1, 1)","(32, 1, 1)","0","12.0","Command line profiler metrics","gpu__time_duration.sum","ns","1888"
+"0","2788897","ab","127.0.0.1","flash_fused_gmax_combine_f16_32_128_s6_lw128_regw","1","7","(128, 1, 1)","(32, 1, 1)","0","12.0","Command line profiler metrics","l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum","sector","5952"
+"0","2788897","ab","127.0.0.1","flash_fused_gmax_combine_f16_32_128_s6_lw128_regw","1","7","(128, 1, 1)","(32, 1, 1)","0","12.0","Command line profiler metrics","sm__inst_executed.sum","inst","11648"

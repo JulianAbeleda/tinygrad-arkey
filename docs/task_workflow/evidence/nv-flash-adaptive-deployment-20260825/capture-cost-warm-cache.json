@@ -1,0 +1,55 @@
+{
+  "max_context": 1024,
+  "s48_capture_seconds": 183.61223342013545,
+  "s48_incremental_bytes": 279141912,
+  "s64_incremental_bytes": 165428760,
+  "s64_incremental_capture_seconds": 184.33483180194162,
+  "schema": "tinygrad.nv_flash_adaptive_deployment.v1",
+  "snapshots": [
+    {
+      "captures": {
+        "s48": [
+          null,
+          null
+        ],
+        "s64": [
+          null,
+          null
+        ]
+      },
+      "device_mem_bytes": 19005008704,
+      "global_mem_bytes": 19005008704,
+      "label": "loaded"
+    },
+    {
+      "captures": {
+        "s48": [
+          4,
+          4
+        ],
+        "s64": [
+          null,
+          null
+        ]
+      },
+      "device_mem_bytes": 19284150616,
+      "global_mem_bytes": 19284150616,
+      "label": "s48_captured"
+    },
+    {
+      "captures": {
+        "s48": [
+          4,
+          4
+        ],
+        "s64": [
+          4,
+          4
+        ]
+      },
+      "device_mem_bytes": 19449579376,
+      "global_mem_bytes": 19449579376,
+      "label": "s64_captured"
+    }
+  ]
+}

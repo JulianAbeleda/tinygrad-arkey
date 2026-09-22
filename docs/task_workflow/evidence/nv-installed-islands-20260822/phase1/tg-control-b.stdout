@@ -1,0 +1,2 @@
+max_context=explicit -> 4608 (free 34.1GB, budget 34.0GB with scanned reserve 0.1GB, weights 18.9GB, KV 0.15GB/1k, prefill-peak 0.07GB/1k, trained 40960, fp16-cap 71001, q8-cap 107700)
+@@DONE@@

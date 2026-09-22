@@ -1,0 +1,17 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.reverse_ablation.v1",
+  "phase": 5,
+  "status": "COMPLETE",
+  "ablations": [
+    {
+      "removed": "NV_SPLIT_PHASE=1 edge-aware PDL arm",
+      "from_stack": "S1",
+      "result_stack": "S0",
+      "ablation_value_us": 12.447,
+      "interpretation": "removing the only candidate restores the production control; the candidate was never promoted, so there is no shared-substrate credit to double-count"
+    }
+  ],
+  "final_ablation_sum_us": 12.447,
+  "interaction_residual_us": 0.0,
+  "note": "the ablation value is the candidate-to-control-bracket spread, not a recovered wall amount; no promotion occurred"
+}

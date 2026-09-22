@@ -1,7 +1,8 @@
 # all of symbolic lives here now
 import math, struct
 from collections import defaultdict
-from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp, GroupOp, exec_alu
+from enum import Enum
+from tinygrad.uop.ops import Ops, PatternMatcher, UPat, UOp, GroupOp, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge, exec_alu
 from tinygrad.dtype import ConstType, dtypes, PtrDType, can_lossless_cast, Invalid
 from tinygrad.helpers import partition, all_same, prod, flatten, get_single_element, unwrap, IMAGE, dedup
 from tinygrad.uop.decompositions import threefry2x32, xpow
@@ -223,13 +224,35 @@ gep_pushing = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma").f(Ops.GEP, name="gep"), gep_through_wmma),
 ])
 
+def _commutative_key(u:UOp) -> tuple:
+  """Total-order key for commutative index canonicalization.
+
+  RANGE args may mix 2-tuples (GLOBAL) with 3-tuples (split LOCAL/WARP) once
+  pm_split_ranges has split part of a body (the per-row-grid reduce-output
+  body splits its 32-lane LOCAL range while its GLOBAL row range stays
+  unsplit).  Comparing those mixed tuples directly raises int-vs-AxisType;
+  normalizing enums to their values makes every key comparable without
+  changing the relative order of any pair the direct comparison could already
+  order (enum comparison is value comparison)."""
+  def norm(v):
+    if isinstance(v, UOp): return key(v)
+    if isinstance(v, tuple): return tuple(norm(x) for x in v)
+    if isinstance(v, Enum): return v.value
+    return v
+  def key(v:UOp) -> tuple:
+    # STRICT_AFTER is value-identical for index canonicalization. Its dependency is a late compiler-order edge,
+    # and recursively tuplizing that edge can expand an entire compute phase into every affine address comparison.
+    if v.op is Ops.AFTER and isinstance(v.arg, StrictAfter): return key(v.src[0])
+    return (v.op.value, norm(v.arg), v.dtype, *(key(s) for s in v.src))
+  return key(u)
+
 commutative = PatternMatcher([
   # ** COMMUTATIVE flipping (only for index) **
   # NOTE: this can break merging vector math by only flipping some of them
   (UPat(GroupOp.Commutative, dtype=dtypes.weakint, name='x'), lambda x:
-    x.replace(src=x.src[::-1]) if x.src[1].tuplize < x.src[0].tuplize and not x.src[0].tuplize < x.src[1].tuplize else None),
+    x.replace(src=x.src[::-1]) if _commutative_key(x.src[1]) < _commutative_key(x.src[0]) and
+                                  not _commutative_key(x.src[0]) < _commutative_key(x.src[1]) else None),
 ])
-
 symbolic = symbolic_simple+commutative+PatternMatcher([
   # ** boolean algebra **
   # TODO: make a more general or folder like simplify_valid
@@ -300,11 +323,11 @@ symbolic = symbolic_simple+commutative+PatternMatcher([
     x.cast(dtypes.int).alu(u.op, y.cast(dtypes.int)).cast(u.dtype) if not any(v.overflows(dtypes.int) for v in (u,x,y)) else None),
   ((UPat.var("x", dtypes.weakint) + UPat.cvar("c")).cast(dtypes.sints, name="cast"), lambda x,c,cast:x.cast(cast.dtype)+c.cast(cast.dtype)),
   # only RANGE/IF/STORE/KERNEL have side effects
-  (UPat(Ops.AFTER, name="x"), lambda x: x.replace(src=(x.src[0],)+
-    tuple(dedup(flatten([(y,) if y.op in {Ops.RANGE, Ops.STORE, Ops.CALL, Ops.FUNCTION, Ops.BARRIER, Ops.END, Ops.UNROLL, Ops.LINEAR, Ops.STAGE}
+  (UPat(Ops.AFTER, name="x"), lambda x: None if isinstance(x.arg, (StrictAfter, LoadSchedule, RegionLoad, RegionLoadBridge)) else x.replace(src=(x.src[0],)+
+    tuple(dedup(flatten([(y,) if y.op in {Ops.RANGE, Ops.IF, Ops.STORE, Ops.CALL, Ops.FUNCTION, Ops.BARRIER, Ops.END, Ops.UNROLL, Ops.LINEAR, Ops.STAGE}
                         else y.src for y in x.src[1:]]))))),
   # after with 1 src is just src[0]
-  (UPat(Ops.AFTER, src=(UPat.var("s"),)), lambda s: s),
+  (UPat(Ops.AFTER, src=(UPat.var("s"),), name="x"), lambda x,s: None if isinstance(x.arg, (LoadSchedule, RegionLoad, RegionLoadBridge)) else s),
   # VECTORIZE/CONST
   (UPat(Ops.STACK, src=UPat(Ops.CONST), name="vec"),
     lambda vec: UOp.const(vec.dtype, tuple(x.arg for x in vec.src)) if len(vec.src) > 0 else None),

@@ -13,7 +13,10 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
+from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
+from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec,
+                                         TypedLayout, execute_promoted_program)
 
 _LOG2E = 1.4426950408889634
 _F32 = dtypes.float32
@@ -32,6 +35,67 @@ def _ceildiv(a, b:int): return (a + b - 1) // b
 def _ceildiv_uop(a, b:int): return (a + (b - 1)) // b
 def _kernel_info(name:str, *, coalesced_loads:bool=False) -> KernelInfo:
   return KernelInfo(name=name, opts_to_apply=(), coalesced_loads=coalesced_loads)
+
+
+def _promoted_route_stage_width(Hq:int, split_count:int, query_group_size:int|None) -> int|None:
+  """The frozen stage_width of the promoted route matching (Hq, split_count, query_group_size), else None.
+
+  G4 (32, 48, None) stages with width 1 and G5 (40, 32, 2) with width 4. Those two geometries are the
+  historical "default geometry": their kernel names are byte-exact artifacts (the name is the rendered C
+  function name), so the naming rule must not append a suffix to them even though G5's stage_width differs
+  from the descriptor default."""
+  if (Hq, split_count, query_group_size) == (32, 48, None): return 1
+  if (Hq, split_count, query_group_size) == (40, 32, 2): return 4
+  return None
+
+
+def _promoted_route_split_count(Hq:int, query_group_size:int|None) -> int|None:
+  """The frozen split_count of the promoted route matching (Hq, query_group_size), else None.
+
+  G4 (32, None) uses S=48 and G5 (40, 2) uses S=32. split_count is shape-derived but participates in the
+  emitted program, so a non-default split count must not collide with the historical kernel name."""
+  if (Hq, query_group_size) == (32, None): return 48
+  if (Hq, query_group_size) == (40, 2): return 32
+  return None
+
+
+def flash_decode_coarse_split_override() -> int:
+  """Env-gated research override for the promoted G4 route's KV split count (0 = unset).
+
+  When ``FLASH_DECODE_COARSE_SPLIT`` is set to a positive int, decode_routes runs the production
+  G4 decode route with that split count instead of the promoted S=48. Unset env is byte-identical
+  to today: the promoted route, its admission guard, and its kernel names are untouched. G5
+  (40 heads, S=32) is not affected by this override.
+  """
+  return getenv("FLASH_DECODE_COARSE_SPLIT", 0)
+
+
+def _tile_geometry_suffix(*, Hq:int, split_count:int, lane_width:int, token_block:int, stage_width:int|None,
+                          reduce_structure:str|None, dot_pair_width:int, score_group_width:int|None, warps:int|None,
+                          query_group_size:int|None, QG:int) -> str:
+  """Deterministic JIT-cache suffix for non-default tile geometry; empty for the promoted-route geometry.
+
+  Only fields that differ from their production default are included, so G4/G5 keep their exact historical
+  kernel names while differently emitted programs get distinct, deterministic names (the canonical JSON is
+  the authoritative candidate identity; this suffix is the short-name side of the same contract)."""
+  route_split = _promoted_route_split_count(Hq, query_group_size)
+  if route_split is not None and split_count == route_split \
+      and lane_width == 32 and token_block == 16 and score_group_width is None and warps is None \
+      and reduce_structure in (None, "staged") and dot_pair_width == 2 and \
+      (stage_width == _promoted_route_stage_width(Hq, split_count, query_group_size) or
+       (stage_width is None and _promoted_route_stage_width(Hq, split_count, query_group_size) == 1)):
+    return ""
+  geom = ""
+  if split_count != route_split: geom += f"_s{split_count}"
+  if lane_width != 32: geom += f"_lw{lane_width}"
+  if token_block != 16: geom += f"_tk{token_block}"
+  route_sw = _promoted_route_stage_width(Hq, split_count, query_group_size)
+  if stage_width != (route_sw if route_sw is not None else 1): geom += f"_sw{stage_width}"
+  if reduce_structure not in (None, "staged"): geom += f"_r{reduce_structure[0]}"
+  if dot_pair_width != 2: geom += f"_dpw{dot_pair_width}"
+  if score_group_width is not None: geom += f"_sgw{score_group_width}"
+  if warps is not None and warps != QG: geom += f"_w{warps}"
+  return geom
 
 
 @dataclass(frozen=True)
@@ -91,15 +155,34 @@ def make_kv_element_loader(cache:UOp, Hd:int, kvscale:UOp|None=None, freqs:UOp|N
 def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc,
                                                               staging:str="KV_BOTH", quant:bool=False,
                                                               rope:bool=False, query_group_size:int|None=None,
-                                                              stage_width:int|None=None):
+                                                              stage_width:int|None=None, token_block:int=16,
+                                                              lane_width:int=32, score_group_width:int|None=None,
+                                                              warps:int|None=None, reduce_structure:str|None=None,
+                                                              dot_pair_width:int=2):
   """Emit the selected live-split tile: LDS K/V, online softmax, and sharded PV."""
-  if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%64==0, got {Hd}")
+  if Hd % (lane_width * dot_pair_width) != 0:
+    raise ValueError(f"block tile requires Hd%(lane_width*dot_pair_width)==0, "
+                     f"got Hd={Hd} lane_width={lane_width} dot_pair_width={dot_pair_width}")
   if staging not in {"KV_BOTH", "K_ONLY"}: raise ValueError(f"unsupported staging={staging!r}")
+  if token_block < 1: raise ValueError(f"token_block must be >= 1, got {token_block}")
+  if lane_width < 1 or lane_width & (lane_width - 1):
+    raise ValueError(f"lane_width must be a positive power of two, got {lane_width}")
+  if dot_pair_width < 1: raise ValueError(f"dot_pair_width must be >= 1, got {dot_pair_width}")
+  if reduce_structure not in (None, "staged", "inline"):
+    raise ValueError(f"reduce_structure must be one of 'staged','inline', got {reduce_structure!r}")
   G = Hq // Hkv
   QG = G if query_group_size is None else query_group_size
   if QG < 1 or QG > G: raise ValueError(f"query_group_size must be in 1..{G}, got {QG}")
-  NG, W, LANES, WARPS, TK = _ceildiv(G, QG), Hd + 2, 32, QG, 16
-  THREADS, R, RP = LANES * WARPS, Hd // LANES, Hd // 64
+  if warps is not None and warps < QG: raise ValueError(f"warps must be >= QG={QG}, got {warps}")
+  # Column-parallel score groups are not implemented: dot ownership is elem =
+  # pair_axis*(LANES*dot_pair_width) + lane*dot_pair_width, so every lane must
+  # contribute to cover Hd. Narrowing the reduce width below lane_width would
+  # sum only a fraction of the dot and produce a wrong score.
+  if score_group_width is not None and score_group_width != lane_width:
+    raise ValueError(f"score_group_width must equal lane_width={lane_width} or be None, got {score_group_width}")
+  group_width = score_group_width or lane_width
+  NG, W, LANES, WARPS, TK = _ceildiv(G, QG), Hd + 2, lane_width, QG if warps is None else warps, token_block
+  THREADS, R, RP = LANES * WARPS, Hd // LANES, Hd // (LANES * dot_pair_width)
   STAGES, NB, scale = _ceildiv(TK * Hd, THREADS), _ceildiv(L, TK), 1.0 / (Hd ** 0.5)
 
   def kernel(pout:UOp, q:UOp, cache:UOp, *extra) -> UOp:
@@ -161,14 +244,18 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       dot_init = dot.after(block, token_in_tile)[0].store(0.0)
       dot = dot.after(dot_init)
       pair_axis = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
-      elem = pair_axis * 64 + lane * 2
+      elem = pair_axis * (LANES * dot_pair_width) + lane * dot_pair_width
       qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (q[head * Hd + elem].cast(dtypes.float16), q[head * Hd + elem + 1].cast(dtypes.float16)))
       kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (ksh.after(barrier)[token_in_tile * Hd + elem],
                                                  ksh.after(barrier)[token_in_tile * Hd + elem + 1]))
       fdot = _lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)
       update = dot[0].store(fdot).end(pair_axis)
-      reduced = (warp_reduce_sum(dot.after(update)[0], lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
-                 else _warp_reduce_sum_staged(dot.after(update)[0], lane, LANES))
+      # reduce_structure is the descriptor owner; the env var is honored ONLY as a legacy alias when the
+      # caller passes reduce_structure=None, never as a production default (the spec always passes a value).
+      inline_reduce = (bool(getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)) if reduce_structure is None
+                       else reduce_structure == "inline")
+      reduced = (warp_reduce_sum(dot.after(update)[0], lane, group_width) if inline_reduce
+                 else _warp_reduce_sum_staged(dot.after(update)[0], lane, group_width))
       return reduced * scale
 
     def merge_tail(token_in_tile, new_max, correction, probability):
@@ -197,17 +284,32 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     ls = pout.after(pv)[base + Hd].store(final_den[0], lane.eq(0) & warp_active)
     ms = pout.after(ls)[base + (Hd + 1)].store(final_max[0], lane.eq(0) & warp_active)
     suffix = "" if QG == G else f"_qg{QG}"
+    geom_suffix = _tile_geometry_suffix(Hq=Hq, split_count=S, lane_width=lane_width, token_block=token_block,
+                                        stage_width=stage_width, reduce_structure=reduce_structure,
+                                        dot_pair_width=dot_pair_width, score_group_width=score_group_width,
+                                        warps=warps, query_group_size=query_group_size, QG=QG)
     return ms.end(kvh, split, query_group, lane, warp).sink(arg=_kernel_info(
-      f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}", coalesced_loads=bool(selected_width)))
+      f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}{suffix}{geom_suffix}",
+      coalesced_loads=bool(selected_width)))
   return kernel
 
 
-def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None):
-  W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, 32, Hd // 32
+def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False,
+                                    lane_width:int=32, register_weights:bool=False, successor_prefetch_groups:int=0,
+                                    output_q8:bool=False, output_q8_fine:bool=False):
+  W, L_COL, M_COL, LANES, R = Hd + 2, Hd, Hd + 1, lane_width, Hd // lane_width
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%{LANES}==0, got {Hd}")
   NW, stride = _ceildiv(S, LANES), S if stride is None else stride
 
-  def kernel(out:UOp, pout:UOp) -> UOp:
+  if successor_prefetch_groups not in (0, 1, 2, 4):
+    raise ValueError(f"successor prefetch groups must be one of 0/1/2/4, got {successor_prefetch_groups}")
+  if output_q8 and output_q8_fine: raise ValueError("only one combine-owned Q8 representation may be selected")
+  if (output_q8 or output_q8_fine) and (lane_width != 128 or not output_fp16 or successor_prefetch_groups):
+    raise ValueError("combine-owned Q8 requires fp16 output, lane width 128, and no successor prefetch")
+
+  def kernel(out:UOp, pout:UOp, *successor:UOp) -> UOp:
+    if len(successor) != int(bool(successor_prefetch_groups or output_q8 or output_q8_fine)):
+      raise ValueError("combine auxiliary output/input argument does not match the selected research mode")
     head = UOp.range(Hq, 0, AxisType.GLOBAL)
     lane = UOp.range(LANES, 1, AxisType.LOCAL)
     weights = UOp.placeholder((S,), _F32, 240, addrspace=AddrSpace.LOCAL)
@@ -216,21 +318,39 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None)
     max_init = global_max.after(head, lane)[0].set(-1e30)
     max_update = max_init[0].set(max_init.after(split)[0].maximum(pout[(head * stride + split) * W + M_COL]), end=split)
     maximum = max_init.after(max_update)[0]
-    weight_iteration = UOp.range(NW, 3)
-    split_idx = weight_iteration * LANES + lane
-    valid_weight = split_idx < S
-    safe_split = valid_weight.where(split_idx, split_idx.const_like(0))
-    weight_store = weights.after(max_update)[safe_split].store(
-      _fexp(pout[(head * stride + safe_split) * W + M_COL] - maximum), valid_weight).end(weight_iteration)
-    barrier = UOp.barrier(UOp.group(weight_store))
+    if register_weights:
+      from tinygrad.codegen.late.warp_reduce import warp_bpermute
+      warp_lane = lane & 31
+      valid_weight = warp_lane < S
+      safe_split = valid_weight.where(warp_lane, warp_lane.const_like(0))
+      weight_reg = UOp.placeholder((1,), _F32, 244, addrspace=AddrSpace.REG)
+      weight_ready = weight_reg.after(max_update)[0].store(valid_weight.where(
+        _fexp(pout[(head * stride + safe_split) * W + M_COL] - maximum), _fc(0.0)))
+      combine_ready = weight_ready
+    else:
+      weight_iteration = UOp.range(NW, 3)
+      split_idx = weight_iteration * LANES + lane
+      valid_weight = split_idx < S
+      safe_split = valid_weight.where(split_idx, split_idx.const_like(0))
+      weight_store = weights.after(max_update)[safe_split].store(
+        _fexp(pout[(head * stride + safe_split) * W + M_COL] - maximum), valid_weight).end(weight_iteration)
+      combine_ready = UOp.barrier(UOp.group(weight_store))
     acc = UOp.placeholder((R,), _F32, 242, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 243, addrspace=AddrSpace.REG)
     zero_axis = UOp.range(R, 5)
-    acc_init = acc.after(barrier, head, lane)[zero_axis].store(0.0).end(zero_axis)
+    prefetch:tuple[UOp,...] = ()
+    if successor_prefetch_groups:
+      successor_row = head * Hd + lane
+      hints = tuple(UOp(Ops.CUSTOM, dtypes.void,
+        (successor[0].index((successor_row * 16 + block) * 36, ptr=True),),
+        arg='asm volatile("prefetch.global.L2 [%0];" :: "l"({0}));') for block in (0, 4, 8, 12)[:successor_prefetch_groups])
+      prefetch = hints
+    acc_init = acc.after(combine_ready, head, lane, *prefetch)[zero_axis].store(0.0).end(zero_axis)
     den_init = den.after(acc_init)[0].store(0.0)
     acc, den = acc.after(den_init), den.after(den_init)
     split_reduce = UOp.range(S, 4, axis_type=AxisType.REDUCE)
-    weight = weights.after(barrier)[split_reduce]
+    weight = warp_bpermute((split_reduce * 4).cast(dtypes.uint32), weight_reg.after(combine_ready)[0]) if register_weights else \
+      weights.after(combine_ready)[split_reduce]
     dim_axis = UOp.range(R, 6)
     dim = lane * R + dim_axis
     acc_update = acc[dim_axis].store(acc.after(split_reduce)[dim_axis] +
@@ -240,9 +360,573 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None)
     final_acc, final_den = acc.after(den_update), den.after(den_update)[0]
     output_axis = UOp.range(R, 7)
     output_dim = lane * R + output_axis
-    return out[head * Hd + output_dim].store(final_acc[output_axis] / final_den).end(output_axis).end(head, lane).sink(
-      arg=KernelInfo(name=f"flash_fused_gmax_combine_{Hq}_{Hd}", opts_to_apply=()))
+    value = final_acc[output_axis] / final_den
+    if output_fp16: value = value.cast(dtypes.float16)
+    s_suffix = "" if S == {32: 48, 40: 32}.get(Hq) else f"_s{S}"
+    lw_suffix = "" if lane_width == 32 else f"_lw{lane_width}"
+    rw_suffix = "_regw" if register_weights else ""
+    combine_name = (f"flash_fused_gmax_combine_f16_{Hq}_{Hd}{s_suffix}{lw_suffix}" if output_fp16
+                    else f"flash_fused_gmax_combine_{Hq}_{Hd}{s_suffix}{lw_suffix}")
+    combine_name += rw_suffix
+    if successor_prefetch_groups: combine_name += f"_opf{successor_prefetch_groups}early"
+    if output_q8: combine_name += "_q8o"
+    if output_q8_fine: combine_name += "_q8f16o"
+    stores=[out[head * Hd + output_dim].store(value)]
+    if output_q8:
+      rounded=value.cast(dtypes.float32); lane32=lane&31; group=head*4+lane//32
+      amax=warp_reduce_max(rounded.abs(),lane32,32,slot_base=260)
+      d=amax/UOp.const(dtypes.float32,127.0); inv=d.eq(0.0).where(UOp.const(dtypes.float32,0.0),d.reciprocal())
+      qi=(rounded*inv).round().maximum(UOp.const(dtypes.float32,-128.0)).minimum(
+        UOp.const(dtypes.float32,127.0)).cast(dtypes.int8).cast(dtypes.int32)
+      q1,q2,q3=(_staged_shfl(qi,off,lane32,270+off) for off in (1,2,3))
+      packed=qi.cast(dtypes.uint8).cast(dtypes.uint32) | q1.cast(dtypes.uint8).cast(dtypes.uint32).lshift(8) | \
+        q2.cast(dtypes.uint8).cast(dtypes.uint32).lshift(16) | q3.cast(dtypes.uint8).cast(dtypes.uint32).lshift(24)
+      stores.append(successor[0][group*8+lane32//4].store(packed,(lane32&3).eq(0)))
+      xsum=_warp_reduce_sum_staged(rounded,lane32,32,slot_base=280)
+      metadata=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32) | \
+        xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32).lshift(16)
+      stores.append(successor[0][1024+group].store(metadata,lane32.eq(0)))
+    if output_q8_fine:
+      # Quality-first research representation: retain the exact fp16 combine
+      # rounding point, but halve the activation scale group from 32 to 16.
+      rounded=value.cast(dtypes.float32); lane16=lane&15; group16=head*8+lane//16
+      amax=warp_reduce_max(rounded.abs(),lane16,16,slot_base=290)
+      d=amax/UOp.const(dtypes.float32,127.0); inv=d.eq(0.0).where(UOp.const(dtypes.float32,0.0),d.reciprocal())
+      qi=(rounded*inv).round().maximum(UOp.const(dtypes.float32,-128.0)).minimum(
+        UOp.const(dtypes.float32,127.0)).cast(dtypes.int8).cast(dtypes.int32)
+      q1,q2,q3=(_staged_shfl(qi,off,lane16,300+off) for off in (1,2,3))
+      packed=qi.cast(dtypes.uint8).cast(dtypes.uint32) | q1.cast(dtypes.uint8).cast(dtypes.uint32).lshift(8) | \
+        q2.cast(dtypes.uint8).cast(dtypes.uint32).lshift(16) | q3.cast(dtypes.uint8).cast(dtypes.uint32).lshift(24)
+      stores.append(successor[0][head*32+lane//4].store(packed,(lane16&3).eq(0)))
+      xsum=_warp_reduce_sum_staged(rounded,lane16,16,slot_base=310)
+      metadata=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32) | \
+        xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32).lshift(16)
+      stores.append(successor[0][1024+group16].store(metadata,lane16.eq(0)))
+    store = UOp.group(*stores).end(output_axis).end(head, lane)
+    return store.sink(*(hint.end(head,lane) for hint in prefetch), arg=KernelInfo(name=combine_name, opts_to_apply=()))
   return kernel
+
+
+def flash_single_stage_d512_kernel(Hd:int, Hq:int, Hkv:int, L:int, Tc, *, output_fp16:bool=True):
+  """Closed-default construction candidate: S=4 split score/PV + ordered combine in one workgroup.
+
+  This emitter is deliberately not wired into any route.  Its fixed ownership is one warp per
+  (split, GQA-head) pair and exists to qualify whether ordinary UOps can carry the communication
+  boundary without a global partial buffer.
+  """
+  S, LANES, TK = 4, 32, 16
+  if (Hd, Hq, Hkv) != (128, 32, 8): raise ValueError("single-stage d512 candidate is fixed to Hd=128,Hq=32,Hkv=8")
+  G, WARPS, THREADS, R, RP, NB = Hq // Hkv, S * (Hq // Hkv), S * (Hq // Hkv) * LANES, Hd // LANES, Hd // 64, _ceildiv(L, TK)
+  W, scale = Hd + 2, 1.0 / (Hd ** 0.5)
+
+  def kernel(out:UOp, q:UOp, cache:UOp) -> UOp:
+    from tinygrad.codegen.late.warp_reduce import _warp_reduce_sum_staged
+    from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    lane = UOp.range(LANES, 10, AxisType.LOCAL)
+    warp = UOp.range(WARPS, 11, AxisType.LOCAL)
+    owner_split, grouped_head = warp // G, warp % G
+    head, tid = kvh * G + grouped_head, warp * LANES + lane
+    ksh = UOp.placeholder((S * TK * Hd,), dtypes.float16, 250, addrspace=AddrSpace.LOCAL)
+    vsh = UOp.placeholder((S * TK * Hd,), dtypes.float16, 251, addrspace=AddrSpace.LOCAL)
+    partial = UOp.placeholder((WARPS * W,), _F32, 252, addrspace=AddrSpace.LOCAL)
+    acc = UOp.placeholder((R,), _F32, 253, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 254, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((1,), _F32, 255, addrspace=AddrSpace.REG)
+    za = UOp.range(R, 2)
+    init = acc.after(kvh)[za].store(0.0).end(za)
+    init = den.after(init)[0].store(0.0)
+    init = mx.after(init)[0].store(-float("inf"))
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    block = UOp.range(NB, 3, AxisType.REDUCE)
+
+    # All 512 threads cooperatively stage one K/V tile for each split. The staging loop and
+    # barriers are uniform; only arithmetic ownership is warp-specific.
+    stage = UOp.range(_ceildiv(S * TK * Hd, THREADS), 4, AxisType.REDUCE)
+    idx = stage * THREADS + tid
+    stage_split, split_elem = idx // (TK * Hd), idx % (TK * Hd)
+    token_stage, elem = split_elem // Hd, split_elem % Hd
+    token = stage_split * L + block * TK + token_stage
+    valid = (stage_split < S) & (token_stage < TK) & (token < Tc)
+    safe_token = valid.where(token, token.const_like(0))
+    kstore = ksh[idx].store(cache[0, 0, kvh, safe_token, elem].cast(dtypes.float16), idx < (S * TK * Hd))
+    vstore = vsh.after(kstore)[idx].store(cache[1, 0, kvh, safe_token, elem].cast(dtypes.float16), idx < (S * TK * Hd))
+    barrier = UOp.barrier(UOp.group(vstore.end(stage)))
+
+    token_in_tile = UOp.range(TK, 5, AxisType.REDUCE)
+    owned_token = owner_split * L + block * TK + token_in_tile
+    in_range = owned_token < Tc
+    dot = UOp.placeholder((1,), _F32, 256, addrspace=AddrSpace.REG)
+    dot_init = dot.after(block, token_in_tile)[0].store(0.0)
+    pair_axis = UOp.range(RP, 6, AxisType.REDUCE)
+    qelem = pair_axis * 64 + lane * 2
+    tile_base = owner_split * TK * Hd + token_in_tile * Hd + qelem
+    qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (q[head * Hd + qelem].cast(dtypes.float16), q[head * Hd + qelem + 1].cast(dtypes.float16)))
+    kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (ksh.after(barrier)[tile_base], ksh.after(barrier)[tile_base + 1]))
+    dot_update = dot.after(dot_init)[0].store(_lower_fdot2(dot.after(pair_axis)[0], qpair, kpair)).end(pair_axis)
+    score = in_range.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, LANES) * scale, _fc(-float("inf")))
+    old_max = mx.after(token_in_tile)[0]
+    new_max = old_max.maximum(score)
+    correction = in_range.where(_fexp(old_max - new_max), _fc(1.0))
+    probability = in_range.where(_fexp(score - new_max), _fc(0.0))
+    da = UOp.range(R, 7)
+    dim = lane * R + da
+    value = vsh.after(barrier)[owner_split * TK * Hd + token_in_tile * Hd + dim].cast(_F32)
+    au = acc[da].store(acc.after(token_in_tile)[da] * correction + probability * value).end(da)
+    du = den.after(au)[0].store(den.after(token_in_tile)[0] * correction + probability)
+    mu = mx.after(du)[0].store(new_max).end(token_in_tile)
+    tile_done = UOp.barrier(UOp.group(mu)).end(block)
+
+    # Preserve the legacy ABI internally, but exchange it through LOCAL rather than global memory.
+    pa = UOp.range(R, 8)
+    pdim = lane * R + pa
+    pbase = warp * W
+    ps = partial.after(tile_done)[pbase + pdim].store(acc.after(tile_done)[pa]).end(pa)
+    ps = partial.after(ps)[pbase + Hd].store(den.after(tile_done)[0], lane.eq(0))
+    ps = partial.after(ps)[pbase + Hd + 1].store(mx.after(tile_done)[0], lane.eq(0))
+    pbar = UOp.barrier(UOp.group(ps))
+
+    # Only the split-0 owner warp for each grouped head performs the legacy ordered combine.
+    active = warp < G
+    output_head = active.where(head, head.const_like(0))
+    gm = UOp.placeholder((1,), _F32, 257, addrspace=AddrSpace.REG)
+    si = UOp.range(S, 12, AxisType.REDUCE)
+    split_warp = si * G + grouped_head
+    ginit = gm.after(pbar)[0].store(-1e30)
+    gupdate = gm.after(ginit)[0].store(gm.after(si)[0].maximum(partial.after(pbar)[split_warp * W + Hd + 1])).end(si)
+    maximum = gm.after(gupdate)[0]
+    ca = UOp.placeholder((R,), _F32, 258, addrspace=AddrSpace.REG)
+    cd = UOp.placeholder((1,), _F32, 259, addrspace=AddrSpace.REG)
+    cia = UOp.range(R, 14)
+    ci = ca.after(gupdate)[cia].store(0.0).end(cia)
+    ci = cd.after(ci)[0].store(0.0)
+    ca, cd = ca.after(ci), cd.after(ci)
+    sr = UOp.range(S, 13, AxisType.REDUCE)
+    sw = sr * G + grouped_head
+    weight = _fexp(partial.after(pbar)[sw * W + Hd + 1] - maximum)
+    cra = UOp.range(R, 15)
+    rdim = lane * R + cra
+    cua = ca[cra].store(ca.after(sr)[cra] + weight * partial.after(pbar)[sw * W + rdim]).end(cra)
+    cud = cd.after(cua)[0].store(cd.after(sr)[0] + weight * partial.after(pbar)[sw * W + Hd]).end(sr)
+    coa = UOp.range(R, 16)
+    odim = lane * R + coa
+    result = ca.after(cud)[coa] / cd.after(cud)[0]
+    if output_fp16: result = result.cast(dtypes.float16)
+    store = out[output_head * Hd + odim].store(result, active).end(coa)
+    suffix = "f16" if output_fp16 else "f32"
+    return store.end(kvh, lane, warp).sink(arg=_kernel_info(f"flash_single_stage_d512_{suffix}_{Hq}_{Hd}"))
+  return kernel
+
+
+def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc, *, wide_kv:bool=False,
+                                    wide_q:bool=True, wide_q_f32:bool=False, token_bound:int|None=None, guard_kv_loads:bool=False,
+                                    separate_kv:bool=False, transpose_pv_smem:bool=False, query_group_size:int=1,
+                                    share_kv_across_query_heads:bool=False, v_pipeline_tail:int=0,
+                                    v_dimension_major:bool=False, shared_probability_ownership:bool=False,
+                                    packed_pv_f16:bool=False, warp_probability_ownership:bool=False):
+  """Llama ``flash_attn_ext_vec`` substrate for d512 decode (closed-default, not routed).
+
+  Faithful transcription of the traced llama kernel (docs/task_workflow/input/
+  nv-flash-score-llama-trace-20260813.md): Q is loaded once into registers; K/V are
+  streamed straight from global/L2 with no per-tile LDS staging; each 8-lane group scores one KV column
+  with a 3-shuffle-stage reduce (4 columns in flight per warp, 16 per block); online softmax and PV
+  accumulation happen in registers in the same pass. The only cross-warp exchange is the final PV/den/max
+  combine, and the output is the legacy ``pout`` partial ABI so ``flash_fused_gmax_combine_kernel`` merges
+  the S=4 splits unchanged.
+
+  Fixed to the d512 shape family (Hd=128, Hq=32, Hkv=8, GQA=4). ``S`` is the KV split count (llama uses 4 at
+  context 512); ``MAXC`` bounds the symbolic context so the chunk loop is static. No quant/rope here: this is
+  the fp16-KV substrate proof.
+  """
+  if (Hd, Hq, Hkv) != (128, 32, 8): raise ValueError("llama-vec substrate is fixed to Hd=128,Hq=32,Hkv=8")
+  G = Hq // Hkv
+  NKQ, LANES, WARPS, THREADS = 8, 32, 4, 128
+  QG = query_group_size
+  if QG not in (1, 2, 4) or G % QG or WARPS % QG:
+    raise ValueError(f"wide query_group_size must divide G={G} and warps={WARPS}, got {QG}")
+  WARPS_PER_HEAD = WARPS // QG
+  GROUPS = LANES // NKQ                        # 4 groups per warp
+  R = Hd // NKQ                                # 16 dims per thread
+  RP = R // 2                                  # 8 half2 per thread
+  COLS_PER_WARP = GROUPS * NKQ                 # 32 columns per warp per chunk
+  COLS_PER_CHUNK = THREADS // QG                # 128/QG columns per head and CTA
+  CHUNK_STRIDE = S * COLS_PER_CHUNK            # 512: each split owns one interleaved 128-col chunk
+  if token_bound is not None and (token_bound > MAXC or token_bound % COLS_PER_CHUNK):
+    raise ValueError(f"token_bound must be <= MAXC and a multiple of {COLS_PER_CHUNK}, got {token_bound}")
+  NCHUNK = _ceildiv(MAXC if token_bound is None else token_bound, CHUNK_STRIDE)
+  if share_kv_across_query_heads and (not wide_kv or QG == 1 or NCHUNK != 1):
+    raise ValueError("cross-head K/V sharing requires wide_kv, query_group_size > 1, and a single static chunk")
+  if v_pipeline_tail not in (0, 1, 2, 4, 8) or (v_pipeline_tail and (not wide_kv or NCHUNK != 1)):
+    raise ValueError("v_pipeline_tail must be 0/1/2/4/8 and requires wide_kv with a single static chunk")
+  if v_dimension_major and v_pipeline_tail != 8:
+    raise ValueError("v_dimension_major requires a complete eight-column V register tile")
+  if shared_probability_ownership and (QG != 1 or NCHUNK != 1):
+    raise ValueError("shared probability ownership requires one query head per CTA and one static chunk")
+  if warp_probability_ownership and (QG != 1 or NCHUNK != 1):
+    raise ValueError("warp probability ownership requires one query head per CTA and one static chunk")
+  if warp_probability_ownership and shared_probability_ownership:
+    raise ValueError("warp and shared probability ownership are mutually exclusive")
+  if packed_pv_f16 and not (shared_probability_ownership and v_dimension_major):
+    raise ValueError("packed fp16 PV is only a research arm for the complete shared-probability V topology")
+  W = Hd + 2
+  scale = 1.0 / (Hd ** 0.5)
+
+  def build_kernel(pout:UOp, q:UOp, cache:UOp, cache_v:UOp|None) -> UOp:
+    from tinygrad.codegen.late.warp_reduce import (_warp_reduce_sum_staged, warp_bpermute,
+                                                   warp_reduce_sum_across_groups, warp_reduce_max_across_groups)
+    from tinygrad.codegen.late.flash_decode_intrinsics import fdot2 as _lower_fdot2
+    head_axis = UOp.range(Hq if QG == 1 else Hq // QG, 0, AxisType.GLOBAL)
+    split = UOp.range(S, 1, AxisType.GLOBAL)    # 4 KV splits
+    lane = UOp.range(LANES, 10, AxisType.LOCAL)
+    warp = UOp.range(WARPS, 11, AxisType.LOCAL)
+    query_in_group = warp % QG
+    warp_in_head = warp if QG == 1 else warp // QG
+    head = head_axis if QG == 1 else head_axis * QG + query_in_group
+    kvh = head // G
+    # Bitwise lane split keeps the 32-lane range intact (no pm_split_ranges decomposition), so CUDA's
+    # __shfl_xor_sync sees the lane along threadIdx.x and the 8-lane group reduce stays warp-aligned.
+    glane = lane & (NKQ - 1)
+    group = lane >> 3
+
+    def packed_half8(ptr:UOp, idx:UOp, gate:UOp|None=None) -> tuple[UOp, ...]:
+      # Match llama's 16-byte cooperative copy. A direct half8 is devectorized
+      # into two 8-byte half4 loads; a uint4 input view keeps the aligned
+      # 128-bit transfer. The research caller supplies q/cache as zero-copy
+      # uint32 bitcast views because pointer reinterpret casts are erased by
+      # the current C-style devectorizer before LOAD folding.
+      raw_ptr = ptr.src[0] if ptr.op is Ops.RESHAPE else ptr
+      if raw_ptr.dtype.base != dtypes.uint32: raise ValueError("wide_kv requires uint32 bitcast views for q and cache")
+      indexed = raw_ptr.index(idx // 2)
+      words = indexed.load(dtype=dtypes.uint32.vec(4)) if gate is None else \
+        indexed.load(UOp.const(dtypes.uint32.vec(4), 0), gate, dtype=dtypes.uint32.vec(4))
+      return tuple(words.gep(i // 2).rshift((i & 1) * 16).cast(dtypes.uint16).bitcast(dtypes.float16) for i in range(8))
+
+    def packed_float4(ptr:UOp, idx:UOp) -> tuple[UOp, ...]:
+      """Four aligned fp32 Q values in one 128-bit request, rounded to the
+      exact fp16 register values consumed by the existing dot path."""
+      raw_ptr = ptr.src[0] if ptr.op is Ops.RESHAPE else ptr
+      if raw_ptr.dtype.base != dtypes.uint32: raise ValueError("wide_q_f32 requires a uint32 bitcast query view")
+      words = raw_ptr.index(idx).load(dtype=dtypes.uint32.vec(4))
+      return tuple(words.gep(i).bitcast(dtypes.float32).cast(dtypes.float16) for i in range(4))
+
+    def owned_dim(i:UOp|int) -> UOp:
+      return (i // 8) * 64 + glane * 8 + (i % 8) if wide_kv else glane * R + i
+
+    # Research spelling: the register ownership layout is ideal for wide global K/V loads, but using that
+    # same order in the final cross-warp shared array makes a fixed dim iteration stride across banks. Keep
+    # external/register ownership unchanged and transpose only the internal shared index so glanes are
+    # contiguous and the four 8-lane groups can multicast the same locations.
+    def pv_shared_dim(i:UOp|int) -> UOp:
+      # Preserve the emitter's 2x8 decomposition so the compiler sees the same statically expanded loop
+      # grammar as owned_dim; spelling this as i*8 inhibits that expansion and serializes the shared reads.
+      return (i // 8) * 64 + (i % 8) * NKQ + glane if transpose_pv_smem else owned_dim(i)
+
+    # Register-resident Q: 16 scalar halves per thread, loaded once. The 8 lanes of a group cover all 128
+    # dims; the 4 groups x 4 warps hold redundant copies so every group can score a column independently.
+    # Scalar (not half2-typed) registers keep the DEFINE_REG index pipeline devectorizer-friendly; the packed
+    # half2 is rebuilt with STACK at the dot, exactly as the legacy tile builds its q/k pairs.
+    if wide_q_f32:
+      qbase = head * Hd + glane * 8
+      qlanes = (packed_float4(q, qbase) + packed_float4(q, qbase + 4) +
+                packed_float4(q, qbase + 64) + packed_float4(q, qbase + 68))
+    elif wide_kv and wide_q:
+      qlanes = packed_half8(q, head * Hd + glane * 8) + packed_half8(q, head * Hd + 64 + glane * 8)
+    else:
+      qreg = UOp.placeholder((R,), dtypes.float16, 300, addrspace=AddrSpace.REG)
+      qp = UOp.range(R, 40)
+      qe = owned_dim(qp)
+      qload = qreg[qp].store(q[head * Hd + qe].cast(dtypes.float16)).end(qp)
+      qreg = qreg.after(qload)
+      qlanes = tuple(qreg[i] for i in range(R))
+
+    acc_dtype = dtypes.float16 if packed_pv_f16 else _F32
+    acc = UOp.placeholder((R,), acc_dtype, 301, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 302, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((1,), _F32, 303, addrspace=AddrSpace.REG)
+    za = UOp.range(R, 41)
+    init = acc.after(head, split)[za].store(0.0).end(za)
+    init = den.after(init)[0].store(0.0)
+    init = mx.after(init)[0].store(-float("inf"))
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+
+    chunk = UOp.range(NCHUNK, 3, axis_type=AxisType.REDUCE)
+
+    # Research-only causal arm for GQA reuse.  In the ordinary wide emitter every query head issues
+    # identical K/V requests for its shared KV head.  Here query_in_group==0 materializes the complete
+    # 32-column tile for each warp_in_head once, and sibling query-head warps consume it from shared
+    # memory.  The buffer is reused between K and V, so this changes neither the math nor the partial ABI.
+    # The single-chunk restriction keeps the experiment surgical: no loop-carried barrier grammar.
+    if share_kv_across_query_heads:
+      sh_kv = UOp.placeholder((WARPS_PER_HEAD * COLS_PER_WARP * Hd,), dtypes.float16, 380, addrspace=AddrSpace.LOCAL)
+      producer = query_in_group.eq(0)
+      sj = UOp.range(NKQ, 23)
+      scol = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + sj
+      svalid = scol < Tc
+      skbase = (kvh * MAXC + scol) * Hd
+      sklanes = packed_half8(cache, skbase + glane * 8, producer & svalid) + \
+                 packed_half8(cache, skbase + 64 + glane * 8, producer & svalid)
+      skslot = (warp_in_head * COLS_PER_WARP + group * NKQ + sj) * Hd
+      skstore = UOp.group(*[sh_kv[skslot + owned_dim(di)].store(sklanes[di], producer) for di in range(R)]).end(sj)
+      k_ready = UOp.barrier(skstore)
+
+    # Per-column scores for this group's 8 columns, held in registers. Each 8-lane group scores
+    # column (warp*32 + group*8 + j); the 8 lanes hold complementary 16-dim Q slices and the
+    # 8-lane reduce broadcasts the full dot to every lane of the group.
+    score = UOp.placeholder((NKQ,), _F32, 304, addrspace=AddrSpace.REG)
+    if shared_probability_ownership:
+      score_shared = UOp.placeholder((WARPS * GROUPS * NKQ,), _F32, 392, addrspace=AddrSpace.LOCAL)
+      score_base = warp * (GROUPS * NKQ) + group * NKQ
+    if warp_probability_ownership:
+      # One score is live in each lane.  glane j owns column j for its 8-lane
+      # dot group; consumers name the owner lane explicitly through a native
+      # warp shuffle instead of retaining eight replicated score registers.
+      score_owned = UOp.placeholder((1,), _F32, 393, addrspace=AddrSpace.REG)
+    j = UOp.range(NKQ, 5, axis_type=AxisType.REDUCE)
+    col = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp_in_head * COLS_PER_WARP + group * NKQ + j
+    token = col
+    valid = token < Tc
+    dot = UOp.placeholder((1,), _F32, 305, addrspace=AddrSpace.REG)
+    dot_init = dot.after(chunk, j, k_ready if share_kv_across_query_heads else chunk)[0].store(0.0)
+    dot = dot.after(dot_init)
+    if wide_kv:
+      if share_kv_across_query_heads:
+        kslot = (warp_in_head * COLS_PER_WARP + group * NKQ + j) * Hd
+        klanes = tuple(sh_kv.after(k_ready)[kslot + owned_dim(di)] for di in range(R))
+      else:
+        kbase = (kvh * MAXC + token) * Hd
+        kgate = valid if guard_kv_loads else None
+        klanes = packed_half8(cache, kbase + glane * 8, kgate) + packed_half8(cache, kbase + 64 + glane * 8, kgate)
+      dot_value = dot[0]
+      for pi in range(RP):
+        qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qlanes[pi * 2], qlanes[pi * 2 + 1]))
+        kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (klanes[pi * 2], klanes[pi * 2 + 1]))
+        dot_value = _lower_fdot2(dot_value, qpair, kpair)
+      dot_update = dot[0].store(dot_value)
+    else:
+      p = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
+      ke = glane * R + p * 2
+      qpair = UOp(Ops.STACK, dtypes.float16.vec(2), (qreg[p * 2], qreg[p * 2 + 1]))
+      kpair = UOp(Ops.STACK, dtypes.float16.vec(2), (cache[0, 0, kvh, token, ke].cast(dtypes.float16),
+                                                    cache[0, 0, kvh, token, ke + 1].cast(dtypes.float16)))
+      dot_update = dot[0].store(_lower_fdot2(dot.after(p)[0], qpair, kpair)).end(p)
+    sc = valid.where(_warp_reduce_sum_staged(dot.after(dot_update)[0], lane, NKQ) * scale, _fc(-float("inf")))
+    if shared_probability_ownership: score_store = score_shared[score_base + j].store(sc, glane.eq(j)).end(j)
+    elif warp_probability_ownership: score_store = score_owned[0].store(sc, glane.eq(j)).end(j)
+    else: score_store = score[j].store(sc).end(j)
+    score_ready = UOp.barrier(score_store) if shared_probability_ownership else score_store
+    score = score.after(score_ready)
+    def score_at(i:UOp|int) -> UOp:
+      if shared_probability_ownership: return score_shared.after(score_ready)[score_base + i]
+      if warp_probability_ownership:
+        return warp_bpermute((group * NKQ + i).cast(dtypes.uint32) * 4, score_owned.after(score_ready)[0])
+      return score[i]
+
+    # Group-wide max over this chunk's 8 columns, then cross-group reduce to the warp-wide max.
+    group_max = UOp.placeholder((1,), _F32, 306, addrspace=AddrSpace.REG)
+    jm = UOp.range(NKQ, 7, axis_type=AxisType.REDUCE)
+    gm_init = group_max.after(score_ready)[0].set(-float("inf"))
+    gm = gm_init[0].set(gm_init.after(jm)[0].maximum(score_at(jm)), end=jm)
+    warp_max = warp_reduce_max_across_groups(gm_init.after(gm)[0], lane, NKQ)
+
+    # Research-only V tail software pipeline.  Keep the successful K path untouched and force only
+    # the last 1/2/4 V columns into distinct typed register destinations before the independent
+    # online-softmax rescale.  This is deliberately not inline PTX: ptxas retains freedom to schedule
+    # the ordinary LDG.E.128 sites while the register stores establish a real live-range boundary.
+    if v_pipeline_tail:
+      vptr = cache_v if separate_kv else cache
+      assert vptr is not None
+      vtail = UOp.placeholder((v_pipeline_tail * R,), dtypes.float16, 390, addrspace=AddrSpace.REG)
+      vstores = []
+      for ti in range(v_pipeline_tail):
+        tj = NKQ - v_pipeline_tail + ti
+        ttok = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + tj
+        tbase = (kvh * MAXC + ttok) * Hd if separate_kv else ((Hkv + kvh) * MAXC + ttok) * Hd
+        tlanes = packed_half8(vptr, tbase + glane * 8) + packed_half8(vptr, tbase + 64 + glane * 8)
+        vstores.extend(vtail[ti * R + di].store(tlanes[di]) for di in range(R))
+      vtail_ready = UOp.group(*vstores)
+
+    # Online-softmax rescale by the warp max, then PV/den accumulation for this group's 8 columns.
+    valid_chunk = warp_max > -1e30
+    old_max = mx.after(score_ready, vtail_ready if v_pipeline_tail else score_ready)[0]
+    rescale = valid_chunk.where(_fexp(old_max - warp_max), _fc(1.0))
+    new_max = valid_chunk.where(warp_max, old_max)
+    da = UOp.range(R, 8)
+    au = acc[da].store((acc.after(score_ready)[da] * rescale).cast(acc_dtype)).end(da)
+    du = den.after(au)[0].store(den.after(score_ready)[0] * rescale)
+    mu = mx.after(du)[0].store(new_max)
+    acc, den, mx = acc.after(au), den.after(du), mx.after(mu)
+
+    if warp_probability_ownership:
+      owned_col = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + glane
+      owned_valid = owned_col < Tc
+      owned_prob = owned_valid.where(_fexp(score_owned.after(score_ready)[0] - new_max), _fc(0.0))
+      def warp_prob_at(i:UOp|int) -> UOp:
+        return warp_bpermute((group * NKQ + i).cast(dtypes.uint32) * 4, owned_prob)
+
+    if share_kv_across_query_heads:
+      # Every sibling must finish reading K before the producer overwrites the shared tile with V.
+      k_done = UOp.barrier(mu)
+      svj = UOp.range(NKQ, 24)
+      svcol = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + svj
+      svvalid = svcol < Tc
+      vptr = cache_v if separate_kv else cache
+      assert vptr is not None
+      svbase = (kvh * MAXC + svcol) * Hd if separate_kv else ((Hkv + kvh) * MAXC + svcol) * Hd
+      svlanes = packed_half8(vptr, svbase + glane * 8, producer & svvalid) + \
+                 packed_half8(vptr, svbase + 64 + glane * 8, producer & svvalid)
+      svslot = (warp_in_head * COLS_PER_WARP + group * NKQ + svj) * Hd
+      svstore = UOp.group(*[sh_kv.after(k_done)[svslot + owned_dim(di)].store(svlanes[di], producer) for di in range(R)]).end(svj)
+      v_ready = UOp.barrier(svstore)
+
+    if v_dimension_major:
+      # Full register tile with dimension-major consumption.  Each dimension retains the exact
+      # j=0..7 recurrence, but all V destinations and probabilities remain live together so ptxas
+      # can reproduce llama's larger V live topology without changing the partial ABI.
+      probreg = UOp.placeholder((NKQ,), _F32, 391, addrspace=AddrSpace.REG)
+      pstores=[]
+      for ji in range(NKQ):
+        tokvi = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + ji
+        validvi = tokvi < Tc
+        probi=warp_prob_at(ji) if warp_probability_ownership else validvi.where(_fexp(score_at(ji) - new_max), _fc(0.0))
+        pstores.append(score_shared[score_base + ji].store(probi, glane.eq(ji)) if shared_probability_ownership else probreg[ji].store(probi))
+      prob_ready=UOp.barrier(UOp.group(*pstores)) if shared_probability_ownership else UOp.group(*pstores)
+      def prob_at(i:int) -> UOp:
+        return score_shared.after(prob_ready)[score_base + i] if shared_probability_ownership else probreg.after(prob_ready)[i]
+      astores=[]
+      for di in range(R):
+        aval=acc.after(mu,prob_ready)[di]
+        for ji in range(NKQ):aval=aval + prob_at(ji) * vtail.after(vtail_ready)[ji * R + di].cast(_F32)
+        astores.append(acc[di].store(aval.cast(acc_dtype)))
+      adone=UOp.group(*astores)
+      dstage=mu
+      for ji in range(NKQ):dstage=den.after(dstage,adone)[0].store(den.after(dstage)[0]+prob_at(ji))
+      chunk_end=dstage.end(chunk)
+    elif v_pipeline_tail:
+      # Static spelling preserves each dimension's j=0..7 recurrence while letting the selected tail
+      # values remain live across the rescale.  Non-tail columns keep the ordinary typed global loads.
+      stage = mu
+      for ji in range(NKQ):
+        tokvi = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + ji
+        validvi = tokvi < Tc
+        probi = warp_prob_at(ji) if warp_probability_ownership else validvi.where(_fexp(score_at(ji) - new_max), _fc(0.0))
+        if ji >= NKQ - v_pipeline_tail:
+          ti = ji - (NKQ - v_pipeline_tail)
+          vlanesi = tuple(vtail.after(vtail_ready)[ti * R + di] for di in range(R))
+        else:
+          vptr = cache_v if separate_kv else cache
+          assert vptr is not None
+          vbasei = (kvh * MAXC + tokvi) * Hd if separate_kv else ((Hkv + kvh) * MAXC + tokvi) * Hd
+          vgatei = validvi if guard_kv_loads else None
+          vlanesi = packed_half8(vptr, vbasei + glane * 8, vgatei) + packed_half8(vptr, vbasei + 64 + glane * 8, vgatei)
+        ai = UOp.group(*[acc[di].store(acc.after(stage)[di] + probi * vlanesi[di].cast(_F32)) for di in range(R)])
+        stage = den.after(ai, stage)[0].store(den.after(stage)[0] + probi)
+      chunk_end = stage.end(chunk)
+    else:
+      jv = UOp.range(NKQ, 9, axis_type=AxisType.REDUCE)
+      tokv = split * COLS_PER_CHUNK + chunk * CHUNK_STRIDE + warp_in_head * COLS_PER_WARP + group * NKQ + jv
+      validv = tokv < Tc
+      prob = warp_prob_at(jv) if warp_probability_ownership else validv.where(_fexp(score_at(jv) - new_max), _fc(0.0))
+      if wide_kv:
+        if share_kv_across_query_heads:
+          vslot = (warp_in_head * COLS_PER_WARP + group * NKQ + jv) * Hd
+          vlanes = tuple(sh_kv.after(v_ready)[vslot + owned_dim(di)] for di in range(R))
+        else:
+          vptr = cache_v if separate_kv else cache
+          assert vptr is not None
+          vbase = (kvh * MAXC + tokv) * Hd if separate_kv else ((Hkv + kvh) * MAXC + tokv) * Hd
+          vgate = validv if guard_kv_loads else None
+          vlanes = packed_half8(vptr, vbase + glane * 8, vgate) + packed_half8(vptr, vbase + 64 + glane * 8, vgate)
+        a2 = UOp.group(*[acc[di].store(acc.after(jv)[di] + prob * vlanes[di].cast(_F32)) for di in range(R)])
+      else:
+        dv = UOp.range(R, 12)
+        vdim = glane * R + dv
+        vval = cache[1, 0, kvh, tokv, vdim].cast(_F32)
+        a2 = acc[dv].store(acc.after(jv)[dv] + prob * vval).end(dv)
+      # mu (the running-max store) is a loop-carried register too; order it inside the chunk so it is not
+      # hoisted out as a dead tail and the next chunk reads the updated softmax frame.
+      d2 = den.after(a2, mu)[0].store(den.after(jv)[0] + prob)
+      chunk_end = d2.end(jv).end(chunk)
+
+    # Cross-group sum of PV and den (the 4 groups own disjoint columns but the same 16-dim slices).
+    # Only lanes 0..7 are group-0 owners, so they alone write each dim slice to avoid a 4-way same-value
+    # store race in shared memory. den/max are already warp-uniform after the cross-group reduce.
+    if transpose_pv_smem:
+      dr_outer, dr_inner = UOp.range(2, 19), UOp.range(8, 20)
+      dr = dr_outer * 8 + dr_inner
+    else: dr = UOp.range(R, 13)
+    warp_acc = warp_reduce_sum_across_groups(acc.after(chunk_end)[dr].cast(_F32), lane, NKQ, slot_base=320)
+    warp_den = warp_reduce_sum_across_groups(den.after(chunk_end)[0], lane, NKQ, slot_base=340)
+    warp_mx = warp_reduce_max_across_groups(mx.after(chunk_end)[0], lane, NKQ, slot_base=350)
+
+    sh_pv = UOp.placeholder((WARPS * Hd,), _F32, 360, addrspace=AddrSpace.LOCAL)
+    sh_den = UOp.placeholder((WARPS,), _F32, 361, addrspace=AddrSpace.LOCAL)
+    sh_mx = UOp.placeholder((WARPS,), _F32, 362, addrspace=AddrSpace.LOCAL)
+    logical_warp = warp if QG == 1 else query_in_group * WARPS_PER_HEAD + warp_in_head
+    ps = sh_pv[logical_warp * Hd + pv_shared_dim(dr)].store(warp_acc, lane < NKQ)
+    ps = ps.end(dr_inner).end(dr_outer) if transpose_pv_smem else ps.end(dr)
+    ps = sh_den.after(ps)[logical_warp].store(warp_den, lane.eq(0))
+    ps = sh_mx.after(ps)[logical_warp].store(warp_mx, lane.eq(0))
+    barrier = UOp.barrier(UOp.group(ps))
+
+    # Block-wide max over the 4 warp partials, then re-normalize each warp's PV/den by exp(warp_max -
+    # block_max) before summing. This is llama's fattn-vec.cuh:434-500: warp partials are only valid in a
+    # common softmax frame after the global-max rescale.
+    block_max = UOp.placeholder((1,), _F32, 370, addrspace=AddrSpace.REG)
+    wmax = UOp.range(WARPS_PER_HEAD, 14, axis_type=AxisType.REDUCE)
+    bm_init = block_max.after(barrier)[0].set(-float("inf"))
+    max_warp = wmax if QG == 1 else query_in_group * WARPS_PER_HEAD + wmax
+    bm = bm_init[0].set(bm_init.after(wmax)[0].maximum(sh_mx.after(barrier)[max_warp]), end=wmax)
+    global_max = bm_init.after(bm)[0]
+
+    block_pv = UOp.placeholder((R,), _F32, 371, addrspace=AddrSpace.REG)
+    block_den = UOp.placeholder((1,), _F32, 372, addrspace=AddrSpace.REG)
+    zr = UOp.range(R, 15)
+    pv_init = block_pv.after(bm)[zr].store(0.0).end(zr)
+    den_init = block_den.after(pv_init)[0].store(0.0)
+    block_pv, block_den = block_pv.after(den_init), block_den.after(den_init)
+
+    ws = UOp.range(WARPS_PER_HEAD, 16, axis_type=AxisType.REDUCE)
+    shared_warp = ws if QG == 1 else query_in_group * WARPS_PER_HEAD + ws
+    # A physical partition may be wholly outside logical Tc (the current llama-like
+    # d512 geometry has six 128-token parts, while Tc is only 513).  In that case
+    # every warp max and the block max are -inf.  exp(-inf - -inf) is NaN and used
+    # to poison the empty partial before the outer combine can give it zero weight.
+    # Preserve the partial ABI for an empty part: PV=0, denominator=0, max=-inf.
+    block_valid = global_max > -1e30
+    weight = block_valid.where(_fexp(sh_mx.after(barrier)[shared_warp] - global_max), _fc(0.0))
+    if transpose_pv_smem:
+      wr_outer, wr_inner = UOp.range(2, 21), UOp.range(8, 22)
+      wr = wr_outer * 8 + wr_inner
+    else: wr = UOp.range(R, 17)
+    pv_up = block_pv[wr].store(block_pv.after(ws)[wr] +
+      weight * sh_pv.after(barrier)[shared_warp * Hd + pv_shared_dim(wr)])
+    pv_up = pv_up.end(wr_inner).end(wr_outer) if transpose_pv_smem else pv_up.end(wr)
+    den_up = block_den.after(pv_up)[0].store(
+      block_den.after(ws)[0] + weight * sh_den.after(barrier)[shared_warp]).end(ws)
+    final_pv, final_den = block_pv.after(den_up), block_den.after(den_up)
+
+    base = (head * S + split) * W
+    output_axis = UOp.range(R, 18)
+    output_dim = owned_dim(output_axis)
+    pv = pout[base + output_dim].store(final_pv[output_axis]).end(output_axis)
+    ls = pout.after(pv)[base + Hd].store(final_den[0], lane.eq(0))
+    ms = pout.after(ls)[base + (Hd + 1)].store(global_max, lane.eq(0))
+    return ms.end(head_axis, split, lane, warp).sink(arg=_kernel_info(
+      f"flash_vec_llama_score_pv_{Hq}_{Hd}_{S}{'_widekv16' if wide_kv else ''}"
+      f"{'_guardkv' if guard_kv_loads else ''}{'_separatekv' if separate_kv else ''}"
+      f"{'_tpvsmem' if transpose_pv_smem else ''}{f'_qg{QG}' if QG != 1 else ''}"
+      f"{'_sharekv' if share_kv_across_query_heads else ''}{f'_vtail{v_pipeline_tail}' if v_pipeline_tail else ''}"
+      f"{'_vdimmajor' if v_dimension_major else ''}{'_sharedprob' if shared_probability_ownership else ''}"
+      f"{'_packedpv16' if packed_pv_f16 else ''}{'_warpprob' if warp_probability_ownership else ''}", coalesced_loads=True))
+
+  if separate_kv:
+    def kernel_separate(pout:UOp, q:UOp, cache_k:UOp, cache_v:UOp) -> UOp:
+      return build_kernel(pout, q, cache_k, cache_v)
+    return kernel_separate
+
+  def kernel_combined(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    return build_kernel(pout, q, cache, None)
+  return kernel_combined
 
 
 @dataclass(frozen=True)
@@ -280,16 +964,35 @@ class FlashDecodeTileSpec:
   token_block: int = 16
   query_group_size: int|None = None
   stage_width: int = 1
-  target: str = "amd_gfx1100"
+  lane_width: int = 32
+  score_group_width: int|None = None
+  warps: int|None = None
+  reduce_structure: str = "staged"
+  dot_pair_width: int = 2
+  target: str|None = None
 
   def validate(self) -> None:
     if min(self.Hq, self.Hd, self.Hkv, self.MAXC) <= 0: raise ValueError("Hq, Hd, Hkv and MAXC must be positive")
     if self.staging != "KV_BOTH": raise ValueError(f"production flash decode requires staging='KV_BOTH', got {self.staging!r}")
-    if self.token_block != 16: raise ValueError(f"token_block must currently be 16, got {self.token_block}")
+    if self.token_block < 1: raise ValueError(f"token_block must be >= 1, got {self.token_block}")
     if self.Hq % self.Hkv != 0: raise ValueError(f"Hq must be divisible by Hkv, got Hq={self.Hq} Hkv={self.Hkv}")
     if self.query_group_size is not None and not 1 <= self.query_group_size <= self.Hq // self.Hkv:
       raise ValueError(f"query_group_size must be in 1..{self.Hq // self.Hkv}, got {self.query_group_size}")
     if self.stage_width not in (1, 2, 4, 8): raise ValueError(f"stage_width must be one of 1,2,4,8, got {self.stage_width}")
+    if self.lane_width < 1 or self.lane_width & (self.lane_width - 1):
+      raise ValueError(f"lane_width must be a positive power of two, got {self.lane_width}")
+    if self.score_group_width is not None and self.score_group_width != self.lane_width:
+      raise ValueError(f"score_group_width must equal lane_width={self.lane_width} or be None, "
+                       f"got {self.score_group_width}")
+    qg = self.query_group_size if self.query_group_size is not None else self.Hq // self.Hkv
+    if self.warps is not None and self.warps < qg:
+      raise ValueError(f"warps must be >= query_group_size={qg} when set, got {self.warps}")
+    if self.dot_pair_width < 1: raise ValueError(f"dot_pair_width must be >= 1, got {self.dot_pair_width}")
+    if self.Hd % (self.lane_width * self.dot_pair_width) != 0:
+      raise ValueError(f"Hd must be divisible by lane_width*dot_pair_width={self.lane_width * self.dot_pair_width}, "
+                       f"got Hd={self.Hd}")
+    if self.reduce_structure not in {"staged", "inline"}:
+      raise ValueError(f"reduce_structure must be one of 'staged','inline', got {self.reduce_structure!r}")
     self.geometry.validate()
 
   @property
@@ -306,19 +1009,30 @@ class FlashDecodeTileSpec:
 
   @property
   def kernel_name(self) -> str:
-    suffix = "" if self.query_group_size is None else f"_qg{self.query_group_size}"
-    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}{suffix}"
+    G = self.Hq // self.Hkv
+    QG = G if self.query_group_size is None else self.query_group_size
+    suffix = "" if QG == G else f"_qg{QG}"
+    geom_suffix = _tile_geometry_suffix(Hq=self.Hq, split_count=self.split_count, lane_width=self.lane_width,
+                                        token_block=self.token_block, stage_width=self.stage_width,
+                                        reduce_structure=self.reduce_structure, dot_pair_width=self.dot_pair_width,
+                                        score_group_width=self.score_group_width, warps=self.warps,
+                                        query_group_size=self.query_group_size, QG=QG)
+    return f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{self.Hq}_{self.Hd}{suffix}{geom_suffix}"
 
   def emit(self, Tc:UOp):
     self.validate()
     return flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(
       self.Hd, self.Hq, self.Hkv, self.MAXC, self.geometry.aligned_per_split_length(Tc), self.split_count, Tc,
       staging=self.staging, quant=self.quant, rope=self.rope, query_group_size=self.query_group_size,
-      stage_width=self.stage_width)
+      stage_width=self.stage_width, token_block=self.token_block, lane_width=self.lane_width,
+      score_group_width=self.score_group_width, warps=self.warps, reduce_structure=self.reduce_structure,
+      dot_pair_width=self.dot_pair_width)
 
   def to_json(self) -> dict[str, Any]:
     return {key:getattr(self, key) for key in ("Hq", "Hd", "Hkv", "MAXC", "split_count", "staging", "quant", "rope",
-                                                 "token_block", "query_group_size", "stage_width", "target")}
+                                                 "token_block", "query_group_size", "stage_width", "lane_width",
+                                                 "score_group_width", "warps", "reduce_structure",
+                                                 "dot_pair_width", "target")}
 
 
 @dataclass(frozen=True)
@@ -327,14 +1041,31 @@ class FlashCombineSpec:
   Hq: int
   split_count: int
   stride: int|None = None
+  output_fp16: bool = False
+  lane_width: int = 32
 
   def validate(self) -> None:
     if min(self.Hd, self.Hq, self.split_count) <= 0: raise ValueError("Hd, Hq and split_count must be positive")
     if self.stride is not None and self.stride < 1: raise ValueError(f"stride must be >= 1, got {self.stride}")
+    if self.lane_width < 1 or self.lane_width & (self.lane_width - 1):
+      raise ValueError(f"lane_width must be a positive power of two, got {self.lane_width}")
+    if self.Hd % self.lane_width != 0:
+      raise ValueError(f"Hd must be divisible by lane_width={self.lane_width}, got Hd={self.Hd}")
 
   @property
-  def kernel_name(self) -> str: return f"flash_fused_gmax_combine_{self.Hq}_{self.Hd}"
-  def emit(self): self.validate(); return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride)
+  def kernel_name(self) -> str:
+    prefix = "flash_fused_gmax_combine_f16" if self.output_fp16 else "flash_fused_gmax_combine"
+    route_split = {32: 48, 40: 32}.get(self.Hq)
+    suffix = ""
+    if self.split_count != route_split: suffix += f"_s{self.split_count}"
+    if self.lane_width != 32: suffix += f"_lw{self.lane_width}"
+    return f"{prefix}_{self.Hq}_{self.Hd}{suffix}"
+  def emit(self):
+    self.validate()
+    return flash_fused_gmax_combine_kernel(self.Hd, self.Hq, self.split_count, self.stride, self.output_fp16,
+                                           self.lane_width)
+  def to_json(self) -> dict[str, Any]:
+    return {key:getattr(self, key) for key in ("Hd", "Hq", "split_count", "stride", "output_fp16", "lane_width")}
 
 
 @dataclass(frozen=True)
@@ -358,11 +1089,20 @@ class FlashDecodeAttentionSpec:
 def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *, staging:str="KV_BOTH",
                                     fused_combine:bool=True, quant:bool=False, rope:bool=False,
                                     combine_stride:int|None=None, query_group_size:int|None=None,
-                                    stage_width:int=1) -> FlashDecodeAttentionSpec:
+                                    stage_width:int=1, token_block:int=16, lane_width:int=32,
+                                    score_group_width:int|None=None, warps:int|None=None,
+                                    reduce_structure:str="staged", dot_pair_width:int=2,
+                                    combine_lane_width:int|None=None,
+                                    combine_fp16:bool=False) -> FlashDecodeAttentionSpec:
+  tile = FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
+                             stage_width=stage_width, token_block=token_block, lane_width=lane_width,
+                             score_group_width=score_group_width, warps=warps, reduce_structure=reduce_structure,
+                             dot_pair_width=dot_pair_width)
   return FlashDecodeAttentionSpec(
-    FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
-                        stage_width=stage_width),
-    FlashCombineSpec(Hd, Hq, S, combine_stride) if fused_combine else None)
+    tile,
+    FlashCombineSpec(Hd, Hq, S, combine_stride, output_fp16=combine_fp16,
+                     lane_width=tile.lane_width if combine_lane_width is None else combine_lane_width)
+    if fused_combine else None)
 
 
 def emit_flash_decode_tile(spec:FlashDecodeAttentionSpec, Tc:UOp): return spec.emit_tile(Tc)
@@ -430,14 +1170,29 @@ class FlashDecodeAdmission:
   authority -- unchanged from the pre-TG7 `supports()` shape check), capability (this file, read from
   renderer facts), and promotion (ModelRoutePlan.target_promoted, tinygrad/llm/model_route_plan.py --
   BoltBeam-sourced route policy, TG3's authority, reused rather than restated). `reason` gives each rejection
-  a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback."""
+  a distinct, observable label instead of the pre-TG7 silent `device == "AMD"` fallback.
+  `epilogue_fusion_promoted` is the L1 decode epilogue-fusion answer (closed default, resolved by
+  decode_routes.py bind from model_route_plan.decode_epilogue_fusion_promoted; it gates the fused combine/
+  epilogue variants only -- the legacy `admitted` route is unchanged by it). `combine_fusion_promoted` is the
+  L1 M5 flash-combine fp16 absorption answer (closed default, resolved by decode_routes.py bind from
+  model_route_plan.decode_flash_combine_fusion_promoted; it gates the fp16 combine variant
+  flash_fused_gmax_combine_f16_* only -- deliberately SEPARATE from M2's epilogue-fusion record, and the
+  legacy fp32 combine is unchanged by it)."""
   shape_ok: bool
   capability: FlashDecodeCapability
   target_promoted: bool
+  epilogue_fusion_promoted: bool = False
+  combine_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool:
     return self.shape_ok and self.capability.satisfied and self.target_promoted
+
+  @property
+  def fusion_admitted(self) -> bool: return self.admitted and self.epilogue_fusion_promoted
+
+  @property
+  def combine_fusion_admitted(self) -> bool: return self.admitted and self.combine_fusion_promoted
 
   @property
   def reason(self) -> str | None:
@@ -465,8 +1220,10 @@ class FlashDecodeRouteConfig:
     question this used to be ANDed with, split out into FlashDecodeAdmission above."""
     return (B, Hq, Hkv, Hd) == (1, self.query_heads, self.kv_heads, self.head_dim)
 
-  def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool) -> FlashDecodeAdmission:
-    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted)
+  def evaluate(self, B:int, Hq:int, Hkv:int, Hd:int, capability:FlashDecodeCapability, target_promoted:bool,
+               epilogue_fusion_promoted:bool=False, combine_fusion_promoted:bool=False) -> FlashDecodeAdmission:
+    return FlashDecodeAdmission(self.shape_ok(B, Hq, Hkv, Hd), capability, target_promoted,
+                                epilogue_fusion_promoted, combine_fusion_promoted)
 
 
 FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "decode_flash_live_split_g4_kvboth",
@@ -474,10 +1231,19 @@ FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "d
 FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5", "decode_flash_live_split_g5_kvboth",
                                           40, 32, 2, 4)
 
+def _adaptive_split_lease_admitted(route:FlashDecodeRouteConfig|None, S:int, query_group_size:int|None,
+                                   staging:str, MAXC:int) -> bool:
+  return route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and MAXC <= 1024 and \
+    (64, route.query_group_size, route.staging) == (S, query_group_size, staging)
+
 
 def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int, Hq:int, Hkv:int, MAXC:int, S:int,
                                        staging:str="KV_BOTH", fused_combine:bool=True, kv_scale:Tensor|None=None,
-                                       freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1) -> Tensor:
+                                       freqs:Tensor|None=None, query_group_size:int|None=None, stage_width:int=1,
+                                       token_block:int=16, lane_width:int=32, score_group_width:int|None=None,
+                                       warps:int|None=None, reduce_structure:str="staged", dot_pair_width:int=2,
+                                       combine_lane_width:int|None=None, combine_fp16:bool=False,
+                                       split_count_leased:bool=False) -> Tensor:
   """Execute the selected live-split flash decode and return ``[Hq, Hd]``."""
   if not fused_combine: raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
   # TG7: this is a pure shape-based route SELECTION (which of G4/G5 matches, to label the emitted
@@ -487,19 +1253,57 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   # dispatch, which is exactly where this runs -- unable to open a device at all (see
   # decode_routes._flash_decode_capability_and_target_for_device's docstring).
   route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.shape_ok(1, Hq, Hkv, Hd)), None)
-  if route is None or (route.split_size, route.query_group_size, route.stage_width, route.staging) != \
-      (S, query_group_size, stage_width, staging):
+  # stage_width/reduce_structure/dot_pair_width are searchable geometry overrides (P3); the promoted-route
+  # identity is the split/query-group/staging triple, not the staging coalesce width.
+  admitted = route is not None and (route.split_size, route.query_group_size, route.staging) == \
+      (S, query_group_size, staging)
+  # Env-gated coarse-split research override (FLASH_DECODE_COARSE_SPLIT): admit the env-selected
+  # split for the G4 d512 route in addition to the promoted one. Unset env leaves `admitted` exactly
+  # as before, so the promoted route stays byte-identical to today.
+  coarse_split = flash_decode_coarse_split_override()
+  if not admitted and route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and coarse_split:
+    admitted = (coarse_split, route.query_group_size, route.staging) == (S, query_group_size, staging)
+  # Closed-default graph-local lease used by the qualified adaptive policy.
+  # Arbitrary split geometry remains inadmissible.
+  if not admitted and split_count_leased:
+    admitted = _adaptive_split_lease_admitted(route, S, query_group_size, staging, MAXC)
+  if not admitted:
     raise ValueError("flash decode geometry is not an admitted promoted route")
   quant, rope = kv_scale is not None, freqs is not None
   inputs = (q.reshape(Hq * Hd), cache_kv) + ((kv_scale,) if quant else ()) + ((freqs,) if rope else ())
   spec = describe_flash_decode_attention(Hq, Hd, Hkv, MAXC, S, staging=staging, quant=quant, rope=rope,
-                                         query_group_size=query_group_size, stage_width=stage_width)
+                                         query_group_size=query_group_size, stage_width=stage_width,
+                                         token_block=token_block, lane_width=lane_width,
+                                         score_group_width=score_group_width, warps=warps,
+                                         reduce_structure=reduce_structure, dot_pair_width=dot_pair_width,
+                                         combine_lane_width=combine_lane_width,
+                                         combine_fp16=combine_fp16)
+  tile_emitter,tile_ticket=lower_authorized_candidate({"family":"flash_decode_spec_tile.v1","candidate_id":route.candidate_id,
+    "spec_repr":repr(spec),"spec_binding":"flash_spec","tc_repr":repr(Tc),"tc_binding":"tile_count"},
+    (("decode_flash_llama_vec_wide","flash_decode_score_pv"),),lowering_bindings={"flash_spec":spec,"tile_count":Tc})
   tile_program = KernelProgram(route.route_id, f"{route.candidate_id}.tile",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_tile(Tc),
-    output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32))
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, tile_emitter,
+    output_spec=OutputSpec((Hq * S * (Hd + 2),), dtypes.float32),
+    boltbeam_ticket=tile_ticket)
   partial = execute_promoted_program(None, *inputs, program=tile_program)
+  # M5 typed boundary (m5-variant-reopen-boundary-p0-scope-20260803.md section 3.1): the fp16
+  # combine declares its typed output layout -- fp16 (Hq*Hd,) row-major, viewable as (Hq, Hd),
+  # no permutation/stride/padding. The emitted kernel is unchanged; only the boundary's declared
+  # output ABI gains the layout/view metadata. combine_fp16 is set by the only call site from
+  # FlashDecodeAdmission.combine_fusion_admitted (decode_routes.py), so recording it here IS the
+  # producer-side combine-fusion gate state the consumer validator requires (scope 4(d)).
+  combine_typed = None
+  if combine_fp16:
+    combine_typed = DeclaredTypedOutput(TypedLayout(dtypes.float16, (Hq * Hd,), (Hq, Hd)),
+                                        combine_fusion_admitted=combine_fp16)
+  combine_emitter,combine_ticket=lower_authorized_candidate({"family":"flash_decode_spec_combine.v1",
+    "candidate_id":route.candidate_id,"spec_repr":repr(spec),"spec_binding":"flash_spec"},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),
+     ("decode_flash_combine_fusion","flash_decode_combine")),lowering_bindings={"flash_spec":spec})
   combine_program = KernelProgram(route.route_id, f"{route.candidate_id}.combine",
-    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, spec.emit_combine(),
-    output_spec=OutputSpec((Hq * Hd,), dtypes.float32))
+    KernelProgramProvenance.MACHINE_SEARCH_GENERATED, combine_emitter,
+    output_spec=OutputSpec((Hq * Hd,), dtypes.float16 if combine_fp16 else dtypes.float32,
+                           typed_output=combine_typed),
+    boltbeam_ticket=combine_ticket)
   out = execute_promoted_program(None, partial, program=combine_program)
   return out.reshape(Hq, Hd)

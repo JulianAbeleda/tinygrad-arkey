@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_w1w3_fp16_store",
+  "description": "M2a fp16 w1w3-store promotion record (nv-epilogue-absorption-route-scope-20260810.md row M2a; nv-epilogue-absorption-m2a-promotion-record-20260812.md). The fused w1+w3 decode GEMV stores its result fp16 in-kernel (q4k_g3_lanemap_gemv_w1w3fused16_*), absorbing the ordinary E_128_32_3 ffn-activation fp32->fp16 cast (36x/token) so the ffn_down Q4K GEMV reads the fp16 z directly. The in-kernel cast is the same round-to-nearest-even fp32->fp16 conversion as the standalone cast, so the stored bytes are bitwise-identical. NV sm_120 is promoted by the M2a wall bracket: all correctness gates PASS (exact logits SHA-256 `70838f5237ce2cf2` identical to control, census net -36 kernels, E_128_32_3 36 -> 0), wall candidate 5.2723 ms/token = 189.67 tok/s vs control bracket 5.3295 ms = 187.64 tok/s, +57.2 us/token ABOVE the +50 us promotion bar. The legacy fp32-store fused kernel (q4k_g3_lanemap_gemv_w1w3fused_*) is unchanged and remains the spelling whenever this record is closed. Deliberately SEPARATE from the w1w3 fusion record (decode-q4k-w1w3-fusion-route-policy.json), which stays NV-promoted for the fused kernel itself.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

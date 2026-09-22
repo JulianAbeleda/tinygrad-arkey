@@ -1,0 +1,15 @@
+{
+  "buffer_events": 8,
+  "buffer_kinds": [
+    "alloc",
+    "copyin",
+    "copyout"
+  ],
+  "entry_records": 8,
+  "observer_off_emitted": false,
+  "schema": "tinygrad.hcq_submission_observer_selftest.v1",
+  "status": "PASS",
+  "submission_jsonl": "docs/task_workflow/evidence/nv-prefill-q6down-d0-20260829/submission-observer-selftest.jsonl",
+  "submission_records": 4,
+  "timestamp_contract": true
+}

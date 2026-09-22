@@ -1,0 +1,13 @@
+{
+  "schema": "tinygrad.nv_prefill_post_substrate_authority.v1",
+  "packet": "S0",
+  "status": "PASS",
+  "authority": {"run_id": "r4-confirming-brackets", "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf", "gpu": "RTX 5090 sm_120", "driver": "595.84", "clocks_session": "flock GPU session; llama and tinygrad fresh processes", "environment": {"QK_PRIMITIVE": "1", "NV_COMPILER_Q4_IMMA_PP512": "1", "NV_COMPILER_Q4_IMMA_K_PP512": "1", "NV_COMPILER_Q4_IMMA_QO_PP512": "1", "NV_COMPILER_Q4_IMMA_UNROLL": "4", "HCQ_NUM_COMPUTE": "2", "HCQ_NV_READY_PLACEMENT": "0", "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "combined-flash-direct-deps-cut-v2.json", "NV_Q4_IMMA_PP512": null, "NV_UNROLL": null, "PROFILE": "0"}},
+  "correctness": {"candidate_0_status": "PASS", "candidate_1_status": "PASS", "deep20_exact": true, "finite": true, "token": 198, "first_mismatch": null},
+  "census": {"predicted": {"canonical_weights": 198, "compiler_mains": 198, "q8_producers": 198, "unknown": 0}, "observed": {"canonical_weights": 198, "compiler_mains": 198, "q8_producers": 198, "gate_up": 72, "k": 36, "qo": 72, "v": 18, "weight_copy_kernels": 0, "partial_workspace_bytes": 0}},
+  "samples": {"candidate_0": "candidate_0.json", "candidate_1": "candidate_1.json", "llama": "llama_r9.json"},
+  "wall": {"candidate_0_median_ms": 67.25154, "candidate_0_min_ms": 67.099104, "candidate_1_median_ms": 67.254339, "candidate_1_min_ms": 67.233269, "settled_median_ms": 67.2529395, "settled_min_ms": 67.099104, "bracket_delta_ms": 0.002799, "reference": 67.235719, "route_config_regression": false},
+  "observer": {"enabled": false, "profile": false},
+  "decision": "PASS: exact F1 route restored; two confirming R9 brackets reproduce the prior authority within noise",
+  "next_packet": null
+}

@@ -149,3 +149,20 @@ def test_model_forward_one_buffer_binding_is_censused_without_relaxing_registry_
   assert report["passed"] is True
   assert report["model_forward"] == [{"role":"attn_qo","shape":{"m":512,"n":4096,"k":4096},
                                        "canonical_identity":"2"*64,"one_buffer":True,"bindings":1}]
+
+def test_exact_model_forward_binding_replaces_dense_body_in_census():
+  admission=_admission("attn_qo",4096,4096,"1"*64); registry=_registry((admission,))
+  with production_route.candidate_route_census() as collector:
+    production_route.record_model_forward_candidate(role="attn_qo",shape=(512,4096,4096),
+      canonical_identity="1"*64,one_buffer=True)
+  report=production_route.finalize_candidate_route_census(collector,registry)
+  assert report["passed"] and report["selected"][0]["model_owned"] is True
+
+def test_model_forward_wrong_identity_shape_or_uninvoked_remains_missing():
+  admission=_admission("attn_qo",4096,4096,"1"*64); registry=_registry((admission,))
+  for shape,identity,invoke in (((512,4096,4096),"2"*64,True),((512,4096,2048),"1"*64,True),
+                                ((512,4096,4096),"1"*64,False)):
+    with production_route.candidate_route_census() as collector:
+      if invoke: production_route.record_model_forward_candidate(role="attn_qo",shape=shape,canonical_identity=identity,one_buffer=True)
+    report=production_route.finalize_candidate_route_census(collector,registry)
+    assert not report["passed"] and len(report["missing"])==1

@@ -1,0 +1,2 @@
+pstate, clocks.current.sm [MHz], clocks.current.memory [MHz], temperature.gpu, power.draw [W], memory.used [MiB]
+P0, 2580 MHz, 14001 MHz, 43, 79.97 W, 117 MiB

@@ -1,0 +1,52 @@
+{
+  "argmax_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208
+  ],
+  "arm": "pingpong",
+  "callify_redirect": 0,
+  "contract": {
+    "admitted": true,
+    "program_counts": [
+      4,
+      4
+    ],
+    "reason": "distinct_fixed_returns_and_read_only_inputs",
+    "return_device": "NV",
+    "return_dtype": "dtypes.int",
+    "return_shape": [
+      1,
+      1
+    ],
+    "written_input_shadows": [
+      0,
+      0
+    ]
+  },
+  "logits_sha256": "1d6c6891b7f20f9aef4da6d0272e29238c41b04a65a6a9457ba9af63989e3a40",
+  "mode": "logits",
+  "route_still_promoted": true,
+  "sample_argmax_match": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "shape": [
+    8,
+    1,
+    151936
+  ],
+  "tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208
+  ]
+}

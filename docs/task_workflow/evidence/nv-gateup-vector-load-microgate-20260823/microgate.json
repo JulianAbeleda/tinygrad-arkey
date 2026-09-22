@@ -1,0 +1,57 @@
+{
+  "bitwise_identical": true,
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "max_abs_diff": 0.0,
+  "mean_abs_diff": 0.0,
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent",
+  "passes": 500,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_w1w3vec16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_w1w3vec16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 67 registers, used 0 barriers",
+    "ptxas info    : Compile time = 21.346 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_w1w3fused16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 74 registers, used 0 barriers",
+    "ptxas info    : Compile time = 21.786 ms"
+  ],
+  "raw_stdout": [
+    "bitwise_identical=1",
+    "max_abs_diff=0 mean_abs_diff=0",
+    "shape=12288x4096 passes=500 reps=5",
+    "rep=0 control=23.7386 candidate=21.9595",
+    "rep=1 control=23.6900 candidate=21.9416",
+    "rep=2 control=23.7048 candidate=21.9504",
+    "rep=3 control=23.6954 candidate=21.9414",
+    "rep=4 control=23.6872 candidate=21.9292"
+  ],
+  "reps": 5,
+  "schema": "tinygrad.q4k_gate_up_vector_load_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 12288
+  },
+  "timing": {
+    "candidate": [
+      21.9595,
+      21.9416,
+      21.9504,
+      21.9414,
+      21.9292
+    ],
+    "candidate_median": 21.9416,
+    "candidate_over_control": 0.9259856343425307,
+    "control": [
+      23.7386,
+      23.69,
+      23.7048,
+      23.6954,
+      23.6872
+    ],
+    "control_median": 23.6954,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

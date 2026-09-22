@@ -1,0 +1,2839 @@
+{
+  "all_replays": [
+    {
+      "node_count": 596,
+      "node_sum_us": 4722.752,
+      "overlap_us": 6.502,
+      "span_us": 614081.5,
+      "union_us": 4716.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4658.112,
+      "overlap_us": 6.112,
+      "span_us": 6319.25,
+      "union_us": 4652.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.72,
+      "overlap_us": 3.72,
+      "span_us": 6427.75,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.712,
+      "overlap_us": 4.462,
+      "span_us": 6074.0,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.08,
+      "overlap_us": 5.58,
+      "span_us": 6088.0,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.72,
+      "overlap_us": 4.47,
+      "span_us": 6018.5,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.088,
+      "overlap_us": 4.338,
+      "span_us": 5985.5,
+      "union_us": 4616.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.032,
+      "overlap_us": 4.532,
+      "span_us": 5918.0,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.608,
+      "overlap_us": 7.858,
+      "span_us": 5887.75,
+      "union_us": 4616.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.368,
+      "overlap_us": 9.118,
+      "span_us": 6129.75,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.08,
+      "overlap_us": 4.58,
+      "span_us": 5882.25,
+      "union_us": 4617.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.664,
+      "overlap_us": 7.914,
+      "span_us": 5884.0,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.944,
+      "overlap_us": 4.444,
+      "span_us": 5906.5,
+      "union_us": 4618.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.32,
+      "overlap_us": 0.82,
+      "span_us": 5862.5,
+      "union_us": 4627.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.72,
+      "overlap_us": 9.97,
+      "span_us": 5890.75,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.008,
+      "overlap_us": 3.258,
+      "span_us": 5838.75,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.744,
+      "overlap_us": 6.994,
+      "span_us": 5816.25,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.088,
+      "overlap_us": 5.088,
+      "span_us": 5844.0,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.472,
+      "overlap_us": 9.972,
+      "span_us": 5796.75,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.528,
+      "overlap_us": 5.278,
+      "span_us": 5810.5,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.96,
+      "overlap_us": 9.71,
+      "span_us": 5820.5,
+      "union_us": 4611.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.424,
+      "overlap_us": 8.674,
+      "span_us": 7127.5,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.616,
+      "overlap_us": 3.616,
+      "span_us": 5869.75,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.272,
+      "overlap_us": 5.272,
+      "span_us": 5806.25,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.144,
+      "overlap_us": -0.106,
+      "span_us": 5819.0,
+      "union_us": 4622.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.272,
+      "overlap_us": 4.772,
+      "span_us": 5793.0,
+      "union_us": 4617.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.928,
+      "overlap_us": 9.428,
+      "span_us": 5775.25,
+      "union_us": 4607.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.336,
+      "overlap_us": 5.586,
+      "span_us": 5834.5,
+      "union_us": 4620.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.192,
+      "overlap_us": 7.692,
+      "span_us": 5778.5,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.224,
+      "overlap_us": 5.724,
+      "span_us": 5791.5,
+      "union_us": 4618.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.16,
+      "overlap_us": 8.41,
+      "span_us": 5824.0,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.704,
+      "overlap_us": 5.954,
+      "span_us": 5785.25,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.112,
+      "overlap_us": 9.612,
+      "span_us": 5817.75,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.448,
+      "overlap_us": 8.448,
+      "span_us": 6050.75,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.76,
+      "overlap_us": 4.26,
+      "span_us": 5780.5,
+      "union_us": 4621.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.392,
+      "overlap_us": 9.642,
+      "span_us": 5879.25,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.904,
+      "overlap_us": 3.154,
+      "span_us": 5811.0,
+      "union_us": 4616.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.936,
+      "overlap_us": 8.186,
+      "span_us": 5796.75,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.776,
+      "overlap_us": 5.526,
+      "span_us": 5801.5,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.928,
+      "overlap_us": 1.428,
+      "span_us": 5753.75,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.752,
+      "overlap_us": 3.752,
+      "span_us": 5972.0,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.632,
+      "overlap_us": 6.132,
+      "span_us": 5863.25,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.216,
+      "overlap_us": 4.466,
+      "span_us": 6612.0,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.936,
+      "overlap_us": 4.936,
+      "span_us": 4723.5,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.52,
+      "overlap_us": 5.02,
+      "span_us": 4719.75,
+      "union_us": 4610.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.128,
+      "overlap_us": 4.878,
+      "span_us": 4718.5,
+      "union_us": 4611.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4609.056,
+      "overlap_us": 5.556,
+      "span_us": 4714.5,
+      "union_us": 4603.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.944,
+      "overlap_us": 4.444,
+      "span_us": 4716.25,
+      "union_us": 4610.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.496,
+      "overlap_us": 6.496,
+      "span_us": 4711.75,
+      "union_us": 4608.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.192,
+      "overlap_us": 3.942,
+      "span_us": 4731.0,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.024,
+      "overlap_us": 3.524,
+      "span_us": 4724.25,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.816,
+      "overlap_us": 5.316,
+      "span_us": 4720.5,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.792,
+      "overlap_us": 4.042,
+      "span_us": 4713.5,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.592,
+      "overlap_us": 1.592,
+      "span_us": 4713.25,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.008,
+      "overlap_us": 10.758,
+      "span_us": 4711.75,
+      "union_us": 4604.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.48,
+      "overlap_us": 5.48,
+      "span_us": 4727.75,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.536,
+      "overlap_us": 4.286,
+      "span_us": 4723.5,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4608.512,
+      "overlap_us": 3.262,
+      "span_us": 4709.0,
+      "union_us": 4605.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.776,
+      "overlap_us": 0.776,
+      "span_us": 4727.0,
+      "union_us": 4623.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.984,
+      "overlap_us": 3.734,
+      "span_us": 4717.5,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.976,
+      "overlap_us": 4.726,
+      "span_us": 4712.75,
+      "union_us": 4606.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.336,
+      "overlap_us": 9.086,
+      "span_us": 4704.5,
+      "union_us": 4605.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.408,
+      "overlap_us": 4.408,
+      "span_us": 4716.25,
+      "union_us": 4609.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.896,
+      "overlap_us": 3.396,
+      "span_us": 4715.5,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.52,
+      "overlap_us": 4.52,
+      "span_us": 4718.75,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.032,
+      "overlap_us": 2.782,
+      "span_us": 4717.25,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.976,
+      "overlap_us": 3.976,
+      "span_us": 4724.75,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4608.544,
+      "overlap_us": 9.544,
+      "span_us": 4715.25,
+      "union_us": 4599.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.232,
+      "overlap_us": 3.482,
+      "span_us": 4712.75,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.016,
+      "overlap_us": 5.516,
+      "span_us": 4715.25,
+      "union_us": 4608.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.68,
+      "overlap_us": 4.93,
+      "span_us": 4715.25,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.72,
+      "overlap_us": 9.22,
+      "span_us": 4714.5,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.872,
+      "overlap_us": 5.622,
+      "span_us": 4720.5,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.72,
+      "overlap_us": 3.97,
+      "span_us": 4717.0,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.328,
+      "overlap_us": 5.328,
+      "span_us": 4725.75,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.112,
+      "overlap_us": 3.362,
+      "span_us": 4714.5,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.8,
+      "overlap_us": 5.8,
+      "span_us": 4722.5,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.544,
+      "overlap_us": 4.794,
+      "span_us": 4729.25,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.304,
+      "overlap_us": 4.554,
+      "span_us": 4717.75,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.696,
+      "overlap_us": 4.196,
+      "span_us": 4717.25,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.656,
+      "overlap_us": 3.906,
+      "span_us": 4722.25,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.512,
+      "overlap_us": 5.012,
+      "span_us": 4724.0,
+      "union_us": 4607.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.0,
+      "overlap_us": 4.75,
+      "span_us": 6359.0,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.64,
+      "overlap_us": 8.64,
+      "span_us": 6006.0,
+      "union_us": 4620.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.752,
+      "overlap_us": 3.752,
+      "span_us": 5795.0,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.512,
+      "overlap_us": 0.012,
+      "span_us": 5845.25,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.776,
+      "overlap_us": 4.776,
+      "span_us": 5904.0,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4609.824,
+      "overlap_us": 5.324,
+      "span_us": 5708.75,
+      "union_us": 4604.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.952,
+      "overlap_us": 5.952,
+      "span_us": 5776.0,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.936,
+      "overlap_us": 5.686,
+      "span_us": 5705.75,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.936,
+      "overlap_us": 4.436,
+      "span_us": 6087.75,
+      "union_us": 4607.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.528,
+      "overlap_us": 8.778,
+      "span_us": 5733.25,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.4,
+      "overlap_us": 8.4,
+      "span_us": 5751.25,
+      "union_us": 4610.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.616,
+      "overlap_us": 4.866,
+      "span_us": 5819.5,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.656,
+      "overlap_us": 8.656,
+      "span_us": 5759.5,
+      "union_us": 4606.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.784,
+      "overlap_us": 4.284,
+      "span_us": 5767.5,
+      "union_us": 4610.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.432,
+      "overlap_us": 4.182,
+      "span_us": 5838.5,
+      "union_us": 4618.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.368,
+      "overlap_us": 4.118,
+      "span_us": 5813.25,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.656,
+      "overlap_us": 4.906,
+      "span_us": 5870.25,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.744,
+      "overlap_us": 3.494,
+      "span_us": 5831.25,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.504,
+      "overlap_us": 4.004,
+      "span_us": 5779.5,
+      "union_us": 4617.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.344,
+      "overlap_us": 8.594,
+      "span_us": 5848.25,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.672,
+      "overlap_us": 1.672,
+      "span_us": 6047.75,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.6,
+      "overlap_us": 4.35,
+      "span_us": 5900.0,
+      "union_us": 4609.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.664,
+      "overlap_us": 5.914,
+      "span_us": 5846.75,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.504,
+      "overlap_us": 3.504,
+      "span_us": 5843.75,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.496,
+      "overlap_us": 10.496,
+      "span_us": 5899.25,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.848,
+      "overlap_us": 4.848,
+      "span_us": 5871.25,
+      "union_us": 4622.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.096,
+      "overlap_us": 0.096,
+      "span_us": 5897.25,
+      "union_us": 4620.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.0,
+      "overlap_us": -0.5,
+      "span_us": 5850.25,
+      "union_us": 4624.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.448,
+      "overlap_us": 9.448,
+      "span_us": 5832.75,
+      "union_us": 4607.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.712,
+      "overlap_us": 9.962,
+      "span_us": 5923.0,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.56,
+      "overlap_us": 5.31,
+      "span_us": 5838.0,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.368,
+      "overlap_us": 4.118,
+      "span_us": 5967.25,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.552,
+      "overlap_us": 10.802,
+      "span_us": 6101.25,
+      "union_us": 4608.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.632,
+      "overlap_us": 3.632,
+      "span_us": 5870.75,
+      "union_us": 4622.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.92,
+      "overlap_us": 10.17,
+      "span_us": 5920.75,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.984,
+      "overlap_us": 5.484,
+      "span_us": 5889.75,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.064,
+      "overlap_us": 8.564,
+      "span_us": 5888.75,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.88,
+      "overlap_us": 8.88,
+      "span_us": 5863.0,
+      "union_us": 4606.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.752,
+      "overlap_us": 4.502,
+      "span_us": 5846.75,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.864,
+      "overlap_us": 9.114,
+      "span_us": 5943.0,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.776,
+      "overlap_us": 7.526,
+      "span_us": 6308.5,
+      "union_us": 4608.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.4,
+      "overlap_us": 3.65,
+      "span_us": 4732.5,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.792,
+      "overlap_us": 5.292,
+      "span_us": 4727.5,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.912,
+      "overlap_us": 3.662,
+      "span_us": 4738.25,
+      "union_us": 4619.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.552,
+      "overlap_us": 5.802,
+      "span_us": 4729.5,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.176,
+      "overlap_us": 3.676,
+      "span_us": 4731.75,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.296,
+      "overlap_us": 4.296,
+      "span_us": 4721.5,
+      "union_us": 4607.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.88,
+      "overlap_us": 5.38,
+      "span_us": 4725.25,
+      "union_us": 4605.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.752,
+      "overlap_us": 4.002,
+      "span_us": 4720.25,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.552,
+      "overlap_us": 5.802,
+      "span_us": 4729.75,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.056,
+      "overlap_us": 4.556,
+      "span_us": 4736.0,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.04,
+      "overlap_us": 9.29,
+      "span_us": 4729.75,
+      "union_us": 4605.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.976,
+      "overlap_us": 4.226,
+      "span_us": 4734.0,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.28,
+      "overlap_us": 5.03,
+      "span_us": 4736.25,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.88,
+      "overlap_us": 5.63,
+      "span_us": 4727.75,
+      "union_us": 4609.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.712,
+      "overlap_us": 4.712,
+      "span_us": 4717.0,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.128,
+      "overlap_us": 7.128,
+      "span_us": 6066.5,
+      "union_us": 4621.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.824,
+      "overlap_us": 10.074,
+      "span_us": 4726.75,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.424,
+      "overlap_us": 5.424,
+      "span_us": 4720.5,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.56,
+      "overlap_us": 4.31,
+      "span_us": 4711.75,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.44,
+      "overlap_us": 4.94,
+      "span_us": 4725.75,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.88,
+      "overlap_us": 3.88,
+      "span_us": 4720.0,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.64,
+      "overlap_us": 3.89,
+      "span_us": 4727.25,
+      "union_us": 4616.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.768,
+      "overlap_us": 4.268,
+      "span_us": 4718.75,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.136,
+      "overlap_us": 4.636,
+      "span_us": 4717.75,
+      "union_us": 4610.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.536,
+      "overlap_us": 3.536,
+      "span_us": 4711.75,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.24,
+      "overlap_us": 6.24,
+      "span_us": 4720.5,
+      "union_us": 4604.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.216,
+      "overlap_us": 5.216,
+      "span_us": 4719.5,
+      "union_us": 4620.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.312,
+      "overlap_us": 4.312,
+      "span_us": 4726.75,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.048,
+      "overlap_us": 5.548,
+      "span_us": 4718.75,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.928,
+      "overlap_us": 3.678,
+      "span_us": 4729.0,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.448,
+      "overlap_us": 3.448,
+      "span_us": 4716.5,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.04,
+      "overlap_us": 6.54,
+      "span_us": 4713.5,
+      "union_us": 4608.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.032,
+      "overlap_us": 2.532,
+      "span_us": 4724.25,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.0,
+      "overlap_us": 4.5,
+      "span_us": 4717.5,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.136,
+      "overlap_us": 3.636,
+      "span_us": 4716.25,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.408,
+      "overlap_us": 5.408,
+      "span_us": 4724.75,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.392,
+      "overlap_us": 4.892,
+      "span_us": 4732.75,
+      "union_us": 4622.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.144,
+      "overlap_us": 4.394,
+      "span_us": 4716.0,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.104,
+      "overlap_us": 5.104,
+      "span_us": 4742.75,
+      "union_us": 4622.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.032,
+      "overlap_us": 5.032,
+      "span_us": 6439.0,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.736,
+      "overlap_us": 5.736,
+      "span_us": 5818.0,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.584,
+      "overlap_us": 11.834,
+      "span_us": 5893.5,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.552,
+      "overlap_us": 7.302,
+      "span_us": 5746.5,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.4,
+      "overlap_us": 8.4,
+      "span_us": 5740.0,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.264,
+      "overlap_us": -0.486,
+      "span_us": 6023.5,
+      "union_us": 4619.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.616,
+      "overlap_us": 8.866,
+      "span_us": 5739.75,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.72,
+      "overlap_us": 4.22,
+      "span_us": 5817.25,
+      "union_us": 4622.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.616,
+      "overlap_us": 2.366,
+      "span_us": 5695.75,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.44,
+      "overlap_us": 5.19,
+      "span_us": 5721.5,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.128,
+      "overlap_us": 3.878,
+      "span_us": 5777.25,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.816,
+      "overlap_us": 5.316,
+      "span_us": 5753.25,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.712,
+      "overlap_us": 8.462,
+      "span_us": 5792.25,
+      "union_us": 4611.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.0,
+      "overlap_us": 0.25,
+      "span_us": 5756.5,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.896,
+      "overlap_us": 9.646,
+      "span_us": 5752.0,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.152,
+      "overlap_us": 9.652,
+      "span_us": 5896.5,
+      "union_us": 4607.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.392,
+      "overlap_us": 9.642,
+      "span_us": 5802.75,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.504,
+      "overlap_us": 3.504,
+      "span_us": 6120.5,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.072,
+      "overlap_us": 5.322,
+      "span_us": 5822.75,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.368,
+      "overlap_us": 8.868,
+      "span_us": 5808.25,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.696,
+      "overlap_us": 5.446,
+      "span_us": 5885.5,
+      "union_us": 4620.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.344,
+      "overlap_us": 9.094,
+      "span_us": 5824.25,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.752,
+      "overlap_us": 9.502,
+      "span_us": 5869.0,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.096,
+      "overlap_us": 10.096,
+      "span_us": 5814.25,
+      "union_us": 4610.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4633.504,
+      "overlap_us": 5.004,
+      "span_us": 5782.0,
+      "union_us": 4628.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.32,
+      "overlap_us": 2.07,
+      "span_us": 5910.25,
+      "union_us": 4622.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4631.36,
+      "overlap_us": 7.86,
+      "span_us": 5835.0,
+      "union_us": 4623.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.504,
+      "overlap_us": 9.254,
+      "span_us": 5885.25,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4632.608,
+      "overlap_us": 5.108,
+      "span_us": 5850.0,
+      "union_us": 4627.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.664,
+      "overlap_us": 10.664,
+      "span_us": 6073.5,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.752,
+      "overlap_us": 9.002,
+      "span_us": 5939.75,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.824,
+      "overlap_us": 9.574,
+      "span_us": 5963.5,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.008,
+      "overlap_us": -0.992,
+      "span_us": 5864.0,
+      "union_us": 4624.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.6,
+      "overlap_us": 4.85,
+      "span_us": 5849.0,
+      "union_us": 4620.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.552,
+      "overlap_us": 0.802,
+      "span_us": 5824.5,
+      "union_us": 4622.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.592,
+      "overlap_us": 10.342,
+      "span_us": 5906.75,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.752,
+      "overlap_us": 4.502,
+      "span_us": 5841.25,
+      "union_us": 4618.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.48,
+      "overlap_us": 8.48,
+      "span_us": 5847.25,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.176,
+      "overlap_us": 4.176,
+      "span_us": 5847.0,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.472,
+      "overlap_us": -1.028,
+      "span_us": 5822.75,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.16,
+      "overlap_us": 4.91,
+      "span_us": 6287.0,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4609.696,
+      "overlap_us": 3.446,
+      "span_us": 4724.75,
+      "union_us": 4606.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.184,
+      "overlap_us": 6.184,
+      "span_us": 4723.0,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.472,
+      "overlap_us": 3.472,
+      "span_us": 4733.5,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.768,
+      "overlap_us": 3.768,
+      "span_us": 4731.5,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.992,
+      "overlap_us": 5.992,
+      "span_us": 4734.0,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.24,
+      "overlap_us": 4.74,
+      "span_us": 4737.25,
+      "union_us": 4621.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.712,
+      "overlap_us": 4.212,
+      "span_us": 4718.5,
+      "union_us": 4607.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.232,
+      "overlap_us": 8.482,
+      "span_us": 4730.75,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.64,
+      "overlap_us": 4.39,
+      "span_us": 4728.25,
+      "union_us": 4608.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.84,
+      "overlap_us": 4.09,
+      "span_us": 4728.25,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.424,
+      "overlap_us": 7.424,
+      "span_us": 4733.25,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.128,
+      "overlap_us": 9.128,
+      "span_us": 4735.25,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.368,
+      "overlap_us": 6.118,
+      "span_us": 4738.5,
+      "union_us": 4620.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.408,
+      "overlap_us": 5.158,
+      "span_us": 4734.25,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.664,
+      "overlap_us": 4.664,
+      "span_us": 4727.75,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.408,
+      "overlap_us": 5.658,
+      "span_us": 4732.5,
+      "union_us": 4611.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.904,
+      "overlap_us": 5.904,
+      "span_us": 4736.75,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.736,
+      "overlap_us": 3.986,
+      "span_us": 4729.75,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.744,
+      "overlap_us": 8.994,
+      "span_us": 4739.5,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.568,
+      "overlap_us": 3.568,
+      "span_us": 4723.5,
+      "union_us": 4610.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.936,
+      "overlap_us": 5.186,
+      "span_us": 4742.25,
+      "union_us": 4618.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.808,
+      "overlap_us": 5.058,
+      "span_us": 4719.25,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.176,
+      "overlap_us": 3.926,
+      "span_us": 4739.5,
+      "union_us": 4622.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.472,
+      "overlap_us": 4.222,
+      "span_us": 4728.5,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.504,
+      "overlap_us": 3.754,
+      "span_us": 4733.5,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.072,
+      "overlap_us": 8.322,
+      "span_us": 4721.5,
+      "union_us": 4606.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.88,
+      "overlap_us": 8.13,
+      "span_us": 4728.0,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.64,
+      "overlap_us": 4.89,
+      "span_us": 4739.0,
+      "union_us": 4619.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.728,
+      "overlap_us": 2.978,
+      "span_us": 4730.25,
+      "union_us": 4618.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.184,
+      "overlap_us": 5.434,
+      "span_us": 4724.0,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.176,
+      "overlap_us": 5.426,
+      "span_us": 4737.5,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.256,
+      "overlap_us": 3.756,
+      "span_us": 4728.75,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.248,
+      "overlap_us": 2.998,
+      "span_us": 4732.25,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.12,
+      "overlap_us": 3.62,
+      "span_us": 4730.0,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.208,
+      "overlap_us": 5.708,
+      "span_us": 4740.75,
+      "union_us": 4620.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.4,
+      "overlap_us": 0.9,
+      "span_us": 4738.25,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.464,
+      "overlap_us": 5.464,
+      "span_us": 4735.0,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.928,
+      "overlap_us": 3.928,
+      "span_us": 4731.25,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.072,
+      "overlap_us": 3.572,
+      "span_us": 4733.75,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.816,
+      "overlap_us": 4.316,
+      "span_us": 6276.0,
+      "union_us": 4618.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.344,
+      "overlap_us": 4.094,
+      "span_us": 5964.5,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.272,
+      "overlap_us": 9.522,
+      "span_us": 5833.0,
+      "union_us": 4604.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.976,
+      "overlap_us": 10.476,
+      "span_us": 5765.75,
+      "union_us": 4608.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.544,
+      "overlap_us": 4.794,
+      "span_us": 5850.25,
+      "union_us": 4623.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.752,
+      "overlap_us": 8.252,
+      "span_us": 5935.75,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.368,
+      "overlap_us": 4.618,
+      "span_us": 5705.75,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.744,
+      "overlap_us": 0.244,
+      "span_us": 5697.0,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.32,
+      "overlap_us": 3.82,
+      "span_us": 5891.25,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.04,
+      "overlap_us": 7.04,
+      "span_us": 5755.5,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.168,
+      "overlap_us": 4.418,
+      "span_us": 5673.75,
+      "union_us": 4618.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.824,
+      "overlap_us": 8.324,
+      "span_us": 5665.25,
+      "union_us": 4605.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.608,
+      "overlap_us": 0.108,
+      "span_us": 5754.25,
+      "union_us": 4624.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.68,
+      "overlap_us": 4.18,
+      "span_us": 5703.0,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.992,
+      "overlap_us": 10.492,
+      "span_us": 5730.0,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.608,
+      "overlap_us": 10.358,
+      "span_us": 5691.5,
+      "union_us": 4606.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.648,
+      "overlap_us": 10.148,
+      "span_us": 5650.5,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.976,
+      "overlap_us": 4.476,
+      "span_us": 5938.0,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.736,
+      "overlap_us": 8.986,
+      "span_us": 5730.0,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.52,
+      "overlap_us": 9.52,
+      "span_us": 5742.5,
+      "union_us": 4606.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.84,
+      "overlap_us": 5.59,
+      "span_us": 5719.75,
+      "union_us": 4618.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.76,
+      "overlap_us": 9.76,
+      "span_us": 5702.5,
+      "union_us": 4608.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.552,
+      "overlap_us": 9.802,
+      "span_us": 5769.0,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.744,
+      "overlap_us": 7.744,
+      "span_us": 5812.75,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.056,
+      "overlap_us": 5.556,
+      "span_us": 5740.0,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.912,
+      "overlap_us": 4.912,
+      "span_us": 5820.75,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.064,
+      "overlap_us": 3.314,
+      "span_us": 5757.0,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.736,
+      "overlap_us": 9.486,
+      "span_us": 5792.0,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.36,
+      "overlap_us": 8.61,
+      "span_us": 5772.75,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.976,
+      "overlap_us": 5.476,
+      "span_us": 6003.75,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.776,
+      "overlap_us": 9.526,
+      "span_us": 5881.25,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.712,
+      "overlap_us": 0.212,
+      "span_us": 5800.5,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.632,
+      "overlap_us": 6.132,
+      "span_us": 5810.75,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.672,
+      "overlap_us": -0.578,
+      "span_us": 5797.25,
+      "union_us": 4625.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.712,
+      "overlap_us": 4.712,
+      "span_us": 5800.0,
+      "union_us": 4619.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.032,
+      "overlap_us": 6.282,
+      "span_us": 5865.25,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.872,
+      "overlap_us": 9.622,
+      "span_us": 5816.5,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.992,
+      "overlap_us": 9.742,
+      "span_us": 5822.5,
+      "union_us": 4615.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.36,
+      "overlap_us": 8.86,
+      "span_us": 5796.5,
+      "union_us": 4610.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.792,
+      "overlap_us": 9.292,
+      "span_us": 5816.25,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4609.184,
+      "overlap_us": 8.934,
+      "span_us": 6298.0,
+      "union_us": 4600.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4610.464,
+      "overlap_us": 10.464,
+      "span_us": 4725.0,
+      "union_us": 4600.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.568,
+      "overlap_us": 2.818,
+      "span_us": 4741.75,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.024,
+      "overlap_us": 4.274,
+      "span_us": 4732.0,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.08,
+      "overlap_us": 5.33,
+      "span_us": 4726.5,
+      "union_us": 4608.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.56,
+      "overlap_us": 6.31,
+      "span_us": 4733.75,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.152,
+      "overlap_us": 4.902,
+      "span_us": 4720.5,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.864,
+      "overlap_us": 4.364,
+      "span_us": 4711.5,
+      "union_us": 4608.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.672,
+      "overlap_us": 4.672,
+      "span_us": 4716.75,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4609.984,
+      "overlap_us": 4.234,
+      "span_us": 4712.0,
+      "union_us": 4605.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.2,
+      "overlap_us": 3.2,
+      "span_us": 4726.5,
+      "union_us": 4620.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.168,
+      "overlap_us": 4.168,
+      "span_us": 4721.75,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.592,
+      "overlap_us": 5.592,
+      "span_us": 4719.5,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.192,
+      "overlap_us": 10.192,
+      "span_us": 4713.25,
+      "union_us": 4610.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.08,
+      "overlap_us": 4.33,
+      "span_us": 4724.5,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.32,
+      "overlap_us": 6.32,
+      "span_us": 4716.25,
+      "union_us": 4606.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.96,
+      "overlap_us": 5.46,
+      "span_us": 4716.25,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.768,
+      "overlap_us": 4.768,
+      "span_us": 4724.25,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.8,
+      "overlap_us": 4.55,
+      "span_us": 4722.5,
+      "union_us": 4620.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.288,
+      "overlap_us": 3.788,
+      "span_us": 4718.5,
+      "union_us": 4616.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.512,
+      "overlap_us": 6.262,
+      "span_us": 4714.75,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.432,
+      "overlap_us": 4.932,
+      "span_us": 4727.75,
+      "union_us": 4617.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.704,
+      "overlap_us": 5.954,
+      "span_us": 4725.0,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.16,
+      "overlap_us": 4.66,
+      "span_us": 4716.5,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.248,
+      "overlap_us": 9.498,
+      "span_us": 4713.75,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.352,
+      "overlap_us": 5.102,
+      "span_us": 4732.25,
+      "union_us": 4619.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.432,
+      "overlap_us": 4.432,
+      "span_us": 4722.25,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.056,
+      "overlap_us": 5.556,
+      "span_us": 4720.5,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.976,
+      "overlap_us": 3.476,
+      "span_us": 4726.75,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.096,
+      "overlap_us": 10.096,
+      "span_us": 4728.5,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.488,
+      "overlap_us": 4.488,
+      "span_us": 4726.75,
+      "union_us": 4619.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.824,
+      "overlap_us": 4.824,
+      "span_us": 4722.5,
+      "union_us": 4617.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.28,
+      "overlap_us": 4.53,
+      "span_us": 4725.5,
+      "union_us": 4620.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.776,
+      "overlap_us": 5.026,
+      "span_us": 4728.5,
+      "union_us": 4622.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.496,
+      "overlap_us": 5.496,
+      "span_us": 4720.0,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.088,
+      "overlap_us": 4.838,
+      "span_us": 4720.5,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.136,
+      "overlap_us": 4.386,
+      "span_us": 4725.0,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.576,
+      "overlap_us": 4.326,
+      "span_us": 4725.25,
+      "union_us": 4616.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.032,
+      "overlap_us": 3.782,
+      "span_us": 4716.25,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.024,
+      "overlap_us": 5.024,
+      "span_us": 4735.75,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.232,
+      "overlap_us": 9.232,
+      "span_us": 6253.5,
+      "union_us": 4614.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.152,
+      "overlap_us": 10.152,
+      "span_us": 6023.5,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.888,
+      "overlap_us": 9.888,
+      "span_us": 5804.75,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.432,
+      "overlap_us": 1.932,
+      "span_us": 5729.75,
+      "union_us": 4624.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.656,
+      "overlap_us": 5.406,
+      "span_us": 5795.0,
+      "union_us": 4609.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.584,
+      "overlap_us": 4.584,
+      "span_us": 5917.5,
+      "union_us": 4615.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.616,
+      "overlap_us": 8.866,
+      "span_us": 5788.75,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.848,
+      "overlap_us": 9.098,
+      "span_us": 5701.25,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.472,
+      "overlap_us": 4.472,
+      "span_us": 5675.25,
+      "union_us": 4609.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4630.976,
+      "overlap_us": 4.226,
+      "span_us": 5782.5,
+      "union_us": 4626.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.792,
+      "overlap_us": -0.708,
+      "span_us": 5666.5,
+      "union_us": 4618.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.912,
+      "overlap_us": 4.162,
+      "span_us": 5637.5,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.848,
+      "overlap_us": 9.848,
+      "span_us": 5735.75,
+      "union_us": 4609.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.192,
+      "overlap_us": 4.692,
+      "span_us": 5656.0,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.88,
+      "overlap_us": 9.38,
+      "span_us": 5755.0,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.464,
+      "overlap_us": 9.964,
+      "span_us": 5709.5,
+      "union_us": 4612.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.072,
+      "overlap_us": 3.572,
+      "span_us": 5706.25,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.392,
+      "overlap_us": 8.892,
+      "span_us": 6033.25,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.032,
+      "overlap_us": 10.782,
+      "span_us": 5782.75,
+      "union_us": 4617.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.864,
+      "overlap_us": 2.614,
+      "span_us": 5795.5,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.36,
+      "overlap_us": 9.61,
+      "span_us": 5775.25,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.528,
+      "overlap_us": 8.778,
+      "span_us": 5778.5,
+      "union_us": 4613.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.36,
+      "overlap_us": 5.61,
+      "span_us": 5975.25,
+      "union_us": 4609.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.272,
+      "overlap_us": 5.022,
+      "span_us": 5919.75,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.992,
+      "overlap_us": 8.992,
+      "span_us": 5916.0,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.856,
+      "overlap_us": 9.856,
+      "span_us": 5871.25,
+      "union_us": 4612.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.424,
+      "overlap_us": 9.924,
+      "span_us": 5836.0,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.176,
+      "overlap_us": 9.426,
+      "span_us": 5901.5,
+      "union_us": 4612.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.592,
+      "overlap_us": 4.592,
+      "span_us": 5824.0,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.904,
+      "overlap_us": 10.404,
+      "span_us": 8858.25,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.496,
+      "overlap_us": 6.746,
+      "span_us": 5915.25,
+      "union_us": 4619.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.592,
+      "overlap_us": 8.342,
+      "span_us": 5864.25,
+      "union_us": 4610.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4624.928,
+      "overlap_us": 3.678,
+      "span_us": 5877.5,
+      "union_us": 4621.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.68,
+      "overlap_us": 4.43,
+      "span_us": 5837.75,
+      "union_us": 4623.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.864,
+      "overlap_us": 9.864,
+      "span_us": 5886.0,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.12,
+      "overlap_us": 9.62,
+      "span_us": 5845.75,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.304,
+      "overlap_us": 9.054,
+      "span_us": 5806.75,
+      "union_us": 4613.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4622.912,
+      "overlap_us": -1.088,
+      "span_us": 5863.75,
+      "union_us": 4624.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.488,
+      "overlap_us": 9.238,
+      "span_us": 5792.5,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.192,
+      "overlap_us": 9.692,
+      "span_us": 5839.75,
+      "union_us": 4618.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.48,
+      "overlap_us": 2.98,
+      "span_us": 6316.0,
+      "union_us": 4625.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.912,
+      "overlap_us": 4.162,
+      "span_us": 4739.5,
+      "union_us": 4614.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4611.552,
+      "overlap_us": 6.302,
+      "span_us": 4723.5,
+      "union_us": 4605.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.944,
+      "overlap_us": 6.694,
+      "span_us": 4734.75,
+      "union_us": 4612.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.344,
+      "overlap_us": 3.594,
+      "span_us": 4732.0,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.912,
+      "overlap_us": 4.162,
+      "span_us": 4726.75,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.512,
+      "overlap_us": 2.762,
+      "span_us": 4730.25,
+      "union_us": 4617.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.744,
+      "overlap_us": 5.244,
+      "span_us": 4731.25,
+      "union_us": 4614.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.72,
+      "overlap_us": 5.47,
+      "span_us": 4731.5,
+      "union_us": 4609.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4626.752,
+      "overlap_us": 4.502,
+      "span_us": 4734.5,
+      "union_us": 4622.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4625.344,
+      "overlap_us": 3.844,
+      "span_us": 4737.75,
+      "union_us": 4621.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.808,
+      "overlap_us": 7.558,
+      "span_us": 4735.75,
+      "union_us": 4620.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.352,
+      "overlap_us": 4.852,
+      "span_us": 4722.25,
+      "union_us": 4615.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.552,
+      "overlap_us": 4.552,
+      "span_us": 4716.25,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4614.72,
+      "overlap_us": 5.22,
+      "span_us": 4710.25,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.48,
+      "overlap_us": 5.48,
+      "span_us": 4721.0,
+      "union_us": 4607.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.824,
+      "overlap_us": 6.074,
+      "span_us": 4715.25,
+      "union_us": 4607.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4627.744,
+      "overlap_us": 8.994,
+      "span_us": 4727.0,
+      "union_us": 4618.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4613.696,
+      "overlap_us": 5.196,
+      "span_us": 4719.25,
+      "union_us": 4608.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4612.608,
+      "overlap_us": 4.608,
+      "span_us": 4710.25,
+      "union_us": 4608.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4616.48,
+      "overlap_us": 4.98,
+      "span_us": 4719.25,
+      "union_us": 4611.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.464,
+      "overlap_us": 5.464,
+      "span_us": 4727.5,
+      "union_us": 4613.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.472,
+      "overlap_us": 6.472,
+      "span_us": 4715.75,
+      "union_us": 4611.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4615.2,
+      "overlap_us": 4.45,
+      "span_us": 4719.5,
+      "union_us": 4610.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4620.096,
+      "overlap_us": 4.096,
+      "span_us": 4726.25,
+      "union_us": 4616.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.976,
+      "overlap_us": 4.726,
+      "span_us": 4718.5,
+      "union_us": 4614.25
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.0,
+      "overlap_us": 4.25,
+      "span_us": 4732.5,
+      "union_us": 4623.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4619.744,
+      "overlap_us": 3.994,
+      "span_us": 4726.5,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4630.272,
+      "overlap_us": 4.522,
+      "span_us": 4730.25,
+      "union_us": 4625.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4617.856,
+      "overlap_us": 4.356,
+      "span_us": 4721.75,
+      "union_us": 4613.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.072,
+      "overlap_us": 3.572,
+      "span_us": 4723.75,
+      "union_us": 4619.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.92,
+      "overlap_us": 4.42,
+      "span_us": 4727.0,
+      "union_us": 4617.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4623.008,
+      "overlap_us": 5.008,
+      "span_us": 4724.75,
+      "union_us": 4618.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4621.76,
+      "overlap_us": 6.01,
+      "span_us": 4727.25,
+      "union_us": 4615.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4629.536,
+      "overlap_us": 2.786,
+      "span_us": 4733.75,
+      "union_us": 4626.75
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.624,
+      "overlap_us": 9.124,
+      "span_us": 4719.0,
+      "union_us": 4609.5
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4628.928,
+      "overlap_us": 4.928,
+      "span_us": 4734.0,
+      "union_us": 4624.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4631.904,
+      "overlap_us": 5.904,
+      "span_us": 4737.0,
+      "union_us": 4626.0
+    },
+    {
+      "node_count": 596,
+      "node_sum_us": 4618.08,
+      "overlap_us": 3.83,
+      "span_us": 4719.25,
+      "union_us": 4614.25
+    }
+  ],
+  "canonical_decode_group_sizes": [
+    32,
+    64,
+    128,
+    256,
+    116
+  ],
+  "canonical_decode_node_count": 596,
+  "group_size_histogram": {
+    "32": 575,
+    "64": 575,
+    "116": 401,
+    "128": 575,
+    "256": 575,
+    "394": 174
+  },
+  "profile_jsonl": "docs/task_workflow/evidence/nv-installed-islands-20260822/phase1/tg-profile.jsonl",
+  "replay_count": 401,
+  "schema": "tinygrad.nv_installed_island_phase1_ledger.v1",
+  "steady_median": {
+    "node_count": 596.0,
+    "node_sum_us": 4619.712,
+    "overlap_us": 5.023,
+    "span_us": 5674.5,
+    "union_us": 4614.0
+  },
+  "steady_replay_count": 398,
+  "warmup_dropped": 3
+}

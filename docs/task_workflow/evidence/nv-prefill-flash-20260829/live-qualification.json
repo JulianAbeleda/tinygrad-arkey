@@ -1,0 +1,99 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_live_capture.v1",
+  "status": "PASS",
+  "program": "nv_sm120_q16_grid_hd128_loop_attention",
+  "call_index": 6,
+  "outs": [
+    0
+  ],
+  "ins": [
+    1,
+    2,
+    3
+  ],
+  "geometry": {
+    "global": [
+      1024,
+      1,
+      1
+    ],
+    "local": [
+      32,
+      1,
+      1
+    ]
+  },
+  "sizes": {
+    "0": 4194304,
+    "1": 4194304,
+    "2": 1048576,
+    "3": 1048576
+  },
+  "sha256": {
+    "0": "f1f2170f2408abab99d1dd7d6a911bc04745b3a3acd4ef5b4fb4bb41966cc797",
+    "1": "4f50b0fdc5cb240f922055618e0643b8979601e228b8076717c7298552a82403",
+    "2": "a514f9dc2b4d96e71d7575c03ab5b09df2bc894360f4f5e6d8ba69f4fff05e34",
+    "3": "ac8c843d7d17bd61782b2860491f3d1b8a2a26c6bb6d493ad0836978d9b3eb3a"
+  },
+  "readonly_inputs": true,
+  "warmup_wall_seconds": 25.442880640970543,
+  "observer_capture_wall_seconds": 3.713722232962027,
+  "replay2_wall_seconds": 0.08439661702141166,
+  "baseline_replay_wall_seconds": 0.08423420111648738,
+  "observer_replay_wall_seconds": 0.08413695800118148,
+  "admission_events": 1018,
+  "graph_calls": 26,
+  "selected_calls": 1,
+  "replay_fresh": true,
+  "readonly_inputs_verified": true,
+  "full_coverage": {
+    "candidate_elements": 2097152,
+    "oracle_elements": 2097152,
+    "missing_elements": 0,
+    "finite_candidate": true,
+    "finite_oracle": true
+  },
+  "oracle": {
+    "finite": true,
+    "candidate_finite": true,
+    "max_abs": 0.009302900957909088,
+    "mean_abs": 0.00017806627801577772,
+    "allclose_rtol_2e2_atol_2e3": true
+  },
+  "observer_overhead_seconds": -9.724311530590057e-05,
+  "observer_events_replay": 0,
+  "arrays": {
+    "0": {
+      "shape": [
+        2097152
+      ],
+      "dtype": "float16",
+      "finite": true,
+      "sha256": "f1f2170f2408abab99d1dd7d6a911bc04745b3a3acd4ef5b4fb4bb41966cc797"
+    },
+    "1": {
+      "shape": [
+        2097152
+      ],
+      "dtype": "float16",
+      "finite": true,
+      "sha256": "4f50b0fdc5cb240f922055618e0643b8979601e228b8076717c7298552a82403"
+    },
+    "2": {
+      "shape": [
+        524288
+      ],
+      "dtype": "float16",
+      "finite": true,
+      "sha256": "a514f9dc2b4d96e71d7575c03ab5b09df2bc894360f4f5e6d8ba69f4fff05e34"
+    },
+    "3": {
+      "shape": [
+        524288
+      ],
+      "dtype": "float16",
+      "finite": true,
+      "sha256": "ac8c843d7d17bd61782b2860491f3d1b8a2a26c6bb6d493ad0836978d9b3eb3a"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "q4": {
+    "total_work": 24576,
+    "owners": 170,
+    "partial_slots": 340,
+    "fixup_grid": 384
+  },
+  "shared_api": [
+    "interval(owner)->(work_start,work_end)",
+    "tile_segment(owner)->(tile_start,tile_end,first_k,last_k)",
+    "tile_body(owner,tile,k_block,partial_slot)",
+    "fixup(tile,ordered_partial_slots)"
+  ],
+  "callback_inputs": "geometry, owner interval, output tile, K block, canonical Q4 words, Q8 record/provider, partial buffer, slot id; callback must return deterministic direct-store or partial-store record"
+}

@@ -1,0 +1,247 @@
+{
+  "buffer_sizes": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": [
+      16384,
+      9437184,
+      8192
+    ],
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": [
+      4096,
+      4096,
+      2359296,
+      2359296,
+      8192
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      8192,
+      16384,
+      8192
+    ]
+  },
+  "buffer_vas": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": [
+      157975244800,
+      139025884480,
+      157975236608
+    ],
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": [
+      157975261184,
+      157975265280,
+      139014071104,
+      139035322176,
+      157975236608
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      157975236608,
+      157975220224,
+      142858940416
+    ]
+  },
+  "capture_identity": {
+    "dependencies": {
+      "provider_to_kv": true,
+      "provider_to_q": true
+    },
+    "sequence": {
+      "q4k_warp_coop_q8_dp4a_direct_4096_4096": 1510,
+      "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": 1511,
+      "rmsnorm_q8_1_llama_provider_4096": 1509
+    },
+    "target_pair_occurrence": 0
+  },
+  "commit": "d4e20ebe6baa1d517a5c865f9ea759c420691273",
+  "cubin_sha256": {
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+    "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096": "6c75d8f0459c4c06f44eeb3d1b41d4bc15c8dc9ce4e8fb3a9a879578625b20cd",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "gpu_state_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2782",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "86.92",
+    "pstate": "P0",
+    "temperature.gpu": "49"
+  },
+  "gpu_state_before": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2782",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "82.51",
+    "pstate": "P0",
+    "temperature.gpu": "47"
+  },
+  "n_per_block": 28,
+  "order": [
+    "control",
+    "candidate",
+    "candidate",
+    "control"
+  ],
+  "output_checksums": {
+    "bitwise_identical": true,
+    "candidate": [
+      "a836e8e0514b892c53e8ba8aabe3a41a9a4ed29bdb9b1d0cbefbd189d2091f15",
+      "308fd6c91bf6ca651a37dad127e235a1df56557d9c66765b0a4385056a21b816",
+      "9c5ab31f4992afc62987870153ec353dbc4fb583d7f67a7659f1f016fda6952e",
+      "ad7c3889b36828de752b3ee72f498816fdf7b0ec1988a7fafe9cc495b90f7ac5"
+    ],
+    "control": [
+      "a836e8e0514b892c53e8ba8aabe3a41a9a4ed29bdb9b1d0cbefbd189d2091f15",
+      "308fd6c91bf6ca651a37dad127e235a1df56557d9c66765b0a4385056a21b816",
+      "9c5ab31f4992afc62987870153ec353dbc4fb583d7f67a7659f1f016fda6952e",
+      "ad7c3889b36828de752b3ee72f498816fdf7b0ec1988a7fafe9cc495b90f7ac5"
+    ]
+  },
+  "projection": {
+    "all_36_layers_unvalidated_ceiling_tok_s": 225.14065961724526,
+    "all_36_layers_unvalidated_ceiling_us": 73.728,
+    "endpoint_tok_s": 221.46453207800593,
+    "endpoint_us": 4515.39571875,
+    "installed_route_projected_tok_s": 222.37226327411094,
+    "installed_route_recovery_us": 18.432,
+    "installed_shared_q4q4_layers": 9
+  },
+  "runs": [
+    {
+      "arm": "control",
+      "durations_us": [
+        18.784,
+        18.496,
+        18.24,
+        18.88,
+        18.368,
+        18.688,
+        18.944,
+        18.624,
+        18.688,
+        18.528,
+        18.4,
+        18.688,
+        18.4,
+        18.4,
+        18.4,
+        18.944,
+        18.656,
+        18.656,
+        18.528,
+        18.144,
+        18.752,
+        18.848,
+        18.656,
+        18.432
+      ],
+      "median_us": 18.64
+    },
+    {
+      "arm": "candidate",
+      "durations_us": [
+        16.032,
+        16.896,
+        16.832,
+        16.064,
+        17.888,
+        15.936,
+        16.832,
+        15.968,
+        16.48,
+        16.576,
+        16.928,
+        17.856,
+        16.224,
+        15.904,
+        16.352,
+        16.96,
+        16.32,
+        16.064,
+        18.272,
+        16.608,
+        17.216,
+        17.12,
+        15.648,
+        17.504
+      ],
+      "median_us": 16.592
+    },
+    {
+      "arm": "candidate",
+      "durations_us": [
+        16.832,
+        16.16,
+        17.376,
+        17.984,
+        18.176,
+        16.032,
+        16.448,
+        17.44,
+        16.032,
+        16.704,
+        16.32,
+        16.96,
+        18.432,
+        16.064,
+        16.544,
+        16.384,
+        17.536,
+        15.904,
+        16.224,
+        15.904,
+        17.152,
+        16.864,
+        17.056,
+        16.512
+      ],
+      "median_us": 16.624
+    },
+    {
+      "arm": "control",
+      "durations_us": [
+        19.2,
+        18.784,
+        18.304,
+        18.112,
+        18.432,
+        18.592,
+        18.464,
+        18.304,
+        18.784,
+        18.688,
+        18.464,
+        18.688,
+        18.976,
+        18.72,
+        18.688,
+        18.4,
+        18.944,
+        18.72,
+        18.688,
+        18.368,
+        18.688,
+        18.56,
+        18.624,
+        18.304
+      ],
+      "median_us": 18.656
+    }
+  ],
+  "schema": "tinygrad.nv_qkv_live_hcq_concurrency.v1",
+  "timing": {
+    "candidate_median": 16.592,
+    "candidate_over_control": 0.8901287553648067,
+    "control_median": 18.64,
+    "recovery_us_per_layer": 2.048,
+    "unit": "us_per_cache_cold_provider_to_join_span"
+  },
+  "token_ids": [
+    13876,
+    38835,
+    34208
+  ],
+  "token_sha256": "8e53da8dcae4daec5228d377e3f7f8c465060d92b94a995e83f4bb7e7c7d7dcc",
+  "verdict": "ADVANCE_TO_SCHEDULER_SCOPE",
+  "warmup_per_block": 4
+}

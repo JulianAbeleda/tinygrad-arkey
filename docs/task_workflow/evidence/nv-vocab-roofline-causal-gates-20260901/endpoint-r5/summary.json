@@ -1,0 +1,14 @@
+{
+  "all_token_hashes_equal": true,
+  "candidate_minus_control_us": -7.525083333333349,
+  "candidate_ms": 4.051534333333334,
+  "candidate_speedup_pct": 0.1857341617821584,
+  "control_a_ms": 4.055612916666666,
+  "control_c_ms": 4.062505916666667,
+  "control_midpoint_ms": 4.059059416666667,
+  "schema": "tinygrad.nv_vocab_fp16_four_warp_endpoint_bracket.v1",
+  "token_stream_hashes": [
+    "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6"
+  ],
+  "verdict": "WALL_PASS"
+}

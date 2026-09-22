@@ -1,0 +1,122 @@
+{
+  "schema": "tinygrad.nv_llama_flash_launch_bounds_ab.v1",
+  "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+  "invariant": "same source/math/bytes/grid; only minBlocksPerMultiprocessor compiler contract removed",
+  "arms": {
+    "control_min_blocks_1": {
+      "build_command": [
+        "/usr/local/cuda-13.2/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "--generate-code=arch=compute_120a,code=[compute_120a,sm_120a]",
+        "--ptxas-options=-v",
+        "-I",
+        "/tmp/nv_llama_flash_lb_ql69ht5f/control_min_blocks_1",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/include",
+        "-isystem",
+        "/usr/local/cuda/targets/x86_64-linux/include",
+        "/home/ubuntu/tinygrad-arkey/extra/llm_research/microbench/llama_fattn_vec_iso.cu",
+        "-o",
+        "/tmp/nv_llama_flash_lb_ql69ht5f/llama_flash_control_min_blocks_1"
+      ],
+      "build_log": "ptxas info    : 26792 bytes gmem\nptxas info    : Compiling entry function '_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil' for 'sm_120a'\nptxas info    : Function properties for _Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 158 registers, used 1 barriers, 8448 bytes smem\nptxas info    : Compile time = 56.656 ms\nptxas info    : Compiling entry function '_Z23stream_read_conditionerPKfyPf' for 'sm_120a'\nptxas info    : Function properties for _Z23stream_read_conditionerPKfyPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 1.136 ms\n",
+      "resources": {
+        "registers_per_thread": 158,
+        "spill_stores_bytes": 0,
+        "spill_loads_bytes": 0
+      },
+      "sass": {
+        "instruction_lines": 0,
+        "ldg_e_128": 0,
+        "ldg_e": 0,
+        "longest_consecutive_ldg_e_128": 0
+      },
+      "sass_disassembly_error": "cuobjdump fatal   : Could not find executable file 'nvdisasm'; you can try adding path to environment variables PATH or NVDISASM_PATH",
+      "hot_sequence_us": [
+        8.63508,
+        8.64036,
+        8.6392,
+        8.6416,
+        8.639,
+        8.64056,
+        8.6384
+      ],
+      "hot_sequence_median_us": 8.6392,
+      "cold_sequence_us": [
+        59.819321,
+        59.81876,
+        59.821117,
+        59.821278,
+        59.81876,
+        59.819199,
+        59.82
+      ],
+      "cold_sequence_median_us": 59.819321
+    },
+    "ablated_one_arg": {
+      "build_command": [
+        "/usr/local/cuda-13.2/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "--generate-code=arch=compute_120a,code=[compute_120a,sm_120a]",
+        "--ptxas-options=-v",
+        "-I",
+        "/tmp/nv_llama_flash_lb_ql69ht5f/ablated_one_arg",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/include",
+        "-isystem",
+        "/usr/local/cuda/targets/x86_64-linux/include",
+        "/home/ubuntu/tinygrad-arkey/extra/llm_research/microbench/llama_fattn_vec_iso.cu",
+        "-o",
+        "/tmp/nv_llama_flash_lb_ql69ht5f/llama_flash_ablated_one_arg"
+      ],
+      "build_log": "ptxas info    : 26792 bytes gmem\nptxas info    : Compiling entry function '_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil' for 'sm_120a'\nptxas info    : Function properties for _Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 96 registers, used 1 barriers, 8448 bytes smem\nptxas info    : Compile time = 60.144 ms\nptxas info    : Compiling entry function '_Z23stream_read_conditionerPKfyPf' for 'sm_120a'\nptxas info    : Function properties for _Z23stream_read_conditionerPKfyPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 1.227 ms\n",
+      "resources": {
+        "registers_per_thread": 96,
+        "spill_stores_bytes": 0,
+        "spill_loads_bytes": 0
+      },
+      "sass": {
+        "instruction_lines": 0,
+        "ldg_e_128": 0,
+        "ldg_e": 0,
+        "longest_consecutive_ldg_e_128": 0
+      },
+      "sass_disassembly_error": "cuobjdump fatal   : Could not find executable file 'nvdisasm'; you can try adding path to environment variables PATH or NVDISASM_PATH",
+      "hot_sequence_us": [
+        8.8132,
+        8.821,
+        8.813081,
+        8.81032,
+        8.81472,
+        8.81732,
+        8.81332
+      ],
+      "hot_sequence_median_us": 8.81332,
+      "cold_sequence_us": [
+        61.395363,
+        61.395321,
+        61.393242,
+        61.395641,
+        61.395077,
+        61.396561,
+        61.394199
+      ],
+      "cold_sequence_median_us": 61.395321
+    }
+  },
+  "deltas_ablated_minus_control": {
+    "hot_sequence_us": 0.1741199999999985,
+    "cold_sequence_us": 1.5760000000000005,
+    "registers_per_thread": -62
+  }
+}

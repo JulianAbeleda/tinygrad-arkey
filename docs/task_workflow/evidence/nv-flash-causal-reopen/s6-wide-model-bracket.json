@@ -1,0 +1,251 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2947",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "251.55",
+        "temperature.gpu": "46"
+      },
+      "ledger": {
+        "node_sum_us": 4013.616,
+        "overlap_us": 5.838,
+        "span_us": 4428.25,
+        "union_us": 4008.0
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket/control_a.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.12546278125,
+          5.11075671875,
+          5.1060034375,
+          5.1189411875,
+          5.22684325,
+          5.14607525,
+          5.13877375
+        ],
+        "external_contention_high_limit_ms": 5.37546278125,
+        "median_ms_per_token": 5.12546278125,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.12546278125,
+          5.11075671875,
+          5.1060034375,
+          5.1189411875,
+          5.22684325,
+          5.14607525,
+          5.13877375
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    },
+    {
+      "arm": "candidate",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2947",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "247.25",
+        "temperature.gpu": "47"
+      },
+      "ledger": {
+        "node_sum_us": 4015.424,
+        "overlap_us": 5.159,
+        "span_us": 4649.0,
+        "union_us": 4010.0
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket/candidate.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.3531073125,
+          5.42679953125,
+          5.34638784375,
+          5.36890671875,
+          5.43763584375,
+          5.36219253125,
+          5.4355675625
+        ],
+        "external_contention_high_limit_ms": 5.61890671875,
+        "median_ms_per_token": 5.36890671875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.3531073125,
+          5.42679953125,
+          5.34638784375,
+          5.36890671875,
+          5.43763584375,
+          5.36219253125,
+          5.4355675625
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    },
+    {
+      "arm": "control_c",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2947",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "239.42",
+        "temperature.gpu": "49"
+      },
+      "ledger": {
+        "node_sum_us": 4013.84,
+        "overlap_us": 6.424,
+        "span_us": 4376.0,
+        "union_us": 4007.25
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket/control_c.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.0369864375,
+          5.02746196875,
+          5.0256398125,
+          5.0250170625,
+          5.150587375,
+          5.0638735,
+          5.070387625
+        ],
+        "external_contention_high_limit_ms": 5.2869864375,
+        "median_ms_per_token": 5.0369864375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.0369864375,
+          5.02746196875,
+          5.0256398125,
+          5.0250170625,
+          5.150587375,
+          5.0638735,
+          5.070387625
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    }
+  ],
+  "candidate_flash_rows": {
+    "flash_fused_gmax_combine_f16_32_128": {
+      "mean_us": 101.291,
+      "median_us": 101.28,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    }
+  },
+  "count": 32,
+  "depth": 512,
+  "ledger_candidate": {
+    "node_sum_us": 4015.424,
+    "overlap_us": 5.159,
+    "span_us": 4649.0,
+    "union_us": 4010.0
+  },
+  "ledger_control": {
+    "node_sum_us": 4013.728,
+    "overlap_us": 6.131,
+    "span_us": 4402.125,
+    "union_us": 4007.625
+  },
+  "ledger_delta": {
+    "node_sum_us": 1.6959999999999127,
+    "overlap_us": -0.9720000000000004,
+    "span_us": 246.875,
+    "union_us": 2.375
+  },
+  "max_context": 768,
+  "mode": "reverse-bracket-profile",
+  "reps": 7,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+  "token_stream_hashes": [
+    "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a"
+  ],
+  "walls_us_per_token": {
+    "candidate": 5368.9067187499995,
+    "candidate_delta": 287.6821093749995,
+    "control_a": 5125.46278125,
+    "control_c": 5036.986437500001,
+    "control_midpoint": 5081.224609375
+  }
+}

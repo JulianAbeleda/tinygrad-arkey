@@ -1,0 +1,67 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "candidate",
+  "status": "PASS",
+  "token": 198,
+  "compiler_gate": {
+    "producer": 0,
+    "main": 0,
+    "identity": "llama-single-role"
+  },
+  "final_row_prune": {
+    "enabled": false,
+    "requested_row": null,
+    "last_down_type": "Q6KPrimitiveLinear"
+  },
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 72,
+    "q4_main_total": 216,
+    "q4_fixup_total": 216,
+    "q6_down_producer": 18,
+    "q6_main_total": 36,
+    "q6_fixup_total": 36,
+    "q4_down_producer": 18,
+    "qkv_ds4_producer": 36,
+    "qkv_d4_producer": 18,
+    "o_producer": 36,
+    "compiler_o_producer": 0,
+    "gate_up_epilogue": 0,
+    "flash_mma_pp512": 36,
+    "roles": {
+      "compiler_gate": {
+        "producer": 0,
+        "main": 0
+      },
+      "llama_up": {
+        "main": 36,
+        "fixup": 36
+      },
+      "llama_other_q4": {
+        "main": 144,
+        "fixup": 144
+      }
+    }
+  },
+  "wall": {
+    "samples_ms": [
+      35.569731,
+      35.593826,
+      35.545726,
+      35.676321,
+      35.75068,
+      35.732277,
+      35.713722,
+      35.736474,
+      35.779585
+    ],
+    "min_ms": 35.545726,
+    "median_ms": 35.713722,
+    "tok_s": 14403.982070868378
+  },
+  "verdict_basis": "mode-aware llama-shim ownership: Q4=216/216, Q8 producers=72, up=36, other=144"
+}

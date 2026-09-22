@@ -1,0 +1,37 @@
+{
+  "schema": "tinygrad.nv_q6_wide_pair_reuse_decision.v1",
+  "decision": {
+    "promote": "aligned_pair_no_reuse",
+    "rejected_reuse_arms": ["metadata", "high", "address", "word_pair"],
+    "reason": "only aligned pair cleanup removal wins against the legacy promoted route; every value-reuse arm regresses against the same-topology control"
+  },
+  "alignment_proof": {
+    "owners": 170,
+    "segments": 290,
+    "boundary_quantum": 8,
+    "tile_k": 192,
+    "all_pair_aligned": true,
+    "violations": 0
+  },
+  "alternating_r31": {
+    "legacy_median_us": 332.864,
+    "candidate_median_us": 327.136,
+    "legacy_min_us": 328.448,
+    "candidate_min_us": 322.24,
+    "paired_recovery_median_us": 8.159999999999968,
+    "candidate_wins": 28,
+    "rounds": 31,
+    "max_abs": 0.0006866455078125,
+    "cpu_fixup_max_abs": 0.0
+  },
+  "sass": {
+    "legacy": {"registers": 250, "stack_bytes": 0, "ldl": 0, "stl": 0, "ldg": 144, "address_ops": 570, "imma": 192, "bar": 6},
+    "candidate": {"registers": 246, "stack_bytes": 0, "ldl": 0, "stl": 0, "ldg": 96, "address_ops": 377, "imma": 128, "bar": 4}
+  },
+  "reuse_arms_vs_aligned_pair_control": {
+    "metadata": {"median_us": 335.584, "delta_us": 8.096, "registers": 254, "stack_bytes": 0, "ldl": 0, "stl": 0, "ldg_delta": -2, "address_ops_delta": -2, "accepted": false},
+    "high": {"median_us": 413.344, "delta_us": 85.856, "registers": 255, "stack_bytes": 136, "ldl": 82, "stl": 84, "ldg_delta": -16, "address_ops_delta": -16, "accepted": false},
+    "address": {"median_us": 334.688, "delta_us": 7.2, "registers": 246, "stack_bytes": 0, "ldl": 0, "stl": 0, "ldg_delta": 0, "address_ops_delta": -11, "accepted": false},
+    "word_pair": {"median_us": 329.216, "delta_us": 1.728, "registers": 248, "stack_bytes": 0, "ldl": 0, "stl": 0, "ldg_delta": -4, "address_ops_delta": -4, "accepted": false}
+  }
+}

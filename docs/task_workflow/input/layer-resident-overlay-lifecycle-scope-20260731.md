@@ -28,7 +28,7 @@ peak versus llama's 79%.
 
 **Why materialisation is the right lever on this device specifically.** M4 has no separate matrix unit:
 plain FMA reaches 3909 GFLOPS against `simdgroup_multiply_accumulate`'s 3781
-(`extra/llm_research/microbench/fma_peak_metal.py`, `docs/what-makes-a-token-fast-20260731.md` §5).
+(`extra/llm_research/microbench/fma_peak_metal.py`, `docs/what-makes-inference-fast.md` §5).
 On AMD, dequant runs on vector ALUs while the multiply runs on WMMA — different units, so the dequant
 tax overlaps and is nearly free. **On M4 they are the same unit, so every dequant instruction directly
 displaces a multiply.** Moving dequant out of the inner loop is therefore the entire lever, and the

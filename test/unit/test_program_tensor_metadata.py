@@ -169,6 +169,18 @@ def test_missing_or_nonquant_facts_fail_closed():
   assert program_identities_from_call(_program_call(output, UOp.new_buffer("CPU", 32, dtypes.uint8), activation)) == ()
 
 
+def test_quantized_packed_output_is_not_a_dense_projection_identity():
+  # The folded W1/W3 -> Q8_1 producer consumes packed gate/up weights but writes
+  # a uint32 quantized ABI, not a float projection. The resolver must skip it
+  # rather than fail ProgramIdentityMetadata validation on the non-float output.
+  fact = _fact("ffn_gate", rows=32, cols=1024, role="ffn_gate_up")
+  packed = UOp.new_buffer("CPU", 144, dtypes.uint8)
+  activation = UOp.new_buffer("CPU", fact.cols, dtypes.float16)
+  output = UOp.new_buffer("CPU", fact.cols // 4 + fact.cols // 32, dtypes.uint32)
+  bind_program_tensor_fact(packed, fact, alias="packed")
+  assert program_identities_from_call(_program_call(output, packed, activation)) == ()
+
+
 def test_registered_fact_without_declared_output_fails_closed():
   fact = _fact("ffn_down", rows=32, cols=256)
   packed = UOp.new_buffer("CPU", 288, dtypes.uint8)

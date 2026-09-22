@@ -1,0 +1,20 @@
+{
+  "schema": "tinygrad.nv_flash_static_horizon_policy_summary.v1",
+  "admission": {
+    "max_context_lte": 1024,
+    "prompt_len_gte": 704,
+    "prompt_plus_expected_output_gte": 779,
+    "explicit_horizon_required": true
+  },
+  "wall": {
+    "control_s48_ms_per_token": 4.35903853125,
+    "candidate_s64_ms_per_token": 4.273807875,
+    "recovery_us_per_token": 85.23065625000027,
+    "control_tok_s": 229.4083873842793,
+    "candidate_tok_s": 233.983377177431,
+    "tok_s_gain": 4.574989793151701,
+    "token_stream_hash": "ccdf6dacfc69df611c0def178d4380c7752e579efa405e5ecdf687292b9b6115",
+    "token_hash_equal": true
+  },
+  "decision": "BOOKED_QUALIFIED_REQUEST_BAND"
+}

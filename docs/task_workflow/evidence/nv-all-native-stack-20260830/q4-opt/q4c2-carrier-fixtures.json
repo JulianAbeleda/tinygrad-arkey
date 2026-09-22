@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "valid": {
+    "shape": [
+      512,
+      4096
+    ],
+    "dtype": "signed char"
+  },
+  "invalid_rejected": [
+    true,
+    true,
+    true
+  ]
+}

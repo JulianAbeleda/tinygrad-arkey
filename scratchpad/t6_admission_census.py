@@ -1,6 +1,6 @@
 """T6 -- pure-Python admission census (no GPU) for the device-aware admission fix.
 
-Checks, in the caller's own process (no Device[...] touched, mirrors metal_precontract_lane.py's own
+Checks, in the caller's own process (no Device[...] touched, mirrors precontract_probe_lane.py's own
 admit_probe_config no-GPU guarantee):
   1. M1e's wave_count group at (256,64,32,wm,1,1) for wm in (8,4,2) -- sanity, these already admitted
      before the fix and must still admit after it.
@@ -16,7 +16,7 @@ from __future__ import annotations
 import sys
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, admit_probe_config
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, admit_probe_config
 from extra.llm_research.runtime_specs import FullKernelAdmissionError
 
 SHAPE = (512, 12288, 4096)

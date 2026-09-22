@@ -1,0 +1,35 @@
+{
+  "quality": {
+    "argmax_equal": true,
+    "control_margins": [
+      16.74876594543457,
+      14.662590026855469,
+      7.245023727416992,
+      11.404306411743164
+    ],
+    "max_abs": 7.62939453125e-06,
+    "max_perturbation": 7.62939453125e-06,
+    "pass": true,
+    "per_row_relative_l2": [
+      2.247401881680976e-07,
+      2.7095925441756144e-07,
+      2.2301620957305872e-07,
+      2.0804431054162253e-07
+    ],
+    "stacked_relative_l2": 2.2685432115285152e-07,
+    "top10_order_equal": true,
+    "top10_sets_equal": true
+  },
+  "schema": "tinygrad.nv_vocab_nacc4_final.v1",
+  "verdict": "STOP_WALL_NEGATIVE_NO_PROMOTION",
+  "wall": {
+    "candidate_minus_control_tok_s": -0.3523158026413,
+    "candidate_minus_control_us": 5.875854166666613,
+    "candidate_tok_s": 244.69107288155215,
+    "candidate_us": 4086.7857916666662,
+    "control_a_us": 4078.3806250000002,
+    "control_c_us": 4083.4392499999994,
+    "control_midpoint_tok_s": 245.04338868419345,
+    "control_midpoint_us": 4080.9099374999996
+  }
+}

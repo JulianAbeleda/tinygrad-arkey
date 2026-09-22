@@ -1,0 +1,274 @@
+{
+  "schema": "tinygrad.nv_compiler_q6k_imma_gate.v1",
+  "adversarial": {
+    "shape": {
+      "M": 32,
+      "N": 32,
+      "K": 256
+    },
+    "identity": "c519344c99fade1ccbf8309e98d9edbe8425aa1b50ef3ed242d23824344c7997",
+    "geometry": {
+      "tile": [
+        32,
+        32,
+        64
+      ],
+      "waves": [
+        1,
+        2
+      ],
+      "threads": 64,
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "local_size": [
+        32,
+        2,
+        1
+      ],
+      "ctas": 1
+    },
+    "correctness": {
+      "finite": true,
+      "reference_finite": true,
+      "unwritten_sentinels": 0,
+      "nonzero": 1024,
+      "max_abs": 0.046875,
+      "mean_abs": 0.0017375946044921875,
+      "allclose_rtol2e5_atol2e3": true,
+      "tensor_path_matches_direct": true
+    },
+    "compiler": {
+      "ordinary_matmul": true,
+      "expanded_global_weight_allocation": false,
+      "group_partial_allocation": false,
+      "candidate_identity": "c519344c99fade1ccbf8309e98d9edbe8425aa1b50ef3ed242d23824344c7997",
+      "candidate_identity_exact": true,
+      "signed_imma": true,
+      "sass": {
+        "cubin": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/adversarial.cubin",
+        "sass": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/adversarial.sass",
+        "returncode": 0,
+        "imma": 16,
+        "bar": 2,
+        "ldsm": 0,
+        "local_load": 0,
+        "local_store": 0,
+        "resources": {
+          "registers": 96,
+          "stack_bytes": 0,
+          "shared_bytes": 6144,
+          "local_bytes": 0
+        }
+      }
+    },
+    "timing": {
+      "samples_us": [
+        3.968,
+        3.936,
+        3.936,
+        3.936,
+        3.936,
+        3.968,
+        3.936,
+        3.936,
+        3.936
+      ],
+      "min_us": 3.936,
+      "median_us": 3.936,
+      "max_us": 3.968
+    },
+    "passed": true,
+    "readonly": {
+      "weight": true,
+      "record": true
+    }
+  },
+  "real": {
+    "v": {
+      "shape": {
+        "M": 512,
+        "N": 1024,
+        "K": 4096
+      },
+      "identity": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+      "geometry": {
+        "tile": [
+          64,
+          32,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          32,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 256
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.8032682419288903e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/v.cubin",
+          "sass": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/v.sass",
+          "returncode": 0,
+          "imma": 16,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 96,
+            "stack_bytes": 0,
+            "shared_bytes": 8704,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          71.296,
+          70.656,
+          70.816,
+          70.752,
+          70.368,
+          70.464,
+          70.304,
+          69.824,
+          70.144
+        ],
+        "min_us": 69.824,
+        "median_us": 70.464,
+        "max_us": 71.296
+      },
+      "passed": true,
+      "fixture": {
+        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+        "weight": "blk.0.attn_v.weight",
+        "format": "Q6_K"
+      },
+      "readonly": {
+        "weight": true,
+        "record": true
+      }
+    },
+    "down": {
+      "shape": {
+        "M": 512,
+        "N": 4096,
+        "K": 12288
+      },
+      "identity": "77d681357cdf89ae284fd64344eb192f37377ff39108418b15e52615af25cb3e",
+      "geometry": {
+        "tile": [
+          64,
+          32,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          128,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 1024
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 2097152,
+        "max_abs": 0.001220703125,
+        "mean_abs": 3.766872760024853e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "77d681357cdf89ae284fd64344eb192f37377ff39108418b15e52615af25cb3e",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/down.cubin",
+          "sass": "docs/task_workflow/evidence/nv-compiler-q6k-imma-20260828/artifacts/down.sass",
+          "returncode": 0,
+          "imma": 16,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 96,
+            "stack_bytes": 0,
+            "shared_bytes": 8704,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          667.744,
+          643.04,
+          640.96,
+          642.592,
+          643.392,
+          642.72,
+          640.64,
+          638.752,
+          641.856
+        ],
+        "min_us": 638.752,
+        "median_us": 642.592,
+        "max_us": 667.744
+      },
+      "passed": true,
+      "fixture": {
+        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+        "weight": "blk.0.ffn_down.weight",
+        "format": "Q6_K"
+      },
+      "readonly": {
+        "weight": true,
+        "record": true
+      }
+    }
+  },
+  "passed": true
+}

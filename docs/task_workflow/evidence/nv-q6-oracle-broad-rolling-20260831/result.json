@@ -1,0 +1,317 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_broad_cta.v1",
+  "baselines": {
+    "current_main_us": 318.8,
+    "llama_main_us": 201.216,
+    "llama_5pct_gate_us": 211.2768
+  },
+  "gate": {
+    "required_projected_recovery_us": 23.5,
+    "passed": false,
+    "decision": "NO_GO_BROAD_CTA"
+  },
+  "arms": [
+    {
+      "prefetch_second_panel": false,
+      "shape": {
+        "rows": 128,
+        "cols": 128,
+        "k": 256,
+        "replicas": 1,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "payload_shared_bytes": 57344,
+        "launch_shared_bytes": 58368
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          13.952,
+          13.856,
+          13.792,
+          13.952,
+          13.92,
+          13.856,
+          13.856,
+          13.856,
+          13.888
+        ],
+        "min_us": 13.792,
+        "median_us": 13.856,
+        "max_us": 13.952
+      },
+      "projection": {
+        "launch_floor_us": 4.0,
+        "owner_work_units": 36.141176470588235,
+        "projected_full_main_us": 360.20743529411766,
+        "projected_recovery_us": -41.40743529411765,
+        "screening_only": true
+      },
+      "compiler": {
+        "render_ms": 5846.888268832117,
+        "compile_wall_ms": 211.09635708853602,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-broad-rolling-20260831/artifacts/nv_q6_oracle_broad_cta_serial/nv_q6_oracle_broad_cta_serial.cu",
+        "source_bytes": 128996,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-broad-rolling-20260831/artifacts/nv_q6_oracle_broad_cta_serial/nv_q6_oracle_broad_cta_serial.cubin",
+        "cubin_sha256": "87a57ce37428c038c55f586c561b68850716ad37393893ec4ee55a44fc535d74"
+      },
+      "sass": {
+        "instruction_total": 4008,
+        "families": {
+          "BAR": 4,
+          "BRA": 6,
+          "BRX": 2,
+          "BSSY": 1,
+          "BSYNC": 1,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 44,
+          "IDP": 1,
+          "IMAD": 1043,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 6,
+          "LDCU": 2,
+          "LDG": 49,
+          "LDL": 18,
+          "LDS": 172,
+          "LDSM": 32,
+          "LEA": 19,
+          "LOP3": 26,
+          "MOV": 475,
+          "NOP": 9,
+          "PRMT": 26,
+          "S2R": 10,
+          "SHF": 103,
+          "STG": 64,
+          "STL": 16,
+          "STS": 42,
+          "UIADD3": 34,
+          "UISETP": 1,
+          "UMOV": 2,
+          "VIMNMX": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 64,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 12,
+            "pcs": [
+              "0x8c0",
+              "0x900",
+              "0xa60",
+              "0xd20",
+              "0xd30",
+              "0xd50",
+              "0xde0",
+              "0xe90",
+              "0xf40",
+              "0xff0",
+              "0x1200",
+              "0x1210"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x1c": 1,
+              "0x20": 1,
+              "0x24": 1,
+              "0x28": 1,
+              "0x30": 1,
+              "0x34": 1,
+              "0x38": 1,
+              "0x3c": 1
+            }
+          },
+          "mma_span": {
+            "LDL": 18,
+            "STL": 4,
+            "pcs": [
+              "0x1400",
+              "0x1450",
+              "0x14f0",
+              "0x3e60",
+              "0x4fb0",
+              "0x5190",
+              "0x5260",
+              "0x52a0",
+              "0x52b0",
+              "0x5370",
+              "0x5380",
+              "0x5b20",
+              "0x61b0",
+              "0x62a0",
+              "0x6400",
+              "0x6990",
+              "0x6b50",
+              "0x6f60",
+              "0x70e0",
+              "0x7390",
+              "0x7540",
+              "0x7760"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1,
+              "0x8": 2,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 2,
+              "0x18": 4,
+              "0x1c": 1,
+              "0x20": 1,
+              "0x24": 1,
+              "0x28": 1,
+              "0x2c": 2,
+              "0x30": 1,
+              "0x34": 1,
+              "0x38": 1,
+              "0x3c": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        }
+      },
+      "feasible": false
+    },
+    {
+      "prefetch_second_panel": true,
+      "shape": {
+        "rows": 128,
+        "cols": 128,
+        "k": 256,
+        "replicas": 1,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "payload_shared_bytes": 57344,
+        "launch_shared_bytes": 58368
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          13.088,
+          13.088,
+          13.056,
+          12.96,
+          13.184,
+          12.992,
+          13.056,
+          13.088,
+          13.184
+        ],
+        "min_us": 12.96,
+        "median_us": 13.088,
+        "max_us": 13.184
+      },
+      "projection": {
+        "launch_floor_us": 4.0,
+        "owner_work_units": 36.141176470588235,
+        "projected_full_main_us": 332.45101176470587,
+        "projected_recovery_us": -13.651011764705856,
+        "screening_only": true
+      },
+      "compiler": {
+        "render_ms": 7067.476231139153,
+        "compile_wall_ms": 44.78467023000121,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-broad-rolling-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch/nv_q6_oracle_broad_cta_prefetch.cu",
+        "source_bytes": 129934,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-broad-rolling-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch/nv_q6_oracle_broad_cta_prefetch.cubin",
+        "cubin_sha256": "91d75afe633d3f338ae08173518d8b12ac8675416508a1e24577f863cd2ba2d5"
+      },
+      "sass": {
+        "instruction_total": 3552,
+        "families": {
+          "BAR": 4,
+          "BRA": 6,
+          "BRX": 2,
+          "BSSY": 1,
+          "BSYNC": 1,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 43,
+          "IDP": 1,
+          "IMAD": 1043,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 6,
+          "LDCU": 2,
+          "LDG": 49,
+          "LDS": 172,
+          "LDSM": 32,
+          "LEA": 19,
+          "LOP3": 26,
+          "MOV": 86,
+          "NOP": 11,
+          "PRMT": 26,
+          "S2R": 9,
+          "SHF": 103,
+          "STG": 64,
+          "STS": 42,
+          "UIADD3": 1,
+          "UISETP": 1,
+          "UMOV": 2,
+          "VIMNMX": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        }
+      },
+      "feasible": true
+    }
+  ]
+}

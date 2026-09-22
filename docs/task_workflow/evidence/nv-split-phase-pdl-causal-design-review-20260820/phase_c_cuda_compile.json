@@ -1,0 +1,10 @@
+{
+  "binaries": {
+    "no_pdl": "/tmp/nv-pdl-phase-c/no_pdl/probe",
+    "pdl_end": "/tmp/nv-pdl-phase-c/pdl_end/probe",
+    "pdl_prologue": "/tmp/nv-pdl-phase-c/pdl_prologue/probe",
+    "pdl_start": "/tmp/nv-pdl-phase-c/pdl_start/probe"
+  },
+  "compile_only": true,
+  "schema": "tinygrad.nv_pdl_phase_c_cuda.v1"
+}

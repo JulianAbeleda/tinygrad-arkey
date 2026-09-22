@@ -1,0 +1,460 @@
+{
+  "backend": "both",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cuda_order": [
+    "no_pdl",
+    "pdl_end",
+    "pdl_start",
+    "pdl_prologue",
+    "no_pdl"
+  ],
+  "device": "NV",
+  "evidence_dir": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821",
+  "native_order": [
+    "no_pdl",
+    "pdl_end",
+    "pdl_start",
+    "pdl_prologue",
+    "qmd_latch",
+    "no_pdl"
+  ],
+  "paths": {
+    "cuda": {
+      "no_pdl": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_cuda_no_pdl_4.json",
+      "pdl_end": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_cuda_pdl_end_1.json",
+      "pdl_prologue": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_cuda_pdl_prologue_3.json",
+      "pdl_start": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_cuda_pdl_start_2.json"
+    },
+    "native": {
+      "no_pdl": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_native_no_pdl_5.json",
+      "pdl_end": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_native_pdl_end_1.json",
+      "pdl_prologue": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_native_pdl_prologue_3.json",
+      "pdl_start": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_native_pdl_start_2.json",
+      "qmd_latch": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-edge-aware-pdl-runtime-hook-20260821/stage2_semantic_native_qmd_latch_4.json"
+    }
+  },
+  "reps": 12,
+  "results": {
+    "cuda_no_pdl_0": {
+      "arm": "no_pdl",
+      "binary_path": "/tmp/nv-stage2-semantic/no_pdl/probe",
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 503.04,
+        "overlap_us": -0.608,
+        "producer_us": 502.4,
+        "trigger_shadow_us": null,
+        "wait_us": 0.064,
+        "wall_us": 528.928
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "3ebe8be66219371c25c7908fb67f9ef6925db16b36aa8e30bfd14af08176cbdd"
+    },
+    "cuda_no_pdl_4": {
+      "arm": "no_pdl",
+      "binary_path": "/tmp/nv-stage2-semantic/no_pdl/probe",
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 502.752,
+        "overlap_us": -0.608,
+        "producer_us": 502.112,
+        "trigger_shadow_us": null,
+        "wait_us": 0.064,
+        "wall_us": 528.896
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "3ebe8be66219371c25c7908fb67f9ef6925db16b36aa8e30bfd14af08176cbdd"
+    },
+    "cuda_pdl_end_1": {
+      "arm": "pdl_end",
+      "binary_path": "/tmp/nv-stage2-semantic/pdl_end/probe",
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 441.952,
+        "overlap_us": 48.672,
+        "producer_us": 490.784,
+        "trigger_shadow_us": 490.496,
+        "wait_us": 49.152,
+        "wall_us": 517.056
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "41f23d5294a04fdd152aeb7854081590dd1a5fc9d57cf37422b480e4434e8195"
+    },
+    "cuda_pdl_prologue_3": {
+      "arm": "pdl_prologue",
+      "binary_path": "/tmp/nv-stage2-semantic/pdl_prologue/probe",
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 441.984,
+        "overlap_us": 46.336,
+        "producer_us": 488.096,
+        "trigger_shadow_us": 487.84,
+        "wait_us": 46.816,
+        "wall_us": 514.528
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "896552196f35ca542d99785f4395662412c5b8c7cf33777f1cc3de0330d74e31"
+    },
+    "cuda_pdl_start_2": {
+      "arm": "pdl_start",
+      "binary_path": "/tmp/nv-stage2-semantic/pdl_start/probe",
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 387.712,
+        "overlap_us": 99.68,
+        "producer_us": 487.392,
+        "trigger_shadow_us": 387.36,
+        "wait_us": 100.128,
+        "wall_us": 512.768
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "8b5321b8fe72cb04af95ec2fc6e70cf96c6d8a7f598589d3e95d8494314072fa"
+    },
+    "native_no_pdl_0": {
+      "arm": "no_pdl",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 505.664,
+        "overlap_us": -0.576,
+        "producer_us": 505.088,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 532.224
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_no_pdl_5": {
+      "arm": "no_pdl",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 505.792,
+        "overlap_us": -0.576,
+        "producer_us": 505.216,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 531.904
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_end_1": {
+      "arm": "pdl_end",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 405.92,
+        "overlap_us": 99.808,
+        "producer_us": 505.728,
+        "trigger_shadow_us": 505.728,
+        "wait_us": 100.192,
+        "wall_us": 531.84
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_prologue_3": {
+      "arm": "pdl_prologue",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 405.792,
+        "overlap_us": 99.776,
+        "producer_us": 505.408,
+        "trigger_shadow_us": 505.408,
+        "wait_us": 100.16,
+        "wall_us": 531.552
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_start_2": {
+      "arm": "pdl_start",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": null,
+      "median": {
+        "launch_shadow_us": 396.096,
+        "overlap_us": 114.048,
+        "producer_us": 510.624,
+        "trigger_shadow_us": 395.84,
+        "wait_us": 114.4,
+        "wall_us": 536.896
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_qmd_latch_4": {
+      "arm": "qmd_latch",
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "consumer_latch_fields": {
+        "wait_on_latch_id": 7,
+        "wait_on_latch_valid": 1
+      },
+      "median": {
+        "launch_shadow_us": 405.28,
+        "overlap_us": 99.808,
+        "producer_us": 505.088,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 465.536
+      },
+      "qmd_latch_fields": {
+        "arrive_at_latch_id": 7,
+        "arrive_at_latch_valid": 1,
+        "enable_program_pre_exit": 1,
+        "pre_exit_at_last_cta_launch": 1
+      },
+      "reps": 11,
+      "source_sha256": null
+    }
+  },
+  "schema": "tinygrad.nv_edge_aware_pdl_stage2_semantic.v1",
+  "semantics": {
+    "deltas": {
+      "pdl_end": {
+        "launch_shadow_us": -36.032,
+        "overlap_us": 51.136,
+        "present": true,
+        "trigger_shadow_us": 15.232,
+        "wait_us": 51.04,
+        "wall_us": 14.784
+      },
+      "pdl_prologue": {
+        "launch_shadow_us": -36.192,
+        "overlap_us": 53.44,
+        "present": true,
+        "trigger_shadow_us": 17.568,
+        "wait_us": 53.344,
+        "wall_us": 17.024
+      },
+      "pdl_start": {
+        "launch_shadow_us": 8.384,
+        "overlap_us": 14.368,
+        "present": true,
+        "trigger_shadow_us": 8.48,
+        "wait_us": 14.272,
+        "wall_us": 24.128
+      }
+    },
+    "discriminators": {
+      "cuda": {
+        "trigger_position_gate": true,
+        "trigger_position_us": 103.136,
+        "wait_placement_gate": true,
+        "wait_placement_us": 2.336
+      },
+      "native": {
+        "trigger_position_gate": true,
+        "trigger_position_us": 109.888,
+        "wait_placement_gate": false,
+        "wait_placement_us": 0.032
+      }
+    },
+    "pairs": {
+      "cuda": {
+        "pdl_end": {
+          "arm": "pdl_end",
+          "available": true,
+          "backend": "cuda",
+          "comparisons": {
+            "candidate_launch_shadow_us": 441.952,
+            "candidate_overlap_us": 48.672,
+            "candidate_trigger_shadow_us": 490.496,
+            "candidate_wait_us": 49.152,
+            "candidate_wall_us": 517.056,
+            "control_post_overlap_us": -0.608,
+            "control_pre_overlap_us": -0.608
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true
+          },
+          "wait_exit": "not_gated",
+          "wait_exit_reason": "wait-exit gate is native-only per Stage 2 scope"
+        },
+        "pdl_prologue": {
+          "arm": "pdl_prologue",
+          "available": true,
+          "backend": "cuda",
+          "comparisons": {
+            "candidate_launch_shadow_us": 441.984,
+            "candidate_overlap_us": 46.336,
+            "candidate_trigger_shadow_us": 487.84,
+            "candidate_wait_us": 46.816,
+            "candidate_wall_us": 514.528,
+            "control_post_overlap_us": -0.608,
+            "control_pre_overlap_us": -0.608
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true
+          },
+          "wait_exit": "not_gated",
+          "wait_exit_reason": "wait-exit gate is native-only per Stage 2 scope"
+        },
+        "pdl_start": {
+          "arm": "pdl_start",
+          "available": true,
+          "backend": "cuda",
+          "comparisons": {
+            "candidate_launch_shadow_us": 387.712,
+            "candidate_overlap_us": 99.68,
+            "candidate_trigger_shadow_us": 387.36,
+            "candidate_wait_us": 100.128,
+            "candidate_wall_us": 512.768,
+            "control_post_overlap_us": -0.608,
+            "control_pre_overlap_us": -0.608
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true
+          },
+          "wait_exit": "not_gated",
+          "wait_exit_reason": "wait-exit gate is native-only per Stage 2 scope"
+        }
+      },
+      "native": {
+        "pdl_end": {
+          "arm": "pdl_end",
+          "available": true,
+          "backend": "native",
+          "comparisons": {
+            "candidate_launch_shadow_us": 405.92,
+            "candidate_overlap_us": 99.808,
+            "candidate_trigger_shadow_us": 505.728,
+            "candidate_wait_us": 100.192,
+            "candidate_wall_us": 531.84,
+            "control_post_overlap_us": -0.576,
+            "control_pre_overlap_us": -0.576,
+            "literal_wait_exit_before_prod_end": false,
+            "literal_wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check",
+            "wait_exit_skew_us": {
+              "max": 0.384,
+              "median": 0.384,
+              "min": 0.352
+            }
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true,
+            "wait_exit_within_2us_of_prod_end": true
+          },
+          "wait_exit": "valid",
+          "wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check"
+        },
+        "pdl_prologue": {
+          "arm": "pdl_prologue",
+          "available": true,
+          "backend": "native",
+          "comparisons": {
+            "candidate_launch_shadow_us": 405.792,
+            "candidate_overlap_us": 99.776,
+            "candidate_trigger_shadow_us": 505.408,
+            "candidate_wait_us": 100.16,
+            "candidate_wall_us": 531.552,
+            "control_post_overlap_us": -0.576,
+            "control_pre_overlap_us": -0.576,
+            "literal_wait_exit_before_prod_end": false,
+            "literal_wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check",
+            "wait_exit_skew_us": {
+              "max": 0.384,
+              "median": 0.384,
+              "min": 0.352
+            }
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true,
+            "wait_exit_within_2us_of_prod_end": true
+          },
+          "wait_exit": "valid",
+          "wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check"
+        },
+        "pdl_start": {
+          "arm": "pdl_start",
+          "available": true,
+          "backend": "native",
+          "comparisons": {
+            "candidate_launch_shadow_us": 396.096,
+            "candidate_overlap_us": 114.048,
+            "candidate_trigger_shadow_us": 395.84,
+            "candidate_wait_us": 114.4,
+            "candidate_wall_us": 536.896,
+            "control_post_overlap_us": -0.576,
+            "control_pre_overlap_us": -0.576,
+            "literal_wait_exit_before_prod_end": false,
+            "literal_wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check",
+            "wait_exit_skew_us": {
+              "max": 0.384,
+              "median": 0.352,
+              "min": 0.352
+            }
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true,
+            "wait_exit_within_2us_of_prod_end": true
+          },
+          "wait_exit": "valid",
+          "wait_exit_reason": "data-readiness wait exit occurs at producer end plus a small propagation skew; strict wait_exit < prod_end is physically unsatisfiable on the CUDA reference path as well and is reported as a named literal check"
+        },
+        "qmd_latch": {
+          "arm": "qmd_latch",
+          "available": true,
+          "backend": "native",
+          "comparisons": {
+            "candidate_launch_shadow_us": 405.28,
+            "candidate_overlap_us": 99.808,
+            "candidate_trigger_shadow_us": null,
+            "candidate_wait_us": 0.0,
+            "candidate_wall_us": 465.536,
+            "control_post_overlap_us": -0.576,
+            "control_pre_overlap_us": -0.576
+          },
+          "gates": {
+            "candidate_overlap_gt_0": true,
+            "checksum_all_true": true,
+            "control_overlap_le_1us": true
+          },
+          "wait_exit": "named_unavailable",
+          "wait_exit_reason": "qmd_latch has no in-kernel griddepcontrol.wait; its t[5] slot is the consumer grid-start marker, not a wait exit"
+        }
+      }
+    },
+    "verdict": {
+      "failed_gates": [],
+      "reason": "all gates passed",
+      "result": "passed"
+    }
+  },
+  "warmup": 1
+}

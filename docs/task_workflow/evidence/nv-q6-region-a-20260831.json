@@ -1,0 +1,189 @@
+{
+  "schema": "tinygrad.nv_q6_region_a.v1",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "population": {
+    "ctas": 128,
+    "k256_blocks_per_cta": 48
+  },
+  "structural_census": {
+    "full_ldg_q6": 36,
+    "full_ldg_q8": 12,
+    "full_buf1_stores": 368,
+    "producer_ldg_q6": 36,
+    "producer_ldg_q8": 12,
+    "producer_buf1_stores": 80
+  },
+  "correctness": {
+    "readback_finite": true,
+    "decoded_nonzero": 2513872,
+    "decoded_sample": [
+      57.0,
+      94.0,
+      132.0,
+      169.0,
+      206.0,
+      243.0,
+      24.0,
+      61.0
+    ]
+  },
+  "timing": {
+    "diagnostic_bulk_readback": {
+      "samples_us": [
+        722.464,
+        724.384,
+        719.456,
+        721.376,
+        723.2,
+        717.952,
+        718.592,
+        720.736,
+        726.688
+      ],
+      "min_us": 717.952,
+      "median_us": 721.376,
+      "max_us": 726.688
+    },
+    "live_sink": {
+      "samples_us": [
+        227.2,
+        227.008,
+        226.496,
+        226.848,
+        226.72,
+        225.92,
+        226.016,
+        225.76,
+        226.368
+      ],
+      "min_us": 225.76,
+      "median_us": 226.496,
+      "max_us": 227.2,
+      "sample_finite": true
+    }
+  },
+  "compiler": {
+    "sha256": "b45a0d0c0b088f7cea2f9a08cde0f5f223826f59020f4884ae4a6e3f65bc0b55",
+    "sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a.sass",
+      "returncode": 0,
+      "imma": 0,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 64,
+        "stack_bytes": 0,
+        "shared_bytes": 21504,
+        "local_bytes": 0
+      }
+    },
+    "timing_sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a_timing.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a_timing.sass",
+      "returncode": 0,
+      "imma": 0,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 0,
+      "local_store": 0,
+      "resources": {
+        "registers": 79,
+        "stack_bytes": 0,
+        "shared_bytes": 21504,
+        "local_bytes": 0
+      }
+    },
+    "no_imma": true,
+    "no_local_spills": true
+  },
+  "full_route": {
+    "shape": {
+      "M": 512,
+      "N": 4096,
+      "K": 12288
+    },
+    "identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+    "geometry": {
+      "tile": [
+        128,
+        128,
+        64
+      ],
+      "waves": [
+        2,
+        4
+      ],
+      "threads": 256,
+      "global_size": [
+        32,
+        4,
+        1
+      ],
+      "local_size": [
+        32,
+        2,
+        4
+      ],
+      "ctas": 128
+    },
+    "correctness": {
+      "finite": true,
+      "reference_finite": true,
+      "unwritten_sentinels": 0,
+      "nonzero": 2097152,
+      "max_abs": 0.001220703125,
+      "mean_abs": 3.766872760024853e-05,
+      "allclose_rtol2e5_atol2e3": true,
+      "tensor_path_matches_direct": true
+    },
+    "compiler": {
+      "ordinary_matmul": true,
+      "expanded_global_weight_allocation": false,
+      "group_partial_allocation": false,
+      "candidate_identity": "f5b8b338a3a068d3805a067a8b7ab74b945d5064bde80e5371abf9da7dd05a36",
+      "candidate_identity_exact": true,
+      "signed_imma": true,
+      "sass": {
+        "cubin": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a_base.cubin",
+        "sass": "docs/task_workflow/evidence/nv-q6-region-a-20260831/region_a_base.sass",
+        "returncode": 0,
+        "imma": 64,
+        "bar": 2,
+        "ldsm": 0,
+        "local_load": 0,
+        "local_store": 0,
+        "resources": {
+          "registers": 214,
+          "stack_bytes": 0,
+          "shared_bytes": 21504,
+          "local_bytes": 0
+        }
+      }
+    },
+    "timing": {
+      "samples_us": [
+        498.368,
+        461.568,
+        460.64,
+        460.384,
+        460.192,
+        460.0,
+        460.128,
+        460.096,
+        459.84
+      ],
+      "min_us": 459.84,
+      "median_us": 460.192,
+      "max_us": 498.368
+    },
+    "passed": true
+  },
+  "passed": true
+}

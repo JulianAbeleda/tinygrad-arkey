@@ -1,0 +1,140 @@
+{
+  "schema": "tinygrad.nv_q4_cooperative_shared_q8_g1_gate.v1",
+  "status": "G18_SEMANTIC_STOP_G12_SETTLED_WALL_PASS",
+  "construction": {
+    "closed_default": true,
+    "composed_baseline": "CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1 + direct-greedy + feedback-pingpong",
+    "groups": 1,
+    "lease_blocks": [1],
+    "runtime_block_extent": "start_pos//(start_pos+1)+4",
+    "runtime_block_extent_value": 4,
+    "extra_scalar_provider": false
+  },
+  "correctness": {
+    "finite": true,
+    "tokens_equal": true,
+    "argmax_equal": true,
+    "top10_sets_equal": true,
+    "top10_order_equal": true,
+    "relative_l2": 0.0004884647408926116,
+    "relative_l2_max": 0.001,
+    "max_abs": 0.008861303329467773,
+    "minimum_baseline_top1_margin": 1.2198467254638672,
+    "perturbation_vs_minimum_margin": 0.014528552062306212,
+    "semantic_pass": true
+  },
+  "topology": {
+    "capture_factor": 2,
+    "fused_rmsnorm_q8_providers": 2,
+    "expected_providers": 2,
+    "cooperative_q4_consumers": 4,
+    "legacy_shared_q4_consumers": 0,
+    "duplicate_providers": 0,
+    "baseline_program_count": 1752,
+    "candidate_program_count": 1756,
+    "program_count_delta": 4,
+    "program_count_delta_reason": "one external four-part sum for Q and K in each of two ping-pong captures"
+  },
+  "invalid_unsettled_reverse_wall": {
+    "tokens_per_rep": 8,
+    "reps": 3,
+    "all_token_hashes_equal": true,
+    "control_a_samples_ms_per_token": [679.66041225, 5.410647625, 5.408876125],
+    "candidate_samples_ms_per_token": [758.42704375, 7.35038, 10.856981125],
+    "control_c_samples_ms_per_token": [692.0685295, 5.418184625, 5.42130525],
+    "control_bracket_median_ms_per_token": 5.4159764374999995,
+    "candidate_median_ms_per_token": 10.856981125,
+    "candidate_minus_control_ms_per_token": 5.441004687500001,
+    "candidate_speedup_percent": -50.1152633946391,
+    "wall_pass": false,
+    "authority": false,
+    "invalid_reason": "timed windows included ping-pong eager/capture and per-rep generation reset lifecycle"
+  },
+  "debug2_attribution": {
+    "standalone_full_token_capture_kernel_sum_ms": {
+      "g0": 5.82826,
+      "g1": 5.83443,
+      "g1_minus_g0": 0.00617
+    },
+    "g1_affected_capture_us": {
+      "fused_rmsnorm_q8_provider": 2.62,
+      "cooperative_q": 9.73,
+      "cooperative_k": 3.94,
+      "q_partial_sum": 1.54,
+      "k_partial_sum": 1.50,
+      "total_provider_q_k_sums": 19.33,
+      "shared_q6_consumer": 14.94
+    },
+    "true_replay_five_batch_device_sums_ms": {
+      "g0_i4": 5.23249,
+      "g0_i5": 5.20901,
+      "g0_median": 5.22075,
+      "g1_i4": 5.21972,
+      "g1_i5": 5.19243,
+      "g1_median": 5.206075,
+      "g1_minus_g0_median": -0.014675
+    },
+    "settled_replay_recaptured": false,
+    "attribution": "The cooperative bodies and settled device graph did not explain the first wall regression. That regression was timing-child lifecycle contamination."
+  },
+  "corrected_settled_g1_wall": {
+    "protocol": "prelude + 6 untimed decode calls, then 5 continuous 32-token windows, no reset or capture inside timer",
+    "all_token_stream_hashes_equal": true,
+    "rejected_external_contention_samples": 0,
+    "control_a_median_ms_per_token": 5.3491478125,
+    "candidate_median_ms_per_token": 5.3376988125,
+    "control_c_median_ms_per_token": 5.346038,
+    "control_bracket_median_ms_per_token": 5.34759290625,
+    "candidate_minus_control_ms_per_token": -0.009894093749999833,
+    "candidate_speedup_percent": 0.18536253351031373,
+    "wall_pass": true
+  },
+  "progression": {
+    "g2": {"semantic_pass": true, "relative_l2": 0.00043991120395002155, "max_abs": 0.008655548095703125,
+      "providers": 4, "cooperative_q4_consumers": 8, "legacy_shared_q4_consumers": 0},
+    "g4": {"semantic_pass": true, "relative_l2": 0.000560287116838045, "max_abs": 0.00974893569946289,
+      "providers": 8, "cooperative_q4_consumers": 18, "legacy_shared_q4_consumers": 0},
+    "g8": {"semantic_pass": true, "relative_l2": 0.0006987380929579424, "max_abs": 0.012845039367675781,
+      "providers": 16, "cooperative_q4_consumers": 40, "legacy_shared_q4_consumers": 0},
+    "g12": {"semantic_pass": true, "relative_l2": 0.0008369634170055909, "max_abs": 0.01642298698425293,
+      "providers": 24, "cooperative_q4_consumers": 60, "legacy_shared_q4_consumers": 0},
+    "g18": {"semantic_pass": false, "relative_l2": 0.001271440484780866, "relative_l2_max": 0.001,
+      "max_abs": 0.02319049835205078, "tokens_equal": true, "argmax_equal": true, "top10_sets_equal": true,
+      "top10_order_equal": true, "perturbation_vs_minimum_margin": 0.038021987300465486,
+      "providers": 36, "cooperative_q4_consumers": 92, "legacy_shared_q4_consumers": 0}
+  },
+  "corrected_settled_g4_wall": {
+    "protocol": "prelude + 6 untimed decode calls, then 5 continuous 32-token windows, no reset or capture inside timer",
+    "all_token_stream_hashes_equal": true,
+    "rejected_external_contention_samples": 0,
+    "control_a_median_ms_per_token": 5.35249584375,
+    "candidate_median_ms_per_token": 5.34103696875,
+    "control_c_median_ms_per_token": 5.35422475,
+    "control_bracket_median_ms_per_token": 5.353360296875,
+    "candidate_minus_control_ms_per_token": -0.012323328124999477,
+    "candidate_speedup_percent": 0.23072912988810756,
+    "wall_pass": true,
+    "marginal_saving_beyond_g1_us_per_token": 2.429234375000356
+  },
+  "corrected_settled_g12_wall": {
+    "protocol": "prelude + 6 untimed decode calls, then 5 continuous 32-token windows, no reset or capture inside timer",
+    "all_token_stream_hashes_equal": true,
+    "rejected_external_contention_samples": 0,
+    "control_a_median_ms_per_token": 5.34202309375,
+    "candidate_median_ms_per_token": 5.32264084375,
+    "control_c_median_ms_per_token": 5.35261140625,
+    "control_bracket_median_ms_per_token": 5.34731725,
+    "candidate_minus_control_ms_per_token": -0.02467640624999934,
+    "candidate_speedup_percent": 0.46361208607519355,
+    "wall_pass": true
+  },
+  "decision": {
+    "g2_g4_g8_g12_completed": true,
+    "g18_completed": true,
+    "g35_skipped_after_g18_semantic_failure": true,
+    "default_changed": false,
+    "promotion_credit": false,
+    "last_qualified_depth": 12,
+    "next_decisive_test": "localize cumulative llama-Q8 numerical error by block between g12 and the g18 semantic stop"
+  }
+}

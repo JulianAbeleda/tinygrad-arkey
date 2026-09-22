@@ -6,7 +6,7 @@ isolation, as the single GPU-lane holder, with no other GPU work concurrent."""
 import sys, time, json
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
 
 QUANT, ROLE = "Q4_K", "ffn_gate_up"
 SHAPE = (512, 12288, 4096)

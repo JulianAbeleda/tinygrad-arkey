@@ -1,0 +1,73 @@
+{
+  "schema": "tinygrad.q4k_warp_coop_dynamic_microgate.v3",
+  "git_commit": "5b70ac4cb4b4c3f9b114d1d62b2f720459355bed",
+  "shape": {
+    "rows": 4096,
+    "k": 4096,
+    "local": 128,
+    "runtime_blocks": 4
+  },
+  "payload": {
+    "q4_sha256": "f00362af8d4fe9002d07ed96df0dc91f317cd3096e277ba897c58c3576327cc4",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "census": {
+    "control_programs_per_replay": 1,
+    "candidate_programs_per_replay": 3,
+    "candidate_programs": [
+      "q8_1_llama_provider_4096",
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "partial_sum_4096x4"
+    ]
+  },
+  "prior_invalid_construction": {
+    "candidate_max_abs_cpu_q8": 0.9392952919006348,
+    "candidate_tol": 0.09806095123291016,
+    "disposition": "header nibble-stride bug fixed before this corrected retry; no timing was run"
+  },
+  "correctness": {
+    "pass": true,
+    "baseline_max_abs_cpu_fp16": 4.76837158203125e-06,
+    "baseline_tol": 0.09814807891845703,
+    "candidate_max_abs_cpu_q8": 0.00255584716796875,
+    "candidate_tol": 0.09806095123291016,
+    "q8_vs_fp16_relative_l2": 0.004799081112170493,
+    "representation": "llama Q8_1 approximate; no full-logit promotion contract"
+  },
+  "timing": {
+    "unit": "us_per_graph_replay",
+    "replays": 200,
+    "reps": 7,
+    "control_a": [
+      124.12612499999999,
+      124.46350000000001,
+      124.04793,
+      124.49075500000001,
+      123.86959,
+      124.566745,
+      125.936265
+    ],
+    "candidate_b": [
+      68.62152,
+      67.458885,
+      67.281805,
+      67.67379,
+      67.60771,
+      67.66983,
+      67.77919
+    ],
+    "control_c": [
+      126.594005,
+      124.141,
+      125.08176499999999,
+      124.868365,
+      124.790465,
+      124.442165,
+      124.48284
+    ],
+    "control_midpoint_median": 124.6269825,
+    "candidate_median": 67.66983,
+    "delta": -56.95715249999999,
+    "gate": "PASS"
+  }
+}

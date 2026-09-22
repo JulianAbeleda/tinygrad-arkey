@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable, cast, TYPE_CHECKING, Type, Sequence, Iterable, Final, Iterator, NamedTuple
 import sys, time, functools, itertools, math, operator, hashlib, os, types, pickle, pathlib, inspect, weakref, collections, struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 from enum import Enum, auto
 from tinygrad.uop import Ops, GroupOp, MemorySemanticOwner
 from tinygrad.uop import trace as _lower_trace   # LR-010 lowering trace; inert unless LOWER_TRACE is set
@@ -22,6 +22,20 @@ class AxisType(Enum):
   THREAD = auto(); PLACEHOLDER = auto() # noqa: E702
 
 @dataclass(frozen=True, order=True)
+class PostBarrierRegion:
+  """Typed contract for a divergent region entered after a workgroup barrier.
+
+  The barrier is deliberately outside the region, so every workitem reaches
+  it.  The ordinary region may predicate arbitrary non-barrier work (for
+  example a single consumer warp loading lane partials produced by sibling
+  warps). ``workgroup_uniform`` is a stronger, separately validated contract:
+  every workitem in a workgroup takes the same branch, so barriers are legal
+  inside it.
+  """
+  version: int = 1
+  workgroup_uniform: bool = False
+
+@dataclass(frozen=True, order=True)
 class ParamArg:
   slot: int
   vmin_vmax: tuple[PyConst, PyConst]|None = None
@@ -29,8 +43,9 @@ class ParamArg:
   addrspace: AddrSpace = AddrSpace.GLOBAL
   axis: int|None = None
   device: str|tuple[str, ...]|None = None
+  const_restrict: bool = False
   def __repr__(self):
-    fields = (("vmin_vmax", None), ("name", None), ("addrspace", AddrSpace.GLOBAL), ("axis", None), ("device", None))
+    fields = (("vmin_vmax", None), ("name", None), ("addrspace", AddrSpace.GLOBAL), ("axis", None), ("device", None), ("const_restrict", False))
     args = [repr(self.slot)] + [f"{k}={v!r}" for k,default in fields if (v:=getattr(self, k)) != default]
     return f"ParamArg({', '.join(args)})"
 axis_letters = {AxisType.GLOBAL: "g", AxisType.THREAD: "t", AxisType.LOCAL: "l", AxisType.WARP: "w", AxisType.LOOP: "L", AxisType.UPCAST: "u",
@@ -139,6 +154,31 @@ class recursive_property(property):
 from tinygrad.mixin import OpMixin
 from tinygrad.mixin.rand import RandMixin
 
+@dataclass(frozen=True)
+class StrictAfter:
+  """Value-preserving compiler-order edge. This is not device synchronization or a memory fence."""
+
+STRICT_AFTER = StrictAfter()
+
+@dataclass(frozen=True)
+class LoadSchedule:
+  """Opaque phase token for immutable scalar loads, carried beside and never inside their INDEX."""
+
+LOAD_SCHEDULE = LoadSchedule()
+
+@dataclass(frozen=True)
+class RegionLoad:
+  """Opaque lexical-region marker for an immutable scalar LOAD."""
+
+REGION_LOAD = RegionLoad()
+
+@dataclass(frozen=True)
+class RegionLoadBridge:
+  """CUDA-only split register bridge across one existing region anchor barrier."""
+  order_after_anchor: bool = False
+
+REGION_LOAD_BRIDGE = RegionLoadBridge()
+
 # NOTE: this should be frozen, but frozen is slower
 @dataclass(eq=False, slots=True)
 class UOp(RandMixin, metaclass=UOpMetaClass):
@@ -149,7 +189,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   tag:Any = None
   def __del__(self):
     if Ops is not None and self.op is Ops.BUFFER and (buffer:=buffers.get(self)) is not None: buffer.ref(-1)
-    try: del UOpMetaClass.ucache[(self.op, self.dtype, self.src, self.arg, self.tag)]
+    try:
+      key = (self.op, self.dtype, self.src, self.arg, self.tag)
+      cached = UOpMetaClass.ucache.get(key)
+      if cached is not None and cached() is self: del UOpMetaClass.ucache[key]
     except AttributeError: pass
   def __reduce__(self):
     args = [self.op, self.dtype, self.src, self.arg, self.tag, self.metadata]
@@ -298,14 +341,17 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Scheduler-only QK-C -> PV-A bridge. Backend lowering must consume it
         # before program construction.
         return self.arg.fragment_shape
-      case Ops.AMD_ROW_SOFTMAX_REPACK:
+      case Ops.NATIVE_ROW_SOFTMAX_REPACK:
         # Physical wave32 QK-C -> PV-A bridge. The descriptor, not DType,
         # owns the native per-lane PV-A fragment width.
         return (self.arg.pv_a_lanes,)
-      case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
-      case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
-      case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
-      case Ops.AMD_ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
+      case Ops.ROW_SOFTMAX_SLOT: return (self.arg.lanes,)
+      case Ops.PACKED_FRAGMENT_LOAD: return (self.arg.fragment_lanes,)
+      case Ops.PACKED_ACTIVATION_CARRIER: return self.arg.logical_shape
+      case Ops.COOPERATIVE_TILE_LOAD: return (self.arg.tile_shape[0]*self.arg.tile_shape[1],)
+      case Ops.COOPERATIVE_STAGE_BEGIN: return ()
+      case Ops.ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
+      case Ops.ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -315,6 +361,12 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.ATTENTION:
         # src[0] is the ordinary, semantically identical fallback result. The
         # remaining sources are the explicit Q/K/V/(optional mask) inputs.
+        return self.src[0]._shape if len(self.src) else None
+      case Ops.RMSNORM:
+        # src[0] is the ordinary fallback result; the remaining sources are
+        # the explicit x and optional affine weight inputs.
+        return self.src[0]._shape if len(self.src) else None
+      case Ops.REDUCE_OUTPUT:
         return self.src[0]._shape if len(self.src) else None
       case Ops.STACK:
         if len(self.src) == 0: return ()
@@ -358,6 +410,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
       case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",)}:
         return (self.dtype.count,) if self.dtype.count > 1 else ()
+      case Ops.CUSTOMI if isinstance(self.tag, tuple) and len(self.tag) == 3 and self.tag[:1] == ("native_fragment_carrier_v1",):
+        return ()
+      case Ops.CUSTOMI if self.arg in (("native_fragment_materialized_x2_v1",), ("native_fragment_bitcast_v1",)):
+        return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
@@ -430,6 +486,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if self.op in GroupOp.Broadcastable:
       input_shapes = [x._shape for x in self.src]
       assert len(self.src) > 0 and all(x is not None for x in input_shapes), f"None input shape not supported for {self.op}"
+      if self.op is Ops.MUL and any(s.op is Ops.PACKED_ACTIVATION_CARRIER for s in self.src) and any(x == () for x in input_shapes):
+        return next(x for x in input_shapes if x != ())
       if DISALLOW_BROADCAST and not all_same(input_shapes):
         # Loud, specific diagnostic for the shared-attention "class-2" collapse:
         # one operand is a fused-attention composite input (carries a
@@ -618,7 +676,93 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return UOp(Ops.WAIT, dtypes.void, (self, self.const_like(src) if not isinstance(src, UOp) else src), **kwargs)
   def end(self, *src:UOp): return UOp(Ops.END, src=(self,)+src) if len(src) else self
   def after(self, *src:UOp, **kwargs): return UOp(Ops.AFTER, self.dtype, (self,)+src, **kwargs) if len(src) else self
+  def strict_after(self, dependency:UOp):
+    """Return this value while retaining one compiler-visible ordering dependency."""
+    if not isinstance(dependency, UOp): raise TypeError("strict_after dependency must be a UOp")
+    return UOp(Ops.AFTER, self.dtype, (self, dependency), arg=STRICT_AFTER)
+  def schedule_after(self, dependency:UOp):
+    """Schedule this immutable scalar LOAD after dependency without changing its graph-level value or INDEX."""
+    if self.op is not Ops.LOAD: raise ValueError("schedule_after is only valid on LOAD")
+    if not isinstance(dependency, UOp): raise TypeError("schedule_after dependency must be a UOp")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, LoadSchedule) for s in self.src[1:]):
+      raise ValueError("LOAD already has a schedule_after boundary")
+    token=UOp(Ops.AFTER, dependency.dtype, (dependency,), arg=LOAD_SCHEDULE)
+    return self.replace(src=self.src+(token,))
+  def load_in_region(self, region:UOp):
+    """Keep this scalar LOAD lexically in a typed post-barrier region."""
+    if self.op is not Ops.LOAD: raise ValueError("load_in_region is only valid on LOAD")
+    if not isinstance(region, UOp) or region.op is not Ops.IF or not isinstance(region.arg, PostBarrierRegion):
+      raise ValueError("load_in_region requires a typed PostBarrierRegion")
+    if self.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.vcount != 1:
+      raise ValueError(f"load_in_region requires a scalar 32-bit LOAD, got {self.dtype}")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, RegionLoad) for s in self.src[1:]):
+      raise ValueError("LOAD already has a load region")
+    token=UOp(Ops.AFTER, dtypes.void, (region,), arg=REGION_LOAD)
+    return self.replace(src=self.src+(token,))
+  def load_in_region_bridge(self, region:UOp, *, order_after_anchor:bool=False):
+    """Opt this LOAD into the validated CUDA split-PTX region bridge."""
+    if self.op is not Ops.LOAD: raise ValueError("load_in_region_bridge is only valid on LOAD")
+    if not isinstance(region, UOp) or region.op is not Ops.IF or not isinstance(region.arg, PostBarrierRegion):
+      raise ValueError("load_in_region_bridge requires a typed PostBarrierRegion")
+    if not region.arg.workgroup_uniform or region.src[0].op is not Ops.CONST or region.src[0].dtype is not dtypes.bool or region.src[0].arg is not True:
+      raise ValueError("load_in_region_bridge requires a constant-true workgroup-uniform PostBarrierRegion")
+    if self.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.vcount != 1:
+      raise ValueError(f"load_in_region_bridge requires a scalar 32-bit LOAD, got {self.dtype}")
+    if any(s.op is Ops.AFTER and isinstance(s.arg, (RegionLoad, RegionLoadBridge)) for s in self.src[1:]):
+      raise ValueError("LOAD already has a load region mode")
+    token=UOp(Ops.AFTER, dtypes.void, (region,),
+              arg=RegionLoadBridge(order_after_anchor=True) if order_after_anchor else REGION_LOAD_BRIDGE)
+    return self.replace(src=self.src+(token,))
+  def pointer_base_params(self) -> set[UOp]:
+    """PARAM owners on this address expression's pointer-producing base lineage.
+
+    INDEX indices/validity and AFTER dependencies are not address owners. Pointer
+    expressions with multiple possible bases are rejected rather than guessed.
+    """
+    owners:set[UOp] = set()
+    seen:set[UOp] = set()
+    stack:list[UOp] = [self]
+    # New-style lowering scalarizes pointer PARAM dtypes before CStyle rendering.
+    # A PARAM reached through the base-only lineage of an address expression is
+    # still its buffer owner; never apply this relaxation to a bare scalar value.
+    lowered_address = self.op in {Ops.INDEX, Ops.SHRINK, Ops.GEP} or isinstance(self.dtype, PtrDType)
+    base_only = {Ops.INDEX, Ops.AFTER, Ops.SHRINK, Ops.GEP, Ops.CAST, Ops.BITCAST}
+    while stack:
+      x = stack.pop()
+      if x in seen: continue
+      seen.add(x)
+      if x.op is Ops.PARAM and isinstance(x.arg, ParamArg):
+        if isinstance(x.dtype, PtrDType) or lowered_address: owners.add(x)
+        continue
+      if x.op in base_only and x.src:
+        stack.append(x.src[0])
+        continue
+      if isinstance(x.dtype, PtrDType):
+        pointer_srcs = [s for s in x.src if isinstance(s.dtype, PtrDType)]
+        if len(pointer_srcs) > 1: raise RuntimeError("pointer expression has ambiguous PARAM ownership")
+        stack.extend(pointer_srcs)
+    return owners
+  def const_restrict(self):
+    """Promise that this immutable GLOBAL parameter does not alias another accessed pointer."""
+    if self.op is not Ops.PARAM or not isinstance(self.arg, ParamArg) or not isinstance(self.dtype, PtrDType):
+      raise ValueError("const_restrict is only valid on a pointer PARAM owner")
+    if self.addrspace is not AddrSpace.GLOBAL or self.arg.addrspace is not AddrSpace.GLOBAL:
+      raise ValueError("const_restrict requires a GLOBAL pointer PARAM")
+    if self.dtype.base not in {dtypes.int, dtypes.uint, dtypes.float} or self.dtype.base.vcount != 1:
+      raise ValueError(f"const_restrict requires a scalar 32-bit pointee, got {self.dtype.base}")
+    if self.arg.const_restrict: raise ValueError("pointer PARAM is already const_restrict")
+    return self.replace(arg=dataclass_replace(self.arg, const_restrict=True))
   def barrier(self, *src:UOp): return UOp(Ops.BARRIER, src=(self,)+src)
+  def post_barrier_region(self, gate:UOp, *, workgroup_uniform:bool=False) -> UOp:
+    if self.op is not Ops.BARRIER: raise ValueError("post_barrier_region must be anchored by an Ops.BARRIER")
+    if gate.dtype is not dtypes.bool: raise ValueError(f"post_barrier_region gate must be bool, got {gate.dtype}")
+    if not isinstance(workgroup_uniform,bool): raise ValueError("workgroup_uniform must be bool")
+    return UOp(Ops.IF, dtypes.void, (gate, self), arg=PostBarrierRegion(workgroup_uniform=workgroup_uniform))
+  def end_region(self, *body_roots:UOp) -> UOp:
+    if self.op is not Ops.IF or not isinstance(self.arg, PostBarrierRegion):
+      raise ValueError("end_region requires an IF created by post_barrier_region")
+    if not body_roots: raise ValueError("post_barrier_region requires at least one ordered body root")
+    return UOp(Ops.ENDIF, dtypes.void, (self, *body_roots), arg=self.arg)
   def ins(self, arg, **kwargs): return UOp(Ops.INS, kwargs.pop("dtype", self.dtype), kwargs.pop("src", self.src), arg, kwargs.pop("tag", self.tag))
   def contract(self, *rngs:UOp):
     assert all(x.arg[-1] == AxisType.UPCAST for x in rngs), "all contract ranges must be upcast"
@@ -658,6 +802,26 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return UOp(Ops.RANGE, dtype=dtype, src=(sint_to_uop(end, dtype),)+src, arg=(axis_id, axis_type)+arg, **kwargs)
   @staticmethod
   def special(end:sint, name:str, dtype=dtypes.weakint): return UOp(Ops.SPECIAL, dtype=dtype, src=(sint_to_uop(end, dtype),), arg=name)
+  @staticmethod
+  def cooperative_tile_load(owner:UOp, tile_base:UOp, spec):
+    from tinygrad.uop.ops import CooperativeTileLoadSpec
+    if not isinstance(spec, CooperativeTileLoadSpec): raise TypeError("cooperative tile load requires CooperativeTileLoadSpec")
+    spec.validate()
+    return UOp(Ops.COOPERATIVE_TILE_LOAD, dtypes.half.ptr(2048, AddrSpace.LOCAL), (owner, tile_base), arg=spec)
+  @staticmethod
+  def cooperative_stage_begin(loop_axis:UOp, stage_generation:UOp, spec):
+    from tinygrad.uop.ops import CooperativeStageBeginSpec
+    if not isinstance(spec, CooperativeStageBeginSpec): raise TypeError("cooperative stage begin requires CooperativeStageBeginSpec")
+    spec.validate()
+    return UOp(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, (loop_axis, stage_generation), arg=spec)
+  @staticmethod
+  def packed_activation_carrier(record:UOp, spec):
+    """Construct a typed logical int8 view over a packed activation record."""
+    if not isinstance(record, UOp): record = getattr(record, "uop", None)
+    if not isinstance(record, UOp): raise TypeError("packed activation carrier requires a record UOp")
+    if not hasattr(spec, "logical_shape") or not hasattr(spec, "transform"):
+      raise TypeError("packed activation carrier requires a record spec")
+    return UOp(Ops.PACKED_ACTIVATION_CARRIER, spec.logical_dtype, (record,), arg=spec)
   def _rop(self, op:Ops, axis:tuple[int, ...]):
     axis = tuple(sorted([x for x in axis if resolve(self.shape[x] != 1)]))
     return UOp(Ops.REDUCE, self.dtype, (self,), (op, axis)) if len(axis) else self
@@ -998,6 +1162,26 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if self.op is Ops.GETTUPLE and self.src[0].op is Ops.TUPLE: return self.src[0].src[self.arg].has_buffer_identity()
     return self.op in {Ops.BUFFER, Ops.SLICE, Ops.PARAM}
 
+  def has_precompiled_output_identity(self):
+    """An exact result of a precompiled function receives a fresh contiguous output
+    buffer during callify. Before callify it is a GETTUPLE, so opaque consumers must
+    preserve this invocation rather than inserting a redundant contiguous adapter.
+    Movement/offset views are intentionally excluded; only the returned slot itself
+    has the output-buffer contract.  CONTIGUOUS over the exact output is the promised
+    materialization (the precompiled result is contiguous), so it preserves the
+    contract.  The schedule resolve spells a nested precompile call as
+    GETTUPLE(FUNCTION(src0=FUNCTION precompile=True)): a composite wrapper whose body
+    is the precompile call, which aliases the same fresh output slot."""
+    if self.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}: return self.src[0].has_precompiled_output_identity()
+    if self.op is not Ops.GETTUPLE or self.src[0].op is not Ops.FUNCTION: return False
+    fn = self.src[0]
+    if getattr(fn.arg, "precompile", False): return True
+    # composite wrapper: unwrap FUNCTION-of-FUNCTION until the body bottoms out at a
+    # precompile call (or a non-FUNCTION body, which has no output-buffer contract)
+    while fn.src[0].op is Ops.FUNCTION and not getattr(fn.arg, "precompile", False):
+      fn = fn.src[0]
+    return getattr(fn.arg, "precompile", False)
+
   def _base_buffer_is_realized(self) -> bool:
     """Walk through AFTER chain to find if the underlying buffer is realized (has allocated memory)."""
     u = self.base
@@ -1236,16 +1420,18 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   # TODO: this should replace placeholder
   @staticmethod
   def param(slot:int, dtype:DType, shape:tuple[sint, ...]|None=None, device=None, vmin_vmax:tuple[PyConst, PyConst]|None=None, name=None,
-            addrspace=AddrSpace.GLOBAL, axis:int|None=None):
+            addrspace=AddrSpace.GLOBAL, axis:int|None=None, const_restrict:bool=False):
     if shape is not None and axis is not None and isinstance(device, tuple):
       shape = tuple(s*len(device) if i == axis else s for i,s in enumerate(shape))
     src: tuple[UOp, ...] = (UOp(Ops.NOOP) if shape is None else shape_to_shape_arg(shape),)
-    return UOp(Ops.PARAM, dtype, src, arg=ParamArg(slot, vmin_vmax, name, addrspace, axis, device))
+    return UOp(Ops.PARAM, dtype, src, arg=ParamArg(slot, vmin_vmax, name, addrspace, axis, device, const_restrict))
   def param_like(self, slot:int):
     addrspace = self.addrspace if isinstance(self.dtype, (PtrDType, ImageDType)) else AddrSpace.GLOBAL
     if self.op is Ops.BIND:
       return UOp.param(slot, self.dtype, self._shape, self.device, cast(tuple[int, int], self._min_max), self.src[0].arg[0], addrspace)
-    return UOp.param(slot, self.dtype, self.shard_shape if self.axis is not None else self._shape, self.device, addrspace=addrspace, axis=self.axis)
+    const_restrict = self.arg.const_restrict if self.op is Ops.PARAM and isinstance(self.arg, ParamArg) else False
+    return UOp.param(slot, self.dtype, self.shard_shape if self.axis is not None else self._shape, self.device,
+                     addrspace=addrspace, axis=self.axis, const_restrict=const_restrict)
 
   # opaque bodies stay as Ops.CALL; value-producing bodies become Ops.FUNCTION (wrapped in TUPLE)
   _OPAQUE_CALL_BODIES = {Ops.SINK, Ops.PROGRAM, Ops.LINEAR, Ops.COPY, Ops.SLICE, Ops.CUSTOM_FUNCTION}
@@ -1257,12 +1443,44 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     # value-producing bodies are always wrapped in TUPLE so FUNCTION dtype is always void
     body = self if self.op is Ops.TUPLE else UOp.maketuple(self)
     return UOp(Ops.FUNCTION, dtypes.void, (body,)+srcs, CallInfo(grad_fxn, metadata, name, precompile, precompile_backward))
+
+  @staticmethod
+  def _preserved_rmsnorm_view(x:UOp) -> UOp|None:
+    """Unwrap a contiguous request over a pure view of a native RMSNorm marker.
+
+    The Path 3 semantic norm is lowered after the opaque consumers are built,
+    so the M5 typed-AFTER fold cannot fire at program-execution time. Keeping
+    the rank-1 view over the marker (rather than materializing CONTIGUOUS)
+    lets the later semantic substitution bind the call argument to the native
+    norm's AFTER buffer. Every non-pure movement or non-marker terminal keeps
+    the conservative materializing boundary.
+    """
+    if x.op is not Ops.CONTIGUOUS: return None
+    original, expected = x.src[0], x.src[0].numel()
+    cur = original
+    while cur.op in (Ops.MEMORY_SEMANTIC, Ops.RESHAPE, Ops.SLICE) and len(cur.src) >= 1:
+      if cur.numel() != expected: return None
+      if cur.op is Ops.SLICE and any(offset != 0 for offset in cur.arg[0]): return None
+      cur = cur.src[0]
+    if cur.op is Ops.RMSNORM and cur.dtype == original.dtype and cur.device == original.device: return original
+    return None
+
   def custom_kernel(*srcs:UOp, fxn:Callable, grad_fxn:Callable|None=None) -> list[UOp]:
     # MEMORY_SEMANTIC is transparent to physical layout. Preserve an already
     # concrete buffer/view argument so ownership metadata does not force a
     # redundant materialization before an opaque kernel.
-    contig_srcs = tuple(x if x.op is Ops.AFTER or (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity())
-                        else x.contiguous() for x in srcs)
+    contig_srcs = []
+    for x in srcs:
+      preserved = UOp._preserved_rmsnorm_view(x)
+      if preserved is not None:
+        contig_srcs.append(preserved)
+      elif x.op is Ops.AFTER or x.has_precompiled_output_identity() or \
+          (x.op is Ops.BITCAST and (x.src[0].has_buffer_identity() or \
+            (x.src[0].op is Ops.AFTER and x.src[0].src[0].has_buffer_identity()))) or \
+          (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity()):
+        contig_srcs.append(x)
+      else:
+        contig_srcs.append(x.contiguous())
     placeholders = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(contig_srcs)]
     kernel = fxn(*placeholders).call(*contig_srcs, grad_fxn=grad_fxn)
     return [s.after(kernel) for s in contig_srcs]
@@ -1456,7 +1674,7 @@ class SharedAttentionCandidateContext(NamedTuple):
 class NativeAttentionRequest(NamedTuple):
   native_abi: str
   candidate_context: SharedAttentionCandidateContext
-  grid: AMDAttentionGridSpec
+  grid: AttentionGridSpec
   input_dtype: DType
   combine_fn: str
 
@@ -1636,7 +1854,11 @@ class RowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("online softmax LDS repack requires a workgroup barrier")
     return self
 
-class AMDRowSoftmaxRepackSpec(NamedTuple):
+def native_attention_abi(abi: str, suffix: str) -> bool:
+  """True for the native fused-attention ABI names of any modeled target."""
+  return abi in {f"amd_gfx1100_{suffix}", f"nv_sm120_{suffix}"}
+
+class NativeRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
 
   This descriptor is scheduler-owned. It deliberately records every physical
@@ -1664,14 +1886,22 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
   valid_kv: int = 16
   dynamic_kv_v1: bool = False
   grid: Any|None = None
+  fragment_model: Any|None = None
 
   def validate(self):
-    if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
-      raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
-    if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
-      raise ValueError("row-softmax native repack requires 8-lane float QK-C and 16-lane half PV-A")
-    if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
-      raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("online_softmax_qk_pv_v1") or \
+         self.target != self.fragment_model.arch or self.wave_size != 32:
+        raise ValueError("row-softmax native repack requires its fragment model's ABI")
+      if (self.qk_c_lanes, self.pv_a_lanes) != (self.fragment_model.score_elements, self.fragment_model.pv_a_lanes):
+        raise ValueError("row-softmax native repack requires the fragment model's lane widths")
+    else:
+      if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
+        raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
+      if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
+        raise ValueError("row-softmax native repack requires 8-lane float QK-C and 16-lane half PV-A")
+      if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
+        raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
     if (self.lds_dtype, self.lds_elements, self.lds_address) != ("half", 256, "row*16+col"):
       raise ValueError("row-softmax native repack requires the exact 256-half LDS identity map")
     if self.requires_barrier is not True or self.reload_layout != "wmma_f32_16x16x16_f16_pv_a_wave32_v1":
@@ -1713,11 +1943,12 @@ class AMDPVCLaneSpec(NamedTuple):
       raise ValueError("PV-C lane projection element must be in [0,8)")
     return self
 
-class AMDRowSoftmaxSlotSpec(NamedTuple):
+class RowSoftmaxSlotSpec(NamedTuple):
   native_abi: str = "amd_gfx1100_online_softmax_qk_pv_v1"
   slot: int = 0
   scalar_dtypes: tuple[str, ...] = ("half", "float", "float", "float")
   lane_counts: tuple[int, ...] = (16, 8, 8, 8)
+  fragment_model: Any|None = None
 
   @property
   def lanes(self) -> int: return self.lane_counts[self.slot]
@@ -1729,14 +1960,19 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
   def carrier_dtype(self) -> DType: return self.scalar_dtype.vec(self.lanes)
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \
-       ("half", "float", "float", "float") or self.lane_counts != (16, 8, 8, 8):
+    if self.fragment_model is not None:
+      expected_lanes = (self.fragment_model.pv_a_lanes,) + (self.fragment_model.score_elements,) * 3
+      if self.native_abi != self.fragment_model.abi("online_softmax_qk_pv_v1") or \
+         self.scalar_dtypes != ("half", "float", "float", "float") or self.lane_counts != expected_lanes:
+        raise ValueError("native row-softmax slot requires its fragment model's repack ABI")
+    elif self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.scalar_dtypes != \
+         ("half", "float", "float", "float") or self.lane_counts != (16, 8, 8, 8):
       raise ValueError("native row-softmax slot requires exact gfx1100 repack ABI")
     if not isinstance(self.slot, int) or not 0 <= self.slot < 4:
       raise ValueError("native row-softmax slot must be in [0,4)")
     return self
 
-class AMDAttentionGridSpec(NamedTuple):
+class AttentionGridSpec(NamedTuple):
   """Compile-time launch ownership for the fixed 16x16x128 attention wave."""
   native_abi: str = "amd_gfx1100_attention_grid_hd128_v1"
   q_tokens: int = 32
@@ -1748,6 +1984,7 @@ class AMDAttentionGridSpec(NamedTuple):
   group_expr: str = "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio"
   wave_size: int = 32
   local_size: int = 32
+  fragment_model: Any|None = None
 
   @property
   def q_tiles(self): return self.q_tokens//16
@@ -1763,7 +2000,10 @@ class AMDAttentionGridSpec(NamedTuple):
     return q_head,q_tile,q_head//self.group_ratio
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("AMD attention grid has an unsupported ownership ABI")
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("attention_grid_hd128_v1"): raise ValueError("attention grid has an unsupported fragment-model ABI")
+    elif self.native_abi != "amd_gfx1100_attention_grid_hd128_v1": raise ValueError("AMD attention grid has an unsupported ownership ABI")
+    if self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("attention grid has an unsupported ownership ABI")
     if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.wave_size,self.local_size)): raise ValueError("AMD attention grid dimensions must be integral")
     # head_dim was pinned "!=128" here; de-literalized to "any positive 16-wide head_dim" (the 16 is
     # our fragment granularity, hardware, and stays literal -- symmetric with decode's Hd%64 posture).
@@ -1812,15 +2052,16 @@ class AMDMultiWaveAttentionGridSpec(NamedTuple):
       raise ValueError("AMD multiwave attention requires 16-wide tokens and G2 heads")
     return self
 
-class AMDAttentionOutputDrainSpec(NamedTuple):
+class AttentionOutputDrainSpec(NamedTuple):
   """Typed final ownership boundary for the native Hd128 attention ABI."""
   native_abi: str = "amd_gfx1100_attention_output_drain_v1"
   head_dim: int = 128
   blocks: int = 8
   lanes_per_fragment: int = 8
   address_expr: str = "e*256+halfwave*128+j*16+col"
-  grid: AMDAttentionGridSpec|None = None
+  grid: AttentionGridSpec|None = None
   output_block_base: int = 0
+  fragment_model: Any|None = None
 
   @property
   def drain_lane_coeffs(self) -> tuple[int, int, int, int]:
@@ -1865,13 +2106,22 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
     # this validator is what now encodes the invariant -- byte-identical at head_dim=128.
     hdb = self.head_dim // 16
     expected_addr = self.address_expr_text
-    full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
-      self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
     # Proper divisors of hdb (< hdb): at head_dim=128 (hdb=8) this is exactly {1,2,4}, unchanged.
     slice_divisors = {d for d in range(1, hdb) if hdb % d == 0}
-    slice_ok = self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and \
-      self.blocks in slice_divisors and self.lanes_per_fragment == 8 and self.address_expr == expected_addr and \
-      0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
+    if self.fragment_model is not None:
+      # The fragment model is the drain lane-layout authority; address_expr is
+      # decorative on the model path (NV has no hand-authored text).
+      full = self.native_abi == self.fragment_model.abi("attention_output_drain_v1") and self.blocks == hdb and \
+        self.lanes_per_fragment == self.fragment_model.score_elements and self.output_block_base == 0
+      slice_ok = self.native_abi == self.fragment_model.abi("attention_output_drain_acc_slice_v2") and \
+        self.blocks in slice_divisors and self.lanes_per_fragment == self.fragment_model.score_elements and \
+        0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
+    else:
+      full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
+        self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
+      slice_ok = self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and \
+        self.blocks in slice_divisors and self.lanes_per_fragment == 8 and self.address_expr == expected_addr and \
+        0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
     if not full and not slice_ok:
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     if self.grid is not None: self.grid.validate()
@@ -1895,7 +2145,7 @@ class AMDAttentionStatsDrainSpec(NamedTuple):
     if self.native_abi != "amd_gfx1100_attention_qk_stats_drain_v1": raise ValueError("AMD attention stats drain ABI mismatch")
     return self
 
-class AMDLoopStateSpec(NamedTuple):
+class LoopStateSpec(NamedTuple):
   """Scheduler-visible recurrence ownership for the unlowered KV tile loop."""
   native_abi: str = "amd_gfx1100_attention_loop_state_v1"
   role: str = "m"
@@ -1903,7 +2153,7 @@ class AMDLoopStateSpec(NamedTuple):
   block: int = 0
   lane: int = 0
   owner: int = 9404
-  # This NamedTuple has no grid field to read head_dim from (unlike AMDPackedFragmentLoopSpec), so an
+  # This NamedTuple has no grid field to read head_dim from (unlike PackedFragmentLoopSpec), so an
   # optional head_dim is added here, defaulted to 128 -> every existing construction site (both in
   # tinygrad/schedule/wmma/loop_state.py) is unchanged/byte-identical without threading a new arg.
   head_dim: int = 128
@@ -1924,24 +2174,116 @@ class AMDLoopStateSpec(NamedTuple):
       raise ValueError("AMD attention loop state has an invalid owner")
     return self
 
-class AMDPackedFragmentLoopSpec(NamedTuple):
+class CooperativeTileLoadSpec(NamedTuple):
+  """Fail-closed NV research contract for one cooperative 16x128 half tile."""
+  native_abi: str = "nv_sm120_cooperative_tile_load_v1"
+  storage: str = "shared"
+  tile_shape: tuple[int,int] = (16, 128)
+  threads: int = 128
+  elems_per_thread: int = 16
+  shared_stride: int = 128
+  tile_base: Any = None
+  phase_abi: str = "single_buffer_barrier_v1"
+  loop_axis: Any = None
+  stage_generation: int = 0
+  end_barrier_token: Any = None
+  slots: int = 1
+  slot_index: Any = 0
+  pre_barrier: bool = False
+  def validate(self):
+    if self.native_abi != "nv_sm120_cooperative_tile_load_v1" or self.storage != "shared": raise ValueError("invalid NV cooperative tile ABI")
+    if self.tile_shape != (16,128) or self.threads != 128 or self.elems_per_thread != 16 or self.shared_stride != 128: raise ValueError("NV cooperative tile requires exact 16x128/128-thread geometry")
+    if self.phase_abi != "single_buffer_barrier_v1" or self.tile_base is None: raise ValueError("NV cooperative tile requires a tile base and phase ABI")
+    if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("NV cooperative tile stage generation must be non-negative")
+    if not isinstance(self.slots, int) or self.slots < 1: raise ValueError("NV cooperative tile slots must be positive")
+    if not isinstance(self.pre_barrier, bool): raise ValueError("NV cooperative tile pre_barrier must be bool")
+    if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV tile end barrier requires a loop axis")
+    return self
+
+class CooperativeStageBeginSpec(NamedTuple):
+  """NV cooperative KV iteration entry; exactly one CTA barrier per iteration."""
+  native_abi: str = "nv_sm120_cooperative_stage_begin_v1"
+  loop_axis: Any = None
+  stage_generation: int = 0
+  ordering_token: str = "single_buffer_barrier_v1"
+  def validate(self):
+    if self.native_abi != "nv_sm120_cooperative_stage_begin_v1" or self.ordering_token != "single_buffer_barrier_v1":
+      raise ValueError("invalid NV cooperative stage-begin ABI")
+    if self.loop_axis is None or not isinstance(self.stage_generation, int) or isinstance(self.stage_generation, bool) or self.stage_generation < 0:
+      raise ValueError("cooperative stage begin requires a loop axis and non-negative generation")
+    return self
+
+class SharedTileOwnerSpec(NamedTuple):
+  native_abi: str = "nv_sm120_shared_tile_owner_v1"
+  shape: tuple[int,int] = (16,128)
+  dtype: Any = dtypes.half
+  phase_token: str = "single_buffer_barrier_v1"
+  threads: int = 128
+  tile_stride: int = 128
+  loop_axis: Any = None
+  stage_generation: int = 0
+  end_barrier_token: Any = None
+  slots: int = 1
+  slot_index: Any = 0
+  def validate(self):
+    if self.native_abi != "nv_sm120_shared_tile_owner_v1" or self.shape != (16,128) or self.dtype is not dtypes.half or self.phase_token != "single_buffer_barrier_v1" or self.threads != 128 or self.tile_stride != 128: raise ValueError("invalid NV shared tile owner")
+    if not isinstance(self.slots, int) or self.slots < 1: raise ValueError("invalid NV shared tile slots")
+    if not isinstance(self.stage_generation, int) or self.stage_generation < 0: raise ValueError("invalid NV shared tile generation")
+    if self.loop_axis is None and self.end_barrier_token is not None: raise ValueError("NV shared tile end barrier requires loop axis")
+    return self
+
+class CooperativeQRoPEStageSpec(NamedTuple):
+  native_abi: str = "nv_sm120_q_rope_stage_pp512_v1"
+  q_tokens: int = 512
+  q_heads: int = 32
+  head_dim: int = 128
+  warps: int = 4
+  tile_elements: int = 2048
+  def validate(self):
+    if tuple(self) != ("nv_sm120_q_rope_stage_pp512_v1",512,32,128,4,2048): raise ValueError("invalid exact NV pp512 Q-RoPE stage")
+    return self
+
+class PackedFragmentLoopSpec(NamedTuple):
   """Exact Hd128 fragment role plus a runtime KV-tile RANGE source."""
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
   role: str = "Q"
   head_block: int = 0
-  grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
+  grid: AttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
   fragment_lanes: int = 16
+  call: int = 0
+  fragment_model: Any|None = None
+  physical_local_size: int = 32
+  storage: str = "global"
+  shared_phase_abi: str|None = None
+  stage_wait: Any = None
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
+    if self.storage not in {"global", "shared"}: raise ValueError("packed fragment storage must be global or shared")
+    if self.storage == "shared" and (not self.native_abi.startswith("nv_sm120_") or self.shared_phase_abi != "single_buffer_barrier_v1"):
+      raise ValueError("shared packed fragments require NV single-buffer phase ABI")
+    if self.fragment_model is not None:
+      if self.native_abi != self.fragment_model.abi("packed_fragment_hd128_loop_v1") or \
+         self.role not in {"Q", "K", "V"} or self.fragment_lanes != self.fragment_model.fragment_lanes(self.role):
+        raise ValueError("loop fragment has an unsupported fragment-model ABI or role")
+      if not isinstance(self.call, int) or isinstance(self.call, bool) or not 0 <= self.call < self.fragment_model.calls_per_tile:
+        raise ValueError("loop fragment call is outside its fragment model's tile composition")
+    elif (self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" and
+          not (self.storage == "shared" and self.native_abi == "nv_sm120_packed_fragment_hd128_loop_v1")) or \
+         self.role not in {"Q", "K", "V"} or self.fragment_lanes != 16:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
+    if self.grid is None and self.call != 0:
+      raise ValueError("loop fragment call requires a grid")
     # `head_block` is a HEAD-BLOCK COUNT -> derives from the bound grid's head_dim (128//16==8,
     # byte-identical). When grid is None, keep the legacy literal 8 default for back-compat.
     hdb = self.grid.head_dim//16 if self.grid is not None else 8
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < hdb:
       raise ValueError("AMD loop fragment has an invalid head block")
     if self.grid is not None: self.grid.validate()
+    if self.stage_wait is not None and getattr(self.stage_wait, "op", None) is not Ops.BARRIER:
+      raise ValueError("shared packed fragment stage_wait must be a barrier")
+    if not isinstance(self.physical_local_size, int) or self.physical_local_size <= 0 or self.physical_local_size % 32:
+      raise ValueError("loop fragment physical_local_size must be a positive wave32 multiple")
     return self
 
 class CompositeInputSpec(NamedTuple):
@@ -2023,8 +2365,87 @@ class AttentionSpec(NamedTuple):
   # Native GQA is opt-in at the shared prefill boundary.  It records the
   # original Q/K/V head ownership instead of making repeat_interleave part of
   # the selected path; unsupported targets keep the ordinary fallback.
-  attention_grid: AMDAttentionGridSpec|None = None
+  attention_grid: AttentionGridSpec|None = None
   attention_context: SharedAttentionCandidateContext|None = None
+
+
+class RMSNormSpec(NamedTuple):
+  """Immutable semantics for an RMSNorm operation before scheduler lowering.
+
+  src[0] of Ops.RMSNORM is the ordinary, semantically identical fallback
+  result; src[1] is the input x and src[2] is the optional affine weight.
+  The arg carries only scalar/layout facts so substitution cannot lose a
+  tensor dependency (path3-semantic-rmsnorm-task-20260802.md section 2).
+  """
+  dim: int
+  eps: float
+  out_dtype: Any
+  affine: bool = True
+
+class ReduceOutputSpec(NamedTuple):
+  """A bounded cooperative reduction followed by an output-wide epilogue.
+
+  The body is derived entirely from this record: the reduction reproduces the
+  ordinary reduce association bitwise.  Single-row shapes mirror the ordinary
+  r_16_256 kernel (each warp serially sums ``per_lane * lanes`` CONTIGUOUS
+  elements, lane 0 publishes the per-warp partial, and the partials are
+  combined in a serial chain); the multi-row q/k shapes (rows 8/32 x dim 128)
+  mirror the ordinary r_8_16_8 / r_2_8_4_4_16 tiling (P partial chains of S
+  strided elements plus a serial combine in t order).  The recipe string
+  selects the per-lane accumulation and epilogue (``sumsq_rsqrt_affine`` is
+  the shipped legacy RMSNorm recipe; ``max_affine`` is the MAX-reduce affine
+  variant).  The epilogue keeps all lanes busy (``per_lane`` elements per
+  lane), so the fused launch stays wide while the reduction is bitwise-equal
+  to the ordinary program.  The carrier remains generic in ownership: fallback
+  and every logical input are source-visible, while lowering is
+  target/layout fail-closed.
+  """
+  rows: int
+  dim: int
+  eps: float
+  out_dtype: Any
+  affine: bool = True
+  recipe: str = "sumsq_rsqrt_affine"
+  # Reduce op for the serial per-warp accumulation.  Only ADD/MAX may be
+  # expressed; anything else fails closed at the emitter (same ValueError ->
+  # reject path as the legacy single-recipe body).
+  reduce_op: Ops = Ops.ADD
+  # Warp/lane/per-lane association, derived from the ordinary reduce shape:
+  # each warp serially sums per_lane*lanes contiguous elements (the ordinary
+  # per-thread extent), the 16 partials combine in a serial chain, and the
+  # epilogue distributes per_lane elements per lane over lanes*warps threads.
+  warps: int = 16
+  lanes: int = 32
+  per_lane: int = 8
+  # Proven at marker creation, before callify can turn a lazy expression into
+  # an invocation PARAM. Late lowering may never infer this from PARAM shape.
+  input_identity_at_marker: bool = False
+  # An exact owned MEMORY_SEMANTIC(CONTIGUOUS(...)) production spelling is a
+  # candidate, not identity. Late lowering must still prove the invocation's
+  # durable output slot, AFTER dependency, and physical buffer contract.
+  owned_contiguous_candidate: bool = False
+  # Callify may bind the candidate to one exact invocation input PARAM after
+  # proving that the corresponding concrete argument is a dependency-bearing
+  # precompiled output. A bare PARAM without this invocation-local proof is
+  # never sufficient.
+  invocation_input_slot: int|None = None
+  # The warp-coop carrier chain
+  # ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))`` is a bounded
+  # kernel-output identity proven at marker creation: the REDUCE reads an
+  # invocation-owned AFTER and is itself a kernel output.  Lowering
+  # materializes that exact REDUCE into a fresh buffer so the fused body
+  # reads the reduced input (bitwise the same kernel the ordinary spelling
+  # runs), never the raw partials.
+  reduce_input_at_marker: bool = False
+  # ``ADD(after, after)`` is the decode block residual ``h = x + attn_out``:
+  # a bounded residual-sum identity proven at marker creation (both operands
+  # are invocation-owned producers). Lowering materializes that exact ADD into
+  # a fresh buffer so the fused body reads the residual-add kernel output, the
+  # same residual the ordinary ffn-norm chain consumes.
+  residual_sum_at_marker: bool = False
+  # Optional output-wide epilogue. ``identity`` preserves the historical
+  # behavior. ``rope`` is admitted only for the bounded q/k rows x 128 shape.
+  epilogue: str = "identity"
 
 
 @dataclass(frozen=True)
@@ -2063,6 +2484,18 @@ class ScheduleHints:
       raise ValueError("ScheduleHints.name must be None or a non-empty string")
 
 @dataclass(frozen=True)
+class RuntimeLocalAllocation:
+  """A workgroup-local arena whose storage is supplied by the launch ABI."""
+  size_bytes: int
+  alignment: int = 16
+
+  def __post_init__(self):
+    if not isinstance(self.size_bytes, int) or isinstance(self.size_bytes, bool) or self.size_bytes <= 0:
+      raise ValueError("runtime local allocation size must be a positive integer")
+    if not isinstance(self.alignment, int) or isinstance(self.alignment, bool) or self.alignment <= 0 or self.alignment & (self.alignment-1):
+      raise ValueError("runtime local allocation alignment must be a positive power of two")
+
+@dataclass(frozen=True)
 class ProgramInfo:
   name: str = "test"
   global_size: tuple[int|float, ...] = (1, 1, 1)
@@ -2075,6 +2508,14 @@ class ProgramInfo:
   wmma_roles: WMMARoleLedger = WMMARoleLedger()
   wmma_role_expectation: tuple[AttentionWMMARole, ...] = ()
   candidate_context: SharedAttentionCandidateContext|None = None
+  # Explicit by-value launch payloads for native kernels. Each entry is
+  # (argument index, raw bytes, alignment); ordinary globals/vals remain ABI
+  # compatible and occupy their usual slots when this is empty.
+  arg_blobs: tuple[tuple[int, bytes, int], ...] = ()
+  arg_layout: tuple[tuple[str, int, int, int], ...] = ()
+  # Positive construction provenance for finalized PROGRAMs. None is deliberately
+  # fail-closed for manually assembled or legacy PROGRAM UOps.
+  provenance: tuple[str, str, str]|None = None
 
   @property
   def function_name(self): return to_function_name(self.name)
@@ -2087,7 +2528,11 @@ class ProgramInfo:
     local_size = tuple([sym_infer(sz, var_vals) for sz in self.local_size]) if self.local_size is not None else None
     return global_size, local_size
 
-  def vals(self, var_vals:dict[str, int]): return tuple(var_vals[k.expr] if k.expr not in self.runtimevars else None for k in self.vars)
+  def vals(self, var_vals:dict[str, int]):
+    # Finalized native PROGRAMs may carry ABI scalars as degenerate variables
+    # (vmin == vmax). They are compile-time launch metadata and need no graph
+    # binding; ordinary symbolic vars retain the existing lookup contract.
+    return tuple(None if k.expr in self.runtimevars else (k.vmin if k.vmin == k.vmax else var_vals[k.expr]) for k in self.vars)
 
   @staticmethod
   def from_sink(sink:UOp, aux:tuple=()) -> ProgramInfo:
@@ -2121,12 +2566,18 @@ class CallInfo:
   precompile: bool = False
   precompile_backward: bool = False
   memory_semantic_slots: tuple[tuple[int, Any], ...] = ()
+  # Invocation argument slots that callify proved are direct outputs of a
+  # precompiled FUNCTION. This survives SINK -> LINEAR recursive scheduling;
+  # consumers must still prove exact argument identity and dependency.
+  precompiled_output_slots: tuple[int, ...] = ()
   # grad_fxn can't be pickled, but metadata can
   def __reduce__(self):
-    return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward, self.memory_semantic_slots))
+    return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward,
+                       self.memory_semantic_slots, self.precompiled_output_slots))
   def __repr__(self):
     gf = id(self.grad_fxn) if self.grad_fxn else None
-    return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, {self.memory_semantic_slots})"
+    return (f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, "
+            f"{self.memory_semantic_slots}, {self.precompiled_output_slots})")
 
 
 DIAGNOSTIC_LAUNCH_AUTHORITY = "tinygrad.research_only.call_global_size.v1"
@@ -2140,7 +2591,8 @@ class DiagnosticCallInfo(CallInfo):
   def __reduce__(self):
     return (DiagnosticCallInfo, (
       None, self.metadata, self.name, self.precompile, self.precompile_backward,
-      self.memory_semantic_slots, self.diagnostic_global_size, self.diagnostic_launch_authority))
+      self.memory_semantic_slots, self.precompiled_output_slots,
+      self.diagnostic_global_size, self.diagnostic_launch_authority))
   def __repr__(self):
     return (f"DiagnosticCallInfo({super().__repr__()}, {self.diagnostic_global_size}, "
             f"{repr(self.diagnostic_launch_authority)})")
@@ -2191,11 +2643,11 @@ def safe_pow(x, y):
 
 python_alu: dict[Ops, Callable]  = {
   Ops.LOG2: lambda x: math.log2(x) if x > 0 else -math.inf if x == 0 else math.nan, Ops.EXP2: safe_exp2,
-  Ops.SQRT: lambda x: math.sqrt(x) if x >= 0 else math.nan, Ops.RECIPROCAL: lambda x: 1/x if x != 0 else math.copysign(math.inf, x),
+  Ops.SQRT: lambda x: math.sqrt(x) if x >= 0 else math.nan, Ops.RECIPROCAL: lambda x: 1/x if x != 0 else math.copysign(math.inf, x), Ops.ROUND_AWAY: lambda x: math.floor(x+0.5) if x >= 0 else math.ceil(x-0.5),
   Ops.SIN: lambda x: math.sin(x) if not math.isinf(x) else math.nan, Ops.POW: safe_pow, Ops.TRUNC: math.trunc,
   Ops.NEG: operator.neg, Ops.ADD: operator.add, Ops.SUB: operator.sub, Ops.MUL: operator.mul, Ops.CMPNE: operator.ne, Ops.CMPLT: operator.lt,
   Ops.XOR: operator.xor, Ops.OR: operator.or_, Ops.AND: operator.and_, Ops.SHR: operator.rshift, Ops.SHL: operator.lshift, Ops.MAX: max,
-  Ops.CMOD: cmod, Ops.CDIV: cdiv, Ops.FLOORDIV: floordiv, Ops.FLOORMOD: floormod,
+  Ops.CMOD: cmod, Ops.CDIV: cdiv, Ops.PRECISE_DIV: operator.truediv, Ops.FLOORDIV: floordiv, Ops.FLOORMOD: floormod,
   Ops.MULACC: lambda x,y,z: (x*y)+z, Ops.WHERE: lambda x,y,z: y if x else z, Ops.CMPEQ: operator.eq}
 
 def exec_alu(op:Ops, dtype:DType, operands, truncate_output=True):

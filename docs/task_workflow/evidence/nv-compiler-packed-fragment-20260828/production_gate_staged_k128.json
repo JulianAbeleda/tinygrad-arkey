@@ -1,0 +1,93 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_production_gate.v1",
+  "shape": {
+    "M": 512,
+    "N": 12288,
+    "K": 4096
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.0.ffn_gate.weight"
+  },
+  "identity": "6277456812fc21fa30d5521e1e2a1ad2e7600ef108f2d1d572953fd3a99976b0",
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 6291456,
+    "max_abs": 0.000213623046875,
+    "mean_abs": 8.06683692644583e-06,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "compiler": {
+    "ordinary_matmul": true,
+    "expanded_global_weight_allocation": false,
+    "programs": 1,
+    "signed_imma": true,
+    "candidate_identity_exact": true,
+    "source": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_staged_k128.cu",
+    "sass": {
+      "path": "docs/task_workflow/evidence/nv-compiler-packed-fragment-20260828/production_gate_staged_k128.sass",
+      "imma": 64,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 110,
+      "local_store": 174
+    }
+  },
+  "timing": {
+    "generated_us": {
+      "min": 745.281,
+      "median": 752.125,
+      "samples": [
+        764.057,
+        761.092,
+        752.125,
+        751.814,
+        755.612,
+        749.86,
+        749.47,
+        745.281,
+        752.355
+      ]
+    },
+    "v4_static_oracle_us": {
+      "min": 1259.36,
+      "median": 1259.808,
+      "samples": [
+        1260.032,
+        1259.872,
+        1260.512,
+        1259.456,
+        1259.776,
+        1259.808,
+        1259.36,
+        1259.904,
+        1259.712
+      ]
+    },
+    "v4_qualified_chain_us": {
+      "min": 464.57599999999996,
+      "median": 465.69599999999997,
+      "samples": [
+        465.088,
+        465.79200000000003,
+        466.048,
+        465.69599999999997,
+        466.08,
+        464.57599999999996,
+        465.472,
+        465.18399999999997,
+        465.69599999999997
+      ]
+    },
+    "generated_over_v4_min": 1.6042176091748175
+  },
+  "passed_correctness": true,
+  "passed_performance": false,
+  "passed": false
+}

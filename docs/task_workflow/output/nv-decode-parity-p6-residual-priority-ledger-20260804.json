@@ -1,0 +1,296 @@
+{
+  "schema": "tinygrad.nv_decode_parity_residual_priority_ledger.v1",
+  "status": "FULL_GAP_RECONCILED_CAUSAL_LOCATION_PASS_IMPLEMENTATION_RECOVERY_OPEN",
+  "authority": {
+    "depth": 512,
+    "model": "Qwen3-8B-Q4_K_M.gguf",
+    "llama_ms_per_token": 3.96614,
+    "tinygrad_cuda_s1_ms_per_token": 5.61323,
+    "tinygrad_native_nv_ms_per_token": 5.61231,
+    "native_minus_llama_us": 1646.17,
+    "native_minus_cuda_us": -0.93,
+    "source": "nv-decode-parity-p1-baseline-p15-boundary-record-20260804.md"
+  },
+  "constraints_not_budget_debits": {
+    "llama_unprofiled_graph_span_us": 3889.808,
+    "llama_outside_graph_remainder_us": 81.979,
+    "llama_profiled_kernel_union_us": 3879.947,
+    "llama_profiled_non_mmq_exposed_us": 300.736,
+    "llama_profiled_non_mmq_hidden_us": 445.954,
+    "tinygrad_historical_cuda_node_sum_us": 5109.61,
+    "tinygrad_historical_physical_merged_cp_us": 3981.512,
+    "planner_delta_us": 38.592,
+    "single_graph_regression_us": 378.0
+  },
+  "cuda_device_window_boundary": {
+    "evidence": "OBSERVATIONAL_EVENT_MARKERS",
+    "marker_off_wall_us": 5634.824978,
+    "marker_on_wall_us": 5638.025934,
+    "marker_overhead_us": 3.200956,
+    "group_span_sum_us": 5376.32,
+    "inter_group_gap_sum_us": 2.4,
+    "device_window_us": 5378.688,
+    "outside_window_us": 263.071001,
+    "llama_independent_graph_span_us": 3889.808,
+    "llama_independent_outside_graph_us": 81.979,
+    "cross_session_graph_device_delta_us": 1488.88,
+    "cross_session_outside_window_delta_us": 181.092001,
+    "verdict": "SIX_GRAPH_INTER_GROUP_GAPS_NOT_CAUSAL",
+    "native_residual_booking_us": 0.0
+  },
+  "native_device_window_boundary": {
+    "evidence": "OBSERVATIONAL_NATIVE_QUEUE_TIMESTAMPS",
+    "groups": 5,
+    "programs": 948,
+    "marker_off_wall_us": 5613.207933,
+    "marker_on_wall_us": 5642.483942,
+    "device_window_us": 5291.424,
+    "derived_marker_free_outside_window_us": 321.783933,
+    "llama_independent_graph_span_us": 3889.808,
+    "llama_independent_outside_graph_us": 81.979,
+    "device_delta_us": 1401.616,
+    "outside_window_delta_us": 239.804933,
+    "reconciled_gap_us": 1641.420933,
+    "authority_gap_us": 1646.17,
+    "reconciliation_residual_us": 4.749067,
+    "reconciliation_residual_percent": 0.288,
+    "verdict": "OUTER_GAP_RECONCILED_SEMANTIC_PARTITION_OPEN"
+  },
+  "native_device_semantic_partition": {
+    "native_device_window_us": 5291.424,
+    "llama_device_window_us": 3889.808,
+    "authority_device_delta_us": 1401.616,
+    "native_non_quantized_us": 1408.818,
+    "llama_exposed_non_mmq_union_us": 300.736,
+    "non_quantized_delta_us": 1108.082,
+    "native_quantized_core_us": 3882.604,
+    "llama_mmq_union_us": 3579.816,
+    "quantized_core_delta_us": 302.788,
+    "llama_internal_gaps_us": 8.111,
+    "profiled_term_equation_us": 1402.759,
+    "reconciliation_error_us": 1.143,
+    "verdict": "PASS_TOP_LEVEL_DEVICE_SEMANTIC_PARTITION"
+  },
+  "native_nonquantized_mechanism_split": {
+    "native_serialized_us": 1408.818,
+    "llama_total_non_mmq_union_us": 746.69,
+    "llama_exposed_non_mmq_us": 300.736,
+    "llama_hidden_non_mmq_us": 445.954,
+    "fusion_dataflow_and_body_attribution_us": 662.128,
+    "hidden_overlap_delta_us": 445.954,
+    "critical_path_delta_us": 1108.082,
+    "ranked_critical_path_family_delta_us": {
+      "norms": 574.654,
+      "flash": 247.989,
+      "residuals_casts_and_contiguous": 240.319,
+      "vocab_sampler_and_token_feedback": 71.215,
+      "rope_and_kv_store": 33.543,
+      "llama_projection_input_quantization": -59.639
+    },
+    "verdict": "PASS_OVERLAP_SAFE_DISJOINT_PARTITION"
+  },
+  "exact_quantized_role_diagnostic": {
+    "llama_source_expansion_order": ["attn_q", "attn_v", "attn_k"],
+    "all_36_layers_exact": true,
+    "attn_v": {"native_us": 382.465, "llama_us": 165.053, "delta_us": 217.412},
+    "attn_k": {"native_us": 152.381, "llama_us": 117.376, "delta_us": 35.005},
+    "ffn_down": {"native_us": 1045.094, "llama_us": 867.076, "delta_us": 178.018},
+    "vocab": {"native_us": 314.432, "llama_us": 303.618, "delta_us": 10.814},
+    "ffn_gate_up": {"native_us": 1360.219, "llama_us": 1364.038, "delta_us": -3.819},
+    "attn_q": {"native_us": 316.227, "llama_us": 342.881, "delta_us": -26.654},
+    "attn_o": {"native_us": 311.786, "llama_us": 418.401, "delta_us": -106.615},
+    "warning": "independently medianed diagnostic roles do not sum exactly to aggregate MMQ union"
+  },
+  "role_evidence": {
+    "q6k_1024x4096_isolated": {
+      "tinygrad_complete_role_us": 42.994946,
+      "llama_exact_q8_to_mmq_us": 4.09856,
+      "ratio": 10.48978,
+      "token_wall_attribution": "UNPROVEN"
+    },
+    "one_q6k_real_token_ab": {
+      "correct": true,
+      "delta_us": -12.317,
+      "verdict": "WALL_NEUTRAL_WITHIN_SHORT_SAMPLE_NOISE",
+      "booking": 0.0
+    },
+    "q6k_attention_family_real_token_ab": {
+      "population_count": 18,
+      "token_identity_count": 31,
+      "control_a_ms_per_token": 5.6019605,
+      "ab_ms_per_token": 5.4151975,
+      "control_b_ms_per_token": 5.597085,
+      "recovery_signal_us": 184.325,
+      "independent_prior_recovery_signal_us": 179.373,
+      "verdict": "PASS_CAUSAL_CONVERSION",
+      "native_residual_booking_us": 0.0,
+      "native_qualification": "PENDING_NATIVE_OWNED_IMPLEMENTATION_AND_REMEASUREMENT"
+    },
+    "q6k_native_direct_output_microgate": {
+      "row_tile_2_delta_us": 39.97439,
+      "row_tile_1_delta_us": 61.401528,
+      "correctness_pass": true,
+      "dp4a_calls_in_rendered_source": 0,
+      "verdict": "REFUTED_AT_GATE_1_MISSING_PACKED_INT8_PROVIDER",
+      "native_residual_booking_us": 0.0
+    },
+    "q6k_native_int8x4_included_cost_microgate": {
+      "provider_emits_sm120_dp4a": true,
+      "run_deltas_us": [1.351988, 1.172032],
+      "verdict": "FAIL_GATE_1_SLOWER",
+      "native_residual_booking_us": 0.0
+    },
+    "q4k_attention_q_family_real_token_ab": {
+      "population_count": 36,
+      "token_identity_count": 32,
+      "control_a_ms_per_token": 5.596255,
+      "ab_ms_per_token": 5.638823,
+      "control_b_ms_per_token": 5.602644,
+      "delta_us": 39.3735,
+      "verdict": "NO_GO_SLOWER",
+      "native_residual_booking_us": 0.0,
+      "timing_basis": {
+        "unprofiled_batched_us": 6.2976003,
+        "profiled_batched_us": 8.5312001,
+        "profiled_single_replay_us": 11.6480002,
+        "interpretation": "profiler perturbation; node-trace duration is not unprofiled wall cost"
+      }
+    },
+    "q4k_gate_up_family_real_token_ab": {
+      "population_count": 36,
+      "generated_tokens_per_arm": 31,
+      "all_six_arms_identical": true,
+      "full_logits_bitwise_identical": true,
+      "cuda_recovery_signal_us": [54.8245, 67.31825],
+      "verdict": "PASS_CAUSAL_CUDA_DIAGNOSTIC",
+      "native_nv_already_fused": true,
+      "native_residual_booking_us": 0.0
+    },
+    "q4k_attention_o_family_real_token_ab": {
+      "population_count": 36,
+      "llama_fused_count": 35,
+      "llama_final_o_nonfused": true,
+      "token_identity_count": 32,
+      "control_a_ms_per_token": 5.608072,
+      "ab_ms_per_token": 5.630468,
+      "control_b_ms_per_token": 5.610438,
+      "delta_us": 21.213,
+      "verdict": "NO_GO_SLOWER",
+      "native_residual_booking_us": 0.0
+    },
+    "ffn_down_family_real_token_ab": {
+      "q4_population_count": 18,
+      "q4_tokens_identical": true,
+      "q4_substrate_recovery_us": 66.109,
+      "q4_full_semantic_recovery_us": 65.761,
+      "q4_incremental_residual_fusion_us": -0.348,
+      "q4_verdict": "PASS_CAUSAL_CUDA_SUBSTRATE",
+      "q6_population_count": 18,
+      "q6_full_family_tokens_identical": false,
+      "q6_first_divergent_token_index": 1,
+      "q6_max_correctness_valid_replacements": 2,
+      "q6_two_call_local_recovery_us": 46.801,
+      "q6_verdict": "NO_BOOKING_SEMANTIC_THRESHOLD",
+      "native_residual_booking_us": 0.0
+    }
+  },
+  "native_outside_window_partition": {
+    "canonical_outside_window_us": 321.783933,
+    "pre_first_graph_us": 247.557,
+    "drained_scalar_copyout_and_item_us": 83.247,
+    "python_yield_us": 3.096,
+    "final_synchronize_us": 4.358,
+    "disjoint_sum_us": 338.458,
+    "reconciliation_error_us": 16.674067,
+    "graph_submission_cpu_is_overlapped": true,
+    "verdict": "RECONCILED_WITHIN_50US"
+  },
+  "native_predispatch_partition": {
+    "pre_first_graph_us": 256.997,
+    "explained_us": 255.634,
+    "closure_us": 1.493,
+    "closure_percent": 0.5824,
+    "written_input_copy_rebind_us": 121.38,
+    "prepare_jit_inputs_us": 77.927,
+    "prepare_structural_signature_us": 49.284,
+    "before_tinyjit_us": 35.637,
+    "graph_cache_lookup_us": 1.112,
+    "post_entry_hcq_cpu_overlaps_device": true,
+    "verdict": "RECONCILED_EXACT_RUNTIME_PATHS"
+  },
+  "native_predispatch_causal_ab": {
+    "evidence": "NATIVE_NV_REVERSE_BRACKET",
+    "all_arms_exact_token_stream": true,
+    "structural_signature_cache_delta_us": -65.5355,
+    "reused_feedback_shadow_delta_us": -28.37175,
+    "combined_delta_us": -69.1655,
+    "individual_results_additive": false,
+    "promotion": "NONE",
+    "verdict": "PASS_CAUSAL_DIAGNOSTIC"
+  },
+  "support_family_causal_findings": {
+    "flash": {
+      "native_serialized_us": 305.581,
+      "llama_raw_class_interval_us": 363.716,
+      "llama_exposed_shapley_us": 57.592,
+      "critical_path_delta_us": 247.989,
+      "verdict": "OVERLAP_EXPOSURE_SUFFICIENT_BODY_PARITY_UNPROVEN"
+    },
+    "norms": {
+      "native_ordinary_two_program_device_span_us": 4.25,
+      "semantic_one_kernel_real_token_median_us": 3.07,
+      "isolated_custom_transport_wall_delta_us": 60.802,
+      "real_token_added_materialization_kernels": 110,
+      "verdict": "RAW_BODY_FAVORABLE_GRAPH_TRANSPORT_AND_MATERIALIZATION_BLOCK"
+    },
+    "epilogues": {
+      "critical_path_ownership_delta_us": 240.319,
+      "attention_o_native_fusion_delta_us": 69.0,
+      "llama_attention_o_substitution_delta_us": 21.213,
+      "ffn_down_incremental_residual_fusion_us": 0.348,
+      "verdict": "CURRENT_CONSTRUCTIONS_CLOSED_ORDINARY_UOP_IN_CORE_EPILOGUE_OPEN"
+    }
+  },
+  "native_residual": {
+    "authority_us": 1646.17,
+    "accepted_native_recovery_us": 0.0,
+    "unimplemented_recovery_us": 1646.17,
+    "causal_native_wall_signal_unbooked_for_full_logits_us": 69.1655,
+    "provisional_engineering_remainder_us": 1577.0045,
+    "reason_not_booked": "production sampled graph exposes exact token stream but not an independent full-logit oracle"
+  },
+  "exact_physical_gap_equation": {
+    "support_critical_path_delta_us": 1108.082,
+    "quantized_core_delta_us": 302.788,
+    "llama_internal_gaps_us": -8.111,
+    "profile_to_unprofiled_device_reconciliation_us": -1.143,
+    "outside_window_delta_us": 239.804933,
+    "outer_reconciliation_us": 4.749067,
+    "sum_us": 1646.17,
+    "authority_us": 1646.17,
+    "verdict": "PASS_PHYSICAL_ACCOUNTING_NOT_INDEPENDENT_RECOVERY_SUM"
+  },
+  "route_topology_distinction": {
+    "cuda_manifest_programs": 1021,
+    "cuda_gate_up_core_count": 72,
+    "native_nv_w1w3_fusion_promoted": true,
+    "native_gate_up_core_count": 36,
+    "rule": "CUDA replacement node removal and wall deltas are mechanism diagnostics and cannot be booked as native topology savings"
+  },
+  "cuda_diagnostic": {
+    "recovery_signal_us": 184.325,
+    "independent_prior_recovery_signal_us": 179.373,
+    "cross_backend_hypothetical_residual_us": 1461.845,
+    "authoritative": false,
+    "reason": "DEV=CUDA diagnostic cannot debit native-NV minus llama residual before native-owned same-session A/B"
+  },
+  "priority_arms": [
+    {"id": "P6-A", "population": "Q6_K 1024x4096 attention", "count": 18, "status": "CUDA_PASS_NATIVE_DIRECT_AND_INCLUDED_DP4A_FAIL", "cuda_recovery_signal_us": 184.325, "independent_prior_cuda_recovery_signal_us": 179.373, "native_direct_candidate_deltas_us": [39.97439, 61.401528], "native_int8x4_included_cost_deltas_us": [1.351988, 1.172032], "native_residual_booking_us": 0.0, "exclusive_booking_group": "q6_attention"},
+    {"id": "P6-B", "population": "Q4_K 12288x4096 gate/up", "count": 36, "tinygrad_cuda_cores": 72, "tinygrad_native_nv_cores": 36, "native_nv_already_fused": true, "status": "PASS_CAUSAL_CUDA_DIAGNOSTIC_ZERO_NATIVE_CREDIT", "cuda_recovery_signal_us": [54.8245, 67.31825], "native_residual_booking_us": 0.0, "exclusive_booking_group": "ffn_gate_up"},
+    {"id": "P6-C", "population": "Q4_K 4096x4096 attention Q/O", "count": 72, "status": "Q_AND_O_LLAMA_SUBSTITUTIONS_NO_GO", "attention_q_cuda_delta_us": 39.3735, "attention_o_cuda_delta_us": 21.213, "native_residual_booking_us": 0.0, "exclusive_booking_group": "attention_q_o"},
+    {"id": "P6-D", "population": "Q4/Q6 4096x12288 fused FFN down", "count": 36, "status": "Q4_PASS_CUDA_Q6_SEMANTIC_BLOCK", "q4_cuda_recovery_us": [65.761, 66.109], "q6_native_booking_us": 0.0, "exclusive_booking_group": "ffn_down"},
+    {"id": "P6-E", "population": "fixed work and vocab", "count": 731, "status": "ACCOUNTED_662_128US_FUSION_DATAFLOW_BODY_PLUS_445_954US_HIDDEN_OVERLAP", "exclusive_booking_group": "fixed_work"},
+    {"id": "P6-F", "population": "native predispatch", "count": 1, "status": "PASS_CAUSAL_DIAGNOSTIC_NOT_PROMOTED", "combined_delta_us": -69.1655, "native_residual_booking_us": 0.0, "exclusive_booking_group": "predispatch"}
+  ],
+  "accounting_rule": "native_unexplained_us = 1646.17 - sum(accepted correctness-passing disjoint same-session native-NV family A/B recoveries); CUDA diagnostics, isolated timings, node counts, overlap intervals, CP values, and regressions are constraints and are never debited"
+}

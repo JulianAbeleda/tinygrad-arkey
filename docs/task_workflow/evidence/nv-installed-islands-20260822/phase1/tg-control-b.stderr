@@ -1,0 +1,2 @@
+ctx   512: W   4.77ms (209.80 tok/s) | D   4.97ms (201.08 tok/s) | host-sync N/A (D slower than W) | flash
+artifact: /home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase1/tg-control-b.json

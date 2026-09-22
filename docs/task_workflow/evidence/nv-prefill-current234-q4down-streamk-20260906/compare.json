@@ -1,0 +1,33 @@
+{
+  "candidate_delta_ms": -4.589872000000007,
+  "candidate_delta_percent": -7.710760792762239,
+  "correctness": {
+    "candidate_vs_a": {
+      "allclose_rtol_0p02_atol_0p5": true,
+      "finite": true,
+      "max_abs": 0.20824766159057617,
+      "mean_abs": 0.04733878746628761,
+      "same_token": true
+    },
+    "candidate_vs_c": {
+      "allclose_rtol_0p02_atol_0p5": true,
+      "finite": true,
+      "max_abs": 0.20824766159057617,
+      "mean_abs": 0.04733878746628761,
+      "same_token": true
+    }
+  },
+  "medians_ms": {
+    "candidate_b": 54.935668,
+    "control_a": 59.534733,
+    "control_c": 59.516347,
+    "control_mean": 59.52554000000001
+  },
+  "population": {
+    "generated_projection_roles": 234,
+    "remaining_v_down_fp16_overlays": 18
+  },
+  "qualification_scope": "fresh-process full-model pp512 bracket; matching tinygrad prompt and route; 10 warmups, R9, 20 recurrent replay cycles per arm",
+  "schema": "tinygrad.nv_prefill_current234_q4down_streamk_compare.v1",
+  "status": "PASS"
+}

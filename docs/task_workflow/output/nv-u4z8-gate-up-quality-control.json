@@ -1,0 +1,15 @@
+{
+  "blocks": [],
+  "commit": "b1d8e72e00d64348f0bdadc03888dfdf83cffc49",
+  "count": 3,
+  "depth": 128,
+  "finite": true,
+  "installed": [],
+  "logits_sha256": "d0c89b01ed1a138e39af642184aefc13bfa5da59d9a6970d47d7f92e957f71a8",
+  "schema": "tinygrad.nv_u4z8_gate_up_quality.v1",
+  "tokens": [
+    4710,
+    279,
+    4710
+  ]
+}

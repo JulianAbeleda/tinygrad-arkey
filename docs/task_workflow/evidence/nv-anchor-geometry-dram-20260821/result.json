@@ -1,0 +1,137 @@
+{
+  "schema": "tinygrad.nv_anchor_geometry_dram.v1",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "method": "render production CUDA source -> nvcc sm_120a standalone -> ncu isolated cold replay",
+  "kernel_specs": {
+    "K": {
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "grid": 1024,
+      "block": 32,
+      "weight_bytes": 2359296
+    },
+    "V": {
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "grid": 1024,
+      "block": 128,
+      "weight_bytes": 3440640
+    },
+    "gate_up": {
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "grid": 12288,
+      "block": 32,
+      "weight_bytes": 56623104
+    }
+  },
+  "wall": {
+    "K": {
+      "per_launch_us": 8.576,
+      "weight_bytes": 2359296
+    },
+    "V": {
+      "per_launch_us": 7.872,
+      "weight_bytes": 3440640
+    },
+    "gate_up": {
+      "per_launch_us": 27.136,
+      "weight_bytes": 56623104
+    }
+  },
+  "ncu": {
+    "K": [
+      {
+        "metric": "dram__bytes_read.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__bytes_write.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "21.15"
+      },
+      {
+        "metric": "gpu__time_duration.sum",
+        "unit": "ns",
+        "value": "6432"
+      },
+      {
+        "metric": "launch__registers_per_thread",
+        "unit": "register/thread",
+        "value": "61"
+      },
+      {
+        "metric": "sm__warps_active.avg.pct_of_peak_sustained_active",
+        "unit": "%",
+        "value": "11.87"
+      }
+    ],
+    "V": [
+      {
+        "metric": "dram__bytes_read.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__bytes_write.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "30.89"
+      },
+      {
+        "metric": "gpu__time_duration.sum",
+        "unit": "ns",
+        "value": "6368"
+      },
+      {
+        "metric": "launch__registers_per_thread",
+        "unit": "register/thread",
+        "value": "39"
+      },
+      {
+        "metric": "sm__warps_active.avg.pct_of_peak_sustained_active",
+        "unit": "%",
+        "value": "47.19"
+      }
+    ],
+    "gate_up": [
+      {
+        "metric": "dram__bytes_read.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__bytes_write.sum",
+        "unit": "",
+        "value": "n/a"
+      },
+      {
+        "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "79.21"
+      },
+      {
+        "metric": "gpu__time_duration.sum",
+        "unit": "ns",
+        "value": "40576"
+      },
+      {
+        "metric": "launch__registers_per_thread",
+        "unit": "register/thread",
+        "value": "74"
+      },
+      {
+        "metric": "sm__warps_active.avg.pct_of_peak_sustained_active",
+        "unit": "%",
+        "value": "44.80"
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "tinygrad.nv_prefill_bf_parity_ledger.v1",
+  "date": "2026-08-29",
+  "lanes": {
+    "B": {
+      "status": "STOP",
+      "packet": "B0.3",
+      "evidence": [
+        "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b03-20260829/result.json",
+        "docs/task_workflow/output/nv-prefill-gateup-schedule-counters-20260829.md"
+      ],
+      "blocker": "No variant established both required counter movements above noise: tensor duty had no eligible increase, long-scoreboard exposure did not fall, and fragment service delta was below 10 us noise; metadata reorder and double buffer had no service win.",
+      "metrics": {
+        "control_median_us": 352.864,
+        "fragment_distance_median_us": 346.72,
+        "metadata_distance_median_us": 351.68,
+        "double_buffer_median_us": 351.328,
+        "counter_noise_us": 10,
+        "correctness_all_variants_passed": true
+      },
+      "unauthorized": ["B0.4", "B1"],
+      "next_authorized_node": null
+    },
+    "F": {
+      "status": "STOP",
+      "packet": "F1.4",
+      "evidence": [
+        "docs/task_workflow/evidence/nv-prefill-f1.4-20260829-r1/verdict.json",
+        "docs/task_workflow/output/nv-prefill-flash-vector-primitive-20260829-f1.4.md"
+      ],
+      "blocker": "Candidate failed mandatory matched-R9 minimum and median performance rules by a large margin despite exact 36-call coverage and correctness.",
+      "metrics": {
+        "installed_calls": 36,
+        "candidate_calls": 36,
+        "installed_service_us_per_call": "99-107",
+        "candidate_service_us_per_call": "6703-6720",
+        "full_output": "PASS",
+        "same_logits_exact": true,
+        "token": 198
+      },
+      "unauthorized": ["F2"],
+      "unnecessary": ["F1.3"],
+      "next_authorized_node": null
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "tinygrad.nv_decode_predispatch_breakdown.compact.v1",
+  "date": "2026-08-05",
+  "route": "DEV=NV",
+  "depth": 512,
+  "device": "NVIDIA GeForce RTX 5090",
+  "driver": "595.84",
+  "reps": 9,
+  "token": 151936,
+  "control_wall_us": 5607.19,
+  "instrumented_wall_us": 5632.909,
+  "observer_tax_wall_us": 25.719,
+  "pre_first_graph_us": 256.997,
+  "pre_first_graph_mad_us": 11.983,
+  "components_us": {
+    "before_tinyjit": 35.637,
+    "prepare_inputs_total": 77.927,
+    "prepare_discovery_realize": 15.479,
+    "prepare_structural_signature": 49.284,
+    "prepare_var_expected_info": 6.312,
+    "reuse_contract_checks": 2.966,
+    "concrete_copy_rebind": 121.38,
+    "copy_input_call_construction": 16.892,
+    "copy_input_run_linear": 99.088,
+    "captured_to_run_linear": 0.742,
+    "run_linear_to_graph_lookup": 3.246,
+    "graph_runtime_lookup": 1.112,
+    "graph_lookup_to_hcq_entry": 2.605
+  },
+  "rowwise_reconciliation": {
+    "explained_pre_first_us": 255.634,
+    "closure_us": 1.493,
+    "closure_pct": 0.5824
+  },
+  "captured_inputs": 2,
+  "captured_written_inputs": 1,
+  "post_entry_hcq_cpu_us": {
+    "total": 196.954,
+    "map": 3.277,
+    "wait_restore": 15.92,
+    "var_dict": 7.002,
+    "node_var_updates": 58.46,
+    "queue_submit": 89.248,
+    "signal_finalize": 17.443
+  },
+  "raw_artifact": "/tmp/nv_decode_predispatch_breakdown_v3_20260805.json",
+  "raw_sha256": "b0d23e644e48f6f334da3f35545973e8e451dac829b378e8c2ff78c6a1c21ee7",
+  "note": "Reconciliation is the median of per-row reconciliations; it is intentionally not the sum of independently selected component medians. HCQ CPU work begins at the first-graph entry and is not additive to the pre-first boundary."
+}

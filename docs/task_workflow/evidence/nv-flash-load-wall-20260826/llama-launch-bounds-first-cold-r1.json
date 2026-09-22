@@ -1,0 +1,146 @@
+{
+  "schema": "tinygrad.nv_llama_flash_launch_bounds_ab.v1",
+  "llama_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+  "invariant": "same source/math/bytes/grid; only minBlocksPerMultiprocessor compiler contract removed",
+  "arms": {
+    "control_min_blocks_1": {
+      "build_command": [
+        "/usr/local/cuda-13.2/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "--generate-code=arch=compute_120a,code=[compute_120a,sm_120a]",
+        "--ptxas-options=-v",
+        "-I",
+        "/tmp/nv_llama_flash_lb_qxqbw1z5/control_min_blocks_1",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/include",
+        "-isystem",
+        "/usr/local/cuda/targets/x86_64-linux/include",
+        "/home/ubuntu/tinygrad-arkey/extra/llm_research/microbench/llama_fattn_vec_iso.cu",
+        "-o",
+        "/tmp/nv_llama_flash_lb_qxqbw1z5/llama_flash_control_min_blocks_1"
+      ],
+      "build_log": "ptxas info    : 26792 bytes gmem\nptxas info    : Compiling entry function '_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil' for 'sm_120a'\nptxas info    : Function properties for _Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 158 registers, used 1 barriers, 8448 bytes smem\nptxas info    : Compile time = 56.984 ms\nptxas info    : Compiling entry function '_Z23stream_read_conditionerPKfyPf' for 'sm_120a'\nptxas info    : Function properties for _Z23stream_read_conditionerPKfyPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 1.252 ms\n",
+      "resources": {
+        "registers_per_thread": 158,
+        "spill_stores_bytes": 0,
+        "spill_loads_bytes": 0
+      },
+      "sass": {
+        "instruction_lines": 0,
+        "ldg_e_128": 0,
+        "ldg_e": 0,
+        "ordinary_ldg_e_128": 0,
+        "first_16_load_span_instructions": 0,
+        "second_16_load_span_instructions": 0
+      },
+      "sass_disassembly_error": null,
+      "hot_sequence_us": [
+        8.640639,
+        8.64104,
+        8.64072
+      ],
+      "hot_sequence_median_us": 8.64072,
+      "cold_sequence_us": [
+        8.64792,
+        8.63904,
+        8.63696
+      ],
+      "cold_sequence_median_us": 8.63904,
+      "ncu_cold_second_flash": {
+        "report": "docs/task_workflow/evidence/nv-flash-load-wall-20260826/llama-launch-bounds-control_min_blocks_1.ncu-rep",
+        "source_view": "docs/task_workflow/evidence/nv-flash-load-wall-20260826/llama-launch-bounds-control_min_blocks_1.sass.txt",
+        "parsed": {
+          "gpu__time_duration.sum": "6.144000 us",
+          "dram__bytes.sum": "417.792000 Kbyte",
+          "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum": "417792.000000 sector",
+          "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct": "53.642233 %"
+        },
+        "sass": {
+          "instruction_lines": 1400,
+          "ldg_e_128": 36,
+          "ldg_e": 46,
+          "ordinary_ldg_e_128": 32,
+          "first_16_load_span_instructions": 32,
+          "second_16_load_span_instructions": 40
+        }
+      }
+    },
+    "ablated_one_arg": {
+      "build_command": [
+        "/usr/local/cuda-13.2/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "--generate-code=arch=compute_120a,code=[compute_120a,sm_120a]",
+        "--ptxas-options=-v",
+        "-I",
+        "/tmp/nv_llama_flash_lb_qxqbw1z5/ablated_one_arg",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/src",
+        "-I",
+        "/home/ubuntu/env/llama.cpp/ggml/include",
+        "-isystem",
+        "/usr/local/cuda/targets/x86_64-linux/include",
+        "/home/ubuntu/tinygrad-arkey/extra/llm_research/microbench/llama_fattn_vec_iso.cu",
+        "-o",
+        "/tmp/nv_llama_flash_lb_qxqbw1z5/llama_flash_ablated_one_arg"
+      ],
+      "build_log": "ptxas info    : 26792 bytes gmem\nptxas info    : Compiling entry function '_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil' for 'sm_120a'\nptxas info    : Function properties for _Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 96 registers, used 1 barriers, 8448 bytes smem\nptxas info    : Compile time = 60.530 ms\nptxas info    : Compiling entry function '_Z23stream_read_conditionerPKfyPf' for 'sm_120a'\nptxas info    : Function properties for _Z23stream_read_conditionerPKfyPf\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 8 registers, used 0 barriers\nptxas info    : Compile time = 1.142 ms\n",
+      "resources": {
+        "registers_per_thread": 96,
+        "spill_stores_bytes": 0,
+        "spill_loads_bytes": 0
+      },
+      "sass": {
+        "instruction_lines": 0,
+        "ldg_e_128": 0,
+        "ldg_e": 0,
+        "ordinary_ldg_e_128": 0,
+        "first_16_load_span_instructions": 0,
+        "second_16_load_span_instructions": 0
+      },
+      "sass_disassembly_error": null,
+      "hot_sequence_us": [
+        8.81488,
+        8.81416,
+        8.81256
+      ],
+      "hot_sequence_median_us": 8.81416,
+      "cold_sequence_us": [
+        8.81424,
+        8.81576,
+        8.8144
+      ],
+      "cold_sequence_median_us": 8.8144,
+      "ncu_cold_second_flash": {
+        "report": "docs/task_workflow/evidence/nv-flash-load-wall-20260826/llama-launch-bounds-ablated_one_arg.ncu-rep",
+        "source_view": "docs/task_workflow/evidence/nv-flash-load-wall-20260826/llama-launch-bounds-ablated_one_arg.sass.txt",
+        "parsed": {
+          "gpu__time_duration.sum": "7.808000 us",
+          "dram__bytes.sum": "418.048000 Kbyte",
+          "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum": "417792.000000 sector",
+          "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct": "65.527393 %"
+        },
+        "sass": {
+          "instruction_lines": 1408,
+          "ldg_e_128": 36,
+          "ldg_e": 46,
+          "ordinary_ldg_e_128": 32,
+          "first_16_load_span_instructions": 279,
+          "second_16_load_span_instructions": 266
+        }
+      }
+    }
+  },
+  "deltas_ablated_minus_control": {
+    "hot_sequence_us": 0.17343999999999937,
+    "cold_sequence_us": 0.17535999999999952,
+    "registers_per_thread": -62
+  }
+}

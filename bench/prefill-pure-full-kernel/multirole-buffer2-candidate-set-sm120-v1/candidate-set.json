@@ -1,0 +1,601 @@
+{
+  "entries": [
+    {
+      "canonical_identity": "e185598e86755bbd89bbce323291ffd5cfca085a4d705e4df6d27e3a5859eee5",
+      "payload": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m_sm120"
+          ],
+          "roles": [
+            "attn_kv"
+          ],
+          "targets": [
+            "CUDA:sm120:wave32"
+          ]
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 16,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 80,
+              "b": 80
+            },
+            "windows": {
+              "a": [
+                0,
+                10240
+              ],
+              "b": [
+                10240,
+                20480
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 32,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 4,
+            "n": 2
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 49152,
+          "max_vgpr_per_thread": 256
+        },
+        "workload": {
+          "dtypes": {
+            "a": "fp16",
+            "accumulator": "fp32",
+            "b": "fp16",
+            "c": "fp16"
+          },
+          "layout": {
+            "a": "row_major",
+            "b": "transposed_row_major",
+            "c": "row_major"
+          },
+          "profile": "qwen3_8b_q4k_m_sm120",
+          "role": "attn_kv",
+          "shape": {
+            "k": 4096,
+            "m": 512,
+            "n": 1024
+          },
+          "target": {
+            "arch": "sm120",
+            "backend": "CUDA",
+            "wave_size": 32
+          }
+        }
+      }
+    },
+    {
+      "canonical_identity": "9a246d75509f03bd92692480640bc2ba47c8a42eb75ac1e71fec538406c2d157",
+      "payload": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m_sm120"
+          ],
+          "roles": [
+            "attn_qo"
+          ],
+          "targets": [
+            "CUDA:sm120:wave32"
+          ]
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 16,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 80,
+              "b": 80
+            },
+            "windows": {
+              "a": [
+                0,
+                10240
+              ],
+              "b": [
+                10240,
+                20480
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 32,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 4,
+            "n": 2
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 49152,
+          "max_vgpr_per_thread": 256
+        },
+        "workload": {
+          "dtypes": {
+            "a": "fp16",
+            "accumulator": "fp32",
+            "b": "fp16",
+            "c": "fp16"
+          },
+          "layout": {
+            "a": "row_major",
+            "b": "transposed_row_major",
+            "c": "row_major"
+          },
+          "profile": "qwen3_8b_q4k_m_sm120",
+          "role": "attn_qo",
+          "shape": {
+            "k": 4096,
+            "m": 512,
+            "n": 4096
+          },
+          "target": {
+            "arch": "sm120",
+            "backend": "CUDA",
+            "wave_size": 32
+          }
+        }
+      }
+    },
+    {
+      "canonical_identity": "d1cf009f0c3882caa69b820495d449d6039f960149a72eaf9852b05e3179ef2d",
+      "payload": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m_sm120"
+          ],
+          "roles": [
+            "ffn_down"
+          ],
+          "targets": [
+            "CUDA:sm120:wave32"
+          ]
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 16,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 80,
+              "b": 80
+            },
+            "windows": {
+              "a": [
+                0,
+                10240
+              ],
+              "b": [
+                10240,
+                20480
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 32,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 4,
+            "n": 2
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 49152,
+          "max_vgpr_per_thread": 256
+        },
+        "workload": {
+          "dtypes": {
+            "a": "fp16",
+            "accumulator": "fp32",
+            "b": "fp16",
+            "c": "fp16"
+          },
+          "layout": {
+            "a": "row_major",
+            "b": "transposed_row_major",
+            "c": "row_major"
+          },
+          "profile": "qwen3_8b_q4k_m_sm120",
+          "role": "ffn_down",
+          "shape": {
+            "k": 12288,
+            "m": 512,
+            "n": 4096
+          },
+          "target": {
+            "arch": "sm120",
+            "backend": "CUDA",
+            "wave_size": 32
+          }
+        }
+      }
+    },
+    {
+      "canonical_identity": "7482fd313efaf05c83484233eabbbfa46cccffeca64efd04a4fcb674d2da89ed",
+      "payload": {
+        "applicability": {
+          "exact_shape": true,
+          "profiles": [
+            "qwen3_8b_q4k_m_sm120"
+          ],
+          "roles": [
+            "ffn_gate_up"
+          ],
+          "targets": [
+            "CUDA:sm120:wave32"
+          ]
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 16,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 80,
+              "b": 80
+            },
+            "windows": {
+              "a": [
+                0,
+                10240
+              ],
+              "b": [
+                10240,
+                20480
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 32,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 4,
+            "n": 2
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 49152,
+          "max_vgpr_per_thread": 256
+        },
+        "workload": {
+          "dtypes": {
+            "a": "fp16",
+            "accumulator": "fp32",
+            "b": "fp16",
+            "c": "fp16"
+          },
+          "layout": {
+            "a": "row_major",
+            "b": "transposed_row_major",
+            "c": "row_major"
+          },
+          "profile": "qwen3_8b_q4k_m_sm120",
+          "role": "ffn_gate_up",
+          "shape": {
+            "k": 4096,
+            "m": 512,
+            "n": 12288
+          },
+          "target": {
+            "arch": "sm120",
+            "backend": "CUDA",
+            "wave_size": 32
+          }
+        }
+      }
+    }
+  ],
+  "schema": "boltbeam.full_kernel_candidate_set.v1"
+}

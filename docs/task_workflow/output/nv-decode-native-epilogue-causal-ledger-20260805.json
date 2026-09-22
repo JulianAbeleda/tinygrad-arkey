@@ -1,0 +1,72 @@
+{
+  "conclusion": "The residual/cast/contiguous row is real serialized native work, but existing experiments close every admitted generic boundary: M4 regresses, llama O substitution regresses, Q4 down's epilogue is neutral, typed-boundary work is an old small win, and KV was already fused. No GPU A/B is run because it would repeat a closed construction rather than test a new semantic route.",
+  "evidence": [
+    {
+      "delta_us": 69.0,
+      "id": "M4-attn-o-residual",
+      "kind": "native experimental route",
+      "reason": "adds 36 kernels and loses 1.15%; this is a different experimental emitter, not an in-core epilogue",
+      "result": "NO_GO",
+      "route": "NV"
+    },
+    {
+      "delta_us": 21.213,
+      "id": "P6-C-llama-attn-o",
+      "kind": "llama substitution",
+      "reason": "q8/fp32 adapters plus one added node per role exceed removed adds; not native topology",
+      "result": "NO_GO",
+      "route": "CUDA"
+    },
+    {
+      "id": "P6-D-q4-down",
+      "incremental_epilogue_us": 0.348,
+      "kind": "llama substrate vs full epilogue",
+      "reason": "the 65.8-us diagnostic gain is MMVQ substrate, not residual absorption",
+      "result": "EPILOGUE_NEUTRAL",
+      "route": "CUDA"
+    },
+    {
+      "id": "M5-typed-combine-boundary",
+      "kind": "typed boundary/copy removal",
+      "reason": "copy removal is not the current 240.762-us role population and is not a same-session native residual credit",
+      "removed_nodes": 36,
+      "result": "SMALL_OLD_SESSION_WIN",
+      "result_percent": 0.22,
+      "route": "NV"
+    },
+    {
+      "id": "KV-store-chain",
+      "kernel_delta": 0,
+      "kind": "store-chain construction",
+      "reason": "legacy path was already one fused store kernel/layer (948 -> 948); no topology to recover",
+      "result": "WALL_NEUTRAL",
+      "route": "NV"
+    }
+  ],
+  "native_credit_us": 0.0,
+  "next_blocker": "Create a tinygrad-owned, ordinary-UOp in-core projection epilogue that consumes the native fp32 GEMV output and its residual without a custom-program boundary, fp16<->fp32 adapter, Q8 quantization, activation recomputation, or changed output-buffer contract. Only after that construction exists should a native-NV all-role A/B be admitted.",
+  "ownership": {
+    "difference_us": 240.319,
+    "interpretation": "location/ownership only; llama elementwise Shapley is overlap-safe but neither a raw kernel-time comparison nor a recoverable saving",
+    "llama_exposed_shapley_us": 0.443,
+    "native_roles": [
+      "attention_cast",
+      "attention_residual_add",
+      "ffn_activation_cast",
+      "ffn_down_cast",
+      "ffn_residual_add",
+      "block_output_contiguous"
+    ],
+    "native_serialized_us": 240.762
+  },
+  "schema": "tinygrad.nv_decode.native_epilogue_causal_ledger.v1",
+  "sources": [
+    "nv-decode-nonquant-role-partition-20260805.json",
+    "m4-decomposition-measurement-record-20260803.md",
+    "nv-decode-parity-p6d-q4-attention-o-family-graph-ab-record-20260804.md",
+    "nv-decode-parity-p6d-ffn-down-construction-record-20260804.md",
+    "m5-typed-boundary-p0-implementation-record-20260803.md",
+    "decode-kv-store-chain-fusion-scope-20260803.md"
+  ],
+  "status": "CLOSED_NO_ADMISSIBLE_GENERIC_EPILOGUE_AB"
+}

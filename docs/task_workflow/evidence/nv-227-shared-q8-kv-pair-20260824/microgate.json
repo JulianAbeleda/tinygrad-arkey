@@ -1,0 +1,57 @@
+{
+  "bitwise_identical": true,
+  "commit": "b7ddda44b3e6e9b7000b29f8a2110dade0f87da3",
+  "mismatched_words": 0,
+  "passes": 500,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_pair_direct_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 7.930 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_direct_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_direct_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.934 ms"
+  ],
+  "reps": 9,
+  "schema": "tinygrad.q4k_shared_q8_pair_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 1024,
+    "shared_q8_q4q4_pairs_per_token": 9
+  },
+  "timing": {
+    "candidate_median": 3.084608,
+    "candidate_over_control": 0.7107758557123686,
+    "candidate_samples": [
+      3.1008,
+      3.084672,
+      3.084608,
+      3.083392,
+      3.085888,
+      3.079616,
+      3.079424,
+      3.074688,
+      3.097536
+    ],
+    "control_median": 4.339776,
+    "control_samples": [
+      4.341696,
+      4.34208,
+      4.337664,
+      4.339776,
+      4.34208,
+      4.33568,
+      4.335872,
+      4.345792,
+      4.338432
+    ],
+    "projected_9_pair_recovery_us": 11.296511999999998,
+    "recovery_us_per_pair": 1.2551679999999998,
+    "unit": "us_per_pair_cuda_event"
+  },
+  "verdict": "ADVANCE"
+}

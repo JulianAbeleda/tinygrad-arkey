@@ -1,0 +1,5 @@
+# Generated Flash token-major output gate
+
+The immediate post-Flash `E_512...284` service is exactly a fp16 `[H,T,D] -> [T,H,D]` transpose and costs `3.488 us/layer`. A typed NV-only token-major output drain writes the generated Flash result directly as `[T,H,D]`; the isolated full output is bit-exact and Q/K/V remain read-only. Full current252 deep smoke passes token198, replay3, every captured stage buffer, canonical252, and zero overlays/copies.
+
+The scheduler replaces the removed 36-call E512 transpose with 36 calls of the generic E64 copy family at the consumer contiguous boundary (measured `3.456 us/layer`), leaving total program count unchanged. Warmup9/R9 controls were `48.192375` and `48.049817 ms` (midpoint `48.121096 ms`); candidate was `47.928500 ms`, a `0.192596 ms` median signal, while candidate minimum `47.803254 ms` was slower than control midpoint minimum `47.6595735 ms`. It fails the frozen promotion threshold and is reverted. The pre-Flash 16.320-us/layer chain remains the next target.

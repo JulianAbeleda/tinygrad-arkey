@@ -1,0 +1,11 @@
+{
+  "schema": "tinygrad.nv.llama_fattn_vec_pp512_abi.v1",
+  "status": "MECHANICAL_ABI_AUDIT",
+  "geometry": {"S": 512, "D": 128, "Hq": 32, "Hkv": 8, "gqa": 4},
+  "production_boundary": {"q": "fp32 [B,Hq,T,D]", "k": "fp16 [B,Hkv,KV,D]", "v": "fp16 [B,Hkv,KV,D]", "output": "fp32 [B,Hq,T,D]"},
+  "known_dispatch": {"architecture": "query_tiled", "mma_template": "<DKQ128,DV128,ncols1=16,ncols2=4,false,false>", "cols_per_block": 2, "ntilesKV": 4, "vec_route_measured_us_per_layer": 322.0, "vec_route_verdict": "rejected"},
+  "launch_geometry": {"main": {"grid": [340, "parallel_blocks", 1], "block": [32, 4, 1], "smem_bytes": 37120, "active_us": 34.944}, "general_fixup": {"grid": [340, 16, 4], "block": [128, 1, 1], "active_us": 11.264}},
+  "scratch_and_meta": {"scratch_bytes": "trace-specific; no separate global partial contract retained", "metadata_bytes": "not retained", "output_combine": "main plus general fixup", "fixup": "general_fixup"},
+  "adjudication": {"exact_internal_abi_available": false, "mechanical_transcription_admitted": false, "next_action": "clean-room query-tiled design with raw fixture gate"},
+  "sources": ["docs/task_workflow/evidence/nv-cleanroom-flash-model-20260830/README.md", "docs/task_workflow/output/nv-flash-cleanroom-rejection-20260830.md"]
+}

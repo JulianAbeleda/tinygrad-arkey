@@ -1,0 +1,25 @@
+{
+  "arm": "control",
+  "median_ms": 4.078380625,
+  "mode": "timing",
+  "samples_ms": [
+    4.0755705833333336,
+    4.078380625,
+    4.076151208333333,
+    4.074601833333333,
+    4.08363075,
+    4.08038075,
+    4.079357
+  ],
+  "schema": "tinygrad.nv_vocab_nacc4_qualification.v1",
+  "token_hashes": [
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+  ],
+  "tokens_identical": true
+}

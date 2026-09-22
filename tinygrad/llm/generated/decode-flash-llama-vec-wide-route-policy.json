@@ -1,0 +1,11 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_flash_llama_vec_wide",
+  "description": "Live-context wide-KV vector Flash promotion for dense Qwen3-8B decode on NV sm_120. Admission is independent of physical cache capacity: separate graph identities select S6 through Tc768, retained S8 through Tc1024, S10 through Tc1280, S18 through Tc2304, and S34 through Tc4352; above the qualified live extent the existing route remains authoritative without capping model context. Reverse brackets at depths 512/1024/2048/4096 recovered 80.428/188.176/234.535/399.893 us per token with exact token-stream hashes. Explicit request-horizon S64 geometry retains precedence and TINYGRAD_FLASH_ACTIVE_HORIZON_DISABLE is the rollback. Evidence: docs/task_workflow/evidence/nv-deep-context-llama-vec-20260901 and docs/task_workflow/output/nv-live-context-wide-flash-promotion-20260901.md.",
+  "promoted_targets": [
+    {
+      "backend": "NV",
+      "architecture": "sm_120"
+    }
+  ]
+}

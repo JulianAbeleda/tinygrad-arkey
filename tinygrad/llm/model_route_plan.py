@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Iterable
+from tinygrad.helpers import getenv
 from tinygrad.llm.model_facts import normalize_route_role
 
 # Serialized route-policy compatibility API.  This consumes only caller-supplied
@@ -149,6 +150,542 @@ def load_qk_target_promotion(path:str) -> frozenset[Target] | None:
   return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
 
 _load_qk_target_promotion = load_qk_target_promotion
+
+def load_decode_epilogue_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 decode epilogue-fusion promotion record (boltbeam.route_policy.v1, same schema family as
+  `load_qk_target_promotion`). CLOSED default, deliberately the inverse of TG3's "no record -> open": the
+  fused decode variants are additive emitter changes and must not move AMD/Metal admitted routes until each
+  target opts in with a measured record (l1-decode-plumbing-fusion-design-20260802.md section 5). A document
+  without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_EPILOGUE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-epilogue-fusion-route-policy.json"
+_DECODE_EPILOGUE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_epilogue_fusion_promotion(_DECODE_EPILOGUE_FUSION_PROMOTION_RECORD)
+
+def decode_epilogue_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 decode epilogue-fusion route (closed default, see the loader above)."""
+  return target in _DECODE_EPILOGUE_FUSION_PROMOTED_TARGETS
+
+def load_decode_q4k_epilogue_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 M4 q4k GEMV epilogue-fusion promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record from
+  M2's `decode_epilogue_fusion` so the measured Q6K in-kernel merge stays NV-promoted while the measured
+  non-landing q4k epilogue variants stay off on every target (m4-q4k-epilogue-measurement-record-20260802.md).
+  A document without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_EPILOGUE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-epilogue-fusion-route-policy.json"
+_DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_epilogue_fusion_promotion(_DECODE_Q4K_EPILOGUE_FUSION_PROMOTION_RECORD)
+
+def decode_q4k_epilogue_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 M4 q4k GEMV epilogue-fusion route (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_EPILOGUE_FUSION_PROMOTED_TARGETS
+
+def load_decode_q4k_epilogue_resadd_promotion(path:str) -> frozenset[Target]:
+  """Read the o-proj residual_add variant promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE
+  record from the combined M4 record (which stays closed: the ffn_down prelude recomputes the
+  activation per row and fp16_cast overlaps M5's output-layout problem). This one variant is the
+  only M4 half with a measured copy-free recovery (m4-variant-reopen-boundary-p0-scope-20260806.md
+  probes 1+2, PASS). A document without `promoted_targets` -- or with an empty list -- promotes
+  nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_EPILOGUE_RESADD_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-epilogue-resadd-route-policy.json"
+_DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_epilogue_resadd_promotion(_DECODE_Q4K_EPILOGUE_RESADD_PROMOTION_RECORD)
+
+def decode_q4k_epilogue_resadd_promoted(target:Target) -> bool:
+  """Policy authority for the o-proj residual_add epilogue variant (closed default; separate
+  from the combined M4 record so the ffn_down prelude and fp16_cast stay closed)."""
+  return target in _DECODE_Q4K_EPILOGUE_RESADD_PROMOTED_TARGETS
+
+def load_decode_shared_q8_attention_promotion(path:str) -> frozenset[Target]:
+  """Read the decode shared-Q8 attention group promotion record (boltbeam.route_policy.v1,
+  same schema family as `load_decode_q4k_epilogue_resadd_promotion`). CLOSED default: the
+  cooperative Q8_1 + DP4A four-warp attention lease is the GEMV substrate half of the old
+  rejected Attention-O composition, and gains `NV sm_120` ONLY after the section-6 full gate
+  passes (nv-gemv-substrate-landing-scope-20260808.md). A document without `promoted_targets`
+  -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_SHARED_Q8_ATTENTION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-shared-q8-attention-route-policy.json"
+_DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS: frozenset[Target] = load_decode_shared_q8_attention_promotion(_DECODE_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
+def decode_shared_q8_attention_promoted(target:Target) -> bool:
+  """Policy authority for the decode shared-Q8 attention group lease (closed default, see the loader above)."""
+  return target in _DECODE_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+
+def load_decode_q6_direct_shared_q8_attention_promotion(path:str) -> frozenset[Target]:
+  """Read the Q6 attention-V direct-output consumer promotion record (boltbeam.route_policy.v1,
+  same schema family as `load_decode_shared_q8_attention_promotion`). CLOSED default and a SEPARATE
+  record from the shared-Q8 group: the group lease (cooperative Q4) is already promoted for NV
+  sm_120, while this Q6-V-only sub-variant stays closed until its own all-depth gate passes
+  (nv-q6-direct-shared-q8-promotion-scope-20260814.md). A document without `promoted_targets`
+  -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q6-direct-shared-q8-attention-route-policy.json"
+_DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS: frozenset[Target] = load_decode_q6_direct_shared_q8_attention_promotion(_DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
+def decode_q6_direct_shared_q8_attention_promoted(target:Target) -> bool:
+  """Policy authority for the Q6 V direct-output consumer (closed default, see the loader above)."""
+  return target in _DECODE_Q6_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+
+def load_decode_q4_direct_shared_q8_attention_promotion(path:str) -> frozenset[Target]:
+  """Read the cooperative Q4/Q8 direct-output promotion record.
+
+  This is a separate sub-variant of the shared-Q8 group lease. It folds the
+  four exact warp partials into the producer CTA and removes the standalone
+  completion kernel; a missing or empty record promotes nothing.
+  """
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1":
+    raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q4-direct-shared-q8-attention-route-policy.json"
+_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS: frozenset[Target] = \
+  load_decode_q4_direct_shared_q8_attention_promotion(_DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTION_RECORD)
+
+def decode_q4_direct_shared_q8_attention_promoted(target:Target) -> bool:
+  """Policy authority for the cooperative Q4 direct-output consumer."""
+  return target in _DECODE_Q4_DIRECT_SHARED_Q8_ATTENTION_PROMOTED_TARGETS
+
+def load_decode_shared_q8_q4kv_pair_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the shared-Q8 Q4/Q4 K/V dual-output producer."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_SHARED_Q8_Q4KV_PAIR_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-shared-q8-q4kv-pair-route-policy.json"
+_DECODE_SHARED_Q8_Q4KV_PAIR_TARGETS = load_decode_shared_q8_q4kv_pair_promotion(_DECODE_SHARED_Q8_Q4KV_PAIR_RECORD)
+
+def decode_shared_q8_q4kv_pair_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the shared-Q8 pair route with an explicit load-time rollback."""
+  return target in _DECODE_SHARED_Q8_Q4KV_PAIR_TARGETS and not getenv_fn("TINYGRAD_SHARED_Q8_Q4KV_PAIR_DISABLE",0)
+
+def load_decode_shared_q8_q4q6_kv_pair_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the shared-Q8 mixed Q4-K/Q6-V producer."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_SHARED_Q8_Q4Q6_KV_PAIR_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-shared-q8-q4q6-kv-pair-route-policy.json"
+_DECODE_SHARED_Q8_Q4Q6_KV_PAIR_TARGETS = load_decode_shared_q8_q4q6_kv_pair_promotion(_DECODE_SHARED_Q8_Q4Q6_KV_PAIR_RECORD)
+
+def decode_shared_q8_q4q6_kv_pair_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the mixed shared-Q8 pair route with an explicit load-time rollback."""
+  return target in _DECODE_SHARED_Q8_Q4Q6_KV_PAIR_TARGETS and not getenv_fn("TINYGRAD_SHARED_Q8_Q4Q6_KV_PAIR_DISABLE",0)
+
+def load_decode_shared_q8_q4q4_qkv_full_promotion(path:str) -> frozenset[Target]:
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema")!="boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_SHARED_Q8_Q4Q4_QKV_FULL_RECORD=pathlib.Path(__file__).with_name("generated")/"decode-shared-q8-q4q4-qkv-full-route-policy.json"
+_DECODE_SHARED_Q8_Q4Q4_QKV_FULL_TARGETS=load_decode_shared_q8_q4q4_qkv_full_promotion(_DECODE_SHARED_Q8_Q4Q4_QKV_FULL_RECORD)
+
+def decode_shared_q8_q4q4_qkv_full_promoted(target:Target,getenv_fn=getenv)->bool:
+  return target in _DECODE_SHARED_Q8_Q4Q4_QKV_FULL_TARGETS and not getenv_fn("TINYGRAD_SHARED_Q8_Q4Q4_QKV_FULL_DISABLE",0)
+
+def load_decode_q4k_q4q4_qkv_full_promotion(path:str) -> frozenset[Target]:
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema")!="boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q4K_Q4Q4_QKV_FULL_RECORD=pathlib.Path(__file__).with_name("generated")/"decode-q4k-q4q4-qkv-full-route-policy.json"
+_DECODE_Q4K_Q4Q4_QKV_FULL_TARGETS=load_decode_q4k_q4q4_qkv_full_promotion(_DECODE_Q4K_Q4Q4_QKV_FULL_RECORD)
+
+def decode_q4k_q4q4_qkv_full_promoted(target:Target,getenv_fn=getenv)->bool:
+  return target in _DECODE_Q4K_Q4Q4_QKV_FULL_TARGETS and not getenv_fn("TINYGRAD_Q4K_Q4Q4_QKV_FULL_DISABLE",0)
+
+def load_decode_q4k_ffn_down_fp16_geometry_promotion(path:str) -> frozenset[Target]:
+  """Read the Q4_K FFN-down four-warp fp16 geometry promotion record (boltbeam.route_policy.v1,
+  same schema family as the shared-Q8 records). CLOSED default and a SEPARATE record from the
+  DP4A/Q8 successor: the geometry-only fp16-FMA route is the measured wall lever (-100.3 us at d512,
+  +2.01% tok/s, token-exact) while the composed Q8 producer-fold is NO_GO_WALL (-0.87%). The route
+  additionally requires the M2b ffn-down resadd promotion and is ANDed with it at resolve time.
+  A document without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-ffn-down-fp16-geometry-route-policy.json"
+_DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_ffn_down_fp16_geometry_promotion(_DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD)
+
+def decode_q4k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
+  """Policy authority for the Q4_K FFN-down four-warp fp16 geometry route (closed default)."""
+  return target in _DECODE_Q4K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
+
+def load_decode_q6k_ffn_down_fp16_geometry_promotion(path:str) -> frozenset[Target]:
+  """Read the Q6_K FFN-down four-warp fp16 geometry promotion record (boltbeam.route_policy.v1,
+  same schema family as the Q4 geometry record). CLOSED default; the Q6 analog of the landed Q4
+  route (nv-q6-ffn-down-four-warp-fp16-microgate-20260815.md: device 25.7 us vs 31.0 us control).
+  A document without `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q6k-ffn-down-fp16-geometry-route-policy.json"
+_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS: frozenset[Target] = load_decode_q6k_ffn_down_fp16_geometry_promotion(_DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTION_RECORD)
+
+def decode_q6k_ffn_down_fp16_geometry_promoted(target:Target) -> bool:
+  """Policy authority for the Q6_K FFN-down four-warp fp16 geometry route (closed default)."""
+  return target in _DECODE_Q6K_FFN_DOWN_FP16_GEOMETRY_PROMOTED_TARGETS
+
+def load_decode_q6k_ffn_down_packed_lanemap_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the exact packed-lane Q6_K FFN-down spelling."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q6k-ffn-down-packed-lanemap-route-policy.json"
+_DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_TARGETS = load_decode_q6k_ffn_down_packed_lanemap_promotion(
+  _DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_RECORD)
+
+def decode_q6k_ffn_down_packed_lanemap_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the packed-lane spelling with an explicit load-time rollback."""
+  return target in _DECODE_Q6K_FFN_DOWN_PACKED_LANEMAP_TARGETS and not getenv_fn("TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE",0)
+
+def load_decode_q6k_ffn_down_unroll_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for four-block packed-lane Q6_K FFN-down unrolling."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q6K_FFN_DOWN_UNROLL_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q6k-ffn-down-unroll-route-policy.json"
+_DECODE_Q6K_FFN_DOWN_UNROLL_TARGETS = load_decode_q6k_ffn_down_unroll_promotion(_DECODE_Q6K_FFN_DOWN_UNROLL_RECORD)
+
+def decode_q6k_ffn_down_unroll_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve four-block unrolling with an explicit load-time rollback."""
+  return target in _DECODE_Q6K_FFN_DOWN_UNROLL_TARGETS and not getenv_fn("TINYGRAD_Q6K_FFN_DOWN_UNROLL_DISABLE",0)
+
+def load_decode_q6k_v_four_warp_fp16_geometry_promotion(path:str) -> frozenset[Target]:
+  """Read the Q6_K attention-V four-warp fp16 geometry promotion record
+  (boltbeam.route_policy.v1, same schema family as the Q6 FFN-down record).
+  CLOSED default; the attention-V analog of the landed Q6 FFN-down route
+  (nv-q6k-v-four-warp-fp16-promotion-20260816.md: in-loop 5.12 us vs 17.94 us
+  control, -147.35 us/token wall bracket).  A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q6k-v-four-warp-fp16-geometry-route-policy.json"
+_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTED_TARGETS: frozenset[Target] = load_decode_q6k_v_four_warp_fp16_geometry_promotion(_DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTION_RECORD)
+
+def decode_q6k_v_four_warp_fp16_geometry_promoted(target:Target) -> bool:
+  """Policy authority for the Q6_K attention-V four-warp fp16 geometry route (closed default)."""
+  return target in _DECODE_Q6K_V_FOUR_WARP_FP16_GEOMETRY_PROMOTED_TARGETS
+
+def load_decode_q6k_vocab_four_warp_fp16_promotion(path:str) -> frozenset[Target]:
+  """Read the exact-shape Q6_K vocabulary four-warp FP16 promotion record."""
+  policy_path=pathlib.Path(path).expanduser(); data=json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"),t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q6K_VOCAB_FOUR_WARP_FP16_RECORD = pathlib.Path(__file__).with_name("generated") / \
+  "decode-q6k-vocab-four-warp-fp16-route-policy.json"
+_DECODE_Q6K_VOCAB_FOUR_WARP_FP16_TARGETS = load_decode_q6k_vocab_four_warp_fp16_promotion(
+  _DECODE_Q6K_VOCAB_FOUR_WARP_FP16_RECORD)
+
+def decode_q6k_vocab_four_warp_fp16_promoted(target:Target,getenv_fn=getenv) -> bool:
+  """Resolve the exact vocabulary route with an explicit load-time rollback."""
+  return target in _DECODE_Q6K_VOCAB_FOUR_WARP_FP16_TARGETS and not getenv_fn("TINYGRAD_Q6K_VOCAB_FOUR_WARP_DISABLE",0)
+
+def load_decode_q4k_w1w3_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the w1+w3 fused gate/up decode GEMV promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M4's q4k epilogue record and M2's Q6K merge record: the fused w1+w3 kernel replaces the gate GEMV
+  + silu + up GEMV + mul chain (72 -> 36 kernels/token) with one 12288-row kernel, and must not fire on
+  any target until a measured record opts it in (mc3-w1w3-fusion-measurement-record-20260803.md,
+  q4k-w1w3-fused-qv-implementation-record-20260803.md). A document without `promoted_targets` -- or with
+  an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_W1W3_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-w1w3-fusion-route-policy.json"
+_DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fusion_promotion(_DECODE_Q4K_W1W3_FUSION_PROMOTION_RECORD)
+
+def decode_q4k_w1w3_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the fused w1+w3 gate/up decode GEMV route (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_W1W3_FUSION_PROMOTED_TARGETS
+
+def load_decode_q4k_w1w3_fp16_store_promotion(path:str) -> frozenset[Target]:
+  """Read the w1+w3 fused fp16-store spelling promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from the w1w3 fusion record: the fused16 kernel stores the gate/up result fp16 in-kernel, absorbing
+  the ordinary E_128_32_3 ffn-activation cast (M2a, nv-epilogue-absorption-route-scope-20260810.md),
+  and must not fire on any target until a measured record opts it in. A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_Q4K_W1W3_FP16_STORE_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-w1w3-fp16-store-route-policy.json"
+_DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fp16_store_promotion(_DECODE_Q4K_W1W3_FP16_STORE_PROMOTION_RECORD)
+
+def decode_q4k_w1w3_fp16_store_promoted(target:Target) -> bool:
+  """Policy authority for the w1+w3 fused fp16-store spelling (closed default, see the loader above)."""
+  return target in _DECODE_Q4K_W1W3_FP16_STORE_PROMOTED_TARGETS
+
+_DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-gate-up-four-warp-vector-route-policy.json"
+_DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTED_TARGETS: frozenset[Target] = load_decode_q4k_w1w3_fusion_promotion(
+  _DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTION_RECORD)
+
+def decode_q4k_gate_up_four_warp_vector_promoted(target:Target) -> bool:
+  """Policy authority for the typed-output four-warp+vector gate/up route."""
+  return target in _DECODE_Q4K_GATE_UP_FOUR_WARP_VECTOR_PROMOTED_TARGETS
+
+def load_decode_ffn_down_resadd_promotion(path:str) -> frozenset[Target]:
+  """Read the ffn_down residual-add absorption promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fp16_store_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M2's decode_epilogue_fusion and M4's q4k epilogue records: the ffn_down Q4K/Q6K GEMV absorbs the
+  standalone h+ffn_out fp32 add in-kernel (M2b, *_epi_ffnresadd names) and the declared epilogue-absorbing
+  block-output AFTER gets its nested CALL rebound to the caller output slot so the identity copies fold
+  away (M2c), and neither may fire on any target until a measured record opts it in
+  (nv-epilogue-absorption-m2c-ab-20260811.json, BOOKED). A document without `promoted_targets` -- or with
+  an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FFN_DOWN_RESADD_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-ffn-down-resadd-route-policy.json"
+_DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS: frozenset[Target] = load_decode_ffn_down_resadd_promotion(_DECODE_FFN_DOWN_RESADD_PROMOTION_RECORD)
+
+def decode_ffn_down_resadd_promoted(target:Target) -> bool:
+  """Policy authority for the ffn_down residual-add absorption route (closed default, see the loader above)."""
+  return target in _DECODE_FFN_DOWN_RESADD_PROMOTED_TARGETS
+
+def load_decode_kv_store_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the decode kv-store chain fusion promotion record (boltbeam.route_policy.v1, same schema
+  family as `load_decode_q4k_w1w3_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from every other decode record: the fused kv-store kernel replaces the k-rope + k-cast + v-cast +
+  Tensor.stack(k, v) + cache store chain (5 kernels/layer, decode-kv-store-chain-fusion-scope-
+  20260803.md), and must not fire on any target until a measured same-session record opts it in
+  (nv-decode-gap-decomposition-record-20260803.md section 5, lever 1). A document without
+  `promoted_targets` -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_KV_STORE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-kv-store-fusion-route-policy.json"
+_DECODE_KV_STORE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_kv_store_fusion_promotion(_DECODE_KV_STORE_FUSION_PROMOTION_RECORD)
+
+def decode_kv_store_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the fused decode kv-store route (closed default, see the loader above)."""
+  return target in _DECODE_KV_STORE_FUSION_PROMOTED_TARGETS
+
+def load_decode_flash_combine_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 M5 flash-decode combine fp16 absorption promotion record (boltbeam.route_policy.v1, same
+  schema family as `load_decode_epilogue_fusion_promotion`). CLOSED default; deliberately a SEPARATE record
+  from M2's `decode_epilogue_fusion` (which stays NV-promoted for the Q6K in-kernel merge only): the fp16
+  combine variant (flash_fused_gmax_combine_f16_*) absorbs the post-combine E_32_32_4_0a5e fp32->fp16 cast
+  and must not fire under the M2 record or on any target until a measured record opts it in
+  (m5-flash-combine-normalization-measurement-record-20260802.md). A document without `promoted_targets`
+  -- or with an empty list -- promotes nothing."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FLASH_COMBINE_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-flash-combine-route-policy.json"
+_DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_flash_combine_fusion_promotion(_DECODE_FLASH_COMBINE_FUSION_PROMOTION_RECORD)
+
+def decode_flash_combine_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 M5 flash-decode combine fp16 absorption route (closed default, see the
+  loader above)."""
+  return target in _DECODE_FLASH_COMBINE_FUSION_PROMOTED_TARGETS
+
+def load_decode_flash_llama_vec_wide_promotion(path:str) -> frozenset[Target]:
+  """Closed-default target policy for the extent-derived wide-KV vector flash route."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-flash-llama-vec-wide-route-policy.json"
+_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS: frozenset[Target] = \
+  load_decode_flash_llama_vec_wide_promotion(_DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTION_RECORD)
+
+def decode_flash_llama_vec_wide_promoted(target:Target) -> bool:
+  return target in _DECODE_FLASH_LLAMA_VEC_WIDE_PROMOTED_TARGETS
+
+def load_decode_norm_fusion_promotion(path:str) -> frozenset[Target]:
+  """Read the L1 M3 fused decode RMSNorm promotion record (boltbeam.route_policy.v1, same schema family
+  as `load_decode_epilogue_fusion_promotion`). CLOSED default with the same semantics: a document without
+  `promoted_targets` -- or with an empty list -- promotes nothing. The fused norm emitter is a measured
+  NON-LANDING on every target so far (m3-fused-norm-measurement-record-20260802.md): the opaque
+  custom-kernel boundary materializes one contiguous copy per norm call, so the family regresses the M2
+  decode baseline despite byte-identical tokens. The record reopens only when a target has a measured
+  copy-free or launch-overhead-equivalent number behind it."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_NORM_FUSION_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-norm-fusion-route-policy.json"
+_DECODE_NORM_FUSION_PROMOTED_TARGETS: frozenset[Target] = load_decode_norm_fusion_promotion(_DECODE_NORM_FUSION_PROMOTION_RECORD)
+
+def decode_norm_fusion_promoted(target:Target) -> bool:
+  """Policy authority for the L1 M3 fused decode RMSNorm route (closed default, measured non-landing)."""
+  return target in _DECODE_NORM_FUSION_PROMOTED_TARGETS
+
+def load_decode_rmsnorm_native_lowering_promotion(path:str) -> frozenset[Target]:
+  """Read the Path 3 semantic RMSNorm native-lowering promotion record (boltbeam.route_policy.v1,
+  same schema family as `load_decode_norm_fusion_promotion`). CLOSED default: a document without
+  `promoted_targets` -- or with an empty list -- promotes nothing. The semantic marker lowers to a
+  scheduler-owned kernel only for a target with a measured fixed-depth win behind it
+  (path3-semantic-rmsnorm-task-20260802.md section 3); decode evidence never authorizes prefill."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-rmsnorm-native-lowering-route-policy.json"
+_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS: frozenset[Target] = load_decode_rmsnorm_native_lowering_promotion(_DECODE_RMSNORM_NATIVE_LOWERING_PROMOTION_RECORD)
+
+def decode_rmsnorm_native_lowering_promoted(target:Target) -> bool:
+  """Target authority for the Path 3 semantic RMSNorm native-lowering route."""
+  return target in _DECODE_RMSNORM_NATIVE_LOWERING_PROMOTED_TARGETS
+
+_DECODE_RMSNORM_NATIVE_LOWERING_SITES = frozenset(("attn_norm", "ffn_norm", "output_norm"))
+
+def decode_rmsnorm_native_lowering_site_promoted(target:Target, site:str) -> bool:
+  """Keep the native route on the qualified 4096-wide sites; Q/K retain their fused route."""
+  return decode_rmsnorm_native_lowering_promoted(target) and site in _DECODE_RMSNORM_NATIVE_LOWERING_SITES
+
+def load_decode_reduce_output_rmsnorm_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the ordinary-CALL cooperative RMSNorm route."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_REDUCE_OUTPUT_RMSNORM_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-reduce-output-rmsnorm-route-policy.json"
+_DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS = load_decode_reduce_output_rmsnorm_promotion(_DECODE_REDUCE_OUTPUT_RMSNORM_RECORD)
+
+def decode_reduce_output_rmsnorm_promoted(target:Target) -> bool:
+  return target in _DECODE_REDUCE_OUTPUT_RMSNORM_TARGETS
+
+def load_decode_qk_norm_rope_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the semantic Q/K REDUCE_OUTPUT RoPE epilogue."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_QK_NORM_ROPE_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-qk-norm-rope-route-policy.json"
+_DECODE_QK_NORM_ROPE_TARGETS = load_decode_qk_norm_rope_promotion(_DECODE_QK_NORM_ROPE_RECORD)
+
+def decode_qk_norm_rope_promoted(target:Target) -> bool:
+  return target in _DECODE_QK_NORM_ROPE_TARGETS
+
+def load_decode_producer_kv_cache_sink_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the terminal K producer-owned K/V cache sink."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_PRODUCER_KV_CACHE_SINK_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-producer-kv-cache-sink-route-policy.json"
+_DECODE_PRODUCER_KV_CACHE_SINK_TARGETS = load_decode_producer_kv_cache_sink_promotion(_DECODE_PRODUCER_KV_CACHE_SINK_RECORD)
+
+def decode_producer_kv_cache_sink_promoted(target:Target, getenv_fn=getenv) -> bool:
+  """Resolve the producer-owned sink with an explicit load-time rollback."""
+  return target in _DECODE_PRODUCER_KV_CACHE_SINK_TARGETS and not getenv_fn("TINYGRAD_PRODUCER_KV_CACHE_SINK_DISABLE", 0)
+
+def load_decode_q4k_kv_pair_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for ordinary Q4/Q4 K/V dual-output producers."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q4K_KV_PAIR_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q4k-kv-pair-route-policy.json"
+_DECODE_Q4K_KV_PAIR_TARGETS = load_decode_q4k_kv_pair_promotion(_DECODE_Q4K_KV_PAIR_RECORD)
+
+def decode_q4k_kv_pair_promoted(target:Target, getenv_fn=getenv) -> bool:
+  """Resolve the Q4/Q4 pair route with an explicit load-time rollback."""
+  return target in _DECODE_Q4K_KV_PAIR_TARGETS and not getenv_fn("TINYGRAD_Q4K_KV_PAIR_DISABLE", 0)
+
+def load_decode_native_argmax_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the one-CTA finite-fp32 decode argmax."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_NATIVE_ARGMAX_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-native-argmax-route-policy.json"
+_DECODE_NATIVE_ARGMAX_TARGETS = load_decode_native_argmax_promotion(_DECODE_NATIVE_ARGMAX_RECORD)
+
+def decode_native_argmax_promoted(target:Target) -> bool:
+  return target in _DECODE_NATIVE_ARGMAX_TARGETS
+
+def decode_native_argmax_threads(target:Target, getenv_fn=getenv) -> int:
+  """Resolve the promoted CTA width, with an explicit load-time rollback."""
+  return 1024 if decode_native_argmax_promoted(target) and not getenv_fn("TINYGRAD_NATIVE_ARGMAX_DISABLE", 0) else 0
 
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:

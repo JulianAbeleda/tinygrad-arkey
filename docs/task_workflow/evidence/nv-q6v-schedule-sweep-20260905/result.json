@@ -1,0 +1,1 @@
+{"schema":"tinygrad.nv.q6v.schedule.sweep.v1","baseline":{"warp_m":2,"warp_n":2,"status":"PASS"},"variants":[{"warp_m":4,"warp_n":1,"status":"FAIL","error":"expected one compiler Q6 attn_v PROGRAM, found 0"},{"warp_m":1,"warp_n":4,"status":"FAIL","error":"expected one compiler Q6 attn_v PROGRAM, found 0"}],"scope":"compile-only research sweep; no runtime promotion"}

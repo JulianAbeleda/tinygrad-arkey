@@ -1,0 +1,39 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.baseline_profile.v1",
+  "session": "2026-08-22T21:39Z",
+  "depth": 512,
+  "label_note": "unprofiled wall and profiled union are different domains; host_gap is UNMEASURED until profiler tax is paired",
+  "llama": {
+    "unprofiled_wall_us": 4029.79635,
+    "profiled_pdl_on": {
+      "nodes": 762,
+      "node_sum_us": 5011.035,
+      "kernel_union_us": 3888.24,
+      "overlap_mass_us": 1122.329,
+      "span_us": 3896.124,
+      "internal_gap_us": 8.173,
+      "graph_id": 6,
+      "steady_replays": 27
+    }
+  },
+  "tinygrad": {
+    "unprofiled_wall_us": 4742.989095393568,
+    "profiled": {
+      "steady_nodes": 596,
+      "node_sum_us": 4675.168,
+      "union_note": "last window timestamps are non-contiguous; union requires a clean steady-window capture",
+      "audit_fresh_reference": {
+        "node_sum_us": 4677.920,
+        "resident_union_us": 4671.500,
+        "resident_overlap_us": 5.500
+      }
+    }
+  },
+  "delta": {
+    "wall_us": 713.192745393568,
+    "profiled_device_union_approx_us": 781.5,
+    "profiled_device_union_note": "tinygrad union approximated from audit overlap 5.5us; not a closed ledger"
+  },
+  "host_gap": "UNMEASURED",
+  "host_gap_note": "requires matched unprofiled+profiled route signatures and profiler-tax pairing per scope 8.2"
+}

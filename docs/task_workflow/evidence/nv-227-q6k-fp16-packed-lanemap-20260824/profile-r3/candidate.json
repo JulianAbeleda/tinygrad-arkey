@@ -1,0 +1,248 @@
+{
+  "arm": "candidate",
+  "complete_replay_count": 15,
+  "count": 32,
+  "depth": 512,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2722",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "251.45",
+    "temperature.gpu": "54"
+  },
+  "group_size_histogram": {
+    "32": 116,
+    "64": 116,
+    "128": 116,
+    "238": 101,
+    "256": 15,
+    "394": 15
+  },
+  "ledger": {
+    "node_sum_us": 910802.176,
+    "overlap_us": 181.653,
+    "span_us": 910580.75,
+    "union_us": 910446.375
+  },
+  "max_context": 1024,
+  "per_name_table": {
+    "E_1187_32_4": {
+      "mean_us": 2.435,
+      "median_us": 2.432,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_2": {
+      "mean_us": 1.413,
+      "median_us": 1.376,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_4_16_8_16_4": {
+      "mean_us": 37.179,
+      "median_us": 37.056,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "E_toks": {
+      "mean_us": 2.043,
+      "median_us": 2.048,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_toks_28start_pos2Btoks29_8_4": {
+      "mean_us": 324.885,
+      "median_us": 323.888,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "E_toks_2_2_8_16_2_4": {
+      "mean_us": 1.981,
+      "median_us": 1.952,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "E_toks_2_8_16_4_4": {
+      "mean_us": 100.248,
+      "median_us": 71.92,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "E_toks_64_16_4": {
+      "mean_us": 366.52,
+      "median_us": 366.432,
+      "per_replay_count": 181.0,
+      "replay_samples": 12
+    },
+    "E_toks_8_2_16_4": {
+      "mean_us": 54.283,
+      "median_us": 54.272,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_1187_32_4_16_2_2_2_4_8": {
+      "mean_us": 3017.528,
+      "median_us": 3016.608,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "r_128_16_8_1187": {
+      "mean_us": 11.208,
+      "median_us": 11.2,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "r_16_8": {
+      "mean_us": 1.272,
+      "median_us": 1.28,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "r_2_8_toks_128_16_2_2_2_32": {
+      "mean_us": 17013.392,
+      "median_us": 17013.328,
+      "per_replay_count": 18.0,
+      "replay_samples": 12
+    },
+    "r_2_8_toks_128_16_4_2_32": {
+      "mean_us": 13234.771,
+      "median_us": 13234.736,
+      "per_replay_count": 18.0,
+      "replay_samples": 12
+    },
+    "r_2_toks_8_4_4_16": {
+      "mean_us": 204.184,
+      "median_us": 62.8,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_32_4_1187": {
+      "mean_us": 47.035,
+      "median_us": 46.96,
+      "per_replay_count": 1.0,
+      "replay_samples": 12
+    },
+    "r_32_toks_28start_pos2Btoks29_16_8": {
+      "mean_us": 5891.499,
+      "median_us": 5892.816,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_4_toks_2_8_16_4_16_4_2_4_8": {
+      "mean_us": 79993.608,
+      "median_us": 79997.744,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_4_toks_2_8_16_4_28start_pos2Btoks29": {
+      "mean_us": 1270.429,
+      "median_us": 1270.816,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_8_toks_128_16_4_2_32": {
+      "mean_us": 12637.691,
+      "median_us": 12628.816,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_8_toks_16_8": {
+      "mean_us": 50.101,
+      "median_us": 50.064,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_toks_16_256": {
+      "mean_us": 274.427,
+      "median_us": 274.368,
+      "per_replay_count": 73.0,
+      "replay_samples": 12
+    },
+    "r_toks_256_16_3_16_4_2_2_16": {
+      "mean_us": 432927.133,
+      "median_us": 433006.64,
+      "per_replay_count": 72.0,
+      "replay_samples": 12
+    },
+    "r_toks_64_16_4_16_2_2_2_4_8": {
+      "mean_us": 53163.584,
+      "median_us": 53160.848,
+      "per_replay_count": 36.0,
+      "replay_samples": 12
+    },
+    "r_toks_64_16_4_48_2_2_2_4_8": {
+      "mean_us": 208625.251,
+      "median_us": 208625.68,
+      "per_replay_count": 18.0,
+      "replay_samples": 12
+    },
+    "r_toks_64_16_4_48_4_2_4_8": {
+      "mean_us": 80007.075,
+      "median_us": 80000.336,
+      "per_replay_count": 18.0,
+      "replay_samples": 12
+    },
+    "r_toks_8_4_28start_pos2Btoks29": {
+      "mean_us": 1306.141,
+      "median_us": 1307.2,
+      "per_replay_count": 72.0,
+      "replay_samples": 12
+    }
+  },
+  "profile_jsonl": "docs/task_workflow/evidence/nv-227-q6k-fp16-packed-lanemap-20260824/profile-r3/candidate.profile.jsonl",
+  "q6_down_blocks": [
+    0,
+    1,
+    2,
+    3,
+    6,
+    9,
+    12,
+    15,
+    18,
+    21,
+    24,
+    27,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "reps": 3,
+  "schema": "tinygrad.nv_q6k_down_packed_lanemap_profile.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      5.48355971875,
+      5.47593665625,
+      5.47018271875
+    ],
+    "external_contention_high_limit_ms": 5.72593665625,
+    "median_ms_per_token": 5.47593665625,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      5.48355971875,
+      5.47593665625,
+      5.47018271875
+    ],
+    "timed_token_count": 96,
+    "token_hashes": [
+      "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+      "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+      "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b"
+    ],
+    "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 12
+}

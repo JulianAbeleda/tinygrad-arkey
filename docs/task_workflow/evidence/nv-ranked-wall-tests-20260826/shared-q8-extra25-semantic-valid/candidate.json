@@ -1,0 +1,22 @@
+{
+  "candidate": true,
+  "finite": true,
+  "prelude_token": 13876,
+  "schema": "tinygrad.nv_shared_q8_extra25_semantic.v1",
+  "shape": [
+    8,
+    1,
+    151936
+  ],
+  "tokens": [
+    4710,
+    32313,
+    11,
+    773,
+    358,
+    1184,
+    311,
+    7071
+  ],
+  "tokens_sha256": "7e2ff56bb98978c6656a49628acae430db10b295c75aa9fc69aa1e30eae5f4e6"
+}

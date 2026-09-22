@@ -1,0 +1,2 @@
+ctx   512: W   6.59ms (151.67 tok/s) | D   5.32ms (187.83 tok/s) | host-sync 1.27ms (19.2%) | flash
+artifact: /home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase1/tg-profile.json

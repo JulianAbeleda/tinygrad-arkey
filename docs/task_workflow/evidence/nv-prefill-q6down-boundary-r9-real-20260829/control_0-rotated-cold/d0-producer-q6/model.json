@@ -1,0 +1,146 @@
+{
+  "arm": "candidate",
+  "authority": {
+    "source_manifest": {
+      "extra/llm_research/prefill/nv_compiler_q6k_model_arm.py": {
+        "bytes": 15565,
+        "mtime_ns": 1788049809887214723,
+        "sha256": "4e6358562ee260b038148b70fa9b253beb479d4fb02dbbf4d7991ab2ffa62ddd"
+      },
+      "extra/llm_research/prefill/nv_compiler_q6k_pp512_binding.py": {
+        "bytes": 17766,
+        "mtime_ns": 1788049771920101942,
+        "sha256": "8d54ae03c1a3ecad83c921d5a45fbbb8006bcbed906fac50e8c7dc02c8601d84"
+      },
+      "tinygrad/codegen/opt/kernel_lds.py": {
+        "bytes": 64500,
+        "mtime_ns": 1787971332047414511,
+        "sha256": "d101157650e4935398f827deafc562a309c333169b65b2be0d49909742148972"
+      },
+      "tinygrad/codegen/opt/packed_weight.py": {
+        "bytes": 41384,
+        "mtime_ns": 1787969338981655078,
+        "sha256": "5fca20de39f54e9fd81da41cd8ab3b9f38039387d923d561b8e9fac992a72151"
+      },
+      "tinygrad/codegen/opt/postrange.py": {
+        "bytes": 65092,
+        "mtime_ns": 1787971332046414507,
+        "sha256": "c1277e06cd851dcd3582d0259bc65ec4e5552e5e2f02170b92f238548af0bf59"
+      },
+      "tinygrad/llm/model.py": {
+        "bytes": 208642,
+        "mtime_ns": 1787979302897129764,
+        "sha256": "6df12badd3b3c70f8340b9346f7203d3ea34d0fde2073579c84c36468c424ddb"
+      }
+    },
+    "structural_only": false
+  },
+  "boundary_capture": null,
+  "census": {
+    "gate_up_main": 72,
+    "k_main": 36,
+    "q4_v_down_fp16_overlays": 36,
+    "q6_all_weights_canonical": true,
+    "q6_candidate_weight_args": 18,
+    "q6_down_all_1024cta": true,
+    "q6_down_fp16_overlays": 0,
+    "q6_down_main": 18,
+    "q6_down_producer": 18,
+    "q6_old_fixup": 0,
+    "q6_partial_workspace_bytes": 0,
+    "q6_records": 18,
+    "q6_unique_weight_bases": 18,
+    "q6_v_all_256cta": false,
+    "q6_v_fp16_overlays": 18,
+    "q6_v_main": 0,
+    "q6_v_producer": 0,
+    "q6_weight_copy_kernels": 0,
+    "total_q8_producer": 126
+  },
+  "program_names": {
+    "E_1024_8_16_4_0474917d69356f3fb88ab57e908ee4f28ade9b7ce4aba40fce75ec61ac8f072d": 36,
+    "E_1024_8_16_4_869e848bb5316270adcd4bf13e8090a251cc6d2bf0836f27b4319c893157eb2c": 36,
+    "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": 2,
+    "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": 72,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_03180df0efeb598bc45a49b92d84c58a8484f4dcd609cd4d3e4aacad5d583fce": 36,
+    "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": 36,
+    "E_4_32_32_4_2_2_2_8_2_127_2_9e9fe095ccae4c757b96799f928901747e2ec817b074f802dfba07b1b95c4fa6": 72,
+    "E_4_32_32_4_2_2_2_8_2_383_2_e1b756a0093f26f96af0ea5db74fc3b41e6a44ae02968e01214c238e807d7a9e": 18,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_4_8_32_4_2_2_2_8_2_127_2_5b25908519df16d6540959b859dfc9b1b3da90428dede53099326cb17b2798b0": 36,
+    "E_512_16_8_2_4_4_2e162bdabfe040283cb257ced27118633de4e59e1679a9699f9c54996923a749": 1,
+    "E_512_4_2_8_16_4_90bc800eaf9a6441acd8c7bf4e4ce6b36ec829b5916985f2e916b5d9931bd5af": 36,
+    "E_512_8_8_16_2_3719fcffb3ecfc3890f940d993b368b2974e12b21911049d9185b25e627fd60a": 36,
+    "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5": 36,
+    "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c": 36,
+    "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": 36,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 36,
+    "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": 35,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 37,
+    "E_64_64_8_16_4_655332ee325f66bbd19a0a9f7ca8e8da98665ae71ce0894dae6e08a7a1de8e63": 18,
+    "E_64_64_8_16_4_6fbbb79c268af5049ba63c1085bc9fceeed2ba0dfed78a06bb342965de3c6d85": 18,
+    "E_8_16_2_8_16_4_4_bfb7c071f7fb3ecd1ad8447888e9dff1f8e4a365777018ee630985cd76194445": 36,
+    "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+    "native_finite_fp32_argmax_151936_t1024": 1,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "q8_compact_record_fp16": 108,
+    "q8_compact_record_fp16_q6_ffn_down": 18,
+    "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": 1,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 73,
+    "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": 36,
+    "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e": 72,
+    "r_8_128_32_2_2_2_2_2_2_192_2_2_2_e7b50137881894b03e7c8a05e6d8f1cd1d1f2effd185e444406c3532cf771c74": 18,
+    "r_8_32_32_2_2_2_2_2_2_64_2_2_2_46e76ef8e7f36dda3cb7b9ed68b09d12dd58ca17ae49b6f377546a11c49b15d9": 36,
+    "r_8_32_8_4_4_16_101af4cba4c325fa1cf1243686d10094252566e2d3df70d2f8849fe60db9f98f": 36
+  },
+  "replay": {
+    "distinct_activation_output": true,
+    "finite": true,
+    "first_token": 198,
+    "replay_token": 198,
+    "same_activation_exact": true,
+    "same_logits_exact": true,
+    "same_logits_max_abs": 0.0,
+    "same_logits_mean_abs": 0.0,
+    "same_token": true
+  },
+  "route": {
+    "active_q6_roles": [
+      "ffn_down"
+    ],
+    "default_enabled": false,
+    "gate_up_identity": "c0d2b181a6de5751180a48cc5c1b1d1c8977770845951d3196a6596877493d28",
+    "k_identity": "50c7576b59193b8ecedf58701515f45e288ce8dde993db3a492badebbead057e",
+    "q6_identities": {
+      "attn_v": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+      "ffn_down": "77d681357cdf89ae284fd64344eb192f37377ff39108418b15e52615af25cb3e"
+    }
+  },
+  "runtime_policy": {
+    "HCQ_NUM_COMPUTE": "2",
+    "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "",
+    "HCQ_NV_MULTI_QUEUE_INDICES": "",
+    "HCQ_NV_MULTI_QUEUE_PROGRAMS": "",
+    "HCQ_NV_READY_PLACEMENT": "0"
+  },
+  "schema": "tinygrad.nv_compiler_q6k_model_arm.v1",
+  "status": "PASS",
+  "token": 198,
+  "wall": {
+    "median_ms": 80.116933,
+    "min_ms": 80.096074,
+    "samples_ms": [
+      80.09949,
+      80.108948,
+      80.116933,
+      80.121501,
+      80.114399,
+      80.096074,
+      80.131601,
+      80.133545,
+      80.124828
+    ],
+    "tok_s": 6392.323299141978
+  }
+}

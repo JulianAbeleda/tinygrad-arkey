@@ -1,0 +1,64 @@
+{
+  "bitwise_identical": true,
+  "commit": "3be70b9978c9a9073f0ac921d74d6be27cb5e7c2",
+  "max_abs_diff": 0.0,
+  "max_rel_diff": 0.0,
+  "mean_abs_diff": 0.0,
+  "method": "render production CUDA -> nvcc sm_120a -> cudaEvent",
+  "passes": 100,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_gate_up_four_warp_vec_fp16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_gate_up_four_warp_vec_fp16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 47 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 20.064 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_w1w3vec16_12288_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_w1w3vec16_12288_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 67 registers, used 0 barriers",
+    "ptxas info    : Compile time = 19.578 ms"
+  ],
+  "raw_stdout": [
+    "bitwise_identical=1",
+    "max_abs_diff=0 mean_abs_diff=0 max_rel_diff=0",
+    "shape=12288x4096 passes=100 reps=7",
+    "rep=0 control=22.1216 candidate=21.0214",
+    "rep=1 control=21.9494 candidate=20.9933",
+    "rep=2 control=21.9622 candidate=21.0330",
+    "rep=3 control=21.9693 candidate=21.0131",
+    "rep=4 control=21.9597 candidate=21.0237",
+    "rep=5 control=22.0115 candidate=21.0134",
+    "rep=6 control=21.9680 candidate=21.0304"
+  ],
+  "reps": 7,
+  "schema": "tinygrad.q4k_gate_up_four_warp_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 12288
+  },
+  "timing": {
+    "candidate": [
+      21.0214,
+      20.9933,
+      21.033,
+      21.0131,
+      21.0237,
+      21.0134,
+      21.0304
+    ],
+    "candidate_median": 21.0214,
+    "candidate_over_control": 0.9569100509832483,
+    "control": [
+      22.1216,
+      21.9494,
+      21.9622,
+      21.9693,
+      21.9597,
+      22.0115,
+      21.968
+    ],
+    "control_median": 21.968,
+    "unit": "us_per_launch_cuda_event"
+  }
+}

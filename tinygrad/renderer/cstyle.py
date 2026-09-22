@@ -2,7 +2,7 @@ from typing import Literal, Callable, cast
 import math, sys, struct, re
 from collections import defaultdict, Counter
 from tinygrad.codegen.opt import tc
-from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, range_str, axis_letters
+from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, ParamArg, PostBarrierRegion, RuntimeLocalAllocation, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge, range_str, axis_letters
 from tinygrad.helpers import strip_parens, getenv, prod, dedup, Target, CPU_COUNT, IMAGE, FLOAT16
 from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType, AddrSpace, truncate, float_to_bf16
 from tinygrad.renderer import Renderer
@@ -28,7 +28,8 @@ def _render_hip_wait(x:UOp) -> str:
 def _render_hip_barrier(ctx, x:UOp) -> str:
   from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
   if isinstance(x.arg,WaveLDSFence): return _render_hip_wait(x)
-  if x.arg is not None: raise ValueError("HIP BARRIER has an unsupported typed payload")
+  if x.arg is not None and not (isinstance(x.arg, tuple) and x.arg[:1] == ("nv_sm120_cooperative_stage_begin_v1",)):
+    raise ValueError("HIP BARRIER has an unsupported typed payload")
   return ctx.barrier
 
 
@@ -85,6 +86,8 @@ base_rewrite = PatternMatcher([
 
   # alu/gep
   (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]})"),
+  (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI, name="value"),), name="x"),
+   lambda ctx,x,value: f"({ctx[value]}).{_nms[x.arg[0]]}" if len(x.arg)==1 and value.dtype.count <= len(_nms) else None),
   (UPat(GroupOp.ALU, name="x"), lambda ctx,x: ctx.code_for_op[x.op](
     *([strip_parens(ctx[v]) if v.op == x.op and x.op in {Ops.ADD, Ops.MUL, Ops.XOR, Ops.OR, Ops.AND} else ctx[v] for v in x.src]), x.dtype)),
 
@@ -125,7 +128,9 @@ def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   if x.dtype != dtypes.float or len(x.src) != 2: return None
   fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1)
   args = ("bpermute", _HIP_BPERMUTE_F32) + ((_HIP_FMAX_F32,) if fuse else ())
-  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in args]
+  from tinygrad.codegen.late.warp_reduce import WARP_BPERMUTE_TAG
+  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and
+           (s.arg in args or (isinstance(s.arg, tuple) and s.arg[:1] == (WARP_BPERMUTE_TAG,)))]
   if len(peers) != 1 and not (fuse and peers): return None
   return UOp(Ops.CUSTOMI, dtypes.float, x.src, _HIP_FMAX_F32)
 
@@ -136,51 +141,59 @@ def _hip_native_row_state(x:UOp) -> UOp|None:
     return x.src[0].src[0].after(*x.src[1:])
   return None
 
-def _hip_expand_native_row_softmax(ctx, x:UOp) -> UOp:
+def _cstyle_expand_native_row_softmax(ctx, x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
   return expand_native_row_softmax_repack(ctx,x,native_state=False)
 
-def _hip_expand_attention_loop_state(x:UOp) -> UOp:
-  from tinygrad.uop.ops import AMDLoopStateSpec
-  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
+def _cstyle_expand_attention_loop_state(x:UOp) -> UOp:
+  from tinygrad.uop.ops import LoopStateSpec
+  if not isinstance(x.arg, LoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
   x.arg.validate()
   if x.arg.access in {"init","write"}: return x.src[0]
   reg=x.src[0]; offset=x.arg.block*8+x.arg.lane if x.arg.role=="acc" else x.arg.lane
   addr=reg.after(*x.src[1:]).index(UOp.const(dtypes.weakint,offset))
   return addr.load()
 
-def _hip_expand_loop_fragment(x:UOp) -> UOp:
+def _cstyle_expand_loop_fragment(x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_loop_fragment
   return expand_loop_fragment(x)
 
-def _hip_expand_attention_output_drain(x:UOp) -> UOp:
+def _cstyle_expand_attention_output_drain(x:UOp) -> UOp:
   """Expand the typed native-output ABI to ordinary HIP SSA stores."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  if not isinstance(x.arg, AttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
   x.arg.validate()
   grid=x.arg.grid
   if len(x.src) != (3+x.arg.blocks if grid is not None else 2+x.arg.blocks) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
   out, *rest=x.src
   group, l, acc = (rest[0],rest[1],rest[2:]) if grid is not None else (None,rest[0],rest[1:])
-  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  nv_grouped = getattr(x.arg, "native_abi", "").startswith("nv_sm120_") and getattr(grid, "local_size", 32) == 128
+  lane=UOp.special(128 if nv_grouped else 32,"lidx0"); lane = lane.alu(Ops.AND,UOp.const(dtypes.weakint,31)) if nv_grouped else lane
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
   # The drain lane convention is NOT restated here: c_e/c_half/c_j/c_col come from the spec's
-  # `drain_lane_coeffs`, which is its single authority (see AMDAttentionOutputDrainSpec).
+  # `drain_lane_coeffs`, which is its single authority (see AttentionOutputDrainSpec).
   # `e*c_e + halfwave*c_half` is emitted in the factored form `(2e+halfwave)*c_half`, which is why
   # c_e == 2*c_half is checked rather than assumed. `range(8)` (qk_c_lanes wave32 C-fragment width),
   # `half`/`col` (wave32 lane math) and `range(x.arg.blocks)` stay as they are -- hardware, or already
   # derived. The per-group row stride is 16 q-tokens * the halfwave stride.
   c_e, c_half, c_j, c_col = x.arg.drain_lane_coeffs
-  if c_e != 2*c_half or c_col != 1: raise ValueError("HIP attention output drain needs the factored wave32 lane convention")
+  model=getattr(x.arg,"fragment_model",None)
+  if model is None and (c_e != 2*c_half or c_col != 1):
+    raise ValueError("HIP attention output drain needs the factored wave32 lane convention")
   for j in range(x.arg.blocks):
-    for e in range(8):
+    for e in range(model.score_elements if model is not None else 8):
       den=l.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
       base=group*UOp.const(dtypes.weakint,16*c_half) if group is not None else UOp.const(dtypes.weakint,0)
-      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,c_half)+(j+x.arg.output_block_base)*c_j+col)
+      if model is not None:
+        dst=out.index(base+model.c_row_uop(e,lane)*UOp.const(dtypes.weakint,c_half)+
+          UOp.const(dtypes.weakint,(j+x.arg.output_block_base)*c_j)+model.c_col_uop(e,lane))
+      else:
+        dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,c_half)+(j+x.arg.output_block_base)*c_j+col)
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 
-def _hip_expand_attention_stats_drain(x:UOp) -> UOp:
+def _cstyle_expand_attention_stats_drain(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDAttentionStatsDrainSpec
   if not isinstance(x.arg,AMDAttentionStatsDrainSpec) or len(x.src) != 4: raise ValueError("HIP attention stats drain is malformed")
   x.arg.validate(); stats,group,m,l=x.src; lane=UOp.special(32,"lidx0"); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)); stores=[]
@@ -196,6 +209,32 @@ hip_native_repack_pm = PatternMatcher([
     arg=_HIP_BPERMUTE_F32)
     if x.arg == "bpermute" and x.dtype == dtypes.float else None),
 ])
+
+def _install_native_attention_bindings(ren) -> None:
+  """Bind the fused-prefill-attention native matchers + weakint type map on a C-style renderer.
+
+  Shared by HIPRenderer (gfx1100) and NVCCRenderer (sm_120) so the two cannot drift apart at the binding
+  site. The expansions are renderer-neutral UOp lowerings of the typed ABI ops in
+  renderer/isa/amd_attention_abi.py; only the leaves are per-target (bpermute spellings resolve through the
+  warp_bpermute providers). HIP-specific extras -- the fmaxf peer rule and the bpermute spelling matcher --
+  are added by the caller after this returns; NVCC adds none.
+  """
+  # Exact native attention loop address expressions retain weakint until source rendering.
+  ren.type_map = {**ren.type_map, dtypes.weakint: "int"}
+  # The scheduler-owned expansion is shared with the native ISA renderer.
+  from tinygrad.renderer.isa.amd import native_repack_matcher
+  from tinygrad.renderer.isa.amd import native_state_lane_matcher
+  ren.native_repack_matcher = PatternMatcher([
+    (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), _cstyle_expand_attention_output_drain),
+    (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), _cstyle_expand_attention_stats_drain),
+    (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state),
+    (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, name="x"), _cstyle_expand_native_row_softmax)]) + native_repack_matcher
+  ren.native_state_lane_matcher = PatternMatcher([
+    (UPat(Ops.ATTENTION_LOOP_STATE, name="x"), _cstyle_expand_attention_loop_state)]) + native_state_lane_matcher
+  from tinygrad.renderer.isa.amd_attention_abi import lower_cooperative_stage_begin
+  ren.native_loop_fragment_matcher = PatternMatcher([
+    (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"), _cstyle_expand_loop_fragment),
+    (UPat(Ops.COOPERATIVE_STAGE_BEGIN, name="x"), lower_cooperative_stage_begin)])
 
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([
@@ -231,7 +270,7 @@ def uops_to_dtypes(uops:list[UOp]) -> list[DType]:
   for u in uops:
     if u.addrspace in (AddrSpace.REG, None) and u.dtype != dtypes.void and u._shape is not None and (key:=(u.dtype, u.max_numel())) not in seen:
       # TODO: this eventually needs to be removed
-      ret.append(u.dtype.vec(u.max_numel()))
+      ret.append(u.dtype if u.dtype.count > 1 else u.dtype.vec(u.max_numel()))
       seen.add(key)
   return ret
 
@@ -247,6 +286,7 @@ class CStyleLanguage(Renderer):
   smem_align: str = ""
   smem_prefix: str = ""
   smem_prefix_for_cast: bool = True
+  runtime_local_prefix: str|None = None
   arg_int_prefix: str = "const int"
   barrier: str = ""
   code_for_workitem: dict[Literal["g", "l", "i"], Callable] = {}
@@ -255,11 +295,16 @@ class CStyleLanguage(Renderer):
   # (val, xor_offset, lane) -> lowered CUSTOMI UOp. `lane` is only meaningful to providers that need a per-lane
   # source address (e.g. AMD's ds_bpermute); providers that take a lane mask directly may ignore it.
   warp_shfl_xor: Callable[[UOp, int, UOp], UOp]|None = None
+  # Byte-address cross-lane permute (the fused-attention row-softmax lowering, warp_reduce.py warp_bpermute).
+  # (addr, value) -> lowered CUSTOMI UOp; a renderer that leaves this None fails loudly at lowering.
+  warp_bpermute: Callable[[UOp, UOp], UOp]|None = None
   # Per-target flash-decode intrinsics (TG7, same declarative shape as warp_shfl_xor above): None means this
   # target cannot express it, and codegen/late/flash_decode_intrinsics.py raises rather than falling back.
   # fdot2(acc, a, b) -> acc + a.x*b.x + a.y*b.y for packed-half2 a/b, fp32 accumulate (see the AMD provider's
   # semantics note on HIPRenderer below). exp2f(x) -> 2**x, the opt-in DECODE_FAST_EXP2 fast path.
   fdot2: Callable[[UOp, UOp, UOp], UOp]|None = None
+  # acc + dot(s8x4(a), s8x4(b)); a/b are uint32 bit containers.
+  int8x4_dot: Callable[[UOp, UOp, UOp], UOp]|None = None
   exp2f: Callable[[UOp], UOp]|None = None
   extra_args: list[str] = []
   float4: str|None = None
@@ -271,10 +316,10 @@ class CStyleLanguage(Renderer):
   code_for_op: dict = {
     Ops.SQRT: lambda x,dtype: f"sqrt({x})", Ops.RECIPROCAL: lambda x,dtype: f"(1/{x})", Ops.NEG: lambda x,dtype: f"-{x}",
     Ops.EXP2: lambda x,dtype: f"exp2({x})", Ops.LOG2: lambda x,dtype: f"log2({x})", Ops.SIN: lambda x,dtype: f"sin({x})",
-    Ops.TRUNC: lambda x,dtype: f"trunc({x})",
+    Ops.TRUNC: lambda x,dtype: f"trunc({x})", Ops.ROUND_AWAY: lambda x,dtype: f"roundf({x})",
     Ops.AND: lambda a,b,dtype: f"({a}&{b})", Ops.XOR: lambda a,b,dtype: f"({a}^{b})", Ops.OR: lambda a,b,dtype: f"({a}|{b})",
     Ops.ADD: lambda a,b,dtype: f"({a}+{b})", Ops.SUB: lambda a,b,dtype: f"({a}-{b})", Ops.MUL: lambda a,b,dtype: f"({a}*{b})",
-    Ops.CMOD: lambda a,b,dtype: f"({a}%{b})", Ops.CDIV: lambda a,b,dtype: f"({a}/{b})", Ops.CMPNE: lambda a,b,dtype: f"({a}!={b})",
+    Ops.CMOD: lambda a,b,dtype: f"({a}%{b})", Ops.CDIV: lambda a,b,dtype: f"({a}/{b})", Ops.PRECISE_DIV: lambda a,b,dtype: f"({a}/{b})", Ops.CMPNE: lambda a,b,dtype: f"({a}!={b})",
     Ops.SHR: lambda a,b,dtype: f"({a}>>{b})", Ops.SHL: lambda a,b,dtype: f"({a}<<{b})", Ops.CMPLT: lambda a,b,dtype: f"({a}<{b})",
     Ops.WHERE: lambda a,b,c,dtype: f"({a}?{b}:{c})", Ops.CMPEQ: lambda a,b,dtype: f"({a}=={b})"}
 
@@ -285,7 +330,20 @@ class CStyleLanguage(Renderer):
     tmp = ""
     if any(isinstance(u.dtype, ImageDType) for _,(u,_) in bufs):
       tmp = "const sampler_t smp = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;\n"
-    buftypes = [(name, self._render_dtype(u.dtype, sz=1, addrspace=u.addrspace, mutable=mutable)+self.buffer_suffix \
+    qualified = [(name,u,mutable) for name,(u,mutable) in bufs if isinstance(u.arg, ParamArg) and u.arg.const_restrict]
+    if qualified:
+      if len(qualified) != 1: raise RuntimeError("const_restrict requires exactly one annotated pointer PARAM per kernel")
+      name,u,mutable = qualified[0]
+      if not getattr(self, "supports_const_restrict_pointer", False):
+        raise RuntimeError(f"{type(self).__name__} cannot preserve const_restrict pointer qualification")
+      if mutable or u.addrspace is not AddrSpace.GLOBAL or u.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or u.dtype.vcount != 1:
+        raise RuntimeError("const_restrict requires an immutable scalar 32-bit GLOBAL pointer PARAM")
+      if sum(isinstance(x.arg, ParamArg) and x.arg.slot == u.arg.slot for _,(x,_) in bufs) != 1:
+        raise RuntimeError("const_restrict pointer PARAM has ambiguous ABI-slot ownership")
+      if (render_qualified:=getattr(self, "render_const_restrict_pointer", None)) is None:
+        raise RuntimeError(f"{type(self).__name__} has no const_restrict pointer lowering")
+    buftypes = [(name, render_qualified(u)+self.buffer_suffix if isinstance(u.arg, ParamArg) and u.arg.const_restrict else
+                 self._render_dtype(u.dtype, sz=1, addrspace=u.addrspace, mutable=mutable)+self.buffer_suffix \
                  if u.addrspace == AddrSpace.GLOBAL else self.arg_int_prefix if u.dtype == dtypes.int else None) for name,(u,mutable) in bufs]
     local_dims = [u.src[0] for u in uops if u.op is Ops.SPECIAL and u.arg[0] == "l"]
     launch_bounds = prod([d.vmax for d in local_dims])
@@ -295,6 +353,9 @@ class CStyleLanguage(Renderer):
     return prg if prefix is None else "\n".join(prefix)+f"\n{prg}"
 
   def render_index(self, x:UOp, buf:UOp, idx:UOp):
+    if buf.addrspace == AddrSpace.REG and buf.max_numel() == 1:
+      assert idx.op is Ops.CONST and idx.arg == 0, f"scalar REG index must be constant zero, got {idx}"
+      return self[buf]
     if buf.addrspace == AddrSpace.REG and buf.op not in {Ops.AFTER, Ops.BUFFER}:
       # this is lane access in C
       assert idx.op is Ops.CONST, f"{idx.op} must be CONST"
@@ -307,8 +368,12 @@ class CStyleLanguage(Renderer):
   def render_buffer(self, x:UOp):
     shp = x.src[0].as_shape
     lanes = 1
+    if isinstance(x.tag, RuntimeLocalAllocation):
+      if self.runtime_local_prefix is None: raise RuntimeError(f"{type(self).__name__} cannot lower runtime workgroup-local storage")
+      if x.tag.size_bytes != shp[0] * x.dtype.itemsize: raise ValueError("runtime local allocation descriptor disagrees with buffer size")
+      return f"{self.runtime_local_prefix.format(alignment=x.tag.alignment)}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}[];"
     prefix = f"{self.smem_align}{self.smem_prefix}" if x.addrspace == AddrSpace.LOCAL else ""
-    suffix = f"[{shp[0]}]" if len(shp) else ""
+    suffix = f"[{shp[0]}]" if len(shp) and not (x.addrspace == AddrSpace.REG and shp[0] == 1) else ""
     return f"{prefix}{self._render_dtype(x.dtype, sz=lanes)} {self[x]}{suffix};"
 
   def render_scalar_dtype(self, dtype:DType) -> str:
@@ -344,6 +409,84 @@ class CStyleLanguage(Renderer):
   def render_dtype(self, dt:DType, mutable=True) -> str:
     return self._render_dtype(dt, 1, dt.addrspace if isinstance(dt, PtrDType) else AddrSpace.REG, mutable)
 
+  def _region_load_bridge_plan(self, uops:list[UOp], child_count:Counter, writable_params:set[UOp]):
+    bridge_loads=[u for u in uops if u.op is Ops.LOAD and
+                  any(s.op is Ops.AFTER and isinstance(s.arg,RegionLoadBridge) for s in u.src[1:])]
+    bridge_markers=[u for u in uops if u.op is Ops.AFTER and isinstance(u.arg,RegionLoadBridge)]
+    if not bridge_loads and not bridge_markers: return None
+    if not getattr(self,"supports_region_load_bridge",False):
+      raise RuntimeError(f"{type(self).__name__} cannot preserve split region-load register bridges")
+    if len(bridge_loads) != 18: raise RuntimeError("region load bridge requires exactly 18 scalar copies")
+    if len(bridge_markers) != 1: raise RuntimeError("region load bridge requires exactly one shared region marker")
+    marker=bridge_markers[0]
+    if len(marker.src) != 1 or marker.src[0].op is not Ops.IF or not isinstance(marker.src[0].arg,PostBarrierRegion):
+      raise RuntimeError("region load bridge marker must own one typed PostBarrierRegion")
+    region=marker.src[0]
+    if not region.arg.workgroup_uniform or len(region.src) != 2 or region.src[0].op is not Ops.CONST or \
+       region.src[0].dtype is not dtypes.bool or region.src[0].arg is not True or region.src[1].op is not Ops.BARRIER:
+      raise RuntimeError("region load bridge requires one constant-true uniform region anchored on a BARRIER")
+    anchor=region.src[1]
+    if sum(u is anchor for u in uops) != 1: raise RuntimeError("region load bridge anchor BARRIER must occur exactly once")
+    ends=[u for u in uops if u.op is Ops.ENDIF and isinstance(u.arg,PostBarrierRegion) and u.src and u.src[0] is region]
+    if len(ends) != 1: raise RuntimeError("region load bridge requires exactly one matching region ENDIF")
+    end=ends[0]
+    pairs=[]
+    global_owner=None
+    local_owner=None
+    for load in bridge_loads:
+      markers=[s for s in load.src[1:] if s.op is Ops.AFTER and isinstance(s.arg,RegionLoadBridge)]
+      if len(load.src) != 2 or markers != [marker] or load.dtype not in {dtypes.int,dtypes.uint,dtypes.float} or load.dtype.vcount != 1:
+        raise RuntimeError("region load bridge requires unmasked scalar 32-bit LOADs with one shared marker")
+      if load.src[0].op is not Ops.INDEX or len(load.src[0].src) != 2 or load.src[0].addrspace is not AddrSpace.GLOBAL:
+        raise RuntimeError("region load bridge requires direct scalar GLOBAL INDEX loads")
+      owners=load.src[0].pointer_base_params()
+      if len(owners) != 1: raise RuntimeError("region load bridge LOAD must have exactly one GLOBAL PARAM owner")
+      owner=next(iter(owners))
+      if not isinstance(owner.arg,ParamArg) or owner.arg.const_restrict or owner in writable_params:
+        raise RuntimeError("region load bridge requires one immutable unqualified GLOBAL source")
+      if global_owner is None: global_owner=owner
+      elif owner is not global_owner: raise RuntimeError("region load bridge requires one common GLOBAL source owner")
+      consumers=[u for u in uops if u.op is Ops.STORE and len(u.src) == 2 and u.src[1] is load]
+      if child_count[load] != 1 or len(consumers) != 1:
+        raise RuntimeError("region load bridge requires one unique direct STORE consumer per LOAD")
+      store=consumers[0]
+      if store.src[0].op is not Ops.INDEX or len(store.src[0].src) != 2 or store.src[0].addrspace is not AddrSpace.LOCAL or \
+         store.src[0].dtype != load.dtype:
+        raise RuntimeError("region load bridge requires direct scalar32 LOCAL STORE destinations")
+      if child_count[store] != 1 or store not in end.src[1:]:
+        raise RuntimeError("region load bridge STORE must be a unique direct root of its region")
+      base=store.src[0].src[0]
+      if local_owner is None: local_owner=base
+      elif base is not local_owner: raise RuntimeError("region load bridge requires one common LOCAL allocation")
+      pairs.append((load,store))
+    if len(set(x for _,x in pairs)) != 18 or len(end.src) != 19 or set(end.src[1:]) != {x for _,x in pairs}:
+      raise RuntimeError("region load bridge region must own exactly its 18 unique STORE roots")
+    positions={u:i for i,u in enumerate(uops)}
+    if not positions[anchor] < positions[region] < min(positions[x] for pair in pairs for x in pair) or \
+       max(positions[x] for pair in pairs for x in pair) >= positions[end]:
+      raise RuntimeError("region load bridge lifecycle is not anchor < region copies < ENDIF")
+    order_dependency=None
+    if marker.arg.order_after_anchor:
+      if len(anchor.src) != 1 or anchor.src[0].op is not Ops.STORE:
+        raise RuntimeError("ordered region load bridge requires one final STORE at its anchor")
+      order_dependency=anchor.src[0].src[0]
+      if order_dependency.addrspace is not AddrSpace.REG or order_dependency.dtype not in {dtypes.int,dtypes.uint,dtypes.float} or \
+         order_dependency.dtype.vcount != 1:
+        raise RuntimeError("ordered region load bridge requires one scalar32 REG completion value")
+    suppressed={region,marker,end,*(x for pair in pairs for x in pair)}
+    allowed=GroupOp.ALU|{Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.DEFINE_VAR,Ops.DEFINE_LOCAL,Ops.BUFFER,Ops.SPECIAL,
+                         Ops.INDEX,Ops.SHRINK,Ops.GEP,Ops.CAST,Ops.BITCAST}
+    store_addresses={store.src[0] for _,store in pairs}
+    address_afters={address.src[0] for address in store_addresses if address.op is Ops.INDEX and address.src[0].op is Ops.AFTER}
+    valid_address_after=lambda u: u in address_afters and u.arg is None and len(u.src)==2 and u.src[1] is anchor and \
+      all(v in store_addresses for v in uops if u in v.src)
+    invalid=[u for u in uops[positions[anchor]+1:positions[end]]
+             if u not in suppressed and u.op not in allowed and not valid_address_after(u)]
+    if invalid:
+      kinds=Counter(u.op for u in invalid)
+      raise RuntimeError(f"region load bridge body contains non-address work outside its direct copies: {dict(kinds)}")
+    return anchor,end,pairs,suppressed,order_dependency
+
   def __getitem__(self, key): return self.r[key]  # hacky helper
   def _render(self, uops:list[UOp]) -> tuple[str, list[str], list[tuple[str,tuple[UOp,bool]]]]:
     r: dict[UOp, str] = {}
@@ -354,17 +497,59 @@ class CStyleLanguage(Renderer):
     # Inlining it turns the lvalue into make_floatN(...), which HIP rejects.
     store_addrs = {u.src[0] for u in uops if u.op is Ops.STORE}
     # find which PARAMs are stored to with a single toposort
-    writable_params = {u for u in UOp.sink(*[u.src[0] for u in uops if u.op is Ops.STORE]).toposort(lambda u: u.op != Ops.END) if u.op is Ops.PARAM}
+    writable_params = {p for u in uops if u.op is Ops.STORE for p in u.src[0].pointer_base_params()}
+    bridge_plan=self._region_load_bridge_plan(uops,child_count,writable_params)
+    bridge_anchor,bridge_end,bridge_pairs,bridge_suppressed,bridge_dependency = \
+      bridge_plan if bridge_plan is not None else (None,None,[],set(),None)
+    bridge_barrier=None
+    direct_region_loads: set[UOp] = set()
+    for u in uops:
+      if u.op is not Ops.LOAD or not any(s.op is Ops.AFTER and isinstance(s.arg, RegionLoad) for s in u.src[1:]): continue
+      markers=[s for s in u.src[1:] if s.op is Ops.AFTER and isinstance(s.arg, RegionLoad)]
+      if len(markers) != 1 or len(u.src) != 2 or u.src[1] is not markers[0] or \
+         u.dtype not in {dtypes.int, dtypes.uint, dtypes.float} or u.dtype.vcount != 1:
+        raise RuntimeError("region load requires one unmasked scalar 32-bit LOAD and one region marker")
+      if u.src[0].op is not Ops.INDEX or len(u.src[0].src) != 2:
+        raise RuntimeError("region load requires one unmasked direct INDEX")
+      consumers=[v for v in uops if v.op is Ops.STORE and len(v.src) == 2 and v.src[1] is u]
+      if child_count[u] != 1 or len(consumers) != 1:
+        raise RuntimeError("region load requires one direct STORE consumer")
+      if u.src[0].addrspace is not AddrSpace.GLOBAL or consumers[0].src[0].addrspace is not AddrSpace.LOCAL:
+        raise RuntimeError("region load requires GLOBAL source and LOCAL destination")
+      owners=u.src[0].pointer_base_params()
+      if any(x in writable_params for x in owners):
+        raise RuntimeError("region load requires an immutable LOAD source")
+      owning_ends=[v for v in uops if v.op is Ops.ENDIF and consumers[0] in v.src[1:]]
+      if len(owning_ends) != 1 or not owning_ends[0].src or owning_ends[0].src[0] is not markers[0].src[0]:
+        raise RuntimeError("region load STORE must be owned by exactly its marker region")
+      direct_region_loads.add(u)
     bufs: dict[UOp, tuple[str, tuple[UOp, bool]]] = {}
     kernel = []
     depth = 1
     c: defaultdict[str, int] = defaultdict(int)
     name = "test"
     for u in uops:
+      if u in bridge_suppressed:
+        if u is bridge_end:
+          if bridge_barrier is None: raise RuntimeError("region load bridge anchor was not rendered before its ENDIF")
+          if (render_bridge:=getattr(self,"render_region_load_bridge",None)) is None:
+            raise RuntimeError(f"{type(self).__name__} has no split region-load bridge lowering")
+          before,after=render_bridge(bridge_pairs,bridge_dependency)
+          kernel.extend("  "*depth+x for x in before)
+          if not getattr(self,"region_load_bridge_owns_barrier",False): kernel.append("  "*depth+bridge_barrier)
+          kernel.extend("  "*depth+x for x in after)
+        continue
       if u.op in {Ops.NOOP, Ops.GROUP}: continue
       if u.op == Ops.STACK and len(u.src) == 0: continue
       if u.op is Ops.AFTER:
-        r[u] = r[u.src[0]]
+        if isinstance(u.arg, LoadSchedule): r[u] = r[u.src[0]]
+        elif isinstance(u.arg, RegionLoad): r[u] = r[u.src[0]]
+        elif isinstance(u.arg, StrictAfter):
+          if (render_strict_after:=getattr(self, "render_strict_after", None)) is None:
+            raise RuntimeError(f"{type(self).__name__} cannot render strict_after")
+          statement, r[u] = render_strict_after(u)
+          kernel.append("  "*depth + statement)
+        else: r[u] = r[u.src[0]]
         continue
       if u.op is Ops.SINK:
         if u.arg is not None: name = u.arg.function_name
@@ -386,8 +571,46 @@ class CStyleLanguage(Renderer):
                   Ops.INDEX: "bidx", Ops.DEFINE_REG: "acc", Ops.LOAD: "val"}.get(u.op, "alu")
         r[u] = f"{prefix}{c[prefix]}"
 
-      l = cast(str, self.string_rewrite.rewrite(u, ctx=self))
+      if u.op is Ops.LOAD and any(s.op is Ops.AFTER and isinstance(s.arg, LoadSchedule) for s in u.src[1:]):
+        if (render_load_schedule:=getattr(self, "render_load_schedule", None)) is None:
+          raise RuntimeError(f"{type(self).__name__} cannot render schedule_after LOAD")
+        owners=u.src[0].pointer_base_params()
+        if any(x in writable_params for x in owners):
+          raise RuntimeError("schedule_after requires an immutable LOAD source")
+        kernel.append("  "*depth + render_load_schedule(u, r[u]))
+        c[prefix] += 1
+        continue
+
+      # A region-tagged immutable scalar load feeding one STORE is a direct
+      # global-to-shared copy region. Keep the load expression at the STORE
+      # site so the temporary never extends across the producer phase.
+      if u in direct_region_loads:
+        r[u] = self.render_access(u.src[0])
+        continue
+
+      # RegionLoad is a lexical marker carried beside the LOAD; erase it only
+      # for expression spelling while retaining the LOAD's position in `uops`.
+      render_u = u
+      if u.op is Ops.LOAD and any(s.op is Ops.AFTER and isinstance(s.arg, RegionLoad) for s in u.src[1:]):
+        render_u = u.replace(src=(u.src[0],))
+      l = cast(str, self.string_rewrite.rewrite(render_u, ctx=self))
       assert l is not None, f"failed to render {u.op} {u.dtype} {[(x.op,x.dtype) for x in u.src]} {u.arg}"
+
+      # A lane STORE into a vector LOAD must address the backing allocation,
+      # not the loaded C temporary.  The ordinary INDEX spelling (``val.x``)
+      # silently drops the publication.  This form is exposed by vectorized
+      # local-memory staging, including precontract WMMA tiles.
+      if u.op is Ops.INDEX and u in store_addrs and len(u.src) == 2 and u.src[0].op is Ops.LOAD:
+        l = f"(*(({self.render_scalar_dtype(u.dtype)}*)({self[u.src[0].src[0]]}) + {self[u.src[1]]}))"
+      elif u.op is Ops.LOAD and u in store_addrs and len(u.src) >= 1:
+        l = self.render_access(u.src[0])
+        r[u] = l
+        continue
+
+      if u is bridge_anchor:
+        bridge_barrier=l
+        r[u]=l
+        continue
 
       if u.op in {Ops.ENDIF, Ops.END}: depth -= 1
       # PREFILL_SOFTMAX_REDUCE_FUSE: Ops.CUSTOMI is normally inlined UNCONDITIONALLY, ignoring
@@ -406,8 +629,8 @@ class CStyleLanguage(Renderer):
       # verified rather than assumed: extra/llm_research/decode/decode_codegen_identity_check.py compiles the real decode
       # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
       # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
-      customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and
-                                                      u.dtype is dtypes.float and child_count[u] > 1)
+      customi_inline = u.op is not Ops.CUSTOMI or not (child_count[u] > 1 and (u.dtype.count > 1 or
+        (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and u.dtype is dtypes.float)))
       if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \
         (u.op is Ops.LOAD and u.src[0].addrspace == AddrSpace.REG) or \
         (u.op is Ops.CAST and u.addrspace in (AddrSpace.GLOBAL, AddrSpace.LOCAL)) or \
@@ -416,7 +639,9 @@ class CStyleLanguage(Renderer):
         r[u] = l
       else:
         if u.op not in {Ops.RANGE, Ops.DEFINE_LOCAL, Ops.STORE, Ops.DEFINE_REG, Ops.BUFFER} and u.dtype != dtypes.void:
-          l = f"{self.render_type(u)} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
+          native_fragment_value = isinstance(u.tag, tuple) and u.tag[:1] == ("native_fragment_carrier_v1",)
+          dtype = self.render_vector_dtype(u.dtype, u.dtype.count) if native_fragment_value else self.render_type(u)
+          l = f"{dtype} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
         kernel.append("  "*depth + l)
         if prefix: c[prefix] += 1  # if it was used, increment
       if u.op in {Ops.IF, Ops.RANGE}: depth += 1
@@ -435,6 +660,13 @@ class ClangRenderer(CStyleLanguage):
   global_max = (CPU_COUNT.value, 0, 0)
   infinity = "__builtin_inff()"
   nan = '__builtin_nanf("")'
+  # CPU is a single work item: the renderer serializes every LOCAL range into a
+  # loop, so a "warp" XOR shuffle is an identity register read.  This is the
+  # CPU decision for the decode cross-lane reduce ladder (warp_reduce.py) and
+  # keeps the cooperative REDUCE_OUTPUT body executable bitwise on DEV=CPU.
+  # The byte-address variant (warp_bpermute) stays unprovided so that class of
+  # cross-lane read still fails loudly on CPU.
+  warp_shfl_xor = staticmethod(lambda val, offset, lane: val)
 
   # language options
   buffer_suffix = " restrict"
@@ -624,20 +856,10 @@ class HIPRenderer(CStyleLanguage):
     self.lds_read_before_next_write_ordered = True
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
-      # Exact native attention loop address expressions retain weakint until HIP source rendering.
-      self.type_map = {**self.type_map, dtypes.weakint:"int"}
-      # The scheduler-owned expansion is shared with the native ISA renderer;
-      # HIP only supplies source spelling for its existing bpermute marker.
-      from tinygrad.renderer.isa.amd import native_repack_matcher
-      from tinygrad.renderer.isa.amd import native_state_lane_matcher
-      self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
-        (UPat(Ops.AMD_ATTENTION_STATS_DRAIN,name="x"), _hip_expand_attention_stats_drain),
-        (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state),
-        (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
-        PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
-      self.native_state_lane_matcher = native_state_lane_matcher
-      self.native_state_lane_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state)]) + native_state_lane_matcher
-      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), _hip_expand_loop_fragment)])
+      _install_native_attention_bindings(self)
+      # HIP-only extras: the PREFILL_SOFTMAX_REDUCE_FUSE fmaxf peer rule (native __builtin_fmaxf spelling)
+      # and the bpermute/row-state spelling matcher.
+      self.native_repack_matcher += PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([
@@ -663,6 +885,10 @@ class HIPRenderer(CStyleLanguage):
   # byte offset, so the source lane (lane ^ offset) is computed here and bit-cast through int for the permute.
   warp_shfl_xor = staticmethod(lambda val, offset, lane: UOp(Ops.CUSTOMI, val.dtype, (val, ((lane ^ offset) * 4).cast(dtypes.int)),
     arg="__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({1}, __builtin_bit_cast(int, {0})))"))
+  # Byte-address variant used by the fused-attention row-softmax lowering: the caller computes the source
+  # lane's register byte address, and the value is bit-cast through unsigned int -- the exact spelling the
+  # pre-tag attention rendering used (see _HIP_BPERMUTE_F32), so the pinned attention hashes stay byte-identical.
+  warp_bpermute = staticmethod(lambda addr, value: UOp(Ops.CUSTOMI, value.dtype, (addr, value), arg=_HIP_BPERMUTE_F32))
   # TG7: byte-identical to the pre-TG7 inline strings in tinygrad/llm/flash_decode_attention.py. fdot2's ISA
   # semantics: __builtin_amdgcn_fdot2(a, b, c, clamp) computes c + a.x*b.x + a.y*b.y for packed half2 a/b, with
   # fp32 intermediate accumulation regardless of the (fp16) input precision -- that fp32 accumulate is exactly
@@ -671,6 +897,8 @@ class HIPRenderer(CStyleLanguage):
   # while the UOp puts acc first (src[0]) so CUSTOMI carries a scalar shape -- {1}/{2}/{0} thread that through.
   fdot2 = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.float32, (acc, a, b),
     arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)"))
+  int8x4_dot = staticmethod(lambda acc, a, b: UOp(Ops.CUSTOMI, dtypes.int32, (acc, a, b),
+    arg="__builtin_amdgcn_sdot4({1}, {2}, {0}, false)"))
   exp2f = staticmethod(lambda x: UOp(Ops.CUSTOMI, x.dtype, (x,), arg="__builtin_amdgcn_exp2f({0})"))
   code_for_op = {**CStyleLanguage.code_for_op, Ops.TRUNC: _ocml("trunc"), Ops.SIN: _ocml("sin"),
                  Ops.LOG2: _ocml("log2"), Ops.EXP2: _ocml("exp2"), Ops.SQRT: _ocml("sqrt")}

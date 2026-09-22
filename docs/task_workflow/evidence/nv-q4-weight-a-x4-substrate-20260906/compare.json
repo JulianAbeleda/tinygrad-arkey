@@ -1,0 +1,31 @@
+{
+  "schema": "tinygrad.nv_q4_weight_a_x4_substrate.v1",
+  "scalar_a_us": 309.231,
+  "native_x4_us": 301.656,
+  "scalar_c_us": 309.973,
+  "scalar_midpoint_us": 309.602,
+  "native_x4_savings_us": 7.9459999999999695,
+  "native_x4_savings_percent": 2.566520888107948,
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 2097152,
+    "max_abs": 0.00048828125,
+    "mean_abs": 9.134983883996028e-06,
+    "allclose_rtol2e5_atol2e3": true
+  },
+  "sass": {
+    "path": "/tmp/q4_weight_a_x4_r9.sass",
+    "imma": 32,
+    "bar": 2,
+    "ldsm": 8,
+    "local_load": 0,
+    "local_store": 0
+  },
+  "source_bytes": {
+    "q4_weight_a_scalar_bracket_a.cu": 64147,
+    "q4_weight_a_x4_r9.cu": 1487750,
+    "q4_weight_a_scalar_bracket_c.cu": 64147
+  }
+}

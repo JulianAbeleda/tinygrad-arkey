@@ -1,0 +1,114 @@
+{
+  "commit": "1d1690f15309df73ce4e966319f0bae8a4562b0d",
+  "ncu": {
+    "method": "Nsight Compute --cache-control all; one post-warmup launch",
+    "rows": [
+      {
+        "metric": "dram__bytes.sum",
+        "unit": "byte",
+        "value": "41333760"
+      },
+      {
+        "metric": "dram__bytes_op_read.sum",
+        "unit": "byte",
+        "value": "41333760"
+      },
+      {
+        "metric": "dram__bytes_op_write.sum",
+        "unit": "byte",
+        "value": "0"
+      },
+      {
+        "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "74.74"
+      },
+      {
+        "metric": "gpu__time_duration.sum",
+        "unit": "ns",
+        "value": "31392"
+      },
+      {
+        "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "32.89"
+      },
+      {
+        "metric": "launch__registers_per_thread",
+        "unit": "register/thread",
+        "value": "38"
+      },
+      {
+        "metric": "lts__t_bytes.sum",
+        "unit": "byte",
+        "value": "50193408"
+      },
+      {
+        "metric": "lts__t_sector_op_read_hit_rate.pct",
+        "unit": "%",
+        "value": "16.95"
+      },
+      {
+        "metric": "sm__inst_executed.sum",
+        "unit": "inst",
+        "value": "18939904"
+      },
+      {
+        "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+        "unit": "%",
+        "value": "40.80"
+      },
+      {
+        "metric": "smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct",
+        "unit": "%",
+        "value": "75.05"
+      },
+      {
+        "metric": "smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct",
+        "unit": "%",
+        "value": "1.65"
+      },
+      {
+        "metric": "smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct",
+        "unit": "%",
+        "value": "0.11"
+      },
+      {
+        "metric": "smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct",
+        "unit": "%",
+        "value": "0.74"
+      },
+      {
+        "metric": "smsp__warp_issue_stalled_wait_per_warp_active.pct",
+        "unit": "%",
+        "value": "3.34"
+      }
+    ]
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd' for 'sm_120a'",
+    "ptxas info    : Function properties for q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 6.872 ms"
+  ],
+  "schema": "tinygrad.nv_q6k_down_cold_counters.v1",
+  "shape": {
+    "block": 128,
+    "grid": 4096,
+    "k": 12288,
+    "rows": 4096
+  },
+  "symbol": "q6k_fp16_packed_lanemap_4096_12288_epi_ffnresadd",
+  "timing": {
+    "median": 13.2331,
+    "samples": [
+      13.5349,
+      13.2331,
+      13.136
+    ],
+    "unit": "us_per_launch_cuda_event"
+  },
+  "weight_halfwords": 20643840
+}

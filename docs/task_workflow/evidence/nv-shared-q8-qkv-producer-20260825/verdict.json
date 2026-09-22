@@ -1,0 +1,45 @@
+{
+  "schema": "tinygrad.nv_shared_q8_qkv_producer_verdict.v1",
+  "date": "2026-08-25",
+  "target": "NV sm_120",
+  "population": {
+    "route": "shared-Q8 Q4/Q4/Q4",
+    "groups_per_token": 9,
+    "logical_outputs": ["Q[4096]", "K[1024]", "V[1024]"]
+  },
+  "correctness": {
+    "collapsed_mismatched_fp32_words": 0,
+    "balanced_mismatched_fp32_words": 0,
+    "association_preserved": true
+  },
+  "payload": {
+    "control_ncu_dram_bytes": 14177792,
+    "collapsed_ncu_dram_bytes": 14170112,
+    "balanced_ncu_dram_bytes": 14167040,
+    "interpretation": "equal within cold replay/cache-sector variation; neither construction removes weight payload"
+  },
+  "complete_span_us_per_group": {
+    "hot": {"control": 7.165867, "collapsed": 6.3424, "balanced": 5.975893},
+    "flush_cold": {"control": 17.798, "collapsed": 23.038, "balanced": 18.818},
+    "pointer_rotated_cold": {"control": 13.654, "collapsed": 13.798, "balanced": 15.676}
+  },
+  "projected_pointer_rotated_delta_us_per_token": {
+    "collapsed": 1.296,
+    "balanced": 18.198
+  },
+  "ptxas": {
+    "registers_each": 40,
+    "spill_loads_each": 0,
+    "spill_stores_each": 0,
+    "collapsed_ctas": 1024,
+    "balanced_ctas": 2048,
+    "control_ctas": 5120
+  },
+  "compiler_wall": {
+    "construction": "4096-CTA one-Q plus conditional packed-K-or-V row",
+    "blocker": "the exact K/V four-warp merge needs a workgroup barrier inside a workgroup-uniform conditional; PostBarrierRegion deliberately rejects inner barriers because it has no uniform-workgroup proof contract",
+    "status": "PROMOTED_AS_PREREQUISITE_NOT_IMPLEMENTED"
+  },
+  "verdict": "NO_GO_CURRENT_GRAMMARS_FULL_GRID_BLOCKED_BY_TYPED_UNIFORM_CONTROL_FLOW_WALL",
+  "production_changed": false
+}

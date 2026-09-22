@@ -1,0 +1,18 @@
+{
+  "schema": "tinygrad.nv_flash_llama_score_fixup_source_build.v1",
+  "date": "2026-08-30",
+  "requested": {"arch": "sm_120a", "B": 1, "Hq": 32, "Hkv": 8, "T": 512, "Hd": 128, "causal": true, "score_grid": [340, 1, 1], "score_block": [32, 4, 1], "fixup_grid": [340, 16, 4], "fixup_block": [128, 1, 1]},
+  "build_attempts": [
+    {"command": "nvcc -std=c++17 -arch=sm_120a -Iggml/src -Iggml/src/ggml-cuda -c template-instances/fattn-vec-instance-bf16-f16.cu", "status": "FAIL", "stderr": "fatal error: ggml.h: No such file or directory"},
+    {"command": "nvcc -std=c++17 -arch=sm_120a -Iggml/include -Iggml/src -Iggml/src/ggml-cuda -c template-instances/fattn-vec-instance-bf16-f16.cu", "status": "PASS", "artifact": "/tmp/fattn-vec-test.o"}
+  ],
+  "source_findings": {
+    "template": "ggml/src/ggml-cuda/template-instances/fattn-vec-instance-bf16-f16.cu",
+    "kernel_definition": "ggml/src/ggml-cuda/fattn-common.cuh",
+    "fixup_kernel": "flash_attn_combine_results",
+    "launch_contract": "ggml_cuda_kernel_launch with ggml_tensor-derived strides, scratch allocation, and ggml_backend_cuda_context",
+    "raw_pointer_wrapper": "not provided by llama source"
+  },
+  "blocker": {"kind": "SOURCE_ABI_DESIGN", "details": "Compilation is available, but the score and fixup device kernels are internal/static template code. The surrounding launch path derives tensor layout and workspace from ggml_tensor/context and cannot be called with tinygrad raw Q/K/V/output/workspace pointers without reimplementing llama's layout and launch contract. A wrapper that merely includes the templates cannot expose the requested ABI.", "integration": "not attempted; no safe callable raw-pointer entry exists"},
+  "decision": "STOP_SOURCE_ABI_BLOCKED_NO_INTEGRATION"
+}

@@ -8,7 +8,9 @@ from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
+from tinygrad.llm.model_route_plan import (ModelRoutePlan, build_model_route_plan,
+  decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted,
+  decode_q4k_w1w3_fusion_promoted)
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 
 def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
@@ -16,29 +18,19 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
   if name is not None and (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
   return policy.get("by_shape", {}).get((typ, rows, cols))
 
-@dataclass(frozen=True)
-class QKPrimitiveEligibility:
-  """Structural target facts retained by an installed AMD gfx1100 primitive.
+def kv_cache_fp16_eligible(device_facts:object|None) -> bool:
+  """Capability answer for fp16 K/V cache storage: is fp16 EXPRESSIBLE on the resolved target?
 
-  NOTE: this pre-TG3 type is retained, unchanged, only for the unrelated generated-decode-attention KV-dtype
-  probe at model.py's `_generated_decode_shape_supported` (a different gate than the one this scope package
-  splits -- see docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md TG7-TG10).
-  The Q4_K/Q6_K primitive gate this file installs now uses `QKPrimitiveCapability` /
-  `QKPrimitiveRouteAdmission` below instead; do not wire this type into new decisions."""
-  backend: str|None = None
-  architecture: str|None = None
-  wave_size: int|None = None
-
-  @property
-  def eligible(self) -> bool:
-    return (self.backend, self.architecture, self.wave_size) == ("AMD", "gfx1100", 32)
-
-def qk_primitive_eligibility_from_device_facts(device_facts:object|None) -> QKPrimitiveEligibility:
-  """Copy only immutable candidate-relevant fields from the load-entry DeviceFacts scan."""
-  if device_facts is None: return QKPrimitiveEligibility()
+  Read from `DeviceCapabilities.supports_fp16`, which the load-entry device-facts scan copies verbatim from
+  the opened renderer's `supported_dtypes()` (tinygrad/llm/device_facts.py) -- never from a backend or
+  architecture string. This is the same capability authority the fp16 prefill overlay admission uses
+  (`v2_on`, model.py) and it replaces the pre-TG3 AMD-gfx1100 string equality that previously decided the
+  cache dtype (removed: see decode-kv-store-chain-fusion-scope-20260803.md revision record). An absent or
+  unreported fact (None) must never be treated as True: strict equality against a known fact, matching the
+  `QKPrimitiveCapability.satisfied` convention."""
+  if device_facts is None: return False
   capabilities = getattr(device_facts, "capabilities", None)
-  return QKPrimitiveEligibility(getattr(device_facts, "backend", None), getattr(device_facts, "architecture", None),
-                                getattr(capabilities, "wave_size", None))
+  return getattr(capabilities, "supports_fp16", None) is True
 
 @dataclass(frozen=True)
 class QKPrimitiveCapability:
@@ -73,12 +65,42 @@ class QKPrimitiveRouteAdmission:
   """The two independent TG3 answers retained by an installed Q4_K/Q6_K primitive: capability (this file,
   read from renderer/device facts) and promotion (ModelRoutePlan.target_promoted, tinygrad/llm/model_route_plan.py
   -- the BoltBeam-sourced route-policy authority). Each is resolved by its own owner; collapsing them back
-  into one hardcoded target-string boolean is exactly the pre-TG3 bug this scope package removes."""
+  into one hardcoded target-string boolean is exactly the pre-TG3 bug this scope package removes.
+  `epilogue_fusion_promoted` is the L1 decode epilogue-fusion answer (closed default,
+  model_route_plan.decode_epilogue_fusion_promoted, l1-decode-plumbing-fusion-design-20260802.md section 5):
+  it gates the fused route variants only -- the legacy `admitted` route is unchanged by it.
+  `q4k_epilogue_fusion_promoted` is the L1 M4 q4k GEMV epilogue answer (closed default,
+  model_route_plan.decode_q4k_epilogue_fusion_promoted, m4-q4k-epilogue-measurement-record-20260802.md):
+  a SEPARATE record from M2's, so the measured non-landing q4k variants stay off while the Q6K in-kernel
+  merge stays promoted.
+  `q4k_epilogue_resadd_promoted` is the o-proj residual_add variant answer (closed default,
+  model_route_plan.decode_q4k_epilogue_resadd_promoted, m4-resadd-landing-scope-20260806.md):
+  a SEPARATE record from the combined M4 answer so the residual_add variant can promote alone while
+  the ffn_down prelude and fp16_cast stay off the combined record.
+  `q4k_w1w3_fusion_promoted` is the fused w1+w3 (gate/up) decode GEMV answer (closed default,
+  model_route_plan.decode_q4k_w1w3_fusion_promoted): the fused kernel needs BOTH linears admitted on the
+  target and its own measured record (q4k-w1w3-fused-qv-implementation-record-20260803.md)."""
   capability: QKPrimitiveCapability = QKPrimitiveCapability()
   target_promoted: bool = True
+  epilogue_fusion_promoted: bool = False
+  q4k_epilogue_fusion_promoted: bool = False
+  q4k_epilogue_resadd_promoted: bool = False
+  q4k_w1w3_fusion_promoted: bool = False
 
   @property
   def admitted(self) -> bool: return self.capability.satisfied and self.target_promoted
+
+  @property
+  def fusion_admitted(self) -> bool: return self.admitted and self.epilogue_fusion_promoted
+
+  @property
+  def q4k_epilogue_fusion_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_fusion_promoted
+
+  @property
+  def q4k_epilogue_resadd_admitted(self) -> bool: return self.admitted and self.q4k_epilogue_resadd_promoted
+
+  @property
+  def w1w3_fusion_admitted(self) -> bool: return self.admitted and self.q4k_w1w3_fusion_promoted
 
 def _model_parameter_alias(source:Tensor|None, derived:Tensor) -> Tensor:
   """Attach model ownership to derived storage which already aliases a backing."""
@@ -189,8 +211,12 @@ class Q4KPrimitiveLinear(_QKPrimitiveLinear):
       Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
     self.kernel_mode = kernel_mode
 
-  def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
+  def __call__(self, x:Tensor, **epilogue_inputs) -> Tensor:
+    """Decode GEMV call. epilogue_inputs are threaded only when the fusion gate
+    (decode_q4k_epilogue_fusion_promoted, closed default) is open and this linear is eligible; otherwise
+    they are silently ignored and the legacy route is used -- the gate-off fallback
+    stays live."""
+    return self._call_with_program_facts(lambda: q4k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted, epilogue_inputs=epilogue_inputs))
 
 class Q6KPrimitiveLinear(_QKPrimitiveLinear):
   _storage_attr, _prefill_attr, _ggml_type = "q6k_storage", "_prefill_q6k_halfs", 14
@@ -201,8 +227,11 @@ class Q6KPrimitiveLinear(_QKPrimitiveLinear):
     self._init_common(weight, bias, halfs, out_features, in_features, parts, opts, name,
       Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, route_admission)
 
-  def __call__(self, x:Tensor) -> Tensor:
-    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
+  def __call__(self, x:Tensor, **epilogue_inputs) -> Tensor:
+    """Decode GEMV call. epilogue_inputs are threaded to the fused variant only
+    when the fusion gate is open; the legacy route ignores them."""
+    return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted,
+                                                                           epilogue_inputs=epilogue_inputs))
 
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.
@@ -359,7 +388,11 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
   # be admitted is recorded in `skipped`, never silently dropped.
   capability = qk_primitive_capability_from_device_facts(device_facts)
   target_promoted = _qk_target_promoted(route_plan, (capability.backend, capability.architecture))
-  route_admission = QKPrimitiveRouteAdmission(capability, target_promoted)
+  route_admission = QKPrimitiveRouteAdmission(capability, target_promoted,
+                                              decode_epilogue_fusion_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_epilogue_fusion_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_epilogue_resadd_promoted((capability.backend, capability.architecture)),
+                                              decode_q4k_w1w3_fusion_promoted((capability.backend, capability.architecture)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
     if len(dims) != 2: skipped["not_2d"] += 1; continue

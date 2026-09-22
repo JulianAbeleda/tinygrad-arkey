@@ -1,0 +1,317 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2722",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "310.92",
+        "temperature.gpu": "58"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "394": 15,
+        "64": 180,
+        "80": 165
+      },
+      "ledger": {
+        "node_sum_us": 4442.88,
+        "overlap_us": 3.867,
+        "span_us": 5485.625,
+        "union_us": 4440.875
+      },
+      "max_context": 1024,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-shared-q8-q4-direct-20260824/depth512-profile/control_a.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_shared_q8_q4_direct_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.19412740625,
+          6.164317125,
+          6.17248746875,
+          6.31764225,
+          6.216717
+        ],
+        "external_contention_high_limit_ms": 6.44412740625,
+        "median_ms_per_token": 6.19412740625,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.19412740625,
+          6.164317125,
+          6.17248746875,
+          6.31764225,
+          6.216717
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "shared_q8_blocks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "steady_replay_count": 162
+    },
+    {
+      "arm": "candidate",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2715",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "330.88",
+        "temperature.gpu": "54"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "37": 165,
+        "394": 15,
+        "64": 180
+      },
+      "ledger": {
+        "node_sum_us": 4391.52,
+        "overlap_us": 3.943,
+        "span_us": 5326.75,
+        "union_us": 4388.5
+      },
+      "max_context": 1024,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-shared-q8-q4-direct-20260824/depth512-profile/candidate.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_shared_q8_q4_direct_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.07547209375,
+          6.033409375,
+          6.0160815625,
+          6.0611501875,
+          6.0719974375
+        ],
+        "external_contention_high_limit_ms": 6.3111501875,
+        "median_ms_per_token": 6.0611501875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.07547209375,
+          6.033409375,
+          6.0160815625,
+          6.0611501875,
+          6.0719974375
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "shared_q8_blocks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "steady_replay_count": 162
+    },
+    {
+      "arm": "control_c",
+      "complete_replay_count": 165,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2722",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Enabled",
+        "power.draw": "302.73",
+        "temperature.gpu": "53"
+      },
+      "group_size_histogram": {
+        "128": 180,
+        "256": 180,
+        "32": 180,
+        "394": 15,
+        "64": 180,
+        "80": 165
+      },
+      "ledger": {
+        "node_sum_us": 4443.92,
+        "overlap_us": 3.968,
+        "span_us": 5566.375,
+        "union_us": 4440.75
+      },
+      "max_context": 1024,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-shared-q8-q4-direct-20260824/depth512-profile/control_c.profile.jsonl",
+      "reps": 5,
+      "schema": "tinygrad.nv_shared_q8_q4_direct_profile.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          6.29270796875,
+          6.27159334375,
+          6.26753259375,
+          6.4077685625,
+          6.33903775
+        ],
+        "external_contention_high_limit_ms": 6.54270796875,
+        "median_ms_per_token": 6.29270796875,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          6.29270796875,
+          6.27159334375,
+          6.26753259375,
+          6.4077685625,
+          6.33903775
+        ],
+        "timed_token_count": 160,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4"
+        ],
+        "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "shared_q8_blocks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "steady_replay_count": 162
+    }
+  ],
+  "closure": {
+    "node_sum_delta_us": -51.88,
+    "union_delta_us": -52.312,
+    "wall_delta_us": -182.267
+  },
+  "cooperative_q4_device": {
+    "candidate_rows_us": {
+      "q4k_warp_coop_q8_dp4a_direct_1024_4096": 97.024,
+      "q4k_warp_coop_q8_dp4a_direct_4096_4096": 141.808
+    },
+    "candidate_us_per_token": 238.832,
+    "completion_nodes_removed": 43,
+    "control_rows_us": {
+      "q4k_warp_coop_q8_dp4a_partial_1024_4096": 96.22399999999999,
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096": 140.89600000000002,
+      "r_32_32_4_4": 19.584,
+      "r_8_32_4_4": 29.632
+    },
+    "control_us_per_token": 286.336,
+    "delta_us_per_token": -47.504
+  },
+  "count": 32,
+  "depth": 512,
+  "ledger_candidate": {
+    "node_sum_us": 4391.52,
+    "overlap_us": 3.943,
+    "span_us": 5326.75,
+    "union_us": 4388.5
+  },
+  "ledger_control": {
+    "node_sum_us": 4443.4,
+    "overlap_us": 3.9175,
+    "span_us": 5526.0,
+    "union_us": 4440.8125
+  },
+  "mode": "reverse-bracket-profile",
+  "reps": 5,
+  "schema": "tinygrad.nv_shared_q8_q4_direct_profile.v1",
+  "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+  "walls_us_per_token": {
+    "candidate": 6061.1501875,
+    "control_a": 6194.12740625,
+    "control_c": 6292.70796875,
+    "control_midpoint": 6243.417687499999
+  }
+}

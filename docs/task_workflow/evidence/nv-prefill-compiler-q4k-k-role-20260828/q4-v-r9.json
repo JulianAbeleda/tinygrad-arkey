@@ -1,0 +1,406 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_k_role_gate.v1",
+  "shape": {
+    "M": 512,
+    "N": 1024,
+    "K": 4096
+  },
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "weight": "blk.4.attn_v.weight",
+    "format": "Q4_K"
+  },
+  "static_oracle": {
+    "topology": "32 CTAs, correctness-only, performance claim rejected",
+    "timing": {
+      "samples_us": [
+        434.464,
+        431.04,
+        430.88,
+        431.008,
+        430.752,
+        430.88,
+        430.848,
+        430.976,
+        430.976
+      ],
+      "first_us": 434.464,
+      "min_us": 430.752,
+      "median_us": 430.976,
+      "max_us": 434.464
+    }
+  },
+  "readonly": {
+    "words": true,
+    "record": true
+  },
+  "arms": {
+    "underfilled_128x128": {
+      "geometry": {
+        "tile": [
+          128,
+          128,
+          64
+        ],
+        "waves": [
+          2,
+          4
+        ],
+        "threads": 256,
+        "global_size": [
+          8,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          4
+        ],
+        "ctas": 32
+      },
+      "identity": "ec64ef1d1256048f8a5fba5cd6c61463ae345cff5576f2cd0999c1152e798e86",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x128.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x128.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x128.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.000213623046875,
+        "mean_abs": 1.0507481420063414e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          116.192,
+          115.872,
+          115.968,
+          116.0,
+          115.712,
+          115.616,
+          115.936,
+          116.0,
+          115.488
+        ],
+        "first_us": 116.192,
+        "min_us": 115.488,
+        "median_us": 115.936,
+        "max_us": 116.192
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    },
+    "safe_64x64_2warp": {
+      "geometry": {
+        "tile": [
+          64,
+          64,
+          64
+        ],
+        "waves": [
+          1,
+          2
+        ],
+        "threads": 64,
+        "global_size": [
+          16,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          1
+        ],
+        "ctas": 128
+      },
+      "identity": "433a3a55f0502e0ecba8b46265d40fccc3126ddc5feaee4206426331359c4376",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_2warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_2warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_2warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.000213623046875,
+        "mean_abs": 1.0507481420063414e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          74.048,
+          73.536,
+          73.6,
+          73.664,
+          73.696,
+          73.568,
+          73.472,
+          73.632,
+          73.504
+        ],
+        "first_us": 74.048,
+        "min_us": 73.472,
+        "median_us": 73.6,
+        "max_us": 74.048
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    },
+    "safe_64x64_4warp": {
+      "geometry": {
+        "tile": [
+          64,
+          64,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          16,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 128
+      },
+      "identity": "2e38c172f6009f3feb2c6802b2b4617aad4b184c131cdd080e82c4a1937c5744",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_4warp.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_4warp.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/safe_64x64_4warp.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 16,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.000213623046875,
+        "mean_abs": 1.0507481420063414e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          61.856,
+          61.75999999999999,
+          61.728,
+          61.696,
+          61.60000000000001,
+          61.632,
+          61.568000000000005,
+          61.568000000000005,
+          61.696
+        ],
+        "first_us": 61.856,
+        "min_us": 61.568000000000005,
+        "median_us": 61.696,
+        "max_us": 61.856
+      },
+      "occupancy_safe": true,
+      "production_claim_admissible": true,
+      "passed": true
+    },
+    "underfilled_64x128": {
+      "geometry": {
+        "tile": [
+          64,
+          128,
+          64
+        ],
+        "waves": [
+          1,
+          4
+        ],
+        "threads": 128,
+        "global_size": [
+          8,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          4,
+          1
+        ],
+        "ctas": 64
+      },
+      "identity": "a92571c59bdcd3621b7c0674a1678be47ead083f437c1b8606b624a4b7824725",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_64x128.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_64x128.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_64x128.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.000213623046875,
+        "mean_abs": 1.0507481420063414e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          96.704,
+          87.936,
+          87.808,
+          88.032,
+          87.808,
+          87.84,
+          87.68,
+          87.584,
+          87.616
+        ],
+        "first_us": 96.704,
+        "min_us": 87.584,
+        "median_us": 87.808,
+        "max_us": 96.704
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    },
+    "underfilled_128x64": {
+      "geometry": {
+        "tile": [
+          128,
+          64,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          16,
+          4,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 64
+      },
+      "identity": "66b9df4d652a02bc31fb4f64a640a91284c4068a1812bef8bc96bb434b4ece37",
+      "compiler": {
+        "programs": 1,
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "candidate_identity_exact": true,
+        "source": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x64.cu",
+        "signed_imma_ptx": true,
+        "sass": {
+          "cubin": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x64.cubin",
+          "sass": "docs/task_workflow/evidence/nv-prefill-compiler-q4k-k-role-20260828/q4-v-artifacts/underfilled_128x64.sass",
+          "cuobjdump_returncode": 0,
+          "imma_16832_s8": 32,
+          "bar_sync": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0
+        }
+      },
+      "correctness": {
+        "finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.000213623046875,
+        "mean_abs": 1.0507481420063414e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "timing": {
+        "samples_us": [
+          85.92,
+          85.728,
+          85.76,
+          85.824,
+          85.696,
+          85.728,
+          85.696,
+          85.76,
+          85.76
+        ],
+        "first_us": 85.92,
+        "min_us": 85.696,
+        "median_us": 85.76,
+        "max_us": 85.92
+      },
+      "occupancy_safe": false,
+      "production_claim_admissible": false,
+      "passed": false
+    }
+  },
+  "winner": "safe_64x64_4warp",
+  "passed": true
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "tinygrad.nv_qo_kv_rate_census_summary.v1",
+  "q_o": {
+    "dram_bytes": 9452800,
+    "cold_duration_ns": 9376,
+    "effective_tb_s": 1.0081911262798635,
+    "registers_per_thread": 43,
+    "long_scoreboard_pct": 70.85,
+    "mio_throttle_pct": 0.12,
+    "math_pipe_throttle_pct": 3.38,
+    "short_scoreboard_pct": 1.32,
+    "wait_pct": 3.65
+  },
+  "k_v_q4": {
+    "dram_bytes": 2374912,
+    "cold_duration_ns": 4608,
+    "effective_tb_s": 0.5153888888888889
+  },
+  "translation": {
+    "two_block_unroll": "PRIMITIVE_NO_GO",
+    "four_block_unroll": "WALL_NO_GO",
+    "multi_row_cta_2_4_8": "PRIMITIVE_NO_GO",
+    "four_warp_q8_qo": "CLOSED",
+    "qkv_aggregation": "SUBSET_BOOKED_BROADER_FORMS_CLOSED"
+  },
+  "booked_recovery_us": 0,
+  "decision": "RATE_DEFICIT_AND_LONG_SCOREBOARD_CONFIRMED__KNOWN_EXACT_TRANSLATIONS_CLOSED"
+}

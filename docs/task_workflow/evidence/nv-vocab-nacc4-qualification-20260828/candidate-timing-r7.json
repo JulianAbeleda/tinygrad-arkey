@@ -1,0 +1,25 @@
+{
+  "arm": "candidate",
+  "median_ms": 4.086785791666666,
+  "mode": "timing",
+  "samples_ms": [
+    4.095286333333333,
+    4.086842541666667,
+    4.084131125,
+    4.102940333333334,
+    4.080424166666666,
+    4.086785791666666,
+    4.085974291666666
+  ],
+  "schema": "tinygrad.nv_vocab_nacc4_qualification.v1",
+  "token_hashes": [
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809",
+    "1d7a6dc302accebf0faefe1d0bfc26ffc561d225ec9662146daea01af9c88809"
+  ],
+  "tokens_identical": true
+}

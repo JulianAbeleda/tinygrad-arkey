@@ -1,0 +1,1032 @@
+{
+  "schema": "tinygrad.nv_q6_llama_arithmetic_contract_gate.v1",
+  "oracle": {
+    "llama_main_us": 201.216,
+    "llama_fixup_us": 8.64,
+    "llama_total_us": 209.856,
+    "target_5pct_us": 220.3488,
+    "historical_only": true,
+    "live_llama_medians_us": {
+      "main": 217.408,
+      "fixup": 8.832,
+      "total": 226.208
+    },
+    "live_target_5pct_us": 237.5184,
+    "numerical_reference": "pinned llama Q6 main and fixup on identical canonical Q6/Q8 records"
+  },
+  "configuration": {
+    "samples": 31,
+    "warmups": 3,
+    "arms": {
+      "trusted_implicit": {
+        "fp32_contraction": "implicit"
+      },
+      "trusted_both": {
+        "fp32_contraction": "trusted_both"
+      },
+      "llama_direct": {
+        "fp32_contraction": "implicit",
+        "weight_scale_contract": "legacy"
+      },
+      "llama_direct_round": {
+        "fp32_contraction": "implicit",
+        "weight_scale_contract": "legacy",
+        "q6_fragment_schedule": "round"
+      },
+      "llama_factor_seq": {
+        "fp32_contraction": "implicit",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true
+      },
+      "llama_factor_seq_round": {
+        "fp32_contraction": "implicit",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "q6_fragment_schedule": "round"
+      },
+      "llama_factor_ssa": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector"
+      },
+      "llama_factor_ssa_round": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "round"
+      },
+      "llama_factor_ssa_tile2": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile2"
+      },
+      "llama_factor_ssa_tile4": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile4"
+      },
+      "llama_factor_ssa_tile8": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8"
+      },
+      "llama_factor_ssa_tile4_meta": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile4",
+        "q6_metadata_schedule": "phase"
+      },
+      "llama_factor_ssa_tile8_meta": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase"
+      },
+      "llama_factor_ssa_tile8_late_d": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "late_d"
+      },
+      "llama_factor_ssa_tile8_pair": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "pair"
+      },
+      "llama_factor_register_bank": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "register_bank",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase"
+      },
+      "llama_factor_ssa_late_p1_c4": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "region_load_bridge_q8_panel1": false,
+        "strict_after_q8_panel1": true,
+        "q8_panel1_anchor_cg": 4
+      },
+      "llama_factor_ssa_late_p1_c5": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "region_load_bridge_q8_panel1": false,
+        "strict_after_q8_panel1": true,
+        "q8_panel1_anchor_cg": 5
+      },
+      "llama_factor_ssa_late_p1_c6": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "region_load_bridge_q8_panel1": false,
+        "strict_after_q8_panel1": true,
+        "q8_panel1_anchor_cg": 6
+      },
+      "llama_factor_ssa_fp32d": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "q6_d_storage": "fp32"
+      },
+      "llama_factor_ssa_fp32d_late_p1": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "q6_d_storage": "fp32",
+        "region_load_bridge_q8_panel1": false,
+        "strict_after_q8_panel1": true,
+        "q8_panel1_anchor_cg": 5
+      },
+      "llama_factor_ssa_duplicated": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "duplicated": true
+      },
+      "llama_factor_ssa_prefetch": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "ssa_vector",
+        "q6_fragment_schedule": "tile8",
+        "q6_metadata_schedule": "phase",
+        "region_load_bridge_q8_panel1": false
+      },
+      "llama_factor": {
+        "fp32_contraction": "both",
+        "weight_scale_contract": "legacy",
+        "factor_dA": true,
+        "fp32_p_tree": "left"
+      }
+    },
+    "partial_output_layout": "destination_major",
+    "region_load_bridge_q8_panel1": true,
+    "gpu_lock": "/tmp/nv-q6-oracle-gpu.lock",
+    "paired_anchor": "llama_factor_ssa_tile8_meta"
+  },
+  "correctness": {
+    "llama_factor_ssa_tile8_meta": {
+      "finite": true,
+      "bit_exact_to_llama": true,
+      "tolerance_failures": 0,
+      "max_abs_to_llama": 0.0,
+      "mean_abs_to_llama": 0.0
+    }
+  },
+  "compiler": {
+    "llama_factor_ssa_tile8_meta": {
+      "source": "docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/q6_llama_factor_ssa_tile8_meta.cu",
+      "source_bytes": 156002,
+      "source_sha256": "13b449de4392e42c699af829491fc2927eeaf52509441a50adac99bbe4123053",
+      "cubin": "docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/q6_llama_factor_ssa_tile8_meta.cubin",
+      "cubin_sha256": "aac4c59782aa63e936f5d2c467cb170d000751c4c793126d0851327186c32517",
+      "render_ms": 5251.062452793121,
+      "compile_ms": 241.7645249515772,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/q6_llama_factor_ssa_tile8_meta.cubin",
+        "cubin_sha256": "aac4c59782aa63e936f5d2c467cb170d000751c4c793126d0851327186c32517",
+        "symbol": "nv_q6_oracle_broad_cta_serial_q6_tile8_fragments_q6_phase_metadata_combined_publish_factor_da_oracle_publisher_fp32_legacy_ssa_vector_both_segments_in_cta_streamk_s0",
+        "instruction_total": 3944,
+        "families": {
+          "BAR": 4,
+          "BRA": 4,
+          "CS2R": 60,
+          "EXIT": 1,
+          "FFMA": 640,
+          "HADD2": 8,
+          "I2FP": 512,
+          "IADD": 94,
+          "IADD3": 3,
+          "IDP": 1,
+          "IMAD": 1071,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDL": 22,
+          "LDS": 202,
+          "LDSM": 32,
+          "LEA": 76,
+          "LOP3": 268,
+          "MOV": 113,
+          "NOP": 15,
+          "PLOP3": 1,
+          "PRMT": 85,
+          "S2R": 7,
+          "S2UR": 4,
+          "SHF": 141,
+          "STG": 64,
+          "STL": 24,
+          "STS": 71,
+          "UIADD3": 17,
+          "UIMAD": 12,
+          "UISETP": 2,
+          "ULEA": 3,
+          "ULOP3": 1,
+          "UMOV": 7,
+          "UPLOP3": 4,
+          "USEL": 2,
+          "USHF": 4,
+          "UVIMNMX": 2
+        },
+        "opcodes": {
+          "BAR.SYNC.DEFER_BLOCKING": 4,
+          "BRA": 2,
+          "BRA.U": 2,
+          "CS2R": 60,
+          "EXIT": 1,
+          "FFMA": 640,
+          "HADD2.F32": 8,
+          "I2FP.F32.S32": 512,
+          "IADD": 86,
+          "IADD.64": 8,
+          "IADD3": 3,
+          "IDP.2A.LO.U16.U8": 1,
+          "IMAD": 1040,
+          "IMAD.WIDE": 30,
+          "IMAD.WIDE.U32": 1,
+          "IMMA.16816.S8.S8": 256,
+          "ISETP.LT.U32.AND": 1,
+          "LDC": 1,
+          "LDC.64": 3,
+          "LDCU.64": 1,
+          "LDG.E": 36,
+          "LDG.E.U16": 69,
+          "LDL": 20,
+          "LDL.LU": 2,
+          "LDS": 162,
+          "LDS.128": 32,
+          "LDS.U16": 8,
+          "LDSM.16.M88.2": 32,
+          "LEA": 75,
+          "LEA.HI": 1,
+          "LOP3.LUT": 268,
+          "MOV": 113,
+          "NOP": 15,
+          "PLOP3.LUT": 1,
+          "PRMT": 85,
+          "S2R": 7,
+          "S2UR": 4,
+          "SHF.L.U32": 52,
+          "SHF.R.S32.HI": 48,
+          "SHF.R.U32.HI": 41,
+          "STG.E": 64,
+          "STL": 24,
+          "STS": 71,
+          "UIADD3": 17,
+          "UIMAD": 9,
+          "UIMAD.WIDE.U32": 3,
+          "UISETP.GE.AND": 1,
+          "UISETP.NE.U32.AND": 1,
+          "ULEA": 2,
+          "ULEA.HI": 1,
+          "ULOP3.LUT": 1,
+          "UMOV": 7,
+          "UPLOP3.LUT": 4,
+          "USEL": 2,
+          "USHF.L.U32": 1,
+          "USHF.R.U32.HI": 3,
+          "UVIMNMX.S32": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 88,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 14,
+            "STL": 22,
+            "pcs": [
+              "0x270",
+              "0x290",
+              "0x2b0",
+              "0x2f0",
+              "0x310",
+              "0x330",
+              "0x350",
+              "0x360",
+              "0x390",
+              "0x3b0",
+              "0x3d0",
+              "0x3f0",
+              "0x400",
+              "0x430",
+              "0x450",
+              "0x470",
+              "0x4a0",
+              "0x4b0",
+              "0x4c0",
+              "0x4f0",
+              "0xca0",
+              "0xcb0",
+              "0xcd0",
+              "0xce0",
+              "0xcf0",
+              "0xd50",
+              "0xd70",
+              "0x1250",
+              "0x1290",
+              "0x12b0",
+              "0x1320",
+              "0x1330",
+              "0x1340",
+              "0x1350",
+              "0x1360",
+              "0x2c80"
+            ],
+            "stack_offsets": {
+              "0x0": 2,
+              "0x4": 2,
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x14": 2,
+              "0x18": 2,
+              "0x1c": 2,
+              "0x20": 2,
+              "0x24": 2,
+              "0x28": 2,
+              "0x2c": 2,
+              "0x30": 1,
+              "0x34": 2,
+              "0x38": 1,
+              "0x3c": 1,
+              "0x40": 1,
+              "0x44": 1,
+              "0x48": 2,
+              "0x4c": 2,
+              "0x50": 2,
+              "0x54": 2
+            }
+          },
+          "mma_span": {
+            "LDL": 8,
+            "STL": 0,
+            "pcs": [
+              "0x7ea0",
+              "0x8710",
+              "0x8980",
+              "0x8a40",
+              "0x8af0",
+              "0x8b80",
+              "0x8dc0",
+              "0x9280"
+            ],
+            "stack_offsets": {
+              "0x8": 1,
+              "0xc": 1,
+              "0x10": 1,
+              "0x30": 1,
+              "0x38": 1,
+              "0x3c": 1,
+              "0x40": 1,
+              "0x44": 1
+            }
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 2,
+            "pcs": [
+              "0xed40",
+              "0xed70"
+            ],
+            "stack_offsets": {
+              "0x0": 1,
+              "0x4": 1
+            }
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/sass/q6_llama_factor_ssa_tile8_meta-aac4c59782aa63e9.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/sass/q6_llama_factor_ssa_tile8_meta-aac4c59782aa63e9.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/q6_llama_factor_ssa_tile8_meta/sass/q6_llama_factor_ssa_tile8_meta-aac4c59782aa63e9.resources.txt"
+      }
+    }
+  },
+  "fixup_compiler": {
+    "cubin_sha256": "f22d72755e1b3836f2f6ca0b41da13ead66889f4643dfa8b99b4f93b1ae1a081",
+    "sass": {
+      "schema": "tinygrad.nv_q6_sass_census.v1",
+      "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-llama-arithmetic-contract-gate19-20260902/artifacts/destination_fixup/destination_fixup.cubin",
+      "cubin_sha256": "f22d72755e1b3836f2f6ca0b41da13ead66889f4643dfa8b99b4f93b1ae1a081",
+      "symbol": "nv_q6_destination_major_fixup",
+      "instruction_total": 72,
+      "families": {
+        "BRA": 2,
+        "EXIT": 1,
+        "FADD": 3,
+        "HFMA2": 1,
+        "IADD": 5,
+        "IMAD": 12,
+        "ISETP": 3,
+        "LDC": 7,
+        "LDCU": 1,
+        "LDG": 7,
+        "LEA": 3,
+        "LOP3": 5,
+        "NOP": 14,
+        "S2R": 3,
+        "SHF": 1,
+        "STG": 1,
+        "UIADD3": 1,
+        "UISETP": 1,
+        "UMOV": 1
+      },
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 3,
+        "HFMA2": 1,
+        "IADD": 5,
+        "IMAD": 2,
+        "IMAD.SHL.U32": 4,
+        "IMAD.WIDE": 4,
+        "IMAD.WIDE.U32": 2,
+        "ISETP.GE.AND": 3,
+        "LDC": 1,
+        "LDC.64": 6,
+        "LDCU.64": 1,
+        "LDG.E": 7,
+        "LEA": 3,
+        "LOP3.LUT": 5,
+        "NOP": 14,
+        "S2R": 3,
+        "SHF.L.U32": 1,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 1
+      },
+      "resources": {
+        "registers": 24,
+        "stack_bytes": 0,
+        "shared_static_bytes": 0,
+        "local_static_bytes": 0
+      },
+      "spill_regions": {
+        "pre_mma": {
+          "LDL": 0,
+          "STL": 0,
+          "pcs": [],
+          "stack_offsets": {}
+        },
+        "mma_span": {
+          "LDL": 0,
+          "STL": 0,
+          "pcs": [],
+          "stack_offsets": {}
+        },
+        "post_mma": {
+          "LDL": 0,
+          "STL": 0,
+          "pcs": [],
+          "stack_offsets": {}
+        }
+      },
+      "notes": [
+        "Static instruction census only; these are not hardware performance counters.",
+        "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+      ]
+    }
+  },
+  "timing": {
+    "llama_factor_ssa_tile8_meta": {
+      "main": {
+        "samples_us": [
+          216.96,
+          217.12,
+          216.512,
+          216.96,
+          218.176,
+          216.96,
+          217.312,
+          216.896,
+          217.984,
+          218.368,
+          217.92,
+          216.864,
+          217.248,
+          218.784,
+          216.608,
+          218.304,
+          217.28,
+          216.928,
+          217.184,
+          217.408,
+          216.768,
+          216.608,
+          217.76,
+          216.736,
+          217.792,
+          218.848,
+          215.744,
+          217.248,
+          216.8,
+          217.152,
+          216.544
+        ],
+        "min_us": 215.744,
+        "median_us": 217.152,
+        "max_us": 218.848
+      },
+      "fixup": {
+        "samples_us": [
+          7.903999999999999,
+          8.032,
+          7.52,
+          8.096,
+          7.648000000000001,
+          8.032,
+          7.616,
+          8.032,
+          7.36,
+          8.064,
+          7.424,
+          8.128,
+          7.456,
+          8.0,
+          7.616,
+          8.032,
+          7.68,
+          8.064,
+          7.392,
+          7.936,
+          7.328,
+          8.0,
+          7.52,
+          8.16,
+          7.424,
+          8.096,
+          7.52,
+          8.192,
+          7.52,
+          8.096,
+          7.36
+        ],
+        "min_us": 7.328,
+        "median_us": 7.903999999999999,
+        "max_us": 8.192
+      },
+      "total": {
+        "samples_us": [
+          224.864,
+          225.15200000000002,
+          224.032,
+          225.056,
+          225.82399999999998,
+          224.99200000000002,
+          224.928,
+          224.928,
+          225.34400000000002,
+          226.432,
+          225.344,
+          224.99200000000002,
+          224.70399999999998,
+          226.784,
+          224.224,
+          226.336,
+          224.96,
+          224.992,
+          224.576,
+          225.344,
+          224.096,
+          224.608,
+          225.28,
+          224.896,
+          225.216,
+          226.94400000000002,
+          223.264,
+          225.44,
+          224.32000000000002,
+          225.248,
+          223.90400000000002
+        ],
+        "min_us": 223.264,
+        "median_us": 224.99200000000002,
+        "max_us": 226.94400000000002
+      }
+    }
+  },
+  "live_llama_timing": {
+    "main": {
+      "samples_us": [
+        217.408,
+        216.864,
+        217.184,
+        216.736,
+        218.624,
+        217.056,
+        218.4,
+        218.144,
+        216.448,
+        216.416,
+        218.56,
+        216.48,
+        217.28,
+        217.504,
+        216.896,
+        217.664,
+        217.792,
+        217.632,
+        217.152,
+        216.672,
+        217.568,
+        217.184,
+        218.176,
+        217.824,
+        217.792,
+        217.856,
+        216.704,
+        216.992,
+        218.144,
+        218.176,
+        217.216
+      ],
+      "min_us": 216.416,
+      "median_us": 217.408,
+      "max_us": 218.624
+    },
+    "fixup": {
+      "samples_us": [
+        8.8,
+        8.704,
+        8.832,
+        8.672,
+        8.896,
+        8.672,
+        8.864,
+        8.736,
+        8.832,
+        8.768,
+        8.8,
+        8.736,
+        8.832,
+        8.832,
+        8.832,
+        8.736,
+        8.992,
+        8.704,
+        8.896,
+        8.736,
+        8.864,
+        8.768,
+        8.96,
+        8.8,
+        8.864,
+        8.896,
+        8.832,
+        8.704,
+        8.896,
+        8.736,
+        8.96
+      ],
+      "min_us": 8.672,
+      "median_us": 8.832,
+      "max_us": 8.992
+    },
+    "total": {
+      "samples_us": [
+        226.208,
+        225.568,
+        226.016,
+        225.408,
+        227.51999999999998,
+        225.728,
+        227.264,
+        226.88,
+        225.28,
+        225.184,
+        227.36,
+        225.21599999999998,
+        226.112,
+        226.33599999999998,
+        225.72799999999998,
+        226.39999999999998,
+        226.784,
+        226.336,
+        226.048,
+        225.408,
+        226.43200000000002,
+        225.952,
+        227.136,
+        226.62400000000002,
+        226.656,
+        226.752,
+        225.536,
+        225.696,
+        227.04000000000002,
+        226.91199999999998,
+        226.17600000000002
+      ],
+      "min_us": 225.184,
+      "median_us": 226.208,
+      "max_us": 227.51999999999998
+    }
+  },
+  "medians_us": {
+    "llama_factor_ssa_tile8_meta": {
+      "main": 217.152,
+      "fixup": 7.903999999999999,
+      "total": 224.99200000000002
+    }
+  },
+  "paired_vs_implicit": {},
+  "paired_vs_live_llama": {
+    "llama_factor_ssa_tile8_meta": {
+      "main": {
+        "median_us": -0.4159999999999968,
+        "mad_us": 0.5440000000000111,
+        "wins": 19,
+        "samples_us": [
+          -0.4479999999999791,
+          0.2560000000000002,
+          -0.671999999999997,
+          0.22400000000001796,
+          -0.4480000000000075,
+          -0.09600000000000364,
+          -1.0879999999999939,
+          -1.2480000000000189,
+          1.5360000000000014,
+          1.9519999999999982,
+          -0.6400000000000148,
+          0.38400000000001455,
+          -0.03200000000001069,
+          1.2800000000000011,
+          -0.2879999999999825,
+          0.6400000000000148,
+          -0.5120000000000005,
+          -0.7040000000000077,
+          0.03200000000001069,
+          0.73599999999999,
+          -0.8000000000000114,
+          -0.5759999999999934,
+          -0.4159999999999968,
+          -1.0880000000000223,
+          0.0,
+          0.9920000000000186,
+          -0.960000000000008,
+          0.2560000000000002,
+          -1.343999999999994,
+          -1.024000000000001,
+          -0.671999999999997
+        ]
+      },
+      "fixup": {
+        "median_us": -0.8960000000000017,
+        "mad_us": 0.3200000000000012,
+        "wins": 31,
+        "samples_us": [
+          -0.8960000000000017,
+          -0.6720000000000006,
+          -1.3120000000000012,
+          -0.5760000000000005,
+          -1.2480000000000002,
+          -0.6400000000000006,
+          -1.248000000000001,
+          -0.7040000000000006,
+          -1.4720000000000004,
+          -0.7040000000000006,
+          -1.3760000000000003,
+          -0.6080000000000005,
+          -1.3760000000000003,
+          -0.8320000000000007,
+          -1.216000000000001,
+          -0.7040000000000006,
+          -1.3120000000000012,
+          -0.6400000000000006,
+          -1.5040000000000004,
+          -0.8000000000000007,
+          -1.5360000000000005,
+          -0.7680000000000007,
+          -1.4400000000000013,
+          -0.6400000000000006,
+          -1.4400000000000004,
+          -0.8000000000000007,
+          -1.3120000000000012,
+          -0.5120000000000005,
+          -1.3760000000000012,
+          -0.6400000000000006,
+          -1.6000000000000005
+        ]
+      },
+      "total": {
+        "median_us": -1.4399999999999977,
+        "mad_us": 0.7040000000000077,
+        "wins": 27,
+        "samples_us": [
+          -1.343999999999994,
+          -0.4159999999999968,
+          -1.9839999999999804,
+          -0.35199999999997544,
+          -1.695999999999998,
+          -0.73599999999999,
+          -2.3360000000000127,
+          -1.9519999999999982,
+          0.06400000000002137,
+          1.2479999999999905,
+          -2.0160000000000196,
+          -0.22399999999996112,
+          -1.4080000000000155,
+          0.4480000000000075,
+          -1.5039999999999907,
+          -0.06399999999996453,
+          -1.8239999999999839,
+          -1.3440000000000225,
+          -1.4720000000000084,
+          -0.06399999999999295,
+          -2.3360000000000127,
+          -1.343999999999994,
+          -1.8559999999999945,
+          -1.728000000000037,
+          -1.4399999999999977,
+          0.19200000000000728,
+          -2.2719999999999914,
+          -0.2560000000000002,
+          -2.719999999999999,
+          -1.6639999999999873,
+          -2.2719999999999914
+        ]
+      }
+    }
+  },
+  "historical_eligible_arms": [],
+  "eligible_arms": [
+    "llama_factor_ssa_tile8_meta"
+  ],
+  "promotion_arm": "llama_factor_ssa_tile8_meta",
+  "promotion_gate": true,
+  "orders": [
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ],
+    [
+      "live_llama",
+      "llama_factor_ssa_tile8_meta"
+    ],
+    [
+      "llama_factor_ssa_tile8_meta",
+      "live_llama"
+    ]
+  ]
+}

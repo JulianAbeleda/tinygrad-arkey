@@ -1,0 +1,575 @@
+{
+  "schema": "tinygrad.nv.vocab.live.v1",
+  "status": "PASS_CORRECTNESS",
+  "qualification": "observed lifecycle; not production promoted",
+  "weight": {
+    "name": "output.weight",
+    "shape": [
+      151936,
+      4096
+    ],
+    "ggml_type": 14
+  },
+  "activation": {
+    "path": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32",
+    "sha256": "b04adfc129794cf0d0c37328ee56d955dcd137137c4c7854bc2963dcbbb20c41",
+    "dtype": "float32"
+  },
+  "input_boundary": "FP32 preserved",
+  "correctness": [
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.018848896026611328,
+      "candidate_token": 8503,
+      "llama_token": 8503,
+      "same_token": true
+    },
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.015535712242126465,
+      "candidate_token": 8503,
+      "llama_token": 8503,
+      "same_token": true
+    }
+  ],
+  "preserve_input_dtype": true,
+  "census": {
+    "candidate": [
+      {
+        "identity": [
+          "q8_1_llama_provider_4096",
+          "56fcbc601fdca3b40872b1b117df596e4de09bf421c977193e6ec011d18ea57f",
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            256,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "E_8_32_4_4_a34df05a49172054c4fa689ad32f9dbf981362d6894bdc1bf19bddabcedbfcfc",
+          "ae89b91429f3627169a726dbbfef40d24e6482d8fab7d9e708f0ee2b1ce7bf24",
+          [
+            8,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "q6k_gen_coop_151936_4096_inkernel",
+          "46ae07b81bad8bd00b1c06bb8fe5af9abbcf0c3f85d936423fdf79687bdaf4a1",
+          [
+            75968,
+            1,
+            1
+          ],
+          [
+            2,
+            16,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          "2734345ad7e2443f9cef9b6d09ea07c00ff10ef6c7a2cb131c1c5ca8fc4534e9",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          "4fb63ed55bd590ab15c01a944dac144551ba28048f8897a469920aa9e94c7d00",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      }
+    ],
+    "llama": [
+      {
+        "identity": [
+          "q8_vocab_fp32",
+          "176cc51e7c1fc50d522a50a51b2efaaf5705726c35a9f907fe1789c23f7e8401",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1
+          ],
+          [
+            0
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "q6k_vocab_hcq",
+          "5aa49d408a15ff652726c2b86e99f9ff323ff2390a5d5d162706e9270a91a4e1",
+          [
+            151936,
+            1,
+            1
+          ],
+          [
+            32,
+            4,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            2
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            151936
+          ],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          "2734345ad7e2443f9cef9b6d09ea07c00ff10ef6c7a2cb131c1c5ca8fc4534e9",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          "4fb63ed55bd590ab15c01a944dac144551ba28048f8897a469920aa9e94c7d00",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      }
+    ]
+  },
+  "timing_ms": {
+    "rounds": 31,
+    "samples": {
+      "candidate": [
+        0.572745,
+        0.567705,
+        0.643367,
+        0.562135,
+        0.555082,
+        0.555683,
+        0.553729,
+        0.556405,
+        0.549882,
+        0.553188,
+        0.550975,
+        0.553899,
+        0.550784,
+        0.552057,
+        0.54844,
+        0.549722,
+        0.548219,
+        0.550483,
+        0.550764,
+        0.551435,
+        0.550212,
+        0.551455,
+        0.552778,
+        0.554341,
+        0.549441,
+        0.555653,
+        0.554161,
+        0.555403,
+        0.558328,
+        0.551455,
+        0.557567
+      ],
+      "llama": [
+        0.456888,
+        0.451908,
+        0.454664,
+        0.449393,
+        0.451488,
+        0.448182,
+        0.449483,
+        0.448302,
+        0.450716,
+        0.449203,
+        0.448481,
+        0.44724,
+        0.448903,
+        0.446879,
+        0.448642,
+        0.455314,
+        0.448562,
+        0.446579,
+        0.456898,
+        0.447861,
+        0.450375,
+        0.448502,
+        0.450826,
+        0.44738,
+        0.451958,
+        0.448963,
+        0.45781,
+        0.448472,
+        0.449243,
+        0.446588,
+        0.449794
+      ]
+    },
+    "orders": [
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ]
+    ],
+    "candidate_median": 0.553188,
+    "llama_median": 0.449203,
+    "includes": "producer, intermediate unpack, vocabulary projection and argmax; host snapshots excluded"
+  }
+}

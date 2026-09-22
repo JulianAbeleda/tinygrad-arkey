@@ -1,0 +1,62 @@
+{
+  "correctness": {
+    "2": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "4": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    },
+    "8": {
+      "bitwise_identical": true,
+      "finite": true,
+      "max_abs_diff": 0.0
+    }
+  },
+  "device": "NV",
+  "git_commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "one_change": "CTA rows; four warps and arithmetic order per row are unchanged",
+  "payload": {
+    "q6_sha256": "088ff1ade02f719877d8aea5acf57ebe82a6ddb3bb602286a46b586a586e5a86",
+    "x_sha256": "fcfa0a425e1bb9ec115271c8257ef3607109d0e6f7c748456963bf5e40c26b80"
+  },
+  "schema": "tinygrad.q6k_ffn_down_row_packing_microgate.v1",
+  "timing": {
+    "best_recovery_us": 2.9336375000000032,
+    "best_rows_per_block": 4,
+    "medians": {
+      "1": 181.5935125,
+      "2": 180.81504999999999,
+      "4": 178.659875,
+      "8": 178.7033375
+    },
+    "replays": 80,
+    "reps": 3,
+    "samples": {
+      "1": [
+        184.353575,
+        181.5935125,
+        179.565325
+      ],
+      "2": [
+        206.76754999999997,
+        180.81504999999999,
+        179.84185
+      ],
+      "4": [
+        178.659875,
+        178.5866125,
+        179.4104125
+      ],
+      "8": [
+        177.2389625,
+        179.179475,
+        178.7033375
+      ]
+    },
+    "unit": "us_per_launch_host_synchronized"
+  }
+}

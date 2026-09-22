@@ -1,0 +1,121 @@
+{
+  "arm": "control",
+  "armed_overlaps": [],
+  "armed_positive_overlap_count": 0,
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "depth": 512,
+  "env": {
+    "HCQ_NUM_COMPUTE": "2",
+    "NV_SPLIT_PHASE": "",
+    "NV_SPLIT_PHASE_CENSUS_JSON": "",
+    "NV_SPLIT_PHASE_POLICY": "",
+    "PROFILE": "1"
+  },
+  "live_armed_edges": null,
+  "live_verification": [],
+  "max_context": 1024,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "policy": null,
+  "policy_coverage": {},
+  "profile_records_total": 75,
+  "queues": 2,
+  "rows": [
+    {
+      "consumer_end_us": 1787322558725930.2,
+      "consumer_grid_start_us": null,
+      "consumer_id": 7,
+      "consumer_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "consumer_start_us": 1787322558725927.8,
+      "graph_id": 1,
+      "overlap_us": 0.0,
+      "producer_end_us": 1787322558725927.8,
+      "producer_id": 5,
+      "producer_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "producer_start_us": 1787322558725926.5,
+      "status": "control_no_instrumentation",
+      "trigger_us": null,
+      "wait_exit_us": null
+    },
+    {
+      "consumer_end_us": 1787322559622568.0,
+      "consumer_grid_start_us": null,
+      "consumer_id": 393,
+      "consumer_name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "consumer_start_us": 1787322559622566.8,
+      "graph_id": 4,
+      "overlap_us": 0.0,
+      "producer_end_us": 1787322559622566.8,
+      "producer_id": 392,
+      "producer_name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "producer_start_us": 1787322559622556.0,
+      "status": "control_no_instrumentation",
+      "trigger_us": null,
+      "wait_exit_us": null
+    }
+  ],
+  "schema": "tinygrad.nv_pdl_stage3.v1",
+  "scratch": {
+    "gtimer_ns_per_us": 1000.0,
+    "note": "%globaltimer returns ns; HCQ profile timestamps are us",
+    "size": 0,
+    "slot_size": 8,
+    "va": null
+  },
+  "selected_edges": [
+    {
+      "access_kind": "RAW",
+      "consumer_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "from": 5,
+      "graph_id": 1,
+      "graph_size": 64,
+      "latch_id": 0,
+      "producer_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "queue": 1,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          0,
+          8
+        ]
+      ],
+      "structural_consumer_name": "E_1187_32_4",
+      "structural_producer_name": "E_2",
+      "to": 7,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    },
+    {
+      "access_kind": "RAW",
+      "consumer_name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "from": 392,
+      "graph_id": 4,
+      "graph_size": 394,
+      "latch_id": 6,
+      "producer_name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "queue": 0,
+      "reason": "candidate_armed",
+      "spans": [
+        [
+          512,
+          1024
+        ]
+      ],
+      "structural_consumer_name": "r_16_8",
+      "structural_producer_name": "r_128_16_8_1187",
+      "to": 393,
+      "trigger_policy": "end",
+      "wait_position": "entry"
+    }
+  ],
+  "summary": {
+    "control_no_instrumentation": 2
+  },
+  "token_evidence": {
+    "count": 1,
+    "first_token_ids": [
+      13876
+    ],
+    "sha256": "51a6b5bb6e00b5ccc0cbc75622616a20ca9e806403d9c290ab44d664d6bb5ac1"
+  },
+  "tokens_requested": 1
+}

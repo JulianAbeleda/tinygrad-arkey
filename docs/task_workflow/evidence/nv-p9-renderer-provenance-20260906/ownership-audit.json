@@ -1,0 +1,879 @@
+{
+  "all_unique_programs_construction_proven": true,
+  "all_unique_programs_source_recompiled": false,
+  "all_unique_programs_source_transported": true,
+  "interpretation": "Every selected PROGRAM maps from its exact retained SOURCE to the captured binary through either a fresh recompile or the production compiler cache. Cache matches prove current source-keyed transport, not fresh toolchain reproducibility. Construction ownership is proven only for exact typed NV CUDARenderer or native_nv_program provenance; absent or unknown provenance fails closed. The selected graph contains no recognized native_nv_program marker used by the known llama packed bindings.",
+  "native_precompiled_programs": [],
+  "native_precompiled_unique_programs": 0,
+  "no_known_native_precompiled_marker_in_selected_graph": true,
+  "program_launches": 418,
+  "programs": [
+    {
+      "binary_sha256": "d9ff6b6e3089ad4bf7945fceb9cc0a7d731eaa15e0ffc3448ac3a3e68b3381ca",
+      "compiler_cached_binary_sha256": "d9ff6b6e3089ad4bf7945fceb9cc0a7d731eaa15e0ffc3448ac3a3e68b3381ca",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1187,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "a2190a1a63a080176147d01f5d467b50f995b6fbbb60625c958341c61171ee60",
+      "program_name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "b4ba88a401dcc717988a2cb02d58b1e2f3e6e1d349758865339b1fc6bbe85674",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "594fbe0aede2d26fc39b6e3e01d16c41b7987ce3966fd4f7bd4661a1f8c584b8",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "b2f6bfeba5f161f3a77cfb06b731e304b18548110361d51421da431d9b997f7a",
+      "compiler_cached_binary_sha256": "b2f6bfeba5f161f3a77cfb06b731e304b18548110361d51421da431d9b997f7a",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1187,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "e110dc7f29b19af192293d71832e7f45f0b5e754fa2f8971ea9471d70dc40f8e",
+      "program_name": "E_1187_32_4_8c978b620f9c49480ac0eb05ba9e92fb742fac375e8a835bf98b19a7c6c6cadf",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "b2f6bfeba5f161f3a77cfb06b731e304b18548110361d51421da431d9b997f7a",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "00df97b7c24270c2030b323b5b8e5009a15fd94946c5c905d836ac844009d461",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "12acf0a3a6307b0c6561171b6c8c8b1bad28b3a7d8a026bf9ee5a05bdb08234c",
+      "compiler_cached_binary_sha256": "12acf0a3a6307b0c6561171b6c8c8b1bad28b3a7d8a026bf9ee5a05bdb08234c",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        2,
+        4,
+        16
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        8,
+        16,
+        1
+      ],
+      "program_hash": "08bfdab78db69395a699059c9007100453a87ed917e4fef8174a29e0c2e650bd",
+      "program_name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "c9ce5d37e9e4748cf34d645d669c94d4cf75bb19b09f6e29f02d892b2a71468e",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "7432e8cd29d5f0a103d2c6630fc075473b249645500e9c76c21586facbd57be8",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "fbd86f6dfecbb0e195d8fd09ea8810f6478002df732b8dcfec64e3f721c9ebac",
+      "compiler_cached_binary_sha256": "fbd86f6dfecbb0e195d8fd09ea8810f6478002df732b8dcfec64e3f721c9ebac",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        1,
+        1,
+        1
+      ],
+      "program_hash": "ce58929f023a8e5b535c0d0bf6e8f7502a22889a2556024faeb7dd6c56b11f17",
+      "program_name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "58c501847a6a1c68afb4944e47218bfed3aa1d7579eeedfb47564b220cd0adc8",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "5bd16d0f95a0aac1fdcd04d67e27a4a0e348f63daecb81c300eaa8f3d9373e91",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+      "compiler_cached_binary_sha256": "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "49fded5b107c58245dea3112796cb15fb4c6757b4375696369cd314d5390a955",
+      "program_name": "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "346847b4f902436272319f58a153ce11652bada6d76267d29bea3e040d1afc98",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "ae7ecf5bf3f5287d7090c472d0b287e54f87780781da494c82148fccf385e0d3",
+      "compiler_cached_binary_sha256": "ae7ecf5bf3f5287d7090c472d0b287e54f87780781da494c82148fccf385e0d3",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "f731d3184f7625cc53fd3dbd4498a0dd471e110bd8dc882a43a6803236ec1a0f",
+      "program_name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "893a817ab02007acff72d223533b06ef356944d2aea356ca229f963c56bb4cd6",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "f867475fcabe8fc27e12112d9dcc382fa6552ebcedb11ce0cae38447a66fde3d",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "97e7a09c1349c886cba9cb5a38e091cd624b4fa315089a6d9faa02d361a2a8fa",
+      "compiler_cached_binary_sha256": "97e7a09c1349c886cba9cb5a38e091cd624b4fa315089a6d9faa02d361a2a8fa",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 2,
+      "local_size": [
+        1,
+        1,
+        1
+      ],
+      "program_hash": "4fd89a55e99b15b3ae7d18c855dc3e2d431f3df5af1274fee2df755c6c3eb969",
+      "program_name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "18d5215660bcd0a78c19f085fe8c72a96f5d51dc5cee9a47641ab64e40a29bca",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "88d1fc971b8425e1bebc2471a7ba5748ab1ec95f8818c494a9e4d548a6b19071",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "86b3bc3387320403153e50a03baf39b4c437cfa6b3d0f692087fcf1f3d008e8b",
+      "compiler_cached_binary_sha256": "86b3bc3387320403153e50a03baf39b4c437cfa6b3d0f692087fcf1f3d008e8b",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 36,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "d43fbf1ef77424e83e8b3618788812ddd4ae597d9623782af85d7cd1cb76252f",
+      "program_name": "flash_fused_gmax_combine_f16_32_128_s6_lw128",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "86b3bc3387320403153e50a03baf39b4c437cfa6b3d0f692087fcf1f3d008e8b",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "d99219435d17b7ee8c66e94a931775c1cdc2894419c910018ea2a4bb0c96dba1",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+      "compiler_cached_binary_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        6,
+        32,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 36,
+      "local_size": [
+        32,
+        4,
+        1
+      ],
+      "program_hash": "427a153198033f53280ec479157aa4f967d244b5039e4a1ce67200aaf14dedb7",
+      "program_name": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "f2433845986fd07b13d895f74d09a13902263b912e1ff60d84696e6e52e0d23b",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "f5ae312be00a1ecd390ddbf2b7b358d7b2a31e260a1ebb2e1804207766b05254",
+      "compiler_cached_binary_sha256": "f5ae312be00a1ecd390ddbf2b7b358d7b2a31e260a1ebb2e1804207766b05254",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        1024,
+        1,
+        1
+      ],
+      "program_hash": "359c32478ab9efe181ebdd52d57cd1f33faa4d9c784b35a7b57d779ddc5c1d2b",
+      "program_name": "native_finite_fp32_argmax_151936_t1024",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "f5ae312be00a1ecd390ddbf2b7b358d7b2a31e260a1ebb2e1804207766b05254",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "a94e61c3958103931642dc3fcb511e77ed3690773107683ebb3297124724b19b",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "305ad59b0c7d592e5c7537dfd56b0d0e2e09f2395c99bebf4ef7081c02fd152d",
+      "compiler_cached_binary_sha256": "305ad59b0c7d592e5c7537dfd56b0d0e2e09f2395c99bebf4ef7081c02fd152d",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 18,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "81443dfdae33b1fb65949633f1489f802467bc336affecaa272b352fee249fcb",
+      "program_name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "305ad59b0c7d592e5c7537dfd56b0d0e2e09f2395c99bebf4ef7081c02fd152d",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "8cc9b6d7e2de016769b28c254c40c4ae930f22fc5bd177dfb551f1790af82a2c",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "b004d467a0c14f906d136a7cc7af44cc175041deafbbf8153eb95fd28a0f7f72",
+      "compiler_cached_binary_sha256": "b004d467a0c14f906d136a7cc7af44cc175041deafbbf8153eb95fd28a0f7f72",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 8,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "2f8e9a1173e43231cc9b87dcf6e4f71e727258c4ed9a8c59ddc373c14f0568b2",
+      "program_name": "q4k_g3_lanemap_gemv_pair_vec_1024_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "b004d467a0c14f906d136a7cc7af44cc175041deafbbf8153eb95fd28a0f7f72",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "01c7d634e0e621751d912e492e7f508e24c7c0ba0ac37ece0b17e35717fed832",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "00f01d5f76c0edd4120ffb6c0ca18f5be224fb9cd8f0d8c315632da898b81d78",
+      "compiler_cached_binary_sha256": "00f01d5f76c0edd4120ffb6c0ca18f5be224fb9cd8f0d8c315632da898b81d78",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 10,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "5ba207e666b875e123a78fcd50bff86b90437ffca60fb533c15a9f6c05a651b7",
+      "program_name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "00f01d5f76c0edd4120ffb6c0ca18f5be224fb9cd8f0d8c315632da898b81d78",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "23bd1edcd9726bba6b0e97ab6e922c70549fe5a123f4508e6c54c53157381ad7",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "4fb912eabba0b1b1ed98505856ae4d78f1bed5a93ba33495f93e08667ab27d38",
+      "compiler_cached_binary_sha256": "4fb912eabba0b1b1ed98505856ae4d78f1bed5a93ba33495f93e08667ab27d38",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 18,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "1f8533100f0d881f102113d8cbc5821e1da43bfb78bb76a067a16651d6b5d83e",
+      "program_name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "4fb912eabba0b1b1ed98505856ae4d78f1bed5a93ba33495f93e08667ab27d38",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "588daa27c59b4d0ac15872c802a702c409e8f6675419c7cfa852dd15e5209493",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "compiler_cached_binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "2bc21a45ec3528225cd72c742ce0b4841732cd24f6edd3e618d1ef76ba541819",
+      "program_name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "325746642672b499a6dcafaf0a1f2d6b675ca4a0eeb49b506162635a2c2e6522",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "compiler_cached_binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 35,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "891bb7dceca97929f8bdb711dd4b9bcc040fc9476e777c9bd0583b8b74fc0f17",
+      "program_name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "e4d5f5a2809e0f206fb54adfade2f2b88a314cb02b607b9e34399cc7ba5ac588",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "ab8f58207cb856e9c4d229ab58a991c909c5b705726b041db06527199bad84af",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "1c194fb341766114e36f2a9ac624922fdc90f7a3932f135deffdd08a1766afee",
+      "compiler_cached_binary_sha256": "1c194fb341766114e36f2a9ac624922fdc90f7a3932f135deffdd08a1766afee",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        12288,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 36,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "b9ba866111f19e196627980381b207226e2a10fd8af99ce51379f7182a579be6",
+      "program_name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "1c194fb341766114e36f2a9ac624922fdc90f7a3932f135deffdd08a1766afee",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "7c69322b0e7c1b97dbb5117f85ea670059fa9ee45e3f0e7ae1ffe37509ffe519",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "6991eb2dc748307b454d4a639896190bdf2e0ee448b8074c91e741b1101ea629",
+      "compiler_cached_binary_sha256": "6991eb2dc748307b454d4a639896190bdf2e0ee448b8074c91e741b1101ea629",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 8,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "eca7c970cb69939a4554dcd168cadb4a85fe0741beb2d6c2026b65cfa7c15b55",
+      "program_name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "6991eb2dc748307b454d4a639896190bdf2e0ee448b8074c91e741b1101ea629",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "a989afe81dfdebb01dd1723701dacbd13765df7d3f9659a064c604f376592198",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+      "compiler_cached_binary_sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 18,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "40ea87638256963af5270932cd6f8c00de1c75edb51df5a3e6bebf17625130c2",
+      "program_name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "181e38cde9ed74615b0223be7934be0a4192d78e36247923b093b4a6b1fc71f3",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "ca4bb39b3dd0f8f043b7bff8a12480a1c944375692a4b07393a806d7eb093633",
+      "compiler_cached_binary_sha256": "ca4bb39b3dd0f8f043b7bff8a12480a1c944375692a4b07393a806d7eb093633",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 10,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "db6c108424bf3afe8694e6ceaa4a16115ee27370987dc07dc16e6963c6cef530",
+      "program_name": "q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "ca4bb39b3dd0f8f043b7bff8a12480a1c944375692a4b07393a806d7eb093633",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "5676a2b0314df9a330fc43a2787e50a6ae95293bc926ffefcfd567b44105a1ef",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "d62ff2aa5f6e09bce99ff96bb3e6485925310fb184b09aed7bfd502082b7443d",
+      "compiler_cached_binary_sha256": "d62ff2aa5f6e09bce99ff96bb3e6485925310fb184b09aed7bfd502082b7443d",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 18,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "07cdf8e55422740ed698f6cb3e15c50eda99d3d35d77ed01f75617bc8d9c86ab",
+      "program_name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "d62ff2aa5f6e09bce99ff96bb3e6485925310fb184b09aed7bfd502082b7443d",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "af6fcf73fc882dc3d849beecd795dfde9832f62923b5d0f101797050ff623de9",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "04715f07e0d824e243dbb61c5bd15bded7f00b1991c5f6bb38578c3fe74b4e03",
+      "compiler_cached_binary_sha256": "04715f07e0d824e243dbb61c5bd15bded7f00b1991c5f6bb38578c3fe74b4e03",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 10,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "7306df45daa71c9a1c52084f7c49e060de96b843601649009594b6e697fb9bc1",
+      "program_name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "04715f07e0d824e243dbb61c5bd15bded7f00b1991c5f6bb38578c3fe74b4e03",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "98928ea772a181e4a51774cfbbc3311d315f2adcdeb2eb36be646a9f3a0e6bfb",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "c7842a40c316b4431e0602489f417db9b07afa5a95efb3c5bec068e2c8cc380b",
+      "compiler_cached_binary_sha256": "c7842a40c316b4431e0602489f417db9b07afa5a95efb3c5bec068e2c8cc380b",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        151936,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "program_hash": "f3e7c3e38442147867ea61350a7e5edaeb8bb5bc4b59db67bd328392813fbe0e",
+      "program_name": "q6k_vocab_four_warp_fp16_direct_151936_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "c7842a40c316b4431e0602489f417db9b07afa5a95efb3c5bec068e2c8cc380b",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "aea63bab7b64dcc698e943cfde96295d2e211956c967f5345e8c40a45b3af79f",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "5cfcbeef58d3b648de1fea8a72e1ac77d2ba577ba39bee0e61e571d8bfcccf74",
+      "compiler_cached_binary_sha256": "5cfcbeef58d3b648de1fea8a72e1ac77d2ba577ba39bee0e61e571d8bfcccf74",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "program_hash": "75bba3405a3e2a58cbd1deef45ff0cab9a122834a05e579226ecea6b3bf020a0",
+      "program_name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "4f8d580b8c56ac7806575b365304f4569a04fa27b8c7612bd0ddfdcf258e4878",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": false,
+      "source_sha256": "fd309708c4b39688f5a51572f501c0434ea14ed0eb42067c0b09ab3cad0619ff",
+      "transport_provenance": "source_binary_compiler_cache_match"
+    },
+    {
+      "binary_sha256": "e3e8c872fbe3fd8dd570b8db49ccaf62c77d277e2dcdd7479f4572955cd4488e",
+      "compiler_cached_binary_sha256": "e3e8c872fbe3fd8dd570b8db49ccaf62c77d277e2dcdd7479f4572955cd4488e",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 36,
+      "local_size": [
+        4,
+        8,
+        1
+      ],
+      "program_hash": "971b5f383f9913c9e27c3c7daf6375d86fa9b77cd875e1db0daef07a231286be",
+      "program_name": "reduce_output_rmsnorm_rope_32_128",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "e3e8c872fbe3fd8dd570b8db49ccaf62c77d277e2dcdd7479f4572955cd4488e",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "d293abaefdbc77703c95f18d29d812e8e22c1747111ddbc15d75063e4c1fa9f1",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "50b238f0ebdb66f3460ad8305052362a7703c3748d063ac1dbcdae56b37287d3",
+      "compiler_cached_binary_sha256": "50b238f0ebdb66f3460ad8305052362a7703c3748d063ac1dbcdae56b37287d3",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 36,
+      "local_size": [
+        2,
+        16,
+        1
+      ],
+      "program_hash": "357e39b02f219e3f7f334c7587074ff0b0b2be39b89afc2bf62725663fcdf251",
+      "program_name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "50b238f0ebdb66f3460ad8305052362a7703c3748d063ac1dbcdae56b37287d3",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "faa72025727c0f2e4c990cf696195bb9e685906894d3b72f9616647edc7e83a0",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "e9615606370f73faa85245380cb6f05661536c3909a727f64db1dbc3b252bc24",
+      "compiler_cached_binary_sha256": "e9615606370f73faa85245380cb6f05661536c3909a727f64db1dbc3b252bc24",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 54,
+      "local_size": [
+        32,
+        16,
+        1
+      ],
+      "program_hash": "69e8e7df16a06ea133066b98d435c1017841778d3a5ec5ed418b7eb1ce4cf6f9",
+      "program_name": "rmsnorm_native_1_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "e9615606370f73faa85245380cb6f05661536c3909a727f64db1dbc3b252bc24",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "19f56a293f7efbe094ce67aaf7c077b5ffead34781306d19f63077450b0ebfee",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "1d77e7430c91451460271b4b725303634f2ec7ec7a2305ddbc4998b2385b4928",
+      "compiler_cached_binary_sha256": "1d77e7430c91451460271b4b725303634f2ec7ec7a2305ddbc4998b2385b4928",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 1,
+      "local_size": [
+        32,
+        16,
+        1
+      ],
+      "program_hash": "7598700560b8f2aae3f80c9aaadcd7fa407c3a1781ae2001178838e2dc77dea2",
+      "program_name": "rmsnorm_native_1_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "1d77e7430c91451460271b4b725303634f2ec7ec7a2305ddbc4998b2385b4928",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "e627d9a547f854ca3ad81efcc934dc04eb0285fc14616b65e66a87b47c0fb91b",
+      "transport_provenance": "source_binary_recompiled_match"
+    },
+    {
+      "binary_sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+      "compiler_cached_binary_sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+      "construction_provenance": "tinygrad_renderer",
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "jit_owner": "rollout_jit_flash_s6",
+      "launch_count": 18,
+      "local_size": [
+        32,
+        16,
+        1
+      ],
+      "program_hash": "76f65f4426c71de0a8c7a1947a5bc0f9632a455246fcc9d2165aca328be7a540",
+      "program_name": "rmsnorm_q8_1_llama_provider_4096",
+      "program_provenance": [
+        "tinygrad_renderer",
+        "tinygrad.renderer.cuda.CUDARenderer",
+        "NV"
+      ],
+      "recompiled_binary_sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+      "source_compiler_cache_match": true,
+      "source_recompile_match": true,
+      "source_sha256": "804b6914bf0d3f99cdc5272b68d7d3b56f469d88ccbdbd54d3e4e14f6bd782cc",
+      "transport_provenance": "source_binary_recompiled_match"
+    }
+  ],
+  "recompiler": {
+    "arch": "sm_120",
+    "class": "NVRTCCompiler",
+    "compile_options": [
+      "--gpu-architecture=sm_120",
+      "-I/usr/local/cuda/include",
+      "-I/usr/include",
+      "-I/opt/cuda/include",
+      "--minimal"
+    ],
+    "compiler_cache_key": "compile_nv_sm_120",
+    "nvrtc_version": [
+      13,
+      2
+    ],
+    "ptx": false
+  },
+  "renderer_owned_unique_programs": 29,
+  "schema": "tinygrad.nv_decode_program_ownership_audit.v1",
+  "selected_jits": [
+    "rollout_jit_flash_s6"
+  ],
+  "source_compiler_cache_matched_unique_programs": 6,
+  "source_recompiled_unique_programs": 23,
+  "unique_programs": 29,
+  "unknown_construction_unique_programs": 0
+}

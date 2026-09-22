@@ -1,0 +1,19 @@
+{
+  "schema": "tinygrad.nv_decode_q6k_llama_one_role_ab.v1",
+  "evidence": "DIAGNOSTIC_REAL_TOKEN_GRAPH_REWIRE",
+  "environment": {"backend": "CUDA", "control_interpretation": "mode=native means DEV=CUDA with the native tinygrad role; it is not the DEV=NV backend", "depth": 512, "model": "Qwen3-8B-Q4_K_M.gguf"},
+  "replacement": {
+    "native_role": "q6k_gen_partial_1024_4096_4",
+    "call": 9,
+    "native_node_destroyed": true,
+    "replacement_nodes": ["fp16_to_fp32", "llama_q8_1", "llama_Q6_K_mmq", "scatter_to_four_partials"],
+    "retained_consumer": "original fused reduction/KV-store node",
+    "graph_nodes_before": 32,
+    "graph_nodes_after": 35,
+    "exact_llama_q6_block": [32, 4, 1]
+  },
+  "correctness": {"tokens_native": [474, 330, 3817, 3302, 474], "tokens_ab": [474, 330, 3817, 3302, 474], "token_identity": true},
+  "wall_ms": {"discarded_first_build_sample": true, "native_steady": [5.728464, 5.622302, 5.604974, 5.597108], "ab_steady": [5.717302, 5.609985, 5.595102, 5.598891], "native_median": 5.622302, "ab_median": 5.609985, "ab_minus_native_us": -12.317},
+  "verdict": "PASS_CORRECTNESS_WALL_NEUTRAL_WITHIN_SHORT_SAMPLE_NOISE",
+  "non_claims": ["not a production route", "not exact llama activation production: explicit fp16-to-fp32 source-equivalent adapter", "one role only", "not a parity claim"]
+}

@@ -38,7 +38,7 @@ def select_with_collector(kv, meta, collector, facts=None):
   facts = device_facts() if facts is None else facts
   inventory = derive_selected_gguf_prefill_inventory(kv, meta)
   with _memory_adaptive_measurement_authority(device_facts=facts, inventory=inventory,
-      workload={"prefill_ubatch": 512}, collector=collector):
+      workload={"prefill_ubatch": 512,"workload_reuse":False}, collector=collector):
     return select_memory_adaptive_runtime_policy(kv=kv, meta=meta, device_facts=facts)
 
 

@@ -1,0 +1,181 @@
+{
+  "method": "production emitter -> rendered CUDA -> nvcc sm_120a",
+  "native_exact": {
+    "bitwise_identical": true,
+    "finite": true,
+    "max_abs_diff": 0.0,
+    "q4_sha256": "b5321ed134aabb5fde8b2bc5ad618e75a8d8c2acfdfcb33cbe6263a4715b5cd1",
+    "x_sha256": "8452f26c01d40f97e213bd1e3b4e48cc28ba493e3bab8bdc0b6275f95073a2dd"
+  },
+  "ncu": {
+    "method": "Nsight Compute --cache-control all; one post-warmup launch",
+    "scalar": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "28360960"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "28360960"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "61.66"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "26112"
+        },
+        {
+          "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "79.80"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "40"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "34580256"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "17.31"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "16179200"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "46.13"
+        }
+      ],
+      "symbol": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd"
+    },
+    "vector": {
+      "rows": [
+        {
+          "metric": "dram__bytes.sum",
+          "unit": "byte",
+          "value": "28360448"
+        },
+        {
+          "metric": "dram__bytes_op_read.sum",
+          "unit": "byte",
+          "value": "28360448"
+        },
+        {
+          "metric": "dram__bytes_op_write.sum",
+          "unit": "byte",
+          "value": "0"
+        },
+        {
+          "metric": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "73.85"
+        },
+        {
+          "metric": "gpu__time_duration.sum",
+          "unit": "ns",
+          "value": "21792"
+        },
+        {
+          "metric": "l1tex__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "30.95"
+        },
+        {
+          "metric": "launch__registers_per_thread",
+          "unit": "register/thread",
+          "value": "38"
+        },
+        {
+          "metric": "lts__t_bytes.sum",
+          "unit": "byte",
+          "value": "36955232"
+        },
+        {
+          "metric": "lts__t_sector_op_read_hit_rate.pct",
+          "unit": "%",
+          "value": "22.54"
+        },
+        {
+          "metric": "sm__inst_executed.sum",
+          "unit": "inst",
+          "value": "14852096"
+        },
+        {
+          "metric": "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+          "unit": "%",
+          "value": "47.22"
+        }
+      ],
+      "symbol": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd"
+    }
+  },
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 384 bytes smem",
+    "ptxas info    : Compile time = 11.151 ms",
+    "ptxas info    : Compiling entry function 'q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 384 bytes smem",
+    "ptxas info    : Compile time = 11.226 ms"
+  ],
+  "raw_stdout": [
+    "zero_input_bitwise=1",
+    "rep=0 scalar=18.3584 vector=12.7984",
+    "rep=1 scalar=18.2656 vector=12.3888",
+    "rep=2 scalar=18.3664 vector=12.3744",
+    "rep=3 scalar=18.3728 vector=12.3808",
+    "rep=4 scalar=18.3936 vector=12.4176"
+  ],
+  "schema": "tinygrad.q4k_ffn_down_vector_load_microgate.v1",
+  "shape": {
+    "block": 128,
+    "grid": 4096,
+    "k": 12288,
+    "rows": 4096
+  },
+  "timing": {
+    "recovery_us": 5.977599999999999,
+    "scalar": [
+      18.3584,
+      18.2656,
+      18.3664,
+      18.3728,
+      18.3936
+    ],
+    "scalar_median": 18.3664,
+    "unit": "us_per_launch_cuda_event",
+    "vector": [
+      12.7984,
+      12.3888,
+      12.3744,
+      12.3808,
+      12.4176
+    ],
+    "vector_median": 12.3888
+  }
+}

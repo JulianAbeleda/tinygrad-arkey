@@ -1,0 +1,56 @@
+{
+  "arm": "fp16",
+  "device_profile": {},
+  "program_names": {
+    "E_1024_8_16_4_0474917d69356f3fb88ab57e908ee4f28ade9b7ce4aba40fce75ec61ac8f072d": 36,
+    "E_1024_8_16_4_869e848bb5316270adcd4bf13e8090a251cc6d2bf0836f27b4319c893157eb2c": 36,
+    "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": 2,
+    "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": 72,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_03180df0efeb598bc45a49b92d84c58a8484f4dcd609cd4d3e4aacad5d583fce": 1,
+    "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": 36,
+    "E_4_32_32_4_2_2_2_8_2_127_2_9e9fe095ccae4c757b96799f928901747e2ec817b074f802dfba07b1b95c4fa6": 72,
+    "E_4_32_32_4_2_2_2_8_2_383_2_4d350ae5af611dd29cc9bccf1b519b45127a4516166c2f578ff0eb387e90a220": 36,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_4_8_32_4_2_2_2_8_2_127_2_5b25908519df16d6540959b859dfc9b1b3da90428dede53099326cb17b2798b0": 72,
+    "E_4_96_32_4_2_2_2_8_2_127_2_0711af9046138a5bb5e4638aac0ba624d4cb4e1d6d1426be57fa3affd7d84235": 72,
+    "E_512_16_8_2_4_4_7ba8bb6e17db46be97b12bb14aa0061205f501e4d34840e5e9a887084bd05ccc": 1,
+    "E_512_4_2_8_16_4_90bc800eaf9a6441acd8c7bf4e4ce6b36ec829b5916985f2e916b5d9931bd5af": 36,
+    "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": 36,
+    "E_64_192_8_16_4_640bf817cadb0a8147e90971f99a6347b79860af34aa6133d67935af68c02254": 1,
+    "E_64_192_8_16_4_9116f1cfc2bb8151b919afd023142993ccca4d58ee934e2f0087282e617f94da": 1,
+    "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": 37,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 1,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 71,
+    "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": 36,
+    "E_8_64_2_8_16_4_e106c4030a9d21cac72ff0bb3b8aa5e9a622cb2894412277e2f90534cf3f0e2e": 1,
+    "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+    "native_finite_fp32_argmax_151936_t1024": 1,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": 1,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 38,
+    "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": 1,
+    "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": 1
+  },
+  "qo_fp16_overlays": 72,
+  "replay": {
+    "distinct_activation_output": true,
+    "finite": true,
+    "same_activation_allclose": true,
+    "same_activation_exact": true,
+    "same_activation_max_abs": 0.0,
+    "same_activation_mean_abs": 0.0,
+    "same_token": true
+  },
+  "schema": "tinygrad.nv_compiler_q4k_qo_model_arm.v1",
+  "status": "PASS",
+  "token": 198,
+  "wall": {
+    "median_ms": 84.043448,
+    "min_ms": 84.043448,
+    "samples_ms": [
+      84.043448
+    ],
+    "tok_s": 6092.0870357437025
+  }
+}

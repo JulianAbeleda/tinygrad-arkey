@@ -1,0 +1,503 @@
+"""Rangeify-side admission for the fp32 q/k reduce-output route (Wave 2, piece C).
+
+Structural CPU-only tests: the rangeify selector admits the fp32 q/k marker
+through the production PERMUTE-view spelling (``PERMUTE(RESHAPE(precompiled
+AFTER))``) and through the warp-coop partials spelling
+(``PERMUTE(...CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER)))))``), the
+PERMUTE-carrier pass lowers ONE fused body per marker with the row-aware name,
+every consumer reads the same dependency-bearing fused output buffer, and the
+fp32 route binds the load-time fp16 identity weight buffer (no per-token
+weight cast, no owned cast).  Every unexpected view stays fail-closed on the
+ordinary graph.  The cooperative body itself cannot compile on the CPU
+renderer (pre-existing: ``test_native_value_matches_ordinary``), so these
+tests are structural and never execute the fused kernel.
+"""
+
+from tinygrad import Tensor, dtypes, nn
+from tinygrad.uop.ops import Ops
+
+
+def _norm(dim, dtype=dtypes.float32):
+  n = nn.RMSNorm(dim, eps=1e-6)
+  n.weight = Tensor.ones(dim, dtype=dtype)
+  return n
+
+
+def _precompiled_producer():
+  from tinygrad.function import function
+  @function(precompile=True)
+  def producer(v): return v + 1
+  return producer
+
+
+def _rope(value, rows, dim, freqs=None):
+  from tinygrad.llm.model import apply_rope
+  if freqs is None: freqs = Tensor.empty(1, 1, dim, dtype=dtypes.float32, device="CPU")
+  return apply_rope(value, freqs)
+
+
+def _attention(value):
+  from tinygrad.function import function
+  @function(precompile=True)
+  def attention(v): return v * 2
+  return attention(value.contiguous())
+
+
+def _names(out):
+  linear, _ = out.linear_with_vars()
+  return [x.src[0].arg.name for x in linear.src]
+
+
+def _qk_graph(rows, promoted=True, producer=None, pre="q"):
+  """Production spelling: precompiled q4k GEMV -> PERMUTE -> marker -> rope -> attention."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  producer = _precompiled_producer() if producer is None else producer
+  x = Tensor.empty(1, 1, rows * 128, dtype=dtypes.float32, device="CPU")
+  q = producer(x).reshape(1, 1, rows, 128).transpose(1, 2)
+  norm = _norm(128)
+  if promoted:
+    q_m = _decode_reduce_output_rmsnorm(norm, q, True)
+  else:
+    q_m = norm(q)
+  q_s = runtime_scratch(q_m)
+  roped = _rope(q_s, rows, 128)
+  return _attention(roped)
+
+
+def test_permute_identity_admits_precompiled_output_through_rangeify():
+  """The selector admits the fp32 q/k marker whose input is a pure PERMUTE of
+  the precompiled q4k GEMV output (rows 32 and 8), lowering the row-aware
+  fused bodies into the schedule."""
+  from tinygrad.helpers import Context
+  for rows, name in ((32, "reduce_output_rmsnorm_32_128"), (8, "reduce_output_rmsnorm_8_128")):
+    out = _qk_graph(rows)
+    with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+      assert name in _names(out)
+
+
+def test_permute_carrier_lowers_one_body_per_marker_with_shared_buffer():
+  """One fused body per unique marker, and every ordinary-elementwise consumer
+  reads the same dependency-bearing fused output buffer."""
+  from tinygrad.helpers import Context
+  from tinygrad.uop.ops import UOp
+  out = _qk_graph(32)
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    linear, _ = out.linear_with_vars()
+  fused = [c for c in linear.src if "reduce_output_rmsnorm" in c.src[0].arg.name]
+  assert [c.src[0].arg.name for c in fused] == ["reduce_output_rmsnorm_32_128"]
+  fused_call = fused[0]
+  out_buf = fused_call.src[1].buf_uop
+  assert out_buf.op in (Ops.BUFFER, Ops.SLICE)
+  consumers = [c for c in linear.src if c is not fused_call and
+               any(a.buf_uop is out_buf for a in c.src[1:])]
+  assert consumers, "the rope elementwise consumers must read the fused output buffer"
+  # Two rope elementwise kernels (the x1 and x2 halves) read the fused buffer.
+  assert len(consumers) >= 2 and all(c.src[0].arg.name == "test" for c in consumers)
+
+
+def test_two_markers_lower_to_two_distinct_bodies():
+  """A graph carrying both q (rows 32) and k (rows 8) markers lowers exactly one
+  body per marker with the right name, and each consumer reads its own fused
+  output."""
+  from tinygrad.function import function
+  from tinygrad.helpers import Context
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  @function(precompile=True)
+  def producer(v): return v + 1
+  q = producer(Tensor.empty(1, 1, 32 * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, 32, 128).transpose(1, 2)
+  k = producer(Tensor.empty(1, 1, 8 * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, 8, 128).transpose(1, 2)
+  q_m = runtime_scratch(_decode_reduce_output_rmsnorm(_norm(128), q, True))
+  k_m = runtime_scratch(_decode_reduce_output_rmsnorm(_norm(128), k, True))
+  roped_q = _rope(q_m, 32, 128)
+  roped_k = _rope(k_m, 8, 128)
+  @function(precompile=True)
+  def attention(v): return v * 2
+  out_q = attention(roped_q.contiguous())
+  out_k = attention(roped_k.contiguous())
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    linear, _ = out_q.linear_with_vars(out_k)
+  names = [c.src[0].arg.name for c in linear.src if "reduce_output_rmsnorm" in c.src[0].arg.name]
+  assert sorted(names) == ["reduce_output_rmsnorm_32_128", "reduce_output_rmsnorm_8_128"]
+  bodies = [c for c in linear.src if "reduce_output_rmsnorm" in c.src[0].arg.name]
+  assert len(bodies) == 2
+  # Distinct physical output views (memory planning may pack scratch slices into
+  # one parent allocation, so compare the exact output views, not the parent).
+  assert bodies[0].src[1] is not bodies[1].src[1]
+  assert bodies[0].src[1].buf_uop is bodies[1].src[1].buf_uop  # same parent scratch block
+  assert bodies[0].src[1].arg != bodies[1].src[1].arg  # disjoint offsets
+
+
+def test_fp32_route_binds_materialized_fp16_identity_weight():
+  """The multi-row fp32 q/k marker binds the load-time fp16 identity buffer so
+  the fused body never materializes a per-token weight cast; the ordinary fp32
+  epilogue rounds through fp16 in-kernel, so the halves are bitwise identical."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  n = _norm(128)
+  fp16_materialized = Tensor.ones(128, dtype=dtypes.float16).contiguous().realize()
+  n._decode_reduce_output_weight = fp16_materialized
+  q = _precompiled_producer()(Tensor.empty(1, 1, 32 * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, 32, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(n, q, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.dtype is dtypes.float32
+  assert marked.uop.src[2] is fp16_materialized.uop
+  assert marked.uop.src[2].dtype is dtypes.float16
+  assert marked.uop.src[2] is not n.weight.uop
+
+
+def test_single_row_c6_route_keeps_materialized_identity_weight():
+  """The C6 norms (rows 1) keep the existing materialized fp16 identity weight
+  behavior; the multi-row fp32 route now binds the same identity buffer."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  n = _norm(4096)
+  fp16_materialized = Tensor.ones(4096, dtype=dtypes.float16).contiguous().realize()
+  n._decode_reduce_output_weight = fp16_materialized
+  x = Tensor.empty(1, 4096, dtype=dtypes.float32, device="CPU")
+  marked = _decode_reduce_output_rmsnorm(n, x, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.src[2] is fp16_materialized.uop
+
+
+def _warp_coop_qk_graph(rows, promoted=True):
+  """Production spelling for the warp-coop q/k family: an opaque custom
+  kernel publishes (rows*128, 4) partials through a RESHAPE view of its
+  scratch buffer (the bounded opaque AFTER spelling, precompile=False), the
+  ordinary chain reduces them (``sum(axis=1).contiguous()``), the flat value
+  is runtime-scratch marked, then reshaped/transposed into the marker input.
+  Everything lives inside a function body exactly like the production
+  per-block trace, so callify keeps the REDUCE chain visible at rangeify."""
+  from tinygrad.function import function
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.uop.ops import CallInfo, UOp
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  w = Tensor.ones(128, dtype=dtypes.float32)
+  @function(precompile=False, allow_implicit=True)
+  def block(src, w):
+    base = UOp.new_buffer("CPU", rows * 128 * 4, dtypes.float32)
+    base_view = base.reshape(rows * 128, 4)
+    body_sink = UOp.sink(base_view.store(src.reshape(rows * 128, 4).uop))
+    body = UOp(Ops.LINEAR, src=(body_sink.call(base_view),))
+    call = UOp(Ops.CALL, dtypes.void, (body, base_view, src.reshape(rows * 128, 4).uop),
+               CallInfo(name="partials_probe", precompile=False))
+    partials = Tensor(base_view.after(call), device="CPU")
+    q_flat = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).contiguous().reshape(1, 1, rows * 128)
+    q_flat = runtime_scratch(q_flat)
+    q = q_flat.reshape(1, 1, rows, 128).transpose(1, 2)
+    norm = _norm(128)
+    norm.weight = w
+    q_m = runtime_scratch(_decode_reduce_output_rmsnorm(norm, q, promoted))
+    return _attention(_rope(q_m, rows, 128))
+  return block(src, w)
+
+
+def _opaque_partials_after(rows):
+  """UOp-level bounded opaque custom-kernel AFTER: a RESHAPE view of the
+  scratch buffer, appearing exactly once among the call arguments, with an
+  opaque (non-precompiled) SINK body.  Mirrors the production warp-coop
+  partials kernel spelling at marker creation."""
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.new_buffer("CPU", rows * 128 * 4, dtypes.float32)
+  base_view = base.reshape(rows * 128, 4)
+  src = UOp.param(0, dtypes.float32, (rows * 128, 4), "CPU")
+  body_sink = UOp.sink(base_view.store(src))
+  body = UOp(Ops.LINEAR, src=(body_sink.call(base_view),))
+  call = UOp(Ops.CALL, dtypes.void, (body, base_view, src),
+             CallInfo(name="partials_probe", precompile=False))
+  return base_view.after(call)
+
+
+def test_reduce_derived_carrier_admits_warp_coop_partials_through_rangeify():
+  """A marker input spelled ``PERMUTE(...CONTIGUOUS(RESHAPE(REDUCE(
+  RESHAPE(AFTER)))))`` (the warp-coop partials carrier) is a bounded
+  kernel-output identity: the selector materializes the exact REDUCE into a
+  fresh buffer and lowers one fused body per marker."""
+  from tinygrad.helpers import Context
+  rows = 32
+  out = _warp_coop_qk_graph(rows)
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    linear, _ = out.linear_with_vars()
+  names = [c.src[0].arg.name for c in linear.src]
+  assert "reduce_output_rmsnorm_32_128" in names, names
+
+
+def test_reduce_derived_carrier_marks_reduce_input_at_marker():
+  """Marker creation records ``reduce_input_at_marker`` for the warp-coop
+  partials spelling and leaves it false for the direct-AFTER spelling."""
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  rows = 32
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  from tinygrad.uop.ops import KernelInfo
+  def fxn(out, x):
+    return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
+  partials = output.uop_program(src, fxn=fxn)[0]
+  q = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).contiguous().reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
+  direct = _precompiled_producer()(Tensor.empty(1, 1, rows * 128, dtype=dtypes.float32, device="CPU")).reshape(1, 1, rows, 128).transpose(1, 2)
+  marked_direct = _decode_reduce_output_rmsnorm(_norm(128), direct, True)
+  assert marked_direct.uop.arg.reduce_input_at_marker is False
+
+
+def test_reduce_derived_carrier_production_spelling_lands_on_reduce():
+  """The production graph has NO explicit CONTIGUOUS before the norm: the
+  marker walk strips PERMUTE/RESHAPE/MS and lands directly on the REDUCE.
+  That spelling must admit exactly like the materialized CONTIGUOUS spelling
+  (callify inserts the CONTIGUOUS only after marker creation)."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.uop.ops import KernelInfo
+  rows = 32
+  src = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  output = Tensor.empty(rows * 128 * 4, dtype=dtypes.float32, device="CPU")
+  def fxn(out, x):
+    return out.store(x).sink(arg=KernelInfo(name="partials_probe", opts_to_apply=()))
+  partials = output.uop_program(src, fxn=fxn)[0]
+  q = partials.reshape(rows * 128, 4).sum(axis=1).reshape(rows * 128).reshape(1, 1, rows * 128)
+  q = runtime_scratch(q)
+  q = q.reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
+
+
+def test_reduce_derived_carrier_opaque_partials_after_proof():
+  """The warp-coop partials AFTER is a bounded opaque custom-kernel output
+  (precompile=False, RESHAPE-viewed base appearing exactly once among the
+  call arguments); the REDUCE-derived marker admits it like the strict
+  PARAM-slot AFTER spelling."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  rows = 32
+  q = Tensor(_opaque_partials_after(rows), device="CPU").sum(axis=1).reshape(rows * 128)
+  q = runtime_scratch(q.contiguous().reshape(1, 1, rows * 128)).reshape(1, 1, rows, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), q, True)
+  assert marked.uop.arg.reduce_input_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is True
+
+
+def test_identity_view_admits_pure_permute_of_precompiled_output():
+  """UOp-level: a pure PERMUTE(RESHAPE(...)) over a precompiled-output AFTER is
+  an identity view; the original dependency-bearing view is retained."""
+  from tinygrad.schedule.rangeify import _identity_buffer_view
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.param(0, dtypes.float32, (4096,), "NV")
+  out = UOp.new_buffer("NV", 4096, dtypes.float32)
+  body_sink = UOp.sink(out.store(UOp.param(1, dtypes.float32, (4096,), "NV")))
+  body = UOp(Ops.LINEAR, src=(body_sink.call(out),))
+  call = UOp(Ops.CALL, dtypes.void, (body, base, out), CallInfo(name="gemv", precompile=True, precompiled_output_slots=()))
+  after = out.after(call)
+  view = after.reshape(1, 1, 32, 128).permute((0, 2, 1, 3))
+  assert view.shape == (1, 32, 1, 128)
+  assert _identity_buffer_view(view) is view
+  # A pure permute over a bare PARAM stays rejected (pinned by
+  # test_identity_view_rejects_offsets_movements_and_dependencies).
+  p = UOp.param(2, dtypes.float32, (4096,), "NV")
+  assert _identity_buffer_view(p.reshape(64, 64).permute((1, 0))) is None
+  # SHRINK legs, non-precompiled AFTER, and multi-producer PERMUTE stay rejected.
+  assert _identity_buffer_view(after.shrink(((0, 2048),))) is None
+  # A non-precompiled AFTER with the base as its unique output argument is the
+  # bounded opaque custom-kernel spelling (decode q4k GEMV, precompile=False)
+  # and IS admitted by the permuted view; an aliased output argument stays
+  # rejected.
+  nonpre = UOp(Ops.CALL, dtypes.void, (body, base, out), CallInfo(name="gemv", precompile=False))
+  assert _identity_buffer_view(out.after(nonpre).reshape(1, 1, 32, 128).permute((0, 2, 1, 3))) is not None
+  aliased = UOp(Ops.CALL, dtypes.void, (body, out, out), CallInfo(name="gemv", precompile=False))
+  assert _identity_buffer_view(out.after(aliased).reshape(1, 1, 32, 128).permute((0, 2, 1, 3))) is None
+
+
+def test_permute_carrier_fails_closed_for_non_identity_marker_input():
+  """A marker whose input is a PERMUTE of an unproven value (ADD chain) is not
+  admitted, so the ordinary graph survives with no fused body."""
+  from tinygrad.function import function
+  from tinygrad.helpers import Context
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  @function(precompile=True)
+  def producer(v): return v + 1
+  x = Tensor.empty(1, 1, 32 * 128, dtype=dtypes.float32, device="CPU")
+  moved = (producer(x) + 1).reshape(1, 1, 32, 128).transpose(1, 2)
+  marked = _decode_reduce_output_rmsnorm(_norm(128), moved, True)
+  assert marked.uop.arg.input_identity_at_marker is False
+  out = _attention(_rope(runtime_scratch(marked), 32, 128))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_32_128" not in _names(out)
+
+
+def test_permute_carrier_fails_closed_for_cast_and_shrink_chains():
+  """CAST and SHRINK legs below the marker input never enter the identity walk,
+  so the fp32 route stays on the ordinary graph."""
+  from tinygrad.function import function
+  from tinygrad.helpers import Context
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  @function(precompile=True)
+  def producer(v): return v + 1
+  x = Tensor.empty(1, 1, 32 * 256, dtype=dtypes.float32, device="CPU")
+  shrink_moved = producer(x).shrink(((0, 1), (0, 1), (0, 32 * 128))).reshape(1, 1, 32, 128).transpose(1, 2)
+  assert _decode_reduce_output_rmsnorm(_norm(128), shrink_moved, True).uop.arg.input_identity_at_marker is False
+  y = Tensor.empty(1, 1, 32 * 128, dtype=dtypes.float32, device="CPU")
+  cast_moved = producer(y).cast(dtypes.float16).reshape(1, 1, 32, 128).transpose(1, 2)
+  assert _decode_reduce_output_rmsnorm(_norm(128), cast_moved, True).uop.arg.input_identity_at_marker is False
+  for moved in (shrink_moved, cast_moved):
+    marked = _decode_reduce_output_rmsnorm(_norm(128), moved, True)
+    out = _attention(_rope(runtime_scratch(marked), 32, 128))
+    with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+      assert "reduce_output_rmsnorm_32_128" not in _names(out)
+
+
+def test_unpromoted_marker_keeps_ordinary_graph():
+  """With promotion off the marker never exists and the ordinary q/k path stays
+  byte-identical (no fused body)."""
+  from tinygrad.helpers import Context
+  out = _qk_graph(32, promoted=False)
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_32_128" not in _names(out)
+
+
+def _opaque_gemv_after(numel, *, alias=False, store_slot=0, linear_body=False):
+  """Build the production q4k spelling: AFTER(BUFFER, CALL) with a non-precompile
+  SINK body whose stores target the placeholder for the given slot."""
+  from tinygrad.uop.ops import CallInfo, UOp
+  out = UOp.new_buffer("CPU", numel, dtypes.float32)
+  inp = UOp.new_buffer("CPU", numel, dtypes.float32)
+  w = UOp.new_buffer("CPU", numel, dtypes.float32)
+  out_p = UOp.placeholder((numel,), dtypes.float32, 0)
+  inp_p = UOp.placeholder((numel,), dtypes.float32, 1)
+  body = UOp.sink((out_p if store_slot == 0 else inp_p).store(inp_p))
+  if linear_body:
+    body = UOp(Ops.LINEAR, src=(body.call(out, inp, w),))
+  args = (out, inp, w) if not alias else (out, out, w)
+  call = UOp(Ops.CALL, dtypes.void, (body, *args), CallInfo(name="q4k_gemv", precompile=False))
+  return out.after(call)
+
+
+def _opaque_qk_marker(rows, dim=128, **kw):
+  """Marker over the opaque q4k spelling: PERMUTE(RESHAPE(MS(RESHAPE(AFTER))))."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm
+  after = _opaque_gemv_after(rows * dim, **kw)
+  ms = runtime_scratch(Tensor(after.reshape(1, 1, rows, dim), device="CPU"))
+  q = ms.reshape(1, 1, rows, dim).permute((0, 2, 1, 3))
+  return _decode_reduce_output_rmsnorm(_norm(dim), q, True)
+
+
+def test_opaque_q4k_after_marks_input_identity():
+  """The q4k GEMV AFTER (non-precompile, unique output slot, SINK store proof)
+  makes the fp32 q/k marker carry input_identity_at_marker=True through the
+  production MS spelling, for both row counts."""
+  for rows in (32, 8):
+    marked = _opaque_qk_marker(rows)
+    assert marked.uop.op is Ops.REDUCE_OUTPUT
+    assert marked.uop.arg.input_identity_at_marker is True
+
+
+def test_opaque_q4k_after_fails_closed():
+  """Aliased output argument, missing body store, and LINEAR bodies never get
+  the identity bit; the marker keeps the ordinary fallback."""
+  assert _opaque_qk_marker(32, alias=True).uop.arg.input_identity_at_marker is False
+  assert _opaque_qk_marker(32, store_slot=1).uop.arg.input_identity_at_marker is False
+  assert _opaque_qk_marker(32, linear_body=True).uop.arg.input_identity_at_marker is False
+
+
+def test_opaque_q4k_after_lowers_through_rangeify():
+  """The opaque q4k spelling (non-precompile AFTER) admits the marker through
+  the rangeify selector and lowers one row-aware body per marker."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  marked = _opaque_qk_marker(32)
+  out = _attention(_rope(runtime_scratch(marked), 32, 128))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_32_128" in _names(out)
+
+
+def test_residual_sum_marks_and_admits_ffn_norm_through_rangeify():
+  """The decode ffn-norm input is the residual ``h = x + attn_out``, an ADD of
+  two invocation-owned opaque AFTERs.  Marker creation records the
+  residual-sum identity (and no weaker identity bit), and rangeify
+  materializes the ADD so the fused 1_4096 body admits."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm_fp16_consumer
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  attn_out = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + attn_out
+  marked = _decode_reduce_output_rmsnorm_fp16_consumer(_norm(4096), h, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.arg.residual_sum_at_marker is True
+  assert marked.uop.arg.input_identity_at_marker is False
+  assert marked.uop.arg.reduce_input_at_marker is False
+  assert marked.uop.arg.owned_contiguous_candidate is False
+  out = _attention(runtime_scratch(marked).reshape(1, 4096))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_1_4096" in _names(out)
+
+
+def test_residual_sum_fails_closed_for_non_identity_operand():
+  """An ADD with a non-identity operand (a bare materialized constant) never
+  gets the residual-sum bit, so the ffn-norm route stays on the ordinary
+  graph with no fused body."""
+  from tinygrad.helpers import Context
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.llm.model import _decode_reduce_output_rmsnorm_fp16_consumer
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + 1
+  marked = _decode_reduce_output_rmsnorm_fp16_consumer(_norm(4096), h, True)
+  assert marked.uop.op is Ops.REDUCE_OUTPUT
+  assert marked.uop.arg.residual_sum_at_marker is False
+  out = _attention(runtime_scratch(marked).reshape(1, 4096))
+  with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+    assert "reduce_output_rmsnorm_1_4096" not in _names(out)
+
+
+def test_residual_sum_view_binds_shared_residual_without_materializing():
+  """The lowering-time residual proof returns the exact marker input rather than
+  emitting a fresh ADD store.  ``h`` is shared with the ffn_down residual slot,
+  so the scheduler materializes it once; a non-residual ADD still fails closed."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import _reduce_residual_sum_view
+  x = Tensor(_opaque_gemv_after(4096), device="CPU")
+  attn_out = Tensor(_opaque_gemv_after(4096), device="CPU")
+  h = x + attn_out
+  marked_input = runtime_scratch(h).uop
+  assert marked_input.op is Ops.MEMORY_SEMANTIC
+  assert _reduce_residual_sum_view(marked_input) is marked_input
+  assert _reduce_residual_sum_view(runtime_scratch(x + 1).uop) is None
+  assert _reduce_residual_sum_view(runtime_scratch(x + x).uop) is None
+
+
+def test_m4_view_proof_admits_shape_bearing_post_callify_after():
+  """The post-callify epi-resadd ffn spelling is
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM, CALL)))``: the opaque q4k o-proj
+  output with its output buffer promoted to a PARAM.  The m4 input-view proof
+  must walk the two-source RESHAPE by src[0] (the shape descriptor is src[1])
+  and re-prove the bounded opaque AFTER through its unique output argument,
+  rather than failing closed on the RESHAPE arity."""
+  from tinygrad.llm.memory_semantics import runtime_scratch
+  from tinygrad.schedule.rangeify import _reduce_output_m4_input_view
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.param(0, dtypes.float32, (4096,), "CPU")
+  inp = UOp.param(1, dtypes.float32, (4096,), "CPU")
+  call = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="q4k_gemv", precompile=False))
+  after = base.after(call)
+  view = runtime_scratch(Tensor(after, device="CPU").reshape(1, 4096)).uop
+  assert view.op is Ops.MEMORY_SEMANTIC
+  assert _reduce_output_m4_input_view(view) is view
+  assert _reduce_output_m4_input_view(after) is None  # bare base: durable proofs own it
+
+
+def test_opaque_proof_rejects_precompiled_call():
+  """The bounded opaque AFTER proof is for precompile=False custom kernels.
+  A precompiled function output has its own redirect-gated output-slot
+  contract, so it must not leak through the opaque custom-kernel path."""
+  from tinygrad.tensor import _bounded_opaque_after_output_identity
+  from tinygrad.uop.ops import CallInfo, UOp
+  base = UOp.param(0, dtypes.float32, (4096,), "CPU")
+  inp = UOp.param(1, dtypes.float32, (4096,), "CPU")
+  precompiled = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="custom", precompile=True))
+  opaque = UOp(Ops.CALL, dtypes.void, (UOp.sink(), base, inp), CallInfo(name="custom", precompile=False))
+  assert _bounded_opaque_after_output_identity(base.after(precompiled)) is False
+  assert _bounded_opaque_after_output_identity(base.after(opaque)) is True

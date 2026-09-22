@@ -1,0 +1,68 @@
+{
+  "all_native": false,
+  "default_selected": true,
+  "families": {
+    "flash_attention": {
+      "binding": "extra/llm_research/prefill/nv_llama_fattn_mma_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "q4_attention_o": {
+      "binding": "extra/llm_research/prefill/nv_llama_packed_q4k_o_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "q4_ffn_down": {
+      "binding": "extra/llm_research/prefill/nv_llama_packed_q4k_down_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "q4_gate_up": {
+      "binding": "extra/llm_research/prefill/nv_llama_packed_q4k_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "q6_ffn_down": {
+      "binding": "extra/llm_research/prefill/nv_llama_packed_q6k_down_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "q6_vocabulary": {
+      "binding": "extra/llm_research/prefill/nv_llama_q6k_vocab_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "reads_cubin_artifact"
+      ]
+    },
+    "qkv": {
+      "binding": "extra/llm_research/prefill/nv_qkv_packed_pp512_binding.py",
+      "classification": "llama_extracted",
+      "violations": [
+        "imports_nv_llama_binding",
+        "reads_cubin_artifact"
+      ]
+    }
+  },
+  "route": "NV pp512 default",
+  "schema": "nv_all_native_provenance_gate/v1",
+  "violations": [
+    "flash_attention:reads_cubin_artifact",
+    "q4_attention_o:reads_cubin_artifact",
+    "q4_ffn_down:reads_cubin_artifact",
+    "q4_gate_up:reads_cubin_artifact",
+    "q6_ffn_down:reads_cubin_artifact",
+    "q6_vocabulary:reads_cubin_artifact",
+    "qkv:imports_nv_llama_binding",
+    "qkv:reads_cubin_artifact"
+  ]
+}

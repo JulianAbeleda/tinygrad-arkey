@@ -1,0 +1,67 @@
+{
+  "argmax_equal": true,
+  "arms": [
+    {
+      "candidate": false,
+      "finite": true,
+      "prelude_token": 13876,
+      "schema": "tinygrad.nv_shared_q8_extra25_semantic.v1",
+      "shape": [
+        8,
+        1,
+        151936
+      ],
+      "tokens": [
+        4710,
+        32313,
+        11,
+        773,
+        358,
+        1184,
+        311,
+        7071
+      ],
+      "tokens_sha256": "7e2ff56bb98978c6656a49628acae430db10b295c75aa9fc69aa1e30eae5f4e6"
+    },
+    {
+      "candidate": true,
+      "finite": true,
+      "prelude_token": 13876,
+      "schema": "tinygrad.nv_shared_q8_extra25_semantic.v1",
+      "shape": [
+        8,
+        1,
+        151936
+      ],
+      "tokens": [
+        4710,
+        32313,
+        11,
+        773,
+        358,
+        1184,
+        311,
+        7071
+      ],
+      "tokens_sha256": "7e2ff56bb98978c6656a49628acae430db10b295c75aa9fc69aa1e30eae5f4e6"
+    }
+  ],
+  "finite": true,
+  "historical_max_abs_gate": {
+    "atol": 0.01,
+    "pass": true,
+    "status": "reported_non_authoritative"
+  },
+  "max_abs": 0.008885860443115234,
+  "min_baseline_top1_margin": 0.2218780517578125,
+  "perturbation_vs_min_margin": 0.080096795268551,
+  "perturbation_vs_min_margin_max": 1.0,
+  "relative_l2": 0.0003667749814365559,
+  "relative_l2_max": 0.001,
+  "schema": "tinygrad.nv_shared_q8_extra25_semantic.v1",
+  "semantic_pass": true,
+  "tokens_equal": true,
+  "top_k": 10,
+  "top_k_order_equal": true,
+  "top_k_sets_equal": true
+}

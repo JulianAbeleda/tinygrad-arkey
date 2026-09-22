@@ -1,0 +1,220 @@
+{
+  "commit": "aa8388c1731e6c5db5dbc7641dd878a0227b1493",
+  "correctness": {
+    "bitwise_all": true,
+    "fixtures": [
+      {
+        "finite": true,
+        "fixture": 0,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 1,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "finite": true,
+        "fixture": 2,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      }
+    ]
+  },
+  "lookahead": {
+    "cache_lines_per_next_block": 2,
+    "distance_blocks": 1,
+    "issuer": "word_col zero in each 8-lane block group",
+    "payload_retained": false
+  },
+  "method": "installed residual-fused FP16 O plus register-free next-block two-line L2 hints; cudaEvent hot and 16-copy rotated-cold r9",
+  "ptxas": [
+    "/tmp/nv_q4k_o_lookahead__a714rm2/gate.cu(175): warning #177-D: function \"ck\" was declared but never referenced",
+    "  static void ck(cudaError_t e,const char*w){if(e!=cudaSuccess){fprintf(",
+    "              ^",
+    "",
+    "Remark: The warnings can be suppressed with \"-diag-suppress <warning-number>\"",
+    "",
+    "/tmp/nv_q4k_o_lookahead__a714rm2/gate.cu(175): warning #177-D: function \"ck\" was declared but never referenced",
+    "  static void ck(cudaError_t e,const char*w){if(e!=cudaSuccess){fprintf(",
+    "              ^",
+    "",
+    "Remark: The warnings can be suppressed with \"-diag-suppress <warning-number>\"",
+    "",
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_lookahead_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_lookahead_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 47 registers, used 0 barriers",
+    "ptxas info    : Compile time = 10.588 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.929 ms"
+  ],
+  "sass": {
+    "candidate": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "CCTL.E.PF2": 2,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 4,
+        "IADD.64": 5,
+        "IMAD": 3,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "ISETP.NE.U32.AND": 1,
+        "ISETP.NE.U32.OR": 1,
+        "LDC": 1,
+        "LDC.64": 4,
+        "LDCU.64": 2,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA.HI": 1,
+        "LOP3.LUT": 54,
+        "MOV": 1,
+        "NOP": 9,
+        "S2R": 2,
+        "SHF.R.U32.HI": 49,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    },
+    "control": {
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_q4k_o_l2_lookahead_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rotated_weight_bytes": 150994944,
+    "rows": 4096,
+    "weight_bytes": 9437184
+  },
+  "threshold": {
+    "cold_recovery_us_per_call": 0.15,
+    "scoreboard_must_reduce": true
+  },
+  "timing": {
+    "candidate_cold_rate_tb_s": 0.9632728386240685,
+    "cold_passes": 32,
+    "cold_recovery_us": -0.062000000000001165,
+    "control_cold_rate_tb_s": 0.9694077041602466,
+    "hot_passes": 500,
+    "hot_recovery_us": -0.46086399999999994,
+    "medians": {
+      "cold_candidate": 9.797,
+      "cold_control": 9.735,
+      "hot_candidate": 5.444352,
+      "hot_control": 4.983488
+    },
+    "reps": 9,
+    "samples": {
+      "cold_candidate": [
+        9.766,
+        9.8,
+        9.797,
+        9.643,
+        9.854,
+        9.614,
+        9.996,
+        9.941,
+        9.761
+      ],
+      "cold_control": [
+        9.89,
+        9.717,
+        9.692,
+        9.746,
+        9.557,
+        9.735,
+        9.891,
+        9.848,
+        9.628
+      ],
+      "hot_candidate": [
+        5.43904,
+        5.458048,
+        5.434688,
+        5.439936,
+        5.44,
+        5.456512,
+        5.444352,
+        5.46016,
+        5.460416
+      ],
+      "hot_control": [
+        4.979072,
+        4.973888,
+        4.985152,
+        4.967872,
+        4.983488,
+        4.974016,
+        4.983488,
+        4.991104,
+        4.998464
+      ]
+    },
+    "unit": "us_per_call"
+  },
+  "verdict": "STOP"
+}

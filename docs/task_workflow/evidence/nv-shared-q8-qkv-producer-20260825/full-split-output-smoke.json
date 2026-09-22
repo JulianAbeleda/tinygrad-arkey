@@ -1,0 +1,120 @@
+{
+  "bitwise_identical": true,
+  "cold_passes": 2,
+  "commit": "4a3c4d32cbd4e23e23e9dad3fd1fcd29bb6b9755",
+  "full_recovery_us": {
+    "cold_per_group": 2.064000000000002,
+    "cold_projected_9_groups": 18.576000000000015,
+    "hot_per_group": 1.4416000000000002,
+    "rotated_per_group": 1.4559999999999995,
+    "rotated_projected_9_groups": 13.103999999999996
+  },
+  "hot_passes": 20,
+  "medians_us": {
+    "cold_balanced": 18.448001,
+    "cold_candidate": 23.568,
+    "cold_control": 17.408,
+    "cold_full": 15.344,
+    "hot_balanced": 6.1056,
+    "hot_candidate": 6.4112,
+    "hot_control": 7.7104,
+    "hot_full": 6.2688,
+    "rotated_balanced": 17.616,
+    "rotated_candidate": 17.616,
+    "rotated_control": 13.92,
+    "rotated_full": 12.464
+  },
+  "mismatched_words": {
+    "balanced": 0,
+    "collapsed": 0,
+    "full": 0
+  },
+  "ncu": null,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_full_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 18.778 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_balanced_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 48 bytes smem",
+    "ptxas info    : Compile time = 9.172 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_qkv_direct_4096_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 96 bytes smem",
+    "ptxas info    : Compile time = 15.406 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_pair_direct_1024_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 32 bytes smem",
+    "ptxas info    : Compile time = 6.359 ms",
+    "ptxas info    : Compiling entry function 'q4k_warp_coop_q8_dp4a_direct_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.242 ms"
+  ],
+  "recovery_us": {
+    "balanced_cold_per_group": -1.0400010000000002,
+    "balanced_cold_projected_9_groups": -9.360009000000002,
+    "balanced_hot_per_group": 1.6048,
+    "balanced_rotated_per_group": -3.6959999999999997,
+    "balanced_rotated_projected_9_groups": -33.263999999999996,
+    "cold_per_group": -6.16,
+    "cold_projected_9_groups": -55.44,
+    "hot_per_group": 1.2992,
+    "rotated_per_group": -3.6959999999999997,
+    "rotated_projected_9_groups": -33.263999999999996
+  },
+  "reps": 1,
+  "samples": {
+    "cold_balanced": [
+      18.448001
+    ],
+    "cold_candidate": [
+      23.568
+    ],
+    "cold_control": [
+      17.408
+    ],
+    "cold_full": [
+      15.344
+    ],
+    "hot_balanced": [
+      6.1056
+    ],
+    "hot_candidate": [
+      6.4112
+    ],
+    "hot_control": [
+      7.7104
+    ],
+    "hot_full": [
+      6.2688
+    ],
+    "rotated_balanced": [
+      17.616
+    ],
+    "rotated_candidate": [
+      17.616
+    ],
+    "rotated_control": [
+      13.92
+    ],
+    "rotated_full": [
+      12.464
+    ]
+  },
+  "schema": "tinygrad.q4k_shared_q8_qkv_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "kv_rows": 1024,
+    "q_rows": 4096,
+    "shared_q8_q4q4q4_groups_per_token": 9
+  },
+  "verdict": "ADVANCE_FULL"
+}

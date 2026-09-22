@@ -1,0 +1,544 @@
+{
+  "schema": "tinygrad.nv.vocab.live.v1",
+  "status": "PASS_CORRECTNESS",
+  "qualification": "observed lifecycle; not production promoted",
+  "weight": {
+    "name": "output.weight",
+    "shape": [
+      151936,
+      4096
+    ],
+    "ggml_type": 14
+  },
+  "activation": {
+    "path": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32",
+    "sha256": "b04adfc129794cf0d0c37328ee56d955dcd137137c4c7854bc2963dcbbb20c41",
+    "dtype": "float32"
+  },
+  "correctness": [
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.0926823616027832,
+      "candidate_token": 8503,
+      "llama_token": 8503,
+      "same_token": true
+    },
+    {
+      "finite": true,
+      "allclose": true,
+      "max_abs": 0.06611204147338867,
+      "candidate_token": 8503,
+      "llama_token": 8503,
+      "same_token": true
+    }
+  ],
+  "input_boundary": "FP32 cast to FP16 before provider",
+  "preserve_input_dtype": false,
+  "census": {
+    "candidate": [
+      {
+        "identity": [
+          "E_32_32_4_5a5673a44c51a85d2e73b347238640218966a387a0c3b168f5ef5dc11a3e0798",
+          "fcfe16554c8a96117fdae6a4f3beae2b16f1aca56633aeea0a54608d81c7ef7a",
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "q6k_v_four_warp_fp16_direct_151936_4096",
+          "9a7700f7aad45cce99912ae725c2d4dda637e980db7f2e0b19dccdc9fdbfd6bb",
+          [
+            151936,
+            1,
+            1
+          ],
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          "2734345ad7e2443f9cef9b6d09ea07c00ff10ef6c7a2cb131c1c5ca8fc4534e9",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          "4fb63ed55bd590ab15c01a944dac144551ba28048f8897a469920aa9e94c7d00",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      }
+    ],
+    "llama": [
+      {
+        "identity": [
+          "q8_vocab_fp32",
+          "176cc51e7c1fc50d522a50a51b2efaaf5705726c35a9f907fe1789c23f7e8401",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1
+          ],
+          [
+            0
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "q6k_vocab_hcq",
+          "5aa49d408a15ff652726c2b86e99f9ff323ff2390a5d5d162706e9270a91a4e1",
+          [
+            151936,
+            1,
+            1
+          ],
+          [
+            32,
+            4,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            2
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            151936
+          ],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+          "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            32,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+          "2734345ad7e2443f9cef9b6d09ea07c00ff10ef6c7a2cb131c1c5ca8fc4534e9",
+          [
+            128,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      },
+      {
+        "identity": [
+          "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+          "4fb63ed55bd590ab15c01a944dac144551ba28048f8897a469920aa9e94c7d00",
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            16,
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [],
+          []
+        ],
+        "count": 1
+      }
+    ]
+  },
+  "timing_ms": {
+    "rounds": 31,
+    "samples": {
+      "candidate": [
+        0.505409,
+        0.498396,
+        0.493888,
+        0.499237,
+        0.491392,
+        0.493306,
+        0.494729,
+        0.489048,
+        0.501442,
+        0.49043,
+        0.525406,
+        0.495721,
+        0.496432,
+        0.502463,
+        0.494258,
+        0.491162,
+        0.491273,
+        0.490992,
+        0.49012,
+        0.493026,
+        0.492605,
+        0.488046,
+        0.48979,
+        0.497695,
+        0.491974,
+        0.48963,
+        0.492053,
+        0.48972,
+        0.493607,
+        0.491824,
+        0.491834
+      ],
+      "llama": [
+        0.451878,
+        0.448702,
+        0.448301,
+        0.444935,
+        0.450316,
+        0.446038,
+        0.44717,
+        0.44754,
+        0.450716,
+        0.448512,
+        0.448913,
+        0.449444,
+        0.445386,
+        0.451889,
+        0.44219,
+        0.451358,
+        0.445366,
+        0.440106,
+        0.444595,
+        0.443042,
+        0.443813,
+        0.44211,
+        0.444935,
+        0.438904,
+        0.449414,
+        0.44248,
+        0.439966,
+        0.442591,
+        0.442911,
+        0.443704,
+        0.439605
+      ]
+    },
+    "orders": [
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ]
+    ],
+    "candidate_median": 0.492605,
+    "llama_median": 0.445366,
+    "includes": "producer, intermediate unpack, vocabulary projection and argmax; host snapshots excluded"
+  }
+}

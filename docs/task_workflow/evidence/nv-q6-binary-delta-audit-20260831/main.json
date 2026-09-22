@@ -1,0 +1,340 @@
+{
+  "schema": "tinygrad.nv_q6_binary_delta_audit.main.v1",
+  "date": "2026-08-31",
+  "scope": "Read-only normalized binary/source audit of the admitted trusted-FP16 packed, one-body, combined-publication, all-partials Q6 main against the pinned llama Q6 dense Stream-K main.",
+  "artifacts": {
+    "tinygrad": {
+      "source": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cu",
+      "source_bytes": 177839,
+      "source_sha256": "40cca7e5d0b11d37c7df5843206eaf0a27cbb128dd556f879f7b4f43ace324d3",
+      "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin",
+      "cubin_bytes": 95616,
+      "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+      "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.nvdisasm",
+      "disassembly_sha256": "aa5fcfdd4a40506cec48e38ef678b3474a3a427424d14a555bb308e1af6d5209",
+      "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.sass.json",
+      "sass_json_sha256": "31a89d68c94e2d2262d63e19ac4377c024979f33de286a2dfa9f311e3fed9616"
+    },
+    "llama": {
+      "source_checkout": "/home/ubuntu/env/llama.cpp",
+      "source_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+      "mmq_source": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+      "mmq_source_sha256": "6d153a9d6f293a4ff5f11e7886a48bf765b21d74075d73b2097a2b2a9149de6f",
+      "mma_source": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mma.cuh",
+      "mma_source_sha256": "c7e0f3332da182e203b4b953f9fa8535ffca3767d2b7d4d7dbf7ce486262d1af",
+      "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+      "cubin_bytes": 195720,
+      "cubin_sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca",
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-spill-convergence-20260831/llama/q6k-mmq-dense.sm_120a-04eb9bcb2edef62c.nvdisasm",
+      "disassembly_sha256": "c97e22ee7b3fa81c7322eb52f07111f6c7aef3b7b1391c4f559ccf675e9a4802",
+      "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-spill-convergence-20260831/llama/q6k-mmq-dense.sm_120a-04eb9bcb2edef62c.sass.json",
+      "sass_json_sha256": "e850340efc38e3e04c35943ac870ed9bf46cadbe87c9288b601025b729811a73"
+    }
+  },
+  "launch": {
+    "shape": {"M": 512, "N": 4096, "K": 12288},
+    "tinygrad": {
+      "grid": [170, 1, 1],
+      "block": [256, 1, 1],
+      "linear_threads": 256,
+      "launch_shared_bytes": 58368,
+      "static_shared_bytes": 1024,
+      "source_launch_bounds": 256,
+      "pointer_abi": ["FP32 all-partials workspace", "canonical packed Q6_K as uint16", "canonical/pretransposed Q8_1 D4 as uint32"]
+    },
+    "llama": {
+      "grid": [170, 1, 1],
+      "block": [32, 8, 1],
+      "linear_threads": 256,
+      "logical_shared_bytes": 58880,
+      "static_shared_bytes": 1024,
+      "source_launch_bounds": [256, 1],
+      "pointer_abi": ["canonical packed Q6_K", "canonical/pretransposed Q8_1 D4", "FP32 destination", "FP32 predecessor workspace"]
+    }
+  },
+  "timing_us": {
+    "tinygrad_main_r31_median": 231.232,
+    "llama_main_pinned": 201.216,
+    "delta": 30.016,
+    "tinygrad_slower_percent": 14.917303
+  },
+  "normalization": {
+    "unit": "one logical N128 x M128 x K256 work-unit body",
+    "reason": "The llama cubin statically duplicates direct-destination and partial-workspace bodies; tinygrad has one physical body. Whole-cubin counts are therefore not comparable.",
+    "work_units": 6144,
+    "llama_direct_work_units": 2414,
+    "llama_partial_work_units": 3730,
+    "tinygrad_loop_pc": ["0x0990", "0x13ad0"],
+    "llama_direct_loop_pc": ["0x0d80", "0xeb50"],
+    "llama_partial_loop_pc": ["0x12880", "0x20780"]
+  },
+  "normalized_static_counts": {
+    "tinygrad": {
+      "instructions": 4885,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 109,
+      "LDG_U16_Q6": 73,
+      "LDG_U32_Q8": 36,
+      "STS": 73,
+      "STG_per_segment_terminal": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FFMA": 0,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "IMAD": 14,
+      "IADD": 71,
+      "LEA": 40,
+      "SHF": 58,
+      "LOP3": 200,
+      "PRMT": 72,
+      "LDL": 0,
+      "STL": 0
+    },
+    "llama_direct": {
+      "instructions": 3550,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 105,
+      "LDG_U16_Q6": 69,
+      "LDG_U32_Q8": 36,
+      "STS": 71,
+      "STG_per_segment_terminal": 64,
+      "BAR": 4,
+      "I2FP": 512,
+      "FFMA": 640,
+      "FMUL": 0,
+      "FADD": 0,
+      "IMAD": 1083,
+      "IADD": 123,
+      "LEA": 62,
+      "SHF": 147,
+      "LOP3": 205,
+      "PRMT": 80,
+      "LDL": 0,
+      "STL": 0
+    },
+    "llama_partial": {
+      "instructions": 3569,
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 105,
+      "STS": 71,
+      "STG_per_segment_terminal": 64,
+      "BAR": 4,
+      "I2FP": 512,
+      "FFMA": 640,
+      "IMAD": 1083,
+      "LDL": 13,
+      "STL": 6
+    },
+    "count_scope_note": "The instruction totals and recurring opcodes are for the K256 loop ranges. STG is the separate 64-instruction terminal writeback region executed once per tile segment and is intentionally not multiplied by K256 work units.",
+    "tinygrad_minus_llama_direct": {
+      "instructions": 1335,
+      "instructions_percent": 37.605634,
+      "LDG": 4,
+      "STS": 2,
+      "I2FP": 512,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": -640,
+      "IMAD": -1069
+    },
+    "dynamic_static_instruction_proxy": {
+      "tinygrad": 30013440,
+      "llama_weighted_direct_plus_partial": 21882070,
+      "delta": 8131370,
+      "delta_percent": 37.159967,
+      "warning": "This is static body length multiplied by exact work-unit counts, not a hardware instruction counter and not adjusted for predication or issue width."
+    }
+  },
+  "ordering_and_dependency_spans": {
+    "tinygrad_barrier_pcs": ["0x3060", "0xa930", "0xaab0", "0x109b0"],
+    "llama_direct_barrier_pcs": ["0x3840", "0x8620", "0x8890", "0xeb40"],
+    "q8_panel1": {
+      "tinygrad": {
+        "loads": 18,
+        "stores": 18,
+        "first_load_pc": "0x1e80",
+        "first_store_pc": "0xa990",
+        "first_load_ordinal": 488,
+        "first_store_ordinal": 2713,
+        "load_to_store_span_instructions": 2225,
+        "ordering": "panel-1 LDG is before the first common Q6/Q8 publication barrier"
+      },
+      "llama_direct": {
+        "loads": 18,
+        "stores": 18,
+        "load_pc_range": ["0x80e0", "0x8290"],
+        "first_store_pc": "0x86e0",
+        "first_load_ordinal": 2062,
+        "first_store_ordinal": 2158,
+        "load_to_store_span_instructions": 96,
+        "ordering": "panel-1 LDG is in the tail of half-0, before barrier 2; panel-1 STS follows barrier 2"
+      },
+      "span_ratio_tinygrad_over_llama": 23.177083
+    },
+    "mma": {
+      "tinygrad_first_last_pc": ["0x3460", "0x130d0"],
+      "tinygrad_first_last_span_instructions": 4039,
+      "tinygrad_median_adjacent_ordinal_delta": 11,
+      "tinygrad_max_adjacent_ordinal_delta": 75,
+      "llama_direct_first_last_pc": ["0x3bf0", "0xe4e0"],
+      "llama_direct_first_last_span_instructions": 2703,
+      "llama_direct_median_adjacent_ordinal_delta": 8,
+      "llama_direct_max_adjacent_ordinal_delta": 70,
+      "tinygrad_span_delta": 1336,
+      "tinygrad_span_delta_percent": 49.426563
+    },
+    "ldsm_preload_windows": {
+      "tinygrad_half0": {"pc": ["0x3120", "0x43b0"], "count": 16, "span_instructions": 297},
+      "tinygrad_half1": {"pc": ["0xac60", "0xd6e0"], "count": 16, "span_instructions": 680},
+      "llama_direct_half0": {"pc": ["0x3890", "0x3ce0"], "count": 16, "span_instructions": 69},
+      "llama_direct_half1": {"pc": ["0x8af0", "0x9770"], "count": 16, "span_instructions": 200}
+    }
+  },
+  "scale_fold": {
+    "tinygrad_source_formula": "acc = rn(acc + rn(dB * rn(rn(float(C1) * rounded_fp16_dA_scale1) + rn(float(C0) * rounded_fp16_dA_scale0))))",
+    "tinygrad_per_512_output_pairs": {"I2FP": 1024, "FMUL": 1536, "FADD": 1024},
+    "tinygrad_additional_publication_FMUL": 8,
+    "llama_source_formula": "tmp += (C0 * int_scale0 + C1 * int_scale1) * dB; sum += tmp * dA",
+    "llama_per_body_binary": {"I2FP": 512, "FFMA": 640, "IMAD": 1083},
+    "contract_warning": "The llama integer-scale fold is not a drop-in optimization: it changes the repaired independently FP16-rounded dA*scale contract."
+  },
+  "traffic": {
+    "same": {
+      "Q8_LDG_per_body": 36,
+      "LDS_per_body": 176,
+      "LDSM_per_body": 32,
+      "STG_per_segment": 64,
+      "dense_segment_store_bytes": 65536,
+      "segments": 294,
+      "total_main_segment_store_bytes": 19267584
+    },
+    "different": {
+      "tinygrad_Q6_U16_LDG_per_body": 73,
+      "llama_Q6_U16_LDG_per_body": 69,
+      "tinygrad_STS_per_body": 73,
+      "llama_STS_per_body": 71,
+      "reason": "tinygrad publishes eight packed FP16 rounded dA*scale words; llama publishes four packed int8 scale words",
+      "nominal_issued_input_bytes_per_body": {
+        "tinygrad": 74240,
+        "llama": 72192,
+        "delta": 2048,
+        "delta_percent": 2.836879
+      },
+      "warning": "Nominal payload assumes active lanes and counts scalar instruction width before coalescing/cache effects; it is not measured DRAM traffic."
+    }
+  },
+  "resources": {
+    "tinygrad": {"registers_per_thread": 255, "stack_bytes": 0, "LDL": 0, "STL": 0, "static_shared_bytes": 1024, "launch_shared_bytes": 58368},
+    "llama": {"registers_per_thread": 255, "stack_bytes": 72, "whole_cubin_LDL": 31, "whole_cubin_STL": 29, "direct_loop_LDL": 0, "direct_loop_STL": 0, "partial_loop_LDL": 13, "partial_loop_STL": 6, "static_shared_bytes": 1024, "logical_shared_bytes": 58880},
+    "conclusion": "Register ceiling and occupancy class are matched. Tinygrad is spill-free, so local-memory spill removal cannot explain or close its main gap."
+  },
+  "proven_binary_and_source_facts": [
+    "The compared cubin and source hashes match the admitted and pinned ledgers.",
+    "Both kernels launch 170 CTAs of 256 threads and execute the same exact Stream-K partition over 6144 K256 work units.",
+    "A normalized body has identical 256 IMMA, 32 LDSM, 176 LDS, four barriers, and 64 global stores.",
+    "Tinygrad has 1335 more static instructions per normalized body and a 1336-instruction wider first-to-last IMMA span.",
+    "Tinygrad's 18 panel-1 Q8 loads precede the first barrier and span 2225 instructions to the first store; llama loads the same 18 words near the tail of half-0 and spans 96 instructions.",
+    "Tinygrad is zero-stack and has no LDL/STL; llama retains a 72-byte frame and spill instructions, including 13 LDL and six STL in its partial loop.",
+    "The source formulas prove different scale-fold associations: tinygrad preserves separately rounded FP16 dA*scale values, while llama folds integer dot results by int8 scales before dA."
+  ],
+  "causal_inferences_ranked": [
+    {
+      "rank": 1,
+      "gap": "Scale-fold arithmetic expansion",
+      "evidence": "The repaired tinygrad formula maps to 1024 I2FP + 1544 FMUL + 1024 FADD, while llama maps its different association to 512 I2FP + 640 FFMA plus mostly integer IMAD work. This exchange accounts for nearly the entire normalized body-length delta.",
+      "inference": "This is the strongest static explanation for lower IMMA density and much of the 30.016 us main gap, but counters are absent and copying llama's association would violate the trusted scale contract."
+    },
+    {
+      "rank": 2,
+      "gap": "Q8 panel-1 register lifetime and publication ordering",
+      "evidence": "The same 18 loads/stores span 2225 instructions in tinygrad versus 96 in llama. The prior combined-late arm shortened the span only to 1827 yet measured 226.432 us versus 231.264 us for early-combined.",
+      "inference": "A genuinely late, spill-free panel-1 prefetch can improve latency by reducing long-lived Q8 registers and better overlapping LDG latency; the earlier timing is directional evidence, not proof of the mechanism."
+    },
+    {
+      "rank": 3,
+      "gap": "Dispersed fragment/IMMA schedule",
+      "evidence": "Tinygrad's IMMA span is 49.43% wider, its median adjacent IMMA ordinal delta is 11 versus eight, and its two 16-LDSM windows span 297/680 instructions versus llama's 69/200.",
+      "inference": "This is likely downstream of scale-fold expansion and early Q8 liveness rather than an independent work-count difference."
+    },
+    {
+      "rank": 4,
+      "gap": "Packed trusted-scale publication traffic",
+      "evidence": "Tinygrad adds four Q6 U16 LDG and two STS per body, a nominal 2048 input bytes or 2.84%, because it publishes eight rounded FP16 scale words rather than four packed int8 scale words.",
+      "inference": "This is real but too small to be the primary static gap; cache and coalescing effects are unknown."
+    }
+  ],
+  "ranked_next_main_experiment": {
+    "rank": 1,
+    "name": "true_late_q8_panel1_on_combined_anchor",
+    "objective": "Force the 18 panel-1 Q8 global loads into the tail of half-0 on the admitted combined-publication body without changing arithmetic, ownership, traffic counts, barriers, or the fixup binary.",
+    "pseudocode": [
+      "publish Q6 plus Q8 panel0; barrier",
+      "execute half0 through a declared late preload point",
+      "load exactly 18 Q8 panel1 words into registers",
+      "finish half0; barrier",
+      "store exactly 18 Q8 panel1 words to the shared Q8 window; barrier",
+      "execute half1; barrier",
+      "write the same all-partials slot"
+    ],
+    "freeze": {
+      "main_anchor_cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "fixup_cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+      "shape": [512, 4096, 12288],
+      "ownership": "170 owners, 294 plane-major all-partials slots, ascending deterministic fold",
+      "arithmetic": "trusted_fp16_packed unchanged",
+      "launch": "grid (170,1,1), block 256, launch shared bytes 58368"
+    },
+    "hard_acceptance": {
+      "correctness": [
+        "finite output",
+        "trusted-reference failing_count == 0 at rtol=2e-5 and atol=2e-3 with no max/mean-error regression",
+        "partial workspace uint32-bit exact to anchor",
+        "GPU fixup bit-exact to the frozen CPU recurrence",
+        "final output uint32-bit exact to anchor",
+        "unused scratch slots retain the NaN sentinel"
+      ],
+      "sass": [
+        "exactly 18 classified panel-1 LDG and 18 classified panel-1 STS",
+        "panel-1 first-load-to-first-store span <= 160 instructions",
+        "panel-1 first load occurs after barrier 1 and before barrier 2",
+        "IMMA=256, LDSM=32, LDS=176, LDG=109, STS=73, STG=64, BAR=4",
+        "I2FP=1024, FMUL=1544, FADD=1024, FFMA=0",
+        "no unrelated arithmetic or ownership/control path appears"
+      ],
+      "resources": [
+        "registers <= 255",
+        "stack_bytes == 0",
+        "LDL == 0 and STL == 0",
+        "static shared == 1024 and launch shared == 58368",
+        "instruction_total <= 5144"
+      ],
+      "timing": [
+        "exclusive flock /tmp/nv-q6-oracle-gpu.lock",
+        "balanced same-process paired R31 against admitted early-combined A",
+        "paired main median delta <= -3.0 us and candidate wins >= 24/31",
+        "paired main-plus-fixup total median delta <= -3.0 us and candidate wins >= 24/31",
+        "fixup cubin SHA remains frozen"
+      ],
+      "decision": "Reject on the first failed correctness, structure, binary, resource, or timing gate; otherwise admit as the new main anchor."
+    }
+  },
+  "reproduction_commands": [
+    "git -C /home/ubuntu/env/llama.cpp rev-parse HEAD",
+    "sha256sum /home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh /home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mma.cuh",
+    "sha256sum docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cubin docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/main_all_partials_ascending.cu docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+    "jq '{symbol,cubin,cubin_sha256,instruction_total,resources,families,spill_regions}' docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.sass.json",
+    "jq '{symbol,cubin,cubin_sha256,instruction_total,resources,families,spill_regions}' docs/task_workflow/evidence/nv-q6-spill-convergence-20260831/llama/q6k-mmq-dense.sm_120a-04eb9bcb2edef62c.sass.json",
+    "rg -n '^\\.L_x_|BRA|BAR\\.SYNC' docs/task_workflow/evidence/nv-q6-oracle-reduction-policy-20260831/artifacts/main_all_partials_ascending/sass/main_all_partials_ascending-6eb663b3a3fd628e.nvdisasm",
+    "rg -n 'BRA `\\(\\.L_x_6\\)|BRA `\\(\\.L_x_137\\)|BAR\\.SYNC' docs/task_workflow/evidence/nv-q6-spill-convergence-20260831/llama/q6k-mmq-dense.sm_120a-04eb9bcb2edef62c.nvdisasm",
+    "jq '.signatures.early_combined.q8_panel1' docs/task_workflow/evidence/nv-q6-oracle-publication-gates-20260831/result.json"
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "schema": "tinygrad.nv_priority1_down_kv_ledger.v1",
+  "date": "2026-08-24",
+  "target": {
+    "tok_per_s": 240.0,
+    "ms_per_token": 4.166666666666667
+  },
+  "q4_down_vector": {
+    "verdict": "PROMOTED",
+    "bitwise_exact": true,
+    "cold_ncu": {
+      "scalar_dram_bytes": 28360960,
+      "vector_dram_bytes": 28360448,
+      "scalar_duration_us": 26.112,
+      "vector_duration_us": 21.792,
+      "scalar_instructions": 16179200,
+      "vector_instructions": 14852096,
+      "scalar_dram_pct": 61.66,
+      "vector_dram_pct": 73.85
+    },
+    "production_device_delta_us_per_token": -18.24,
+    "wall_depth512_reps15": {
+      "control_a_ms": 4.69390271875,
+      "candidate_ms": 4.6650448125,
+      "control_c_ms": 4.70129984375,
+      "recovery_us": 32.55646875000018,
+      "verdict": "WALL_PASS"
+    },
+    "wall_depth128_reps9": {
+      "control_a_ms": 6.63514278125,
+      "candidate_ms": 6.61430190625,
+      "control_c_ms": 6.63275465625,
+      "recovery_us": 19.646812500000443,
+      "verdict": "WALL_PASS"
+    },
+    "production_census": {
+      "vector_count": 18,
+      "scalar_count": 0
+    },
+    "rollback_env": "TINYGRAD_Q4K_SCALAR_LOAD=1"
+  },
+  "q6_down_row_packing": {
+    "verdict": "REJECTED_PRODUCTION_REGRESSION",
+    "bitwise_exact_rows_per_block": [2, 4, 8],
+    "host_microgate_best_rows_per_block": 4,
+    "host_microgate_recovery_us_per_launch": 1.5855099999999709,
+    "production_device": {
+      "control_rows_per_block": 1,
+      "candidate_rows_per_block": 4,
+      "control_us_per_token": 552.704,
+      "candidate_us_per_token": 563.36,
+      "delta_us_per_token": 10.656,
+      "node_sum_delta_us": 10.752,
+      "union_delta_us": 10.875
+    },
+    "production_rows_per_block": 1
+  },
+  "shared_q8_q4_direct_output": {
+    "verdict": "PROMOTED",
+    "bitwise_gate": {
+      "all_bitwise_equal": true,
+      "float32_elements_checked": 5120,
+      "mismatched_float32_words": 0,
+      "max_abs_delta": 0.0
+    },
+    "production_device": {
+      "control_us_per_token": 286.336,
+      "candidate_us_per_token": 238.832,
+      "bucket_delta_us_per_token": -47.504,
+      "node_sum_delta_us_per_token": -51.88,
+      "union_delta_us_per_token": -52.312,
+      "completion_nodes_removed": 43
+    },
+    "wall_depth512_reps9": {
+      "control_a_ms": 4.6409066875,
+      "candidate_ms": 4.6148659375,
+      "control_c_ms": 4.618902125,
+      "recovery_us": 15.038468750000256,
+      "verdict": "WALL_PASS"
+    },
+    "wall_depth512_reps15": {
+      "control_a_ms": 4.66272259375,
+      "candidate_ms": 4.6359459375,
+      "control_c_ms": 4.65512809375,
+      "recovery_us": 22.979406250000167,
+      "verdict": "WALL_PASS"
+    },
+    "wall_depth128_reps9": {
+      "control_a_ms": 6.58375421875,
+      "candidate_ms": 6.53446178125,
+      "control_c_ms": 6.6084471875,
+      "recovery_us": 61.63892187499975,
+      "verdict": "WALL_PASS"
+    },
+    "production_census": {
+      "direct_count": 43,
+      "partial_count": 0,
+      "completion_count": 0
+    },
+    "rollback_census": {
+      "direct_count": 0,
+      "partial_count": 43,
+      "completion_count": 43
+    },
+    "rollback_env": "TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT=1"
+  },
+  "installed_current": {
+    "scheduled_nodes": 517,
+    "node_sum_us": 4393.776,
+    "union_us": 4390.75,
+    "overlap_us": 3.026,
+    "pre_priority1_node_sum_us": 4463.36,
+    "pre_priority1_union_us": 4460.875,
+    "pre_priority1_scheduled_nodes": 560,
+    "node_sum_change_us": -69.584,
+    "union_change_us": -70.125,
+    "scheduled_node_change": -43
+  },
+  "current_wall_endpoint": {
+    "ms_per_token": 4.6359459375,
+    "tok_per_s": 215.70570784940264,
+    "remaining_to_240_us": 469.2792708333329
+  },
+  "remaining_llama_delta_us": {
+    "node_sum_total": 515.506,
+    "norm_4096_accounting_caveat": 115.42,
+    "flash_score": 82.24,
+    "kv_projection": 73.12,
+    "flash_combine": 66.69,
+    "vocab": 65.44,
+    "down": 57.91,
+    "gate_up": 53.65,
+    "q_projection": 51.42,
+    "o_projection": 48.86
+  },
+  "next_sequence": [
+    "flash_combine_wider_parallel_reduction",
+    "vocab_tail_wider_or_two_stage_reduction",
+    "causal_production_conditioned_handoff_candidates",
+    "fresh_installed_and_wall_reledger"
+  ],
+  "verdict": "PRIORITY1_PARTIAL_PARITY_TWO_PROMOTIONS_240_NOT_REACHED"
+}

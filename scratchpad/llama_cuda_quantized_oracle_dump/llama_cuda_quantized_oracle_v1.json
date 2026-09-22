@@ -1,0 +1,1293 @@
+{
+  "binary_reuse_candidate": true,
+  "caveats": [
+    "kernels are STB_LOCAL inside the embedded cubin; live launch requires loading the extracted cubin and resolving the local entry name, and src1 must be quantized to block_q8_1 with rows padded to 512"
+  ],
+  "cubin_count": 138,
+  "cubins": [
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.1.sm_120a.cubin",
+      "ordinal": 1
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.2.sm_120a.cubin",
+      "ordinal": 2
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.3.sm_120a.cubin",
+      "ordinal": 3
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.4.sm_120a.cubin",
+      "ordinal": 4
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.5.sm_120a.cubin",
+      "ordinal": 5
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.6.sm_120a.cubin",
+      "ordinal": 6
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.7.sm_120a.cubin",
+      "ordinal": 7
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.8.sm_120a.cubin",
+      "ordinal": 8
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.9.sm_120a.cubin",
+      "ordinal": 9
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.10.sm_120a.cubin",
+      "ordinal": 10
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.11.sm_120a.cubin",
+      "ordinal": 11
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.12.sm_120a.cubin",
+      "ordinal": 12
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.13.sm_120a.cubin",
+      "ordinal": 13
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.14.sm_120a.cubin",
+      "ordinal": 14
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.15.sm_120a.cubin",
+      "ordinal": 15
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.16.sm_120a.cubin",
+      "ordinal": 16
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.17.sm_120a.cubin",
+      "ordinal": 17
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.18.sm_120a.cubin",
+      "ordinal": 18
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.19.sm_120a.cubin",
+      "ordinal": 19
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.20.sm_120a.cubin",
+      "ordinal": 20
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.21.sm_120a.cubin",
+      "ordinal": 21
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.22.sm_120a.cubin",
+      "ordinal": 22
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.23.sm_120a.cubin",
+      "ordinal": 23
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.24.sm_120a.cubin",
+      "ordinal": 24
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.25.sm_120a.cubin",
+      "ordinal": 25
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.26.sm_120a.cubin",
+      "ordinal": 26
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.27.sm_120a.cubin",
+      "ordinal": 27
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.28.sm_120a.cubin",
+      "ordinal": 28
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.29.sm_120a.cubin",
+      "ordinal": 29
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.30.sm_120a.cubin",
+      "ordinal": 30
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.31.sm_120a.cubin",
+      "ordinal": 31
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.32.sm_120a.cubin",
+      "ordinal": 32
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.33.sm_120a.cubin",
+      "ordinal": 33
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.34.sm_120a.cubin",
+      "ordinal": 34
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.35.sm_120a.cubin",
+      "ordinal": 35
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.36.sm_120a.cubin",
+      "ordinal": 36
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.37.sm_120a.cubin",
+      "ordinal": 37
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.38.sm_120a.cubin",
+      "ordinal": 38
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.39.sm_120a.cubin",
+      "ordinal": 39
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.40.sm_120a.cubin",
+      "ordinal": 40
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.41.sm_120a.cubin",
+      "ordinal": 41
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.42.sm_120a.cubin",
+      "ordinal": 42
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.43.sm_120a.cubin",
+      "ordinal": 43
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.44.sm_120a.cubin",
+      "ordinal": 44
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.45.sm_120a.cubin",
+      "ordinal": 45
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.46.sm_120a.cubin",
+      "ordinal": 46
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.47.sm_120a.cubin",
+      "ordinal": 47
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.48.sm_120a.cubin",
+      "ordinal": 48
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.49.sm_120a.cubin",
+      "ordinal": 49
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.50.sm_120a.cubin",
+      "ordinal": 50
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.51.sm_120a.cubin",
+      "ordinal": 51
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.52.sm_120a.cubin",
+      "ordinal": 52
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.53.sm_120a.cubin",
+      "ordinal": 53
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.54.sm_120a.cubin",
+      "ordinal": 54
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.55.sm_120a.cubin",
+      "ordinal": 55
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.56.sm_120a.cubin",
+      "ordinal": 56
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.57.sm_120a.cubin",
+      "ordinal": 57
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.58.sm_120a.cubin",
+      "ordinal": 58
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.59.sm_120a.cubin",
+      "ordinal": 59
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.60.sm_120a.cubin",
+      "ordinal": 60
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.61.sm_120a.cubin",
+      "ordinal": 61
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.62.sm_120a.cubin",
+      "ordinal": 62
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.63.sm_120a.cubin",
+      "ordinal": 63
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.64.sm_120a.cubin",
+      "ordinal": 64
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.65.sm_120a.cubin",
+      "ordinal": 65
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.66.sm_120a.cubin",
+      "ordinal": 66
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.67.sm_120a.cubin",
+      "ordinal": 67
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.68.sm_120a.cubin",
+      "ordinal": 68
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.69.sm_120a.cubin",
+      "ordinal": 69
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.70.sm_120a.cubin",
+      "ordinal": 70
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.71.sm_120a.cubin",
+      "ordinal": 71
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.72.sm_120a.cubin",
+      "ordinal": 72
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.73.sm_120a.cubin",
+      "ordinal": 73
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.74.sm_120a.cubin",
+      "ordinal": 74
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.75.sm_120a.cubin",
+      "ordinal": 75
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.76.sm_120a.cubin",
+      "ordinal": 76
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.77.sm_120a.cubin",
+      "ordinal": 77
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.78.sm_120a.cubin",
+      "ordinal": 78
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.79.sm_120a.cubin",
+      "ordinal": 79
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.80.sm_120a.cubin",
+      "ordinal": 80
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.81.sm_120a.cubin",
+      "ordinal": 81
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.82.sm_120a.cubin",
+      "ordinal": 82
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.83.sm_120a.cubin",
+      "ordinal": 83
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.84.sm_120a.cubin",
+      "ordinal": 84
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.85.sm_120a.cubin",
+      "ordinal": 85
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.86.sm_120a.cubin",
+      "ordinal": 86
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.87.sm_120a.cubin",
+      "ordinal": 87
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.88.sm_120a.cubin",
+      "ordinal": 88
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.89.sm_120a.cubin",
+      "ordinal": 89
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.90.sm_120a.cubin",
+      "ordinal": 90
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.91.sm_120a.cubin",
+      "ordinal": 91
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.92.sm_120a.cubin",
+      "ordinal": 92
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.93.sm_120a.cubin",
+      "ordinal": 93
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.94.sm_120a.cubin",
+      "ordinal": 94
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.95.sm_120a.cubin",
+      "ordinal": 95
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.96.sm_120a.cubin",
+      "ordinal": 96
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.97.sm_120a.cubin",
+      "ordinal": 97
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.98.sm_120a.cubin",
+      "ordinal": 98
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.99.sm_120a.cubin",
+      "ordinal": 99
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.100.sm_120a.cubin",
+      "ordinal": 100
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.101.sm_120a.cubin",
+      "ordinal": 101
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.102.sm_120a.cubin",
+      "ordinal": 102
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.103.sm_120a.cubin",
+      "ordinal": 103
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.104.sm_120a.cubin",
+      "ordinal": 104
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.105.sm_120a.cubin",
+      "ordinal": 105
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.106.sm_120a.cubin",
+      "ordinal": 106
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.107.sm_120a.cubin",
+      "ordinal": 107
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.108.sm_120a.cubin",
+      "ordinal": 108
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.109.sm_120a.cubin",
+      "ordinal": 109
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.110.sm_120a.cubin",
+      "ordinal": 110
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.111.sm_120a.cubin",
+      "ordinal": 111
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.112.sm_120a.cubin",
+      "ordinal": 112
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.113.sm_120a.cubin",
+      "ordinal": 113
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.114.sm_120a.cubin",
+      "ordinal": 114
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.115.sm_120a.cubin",
+      "ordinal": 115
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.116.sm_120a.cubin",
+      "ordinal": 116
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.117.sm_120a.cubin",
+      "ordinal": 117
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.118.sm_120a.cubin",
+      "ordinal": 118
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.119.sm_120a.cubin",
+      "ordinal": 119
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.120.sm_120a.cubin",
+      "ordinal": 120
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.121.sm_120a.cubin",
+      "ordinal": 121
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.122.sm_120a.cubin",
+      "ordinal": 122
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.123.sm_120a.cubin",
+      "ordinal": 123
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.124.sm_120a.cubin",
+      "ordinal": 124
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.125.sm_120a.cubin",
+      "ordinal": 125
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.126.sm_120a.cubin",
+      "ordinal": 126
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.127.sm_120a.cubin",
+      "ordinal": 127
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.128.sm_120a.cubin",
+      "ordinal": 128
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.129.sm_120a.cubin",
+      "ordinal": 129
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.130.sm_120a.cubin",
+      "ordinal": 130
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.131.sm_120a.cubin",
+      "ordinal": 131
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.132.sm_120a.cubin",
+      "ordinal": 132
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.133.sm_120a.cubin",
+      "ordinal": 133
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.134.sm_120a.cubin",
+      "ordinal": 134
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.135.sm_120a.cubin",
+      "ordinal": 135
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.136.sm_120a.cubin",
+      "ordinal": 136
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.137.sm_120a.cubin",
+      "ordinal": 137
+    },
+    {
+      "arch": "120a",
+      "name": "libggml-cuda.so.0.14.138.sm_120a.cubin",
+      "ordinal": 138
+    }
+  ],
+  "cuobjdump": {
+    "path": "/usr/local/cuda-13.2/bin/cuobjdump",
+    "present": true,
+    "version": "cuobjdump: NVIDIA (R) fat binary listing tool"
+  },
+  "dump": {
+    "cubins": [
+      {
+        "expected_symbols": 11,
+        "kind": "Q4_K",
+        "path": "/home/ubuntu/tinygrad-arkey/scratchpad/llama_cuda_quantized_oracle_dump/libggml-cuda.so.0.14.36.sm_120a.cubin",
+        "sha256": "57c0a9caeee467316fc295b9447a61873d5578eb2a5a28b36e58f237e605bd88",
+        "verified": {
+          "found_local": [
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi2ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi3ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi4ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi5ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi6ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi7ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type12ELi8ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj"
+          ],
+          "missing": [],
+          "tool": "nm"
+        }
+      },
+      {
+        "expected_symbols": 11,
+        "kind": "Q6_K",
+        "path": "/home/ubuntu/tinygrad-arkey/scratchpad/llama_cuda_quantized_oracle_dump/libggml-cuda.so.0.14.36.sm_120a.cubin",
+        "sha256": "57c0a9caeee467316fc295b9447a61873d5578eb2a5a28b36e58f237e605bd88",
+        "verified": {
+          "found_local": [
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi2ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi3ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi4ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi5ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi6ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi7ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+            "_Z13mul_mat_vec_qIL9ggml_type14ELi8ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj"
+          ],
+          "missing": [],
+          "tool": "nm"
+        }
+      }
+    ],
+    "report": "/home/ubuntu/tinygrad-arkey/scratchpad/llama_cuda_quantized_oracle_dump/llama_cuda_quantized_oracle_v1.json"
+  },
+  "fusion_args": {
+    "fields": [
+      {
+        "ctype": "void *",
+        "name": "x_bias"
+      },
+      {
+        "ctype": "void *",
+        "name": "gate"
+      },
+      {
+        "ctype": "void *",
+        "name": "gate_bias"
+      },
+      {
+        "ctype": "int32_t",
+        "name": "glu_op"
+      }
+    ],
+    "glu_op_enum": {
+      "GGML_GLU_OP_GEGLU": 1,
+      "GGML_GLU_OP_GEGLU_ERF": 4,
+      "GGML_GLU_OP_GEGLU_QUICK": 5,
+      "GGML_GLU_OP_REGLU": 0,
+      "GGML_GLU_OP_SWIGLU": 2,
+      "GGML_GLU_OP_SWIGLU_OAI": 3
+    },
+    "size_bytes": 32,
+    "struct": "ggml_cuda_mm_fusion_args_device"
+  },
+  "kernels": {
+    "Q4_K": {
+      "abi": {
+        "blck_size": 256,
+        "block_size_bytes": 144,
+        "ggml_type": 12,
+        "nwarps_generic": [
+          {
+            "ncols_dst": 1,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 2,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 3,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 4,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 5,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 6,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 7,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 8,
+            "nwarps": 2
+          }
+        ],
+        "qi": 32,
+        "qk": 256,
+        "qr": 2,
+        "quant_kind": "Q4_K",
+        "rows_per_block_default": 1,
+        "vdr": 2,
+        "vec_dot": "vec_dot_q4_k_q8_1"
+      },
+      "block_layout": {
+        "fields": [
+          {
+            "ctype": "ggml_half",
+            "meaning": "super-block scale for quantized scales",
+            "name": "d",
+            "offset": 0,
+            "size": 2
+          },
+          {
+            "ctype": "ggml_half",
+            "meaning": "super-block scale for quantized mins",
+            "name": "dmin",
+            "offset": 2,
+            "size": 2
+          },
+          {
+            "ctype": "uint8_t[12]",
+            "meaning": "scales and mins, quantized with 6 bits",
+            "name": "scales",
+            "offset": 4,
+            "size": 12
+          },
+          {
+            "ctype": "uint8_t[128]",
+            "meaning": "4-bit quants",
+            "name": "qs",
+            "offset": 16,
+            "size": 128
+          }
+        ],
+        "size_bytes": 144
+      },
+      "canonical_entry": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "cubin": {
+        "arch": "120a",
+        "name": "libggml-cuda.so.0.14.36.sm_120a.cubin",
+        "ordinal": 36
+      },
+      "ggml_type": 12,
+      "kernel_count": 12,
+      "local_kernel_symbols": [
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb0ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi2ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi3ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi4ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi5ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi6ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi7ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type12ELi8ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj"
+      ],
+      "quant_kind": "Q4_K",
+      "template_params": {
+        "has_fusion_variants": [
+          false,
+          true
+        ],
+        "kernel": "mul_mat_vec_q<type, ncols_dst, has_fusion, small_k>",
+        "ncols_dst_variants": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "small_k_variants": [
+          false,
+          true
+        ],
+        "type": "ggml_type12"
+      }
+    },
+    "Q6_K": {
+      "abi": {
+        "blck_size": 256,
+        "block_size_bytes": 210,
+        "ggml_type": 14,
+        "nwarps_generic": [
+          {
+            "ncols_dst": 1,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 2,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 3,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 4,
+            "nwarps": 4
+          },
+          {
+            "ncols_dst": 5,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 6,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 7,
+            "nwarps": 2
+          },
+          {
+            "ncols_dst": 8,
+            "nwarps": 2
+          }
+        ],
+        "qi": 32,
+        "qk": 256,
+        "qr": 2,
+        "quant_kind": "Q6_K",
+        "rows_per_block_default": 1,
+        "vdr": 1,
+        "vec_dot": "vec_dot_q6_k_q8_1"
+      },
+      "block_layout": {
+        "fields": [
+          {
+            "ctype": "uint8_t[128]",
+            "meaning": "quants, lower 4 bits",
+            "name": "ql",
+            "offset": 0,
+            "size": 128
+          },
+          {
+            "ctype": "uint8_t[64]",
+            "meaning": "quants, upper 2 bits",
+            "name": "qh",
+            "offset": 128,
+            "size": 64
+          },
+          {
+            "ctype": "int8_t[16]",
+            "meaning": "scales, quantized with 8 bits",
+            "name": "scales",
+            "offset": 192,
+            "size": 16
+          },
+          {
+            "ctype": "ggml_half",
+            "meaning": "super-block scale",
+            "name": "d",
+            "offset": 208,
+            "size": 2
+          }
+        ],
+        "size_bytes": 210
+      },
+      "canonical_entry": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+      "cubin": {
+        "arch": "120a",
+        "name": "libggml-cuda.so.0.14.36.sm_120a.cubin",
+        "ordinal": 36
+      },
+      "ggml_type": 14,
+      "kernel_count": 12,
+      "local_kernel_symbols": [
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb1EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi2ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi3ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi4ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi5ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi6ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi7ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "_Z13mul_mat_vec_qIL9ggml_type14ELi8ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj"
+      ],
+      "quant_kind": "Q6_K",
+      "template_params": {
+        "has_fusion_variants": [
+          false,
+          true
+        ],
+        "kernel": "mul_mat_vec_q<type, ncols_dst, has_fusion, small_k>",
+        "ncols_dst_variants": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "small_k_variants": [
+          false,
+          true
+        ],
+        "type": "ggml_type14"
+      }
+    }
+  },
+  "launch_wrapper": {
+    "block": "dim3(warp_size, nwarps, 1)",
+    "dynamic_symbol_present": true,
+    "grid": "dim3(ceil(nrows_x / rows_per_block), nchannels_dst, nsamples_dst)",
+    "host_dispatch_symbol": "_Z23ggml_cuda_mul_mat_vec_qR25ggml_backend_cuda_contextPK11ggml_tensorS3_S3_PS1_PK29ggml_cuda_mm_fusion_args_host",
+    "kernel_argument_order": [
+      {
+        "ctype": "const void *",
+        "index": 1,
+        "name": "vx_ptr",
+        "note": "src0 quantized data (block_q4_K/block_q6_K)"
+      },
+      {
+        "ctype": "const void *",
+        "index": 2,
+        "name": "vy_ptr",
+        "note": "src1 quantized to block_q8_1 staging buffer"
+      },
+      {
+        "ctype": "const int32_t *",
+        "index": 3,
+        "name": "ids_ptr",
+        "note": "MUL_MAT_ID row ids, nullptr for MUL_MAT"
+      },
+      {
+        "ctype": "ggml_cuda_mm_fusion_args_device",
+        "index": 4,
+        "name": "fusion",
+        "note": "passed by value (32 bytes)"
+      },
+      {
+        "ctype": "float *",
+        "index": 5,
+        "name": "dst_ptr",
+        "note": "output f32 buffer"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 6,
+        "name": "ncols_x",
+        "note": "src0->ne[0], contracted K in elements"
+      },
+      {
+        "ctype": "uint3",
+        "index": 7,
+        "name": "nchannels_y",
+        "note": "fastdiv table for src1 channel index"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 8,
+        "name": "stride_row_x",
+        "note": "src0 rows per channel (block units)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 9,
+        "name": "stride_col_y",
+        "note": "q8_1 blocks per quantized src1 row"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 10,
+        "name": "stride_col_dst",
+        "note": "dst rows per column in floats"
+      },
+      {
+        "ctype": "uint3",
+        "index": 11,
+        "name": "channel_ratio",
+        "note": "fastdiv(dst ne2 / src0 ne2) as (mp,L,d)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 12,
+        "name": "stride_channel_x",
+        "note": "src0 channels per sample (block units)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 13,
+        "name": "stride_channel_y",
+        "note": "src1 channels per sample (q8_1 blocks)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 14,
+        "name": "stride_channel_dst",
+        "note": "dst channels per sample in floats"
+      },
+      {
+        "ctype": "uint3",
+        "index": 15,
+        "name": "sample_ratio",
+        "note": "fastdiv(dst ne3 / src0 ne3) as (mp,L,d)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 16,
+        "name": "stride_sample_x",
+        "note": "src0 samples stride (block units)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 17,
+        "name": "stride_sample_y",
+        "note": "src1 samples stride (q8_1 blocks)"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 18,
+        "name": "stride_sample_dst",
+        "note": "dst samples stride in floats"
+      },
+      {
+        "ctype": "uint32_t",
+        "index": 19,
+        "name": "ids_stride",
+        "note": "ids row stride, 0 when ids is null"
+      }
+    ],
+    "notes": "vdr from get_vdr_mmvq(type); this tree has no qk_peel template parameter, the equivalent is the small_k flag plus vdr"
+  },
+  "library": "/home/ubuntu/env/llama.cpp/build-cuda/bin/libggml-cuda.so.0.14.0",
+  "library_sha256": "d0f6580892fc5940321a3dfd9af3b3febd13c01102861da9c155ae4cda86ac49",
+  "logical_tensor_mapping": {
+    "case": "MUL_MAT without ids (direct-launch target)",
+    "params": [
+      {
+        "logical": "src0->ne[0]",
+        "note": "contracted K dimension in elements",
+        "param": "ncols_x"
+      },
+      {
+        "logical": "src0->ne[1]",
+        "note": "rows of src0; grid.x = ceil(nrows_x / rows_per_block)",
+        "param": "nrows_x"
+      },
+      {
+        "logical": "src0->nb[1] / ggml_type_size(src0->type)",
+        "note": "src0 row stride in block units",
+        "param": "stride_row_x"
+      },
+      {
+        "logical": "src0->ne[2]",
+        "note": "src0 channel count",
+        "param": "nchannels_x"
+      },
+      {
+        "logical": "src0->nb[2] / ggml_type_size(src0->type)",
+        "note": "src0 channel stride in block units",
+        "param": "stride_channel_x"
+      },
+      {
+        "logical": "src0->ne[3]",
+        "note": "src0 sample count",
+        "param": "nsamples_x"
+      },
+      {
+        "logical": "src0->nb[3] / ggml_type_size(src0->type)",
+        "note": "src0 sample stride in block units",
+        "param": "stride_sample_x"
+      },
+      {
+        "logical": "dst->ne[1]",
+        "note": "dst rows (must be <= MMVQ_MAX_BATCH_SIZE=8)",
+        "param": "ncols_dst"
+      },
+      {
+        "logical": "dst->nb[1] / 4",
+        "note": "dst row stride in floats",
+        "param": "stride_col_dst"
+      },
+      {
+        "logical": "src1->ne[2]",
+        "note": "src1 channel count",
+        "param": "nchannels_y"
+      },
+      {
+        "logical": "GGML_PAD(src1->ne[0], 512) / QK8_1",
+        "note": "q8_1 blocks per quantized src1 row",
+        "param": "stride_col_y"
+      },
+      {
+        "logical": "src1->ne[1] * stride_col_y",
+        "note": "q8_1 blocks per src1 channel",
+        "param": "stride_channel_y"
+      },
+      {
+        "logical": "src1->ne[2] * stride_channel_y",
+        "note": "q8_1 blocks per src1 sample",
+        "param": "stride_sample_y"
+      },
+      {
+        "logical": "dst->ne[3]",
+        "note": "dst sample count",
+        "param": "nsamples_dst"
+      },
+      {
+        "logical": "dst->nb[3] / 4",
+        "note": "dst sample stride in floats",
+        "param": "stride_sample_dst"
+      },
+      {
+        "logical": "fastdiv(dst->ne[2] / src0->ne[2])",
+        "note": "encoded uint3(mp,L,d), zero when ids is set",
+        "param": "channel_ratio"
+      },
+      {
+        "logical": "fastdiv(dst->ne[3] / src0->ne[3])",
+        "note": "encoded uint3(mp,L,d)",
+        "param": "sample_ratio"
+      },
+      {
+        "logical": "ids ? ids->nb[1] / 4 : 0",
+        "note": "zero for plain MUL_MAT",
+        "param": "ids_stride"
+      }
+    ]
+  },
+  "mode": "dump",
+  "reasons": [
+    "Q4_K mul_mat_vec_q kernel group found in embedded cubin libggml-cuda.so.0.14.36.sm_120a.cubin (11 local entries)",
+    "Q6_K mul_mat_vec_q kernel group found in embedded cubin libggml-cuda.so.0.14.36.sm_120a.cubin (11 local entries)",
+    "host dispatcher ggml_cuda_mul_mat_vec_q present in dynamic symbol table",
+    "src1 row quantizer quantize_row_q8_1_cuda present in dynamic symbol table",
+    "ggml_cuda_mm_fusion_args_device layout is 32 bytes on this host"
+  ],
+  "schema": "tinygrad.llama_cuda_quantized_oracle.v1",
+  "sources": [
+    {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu",
+      "role": "primary (ggml-cuda.cu)",
+      "sha256": "fe664f01522c7f1a59a99c13dcdc967922b63f2f83177a681335ba2052f64cb7"
+    },
+    {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmvq.cu",
+      "role": "kernel + launch wrapper",
+      "sha256": "19cec84e1c293c133b8101b142bb497c726023123deaca09b18e8d81b31f35e9"
+    },
+    {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmvq.cuh",
+      "role": "mmvq interface",
+      "sha256": "b37f8359f519ba90ddecd9cb3ca5f8c2ae05685bfae6813d435d75763c2bb006"
+    },
+    {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/vecdotq.cuh",
+      "role": "vec_dot + VDR constants",
+      "sha256": "69ee2488c89da7e6d31a91d2f33f3312d7c66dbcb60b4c42f154bdf775c4436a"
+    },
+    {
+      "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/common.cuh",
+      "role": "fusion args struct",
+      "sha256": "f48608848ddfe23c232359c26a95ad9f584d6b72ae4b23cc906302174de433e6"
+    }
+  ]
+}

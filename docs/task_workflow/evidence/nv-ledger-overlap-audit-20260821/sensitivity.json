@@ -1,0 +1,796 @@
+{
+  "closed_levers": [
+    {
+      "evidence": "current-DAG ideal ceiling below promotion gate before real wait tax",
+      "lever": "more than two compute GPFIFOs",
+      "status": "closed"
+    },
+    {
+      "evidence": "measured +112.9us slower on production wall",
+      "lever": "replay merge (JIT_BATCH_SIZE=1024)",
+      "status": "closed"
+    },
+    {
+      "evidence": "no new overlap beyond landed QMD latch behavior",
+      "lever": "early launch_dependents START placement",
+      "status": "closed"
+    },
+    {
+      "evidence": "measured substantially slower on DEV=NV",
+      "lever": "coarse flash split S=4/S=2",
+      "status": "closed"
+    }
+  ],
+  "critical_path": {
+    "llama_node_count": 762,
+    "llama_us": 4444.689,
+    "note": "duration-weighted longest path on logical dependency edges; llama's serialized CP exceeds its observed span because PDL launch-completion edges let consumers start before producers finish",
+    "tinygrad_node_count": 596,
+    "tinygrad_us": 4252.448
+  },
+  "edge_ceiling_notes": {
+    "llama": "zero-cost edge ceilings are not mechanically meaningful: removing an inferred logical data edge severs the reconstructed llama chain, so the CP delta is a connectivity artifact rather than a buildable change; llama edge rows are retained for structure audit, not ranking",
+    "tinygrad": "edge ceilings are meaningful only for legal edges; the top tinygrad edges are the gate_up->down RAW dependencies (~44-48us)"
+  },
+  "edge_ceilings_top": {
+    "llama": [
+      {
+        "from_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "from_node": 414,
+        "kind": "DATA",
+        "to_name": "_Z12rms_norm_f32ILi1024ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+        "to_node": 415,
+        "zero_cost_cp_ceiling_us": 2220.713
+      },
+      {
+        "from_name": "_Z12rms_norm_f32ILi1024ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+        "from_node": 415,
+        "kind": "DATA",
+        "to_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "to_node": 416,
+        "zero_cost_cp_ceiling_us": 2217.769
+      },
+      {
+        "from_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "from_node": 416,
+        "kind": "DATA",
+        "to_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "to_node": 417,
+        "zero_cost_cp_ceiling_us": 2214.601
+      },
+      {
+        "from_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "from_node": 413,
+        "kind": "DATA",
+        "to_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "to_node": 414,
+        "zero_cost_cp_ceiling_us": 2212.2
+      },
+      {
+        "from_name": "_Z26flash_attn_combine_resultsILi128EEvPKfPK6float2Pfi",
+        "from_node": 412,
+        "kind": "DATA",
+        "to_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "to_node": 413,
+        "zero_cost_cp_ceiling_us": 2206.984
+      },
+      {
+        "from_name": "_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil",
+        "from_node": 411,
+        "kind": "DATA",
+        "to_name": "_Z26flash_attn_combine_resultsILi128EEvPKfPK6float2Pfi",
+        "to_node": 412,
+        "zero_cost_cp_ceiling_us": 2201.736
+      },
+      {
+        "from_name": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "from_node": 398,
+        "kind": "DATA",
+        "to_name": "_Z12rms_norm_f32ILi1024ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+        "to_node": 399,
+        "zero_cost_cp_ceiling_us": 2178.536
+      },
+      {
+        "from_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "from_node": 417,
+        "kind": "DATA",
+        "to_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "to_node": 418,
+        "zero_cost_cp_ceiling_us": 2176.361
+      },
+      {
+        "from_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "from_node": 418,
+        "kind": "DATA",
+        "to_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "to_node": 419,
+        "zero_cost_cp_ceiling_us": 2175.529
+      },
+      {
+        "from_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "from_node": 419,
+        "kind": "DATA",
+        "to_name": "_Z12rms_norm_f32ILi1024ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+        "to_node": 420,
+        "zero_cost_cp_ceiling_us": 2155.945
+      },
+      {
+        "from_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "from_node": 397,
+        "kind": "DATA",
+        "to_name": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "to_node": 398,
+        "zero_cost_cp_ceiling_us": 2148.488
+      },
+      {
+        "from_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "from_node": 396,
+        "kind": "DATA",
+        "to_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "to_node": 397,
+        "zero_cost_cp_ceiling_us": 2147.656
+      },
+      {
+        "from_name": "_Z18flash_attn_ext_vecILi128ELi1EL9ggml_type1ELS0_1ELb0EEvPKcS2_S2_S2_S2_PKiPfP6float2ffffjfi5uint3iiiiiiiiiiiliiliiiiil",
+        "from_node": 432,
+        "kind": "DATA",
+        "to_name": "_Z26flash_attn_combine_resultsILi128EEvPKfPK6float2Pfi",
+        "to_node": 433,
+        "zero_cost_cp_ceiling_us": 2132.552
+      },
+      {
+        "from_name": "_Z26flash_attn_combine_resultsILi128EEvPKfPK6float2Pfi",
+        "from_node": 433,
+        "kind": "DATA",
+        "to_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "to_node": 434,
+        "zero_cost_cp_ceiling_us": 2127.271
+      },
+      {
+        "from_name": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+        "from_node": 434,
+        "kind": "DATA",
+        "to_name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "to_node": 435,
+        "zero_cost_cp_ceiling_us": 2121.99
+      }
+    ],
+    "tinygrad": [
+      {
+        "from_name": "q6k_gen_coop_151936_4096_inkernel",
+        "from_node": 591,
+        "kind": "RAW",
+        "to_name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+        "to_node": 592,
+        "zero_cost_cp_ceiling_us": 56.192
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 19,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 20,
+        "zero_cost_cp_ceiling_us": 48.576
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 482,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 483,
+        "zero_cost_cp_ceiling_us": 47.264
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 229,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 230,
+        "zero_cost_cp_ceiling_us": 46.432
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 36,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 37,
+        "zero_cost_cp_ceiling_us": 45.728
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 106,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 107,
+        "zero_cost_cp_ceiling_us": 44.352
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 497,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 498,
+        "zero_cost_cp_ceiling_us": 44.096
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 141,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 142,
+        "zero_cost_cp_ceiling_us": 44.0
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 452,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 453,
+        "zero_cost_cp_ceiling_us": 43.84
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 392,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 393,
+        "zero_cost_cp_ceiling_us": 43.392
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 176,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 177,
+        "zero_cost_cp_ceiling_us": 43.328
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 194,
+        "kind": "RAW",
+        "to_name": "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 195,
+        "zero_cost_cp_ceiling_us": 43.296
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 557,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 558,
+        "zero_cost_cp_ceiling_us": 43.264
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 332,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 333,
+        "zero_cost_cp_ceiling_us": 43.232
+      },
+      {
+        "from_name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "from_node": 70,
+        "kind": "RAW",
+        "to_name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+        "to_node": 71,
+        "zero_cost_cp_ceiling_us": 43.04
+      }
+    ]
+  },
+  "family_ceilings": {
+    "llama": {
+      "flash_combine": {
+        "cp_mass_us": 189.825,
+        "hidden_behind_anchor_us": 138.401,
+        "node_count": 36,
+        "node_mass_us": 189.825,
+        "union_marginal_ceiling_us": 0.0,
+        "union_us": 189.825,
+        "zero_cost_cp_ceiling_us": 189.825
+      },
+      "flash_score": {
+        "cp_mass_us": 173.537,
+        "hidden_behind_anchor_us": 99.265,
+        "node_count": 36,
+        "node_mass_us": 173.537,
+        "union_marginal_ceiling_us": 9.984,
+        "union_us": 173.537,
+        "zero_cost_cp_ceiling_us": 173.537
+      },
+      "gemv": {
+        "cp_mass_us": 2997.927,
+        "hidden_behind_anchor_us": 2997.927,
+        "node_count": 144,
+        "node_mass_us": 2997.927,
+        "union_marginal_ceiling_us": 2626.853,
+        "union_us": 2997.927,
+        "zero_cost_cp_ceiling_us": 2801.736
+      },
+      "gemv_kv": {
+        "cp_mass_us": 0,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 72,
+        "node_mass_us": 288.316,
+        "union_marginal_ceiling_us": 213.98,
+        "union_us": 288.316,
+        "zero_cost_cp_ceiling_us": 0.0
+      },
+      "kv": {
+        "cp_mass_us": 1.696,
+        "hidden_behind_anchor_us": 0.032,
+        "node_count": 38,
+        "node_mass_us": 78.337,
+        "union_marginal_ceiling_us": 13.216,
+        "union_us": 77.505,
+        "zero_cost_cp_ceiling_us": 1.696
+      },
+      "quant_provider": {
+        "cp_mass_us": 448.994,
+        "hidden_behind_anchor_us": 371.074,
+        "node_count": 217,
+        "node_mass_us": 552.546,
+        "union_marginal_ceiling_us": 28.8,
+        "union_us": 552.546,
+        "zero_cost_cp_ceiling_us": 448.994
+      },
+      "residual": {
+        "cp_mass_us": 1.952,
+        "hidden_behind_anchor_us": 0.672,
+        "node_count": 1,
+        "node_mass_us": 1.952,
+        "union_marginal_ceiling_us": 0.0,
+        "union_us": 1.952,
+        "zero_cost_cp_ceiling_us": 1.952
+      },
+      "rmsnorm": {
+        "cp_mass_us": 263.459,
+        "hidden_behind_anchor_us": 152.833,
+        "node_count": 145,
+        "node_mass_us": 309.603,
+        "union_marginal_ceiling_us": 58.913,
+        "union_us": 309.603,
+        "zero_cost_cp_ceiling_us": 263.459
+      },
+      "rope": {
+        "cp_mass_us": 63.553,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 72,
+        "node_mass_us": 128.034,
+        "union_marginal_ceiling_us": 0.0,
+        "union_us": 128.034,
+        "zero_cost_cp_ceiling_us": 63.553
+      },
+      "vocab": {
+        "cp_mass_us": 303.746,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 1,
+        "node_mass_us": 303.746,
+        "union_marginal_ceiling_us": 301.058,
+        "union_us": 303.746,
+        "zero_cost_cp_ceiling_us": 303.746
+      }
+    },
+    "tinygrad": {
+      "flash_combine": {
+        "cp_mass_us": 105.536,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 36,
+        "node_mass_us": 105.536,
+        "union_marginal_ceiling_us": 105.5,
+        "union_us": 105.5,
+        "zero_cost_cp_ceiling_us": 105.536
+      },
+      "flash_score": {
+        "cp_mass_us": 267.776,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 36,
+        "node_mass_us": 267.776,
+        "union_marginal_ceiling_us": 268.0,
+        "union_us": 268.0,
+        "zero_cost_cp_ceiling_us": 267.776
+      },
+      "gemv": {
+        "cp_mass_us": 2949.44,
+        "hidden_behind_anchor_us": 2947.75,
+        "node_count": 144,
+        "node_mass_us": 2949.44,
+        "union_marginal_ceiling_us": 2947.75,
+        "union_us": 2947.75,
+        "zero_cost_cp_ceiling_us": 2805.792
+      },
+      "gemv_kv": {
+        "cp_mass_us": 0,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 72,
+        "node_mass_us": 298.432,
+        "union_marginal_ceiling_us": 299.0,
+        "union_us": 299.0,
+        "zero_cost_cp_ceiling_us": 0.0
+      },
+      "quant_provider": {
+        "cp_mass_us": 30.88,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 17,
+        "node_mass_us": 30.88,
+        "union_marginal_ceiling_us": 32.0,
+        "union_us": 32.0,
+        "zero_cost_cp_ceiling_us": 30.88
+      },
+      "reduce": {
+        "cp_mass_us": 203.392,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 84,
+        "node_mass_us": 234.304,
+        "union_marginal_ceiling_us": 232.25,
+        "union_us": 234.25,
+        "zero_cost_cp_ceiling_us": 203.392
+      },
+      "residual": {
+        "cp_mass_us": 148.928,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 115,
+        "node_mass_us": 219.168,
+        "union_marginal_ceiling_us": 212.75,
+        "union_us": 214.25,
+        "zero_cost_cp_ceiling_us": 148.928
+      },
+      "rmsnorm": {
+        "cp_mass_us": 232.96,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 91,
+        "node_mass_us": 323.392,
+        "union_marginal_ceiling_us": 319.0,
+        "union_us": 322.5,
+        "zero_cost_cp_ceiling_us": 232.96
+      },
+      "vocab": {
+        "cp_mass_us": 313.536,
+        "hidden_behind_anchor_us": 0.0,
+        "node_count": 1,
+        "node_mass_us": 313.536,
+        "union_marginal_ceiling_us": 313.5,
+        "union_us": 313.5,
+        "zero_cost_cp_ceiling_us": 313.536
+      }
+    }
+  },
+  "node_ceilings_top": {
+    "llama": [
+      {
+        "duration_us": 303.746,
+        "family": "vocab",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 761,
+        "scope": "tail",
+        "zero_cost_cp_ceiling_us": 303.746
+      },
+      {
+        "duration_us": 39.424,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 756,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 39.424
+      },
+      {
+        "duration_us": 38.368,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 354,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.368
+      },
+      {
+        "duration_us": 38.336,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 375,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.336
+      },
+      {
+        "duration_us": 38.24,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 417,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.24
+      },
+      {
+        "duration_us": 38.112,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 480,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.112
+      },
+      {
+        "duration_us": 38.048,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 543,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.048
+      },
+      {
+        "duration_us": 37.984,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 123,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.984
+      },
+      {
+        "duration_us": 37.984,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 438,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.984
+      },
+      {
+        "duration_us": 37.984,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 627,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.984
+      },
+      {
+        "duration_us": 37.952,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 81,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.952
+      },
+      {
+        "duration_us": 37.92,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 102,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.92
+      },
+      {
+        "duration_us": 37.92,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 585,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.92
+      },
+      {
+        "duration_us": 37.889,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 396,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.889
+      },
+      {
+        "duration_us": 37.889,
+        "family": "gemv",
+        "name": "_Z13mul_mat_vec_qIL9ggml_type12ELi1ELb1ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+        "node": 648,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 37.889
+      }
+    ],
+    "tinygrad": [
+      {
+        "duration_us": 313.536,
+        "family": "vocab",
+        "name": "q6k_gen_coop_151936_4096_inkernel",
+        "node": 591,
+        "scope": "tail",
+        "zero_cost_cp_ceiling_us": 313.536
+      },
+      {
+        "duration_us": 43.424,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 19,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 43.424
+      },
+      {
+        "duration_us": 40.928,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 482,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 40.928
+      },
+      {
+        "duration_us": 39.52,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 36,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 39.52
+      },
+      {
+        "duration_us": 39.36,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 229,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 39.36
+      },
+      {
+        "duration_us": 39.296,
+        "family": "reduce",
+        "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+        "node": 593,
+        "scope": "tail",
+        "zero_cost_cp_ceiling_us": 39.296
+      },
+      {
+        "duration_us": 39.104,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 497,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 39.104
+      },
+      {
+        "duration_us": 38.88,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 141,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.88
+      },
+      {
+        "duration_us": 38.848,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 452,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.848
+      },
+      {
+        "duration_us": 38.432,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 106,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.432
+      },
+      {
+        "duration_us": 38.368,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 392,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.368
+      },
+      {
+        "duration_us": 38.336,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 194,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.336
+      },
+      {
+        "duration_us": 38.176,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 557,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.176
+      },
+      {
+        "duration_us": 38.144,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 176,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.144
+      },
+      {
+        "duration_us": 38.048,
+        "family": "gemv",
+        "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+        "node": 587,
+        "scope": "layer",
+        "zero_cost_cp_ceiling_us": 38.048
+      }
+    ]
+  },
+  "promotion_gate_us": 50.0,
+  "provenance": {
+    "llama_dag": {
+      "chosen_span_us": 3898.776,
+      "data_edge_count": 834,
+      "dump_sha256": "a76d7582cd475a8481d0330c90620c0c23baa8e73aca306daf242ae0fd8e28f3",
+      "node_count": 762,
+      "path": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/llama-dag.json",
+      "trace_sha256": "85e96f49b449e3ea0233081e05c07ab1e174ac016f483b420cf130a63023f82c"
+    },
+    "tinygrad_control": {
+      "commit": "6570abc025514273faa100c66b979e531585a1e1",
+      "edge_count": 1230,
+      "node_count": 596,
+      "path": "docs/task_workflow/evidence/nv-ledger-overlap-audit-20260821/tinygrad-capture.json"
+    }
+  },
+  "schema": "tinygrad.nv_inter_anchor_wall_sensitivity.v1",
+  "tinygrad_build_rank": [
+    {
+      "cp_mass_us": 2949.44,
+      "family": "gemv",
+      "hidden_behind_anchor_us": 2947.75,
+      "node_mass_us": 2949.44,
+      "union_marginal_ceiling_us": 2947.75,
+      "zero_cost_cp_ceiling_us": 2805.792
+    },
+    {
+      "cp_mass_us": 232.96,
+      "family": "rmsnorm",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 323.392,
+      "union_marginal_ceiling_us": 319.0,
+      "zero_cost_cp_ceiling_us": 232.96
+    },
+    {
+      "cp_mass_us": 313.536,
+      "family": "vocab",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 313.536,
+      "union_marginal_ceiling_us": 313.5,
+      "zero_cost_cp_ceiling_us": 313.536
+    },
+    {
+      "cp_mass_us": 0,
+      "family": "gemv_kv",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 298.432,
+      "union_marginal_ceiling_us": 299.0,
+      "zero_cost_cp_ceiling_us": 0.0
+    },
+    {
+      "cp_mass_us": 267.776,
+      "family": "flash_score",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 267.776,
+      "union_marginal_ceiling_us": 268.0,
+      "zero_cost_cp_ceiling_us": 267.776
+    },
+    {
+      "cp_mass_us": 203.392,
+      "family": "reduce",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 234.304,
+      "union_marginal_ceiling_us": 232.25,
+      "zero_cost_cp_ceiling_us": 203.392
+    },
+    {
+      "cp_mass_us": 148.928,
+      "family": "residual",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 219.168,
+      "union_marginal_ceiling_us": 212.75,
+      "zero_cost_cp_ceiling_us": 148.928
+    },
+    {
+      "cp_mass_us": 105.536,
+      "family": "flash_combine",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 105.536,
+      "union_marginal_ceiling_us": 105.5,
+      "zero_cost_cp_ceiling_us": 105.536
+    },
+    {
+      "cp_mass_us": 30.88,
+      "family": "quant_provider",
+      "hidden_behind_anchor_us": 0.0,
+      "node_mass_us": 30.88,
+      "union_marginal_ceiling_us": 32.0,
+      "zero_cost_cp_ceiling_us": 30.88
+    }
+  ]
+}

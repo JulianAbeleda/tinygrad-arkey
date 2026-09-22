@@ -1,0 +1,48 @@
+{
+  "conclusion": "F5 wall mechanism fully measured on NV: the fused u64 cross-tile reduce r_16_4_1187 reads its 607KB packed-keys input L2-cold after the 315us vocab GEMV epilogue, paying DRAM latency (84.7-85.7us) instead of the L2-warm 44.0us. A 2.2us warm-up copy of the keys before the reduce restores 44.0us, proving the wall is L2 residency, not kernel body, launch config, or NV-vs-CUDA. This flips the fused tail from +25.8us slower to ~-11us faster than the legacy chain.",
+  "controlled_experiments": {
+    "epi_gemv_chain_copy_warm": {
+      "median_us": 44.0,
+      "mode": "epi GEMV then 2.2us keys.clone() then reduce (like legacy E_1187_32_4)"
+    },
+    "epi_gemv_chain_direct": {
+      "median_us": 84.72,
+      "mode": "epi GEMV writes keys then reduce reads them directly (mimics in-situ)"
+    },
+    "flush_l2_then_reduce": {
+      "median_us": 85.68,
+      "mode": "155 MB unrelated write flushes L2, then reduce over same warm buffer"
+    },
+    "isolated_fresh_alloc": {
+      "median_us": 43.648,
+      "mode": "fresh Tensor.empty keys each replay, no GEMV"
+    },
+    "isolated_warm_keys": {
+      "median_us": 44.128,
+      "mode": "reduce over L2-warm reused keys buffer"
+    }
+  },
+  "git_commit": "dcc59225945b752aab7d737a665bef1e4cdb9fc0",
+  "in_situ_graph_profile": {
+    "ab_delta_us": 25.513,
+    "control_tail_us": 58.56,
+    "fused_tail_us": 84.32,
+    "reduce_r_16_4_1187_us": 83.104
+  },
+  "launch_config": {
+    "global_size": [
+      1,
+      1,
+      1
+    ],
+    "kernel_hash": "77cd82e5",
+    "local_size": [
+      16,
+      1,
+      1
+    ]
+  },
+  "method": "PROFILE=1 HCQ per-kernel GPU timestamps on NV; isolated control experiments on the same kernel",
+  "model": "Qwen3-8B-Q4_K_M",
+  "schema": "tinygrad.nv_vocab_reduce_l2_mechanism.v1"
+}

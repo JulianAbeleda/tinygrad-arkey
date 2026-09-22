@@ -1,0 +1,125 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control",
+      "commit": "e411a292a4a4466bb4d6fdbb66e7c0b415a55224",
+      "count": 32,
+      "depth": 512,
+      "first_tokens": [
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835
+      ],
+      "median_ms_per_token": 4.02746846875,
+      "pair_captured": true,
+      "reps": 7,
+      "samples_ms_per_token": [
+        4.03412653125,
+        4.02444840625,
+        4.0218620625,
+        4.025330875,
+        4.02850253125,
+        4.02746846875,
+        4.03046671875
+      ],
+      "schema": "tinygrad.nv_submit_ahead_wall_audit.child.v1",
+      "submit_ahead_eligible": false,
+      "token_hashes": [
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+      ]
+    },
+    {
+      "arm": "candidate",
+      "commit": "e411a292a4a4466bb4d6fdbb66e7c0b415a55224",
+      "count": 32,
+      "depth": 512,
+      "first_tokens": [
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835
+      ],
+      "median_ms_per_token": 4.0250536875,
+      "pair_captured": true,
+      "reps": 7,
+      "samples_ms_per_token": [
+        4.00012946875,
+        4.0206703125,
+        4.02444684375,
+        4.02859434375,
+        4.0250536875,
+        4.0255033125,
+        4.02820534375
+      ],
+      "schema": "tinygrad.nv_submit_ahead_wall_audit.child.v1",
+      "submit_ahead_eligible": true,
+      "token_hashes": [
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+      ]
+    },
+    {
+      "arm": "control",
+      "commit": "e411a292a4a4466bb4d6fdbb66e7c0b415a55224",
+      "count": 32,
+      "depth": 512,
+      "first_tokens": [
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835,
+        38835
+      ],
+      "median_ms_per_token": 4.02411090625,
+      "pair_captured": true,
+      "reps": 7,
+      "samples_ms_per_token": [
+        4.02734559375,
+        4.018379375,
+        4.02034309375,
+        4.0242633125,
+        4.01660990625,
+        4.02597690625,
+        4.02411090625
+      ],
+      "schema": "tinygrad.nv_submit_ahead_wall_audit.child.v1",
+      "submit_ahead_eligible": false,
+      "token_hashes": [
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+        "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+      ]
+    }
+  ],
+  "candidate_minus_control_a_us": -2.4147812500006083,
+  "candidate_minus_control_b_us": 0.9427812500000243,
+  "candidate_minus_control_bracket_us": -0.7359999999998479,
+  "candidate_ms": 4.0250536875,
+  "control_bracket_median_ms": 4.0257896875,
+  "schema": "tinygrad.nv_submit_ahead_wall_audit.v1"
+}

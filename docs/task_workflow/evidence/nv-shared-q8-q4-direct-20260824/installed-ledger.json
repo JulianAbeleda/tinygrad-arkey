@@ -1,0 +1,237 @@
+{
+  "closure": {
+    "host_gap_us": 1698.166,
+    "identity_union_node_sum_overlap_residual_us": 0.0,
+    "identity_wall_union_host_gap_residual_us": 0.0,
+    "node_sum_us": 4393.776,
+    "overlap_us": 3.026,
+    "remaining_to_240_us": 1922.249,
+    "span_us": 5343.125,
+    "target_240_us": 4166.666667,
+    "tok_per_s": 164.233,
+    "union_us": 4390.75,
+    "wall_us_per_token": 6088.916
+  },
+  "complete_replay_count": 261,
+  "group_size_histogram": {
+    "32": 276,
+    "37": 261,
+    "64": 276,
+    "128": 276,
+    "256": 276,
+    "394": 15
+  },
+  "mode": "analyze",
+  "rows": [
+    {
+      "mean_us_per_replay": 1324.672,
+      "median_us_per_replay": 1324.688,
+      "name": "q4k_g3_lanemap_gemv_w1w3vec16_12288_4096",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 47688.768
+    },
+    {
+      "mean_us_per_replay": 308.619,
+      "median_us_per_replay": 308.624,
+      "name": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 11110.464
+    },
+    {
+      "mean_us_per_replay": 549.934,
+      "median_us_per_replay": 549.936,
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "per_replay_count": 18,
+      "wall_us_per_replay": 9898.848
+    },
+    {
+      "mean_us_per_replay": 243.935,
+      "median_us_per_replay": 240.384,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 8653.824
+    },
+    {
+      "mean_us_per_replay": 363.165,
+      "median_us_per_replay": 363.168,
+      "name": "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd",
+      "per_replay_count": 18,
+      "wall_us_per_replay": 6537.024
+    },
+    {
+      "mean_us_per_replay": 126.74,
+      "median_us_per_replay": 126.72,
+      "name": "r_16_256",
+      "per_replay_count": 37,
+      "wall_us_per_replay": 4688.64
+    },
+    {
+      "mean_us_per_replay": 103.601,
+      "median_us_per_replay": 103.584,
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 3729.024
+    },
+    {
+      "mean_us_per_replay": 116.433,
+      "median_us_per_replay": 116.4,
+      "name": "q4k_g3_lanemap_gemv_vec_1024_4096",
+      "per_replay_count": 28,
+      "wall_us_per_replay": 3259.2
+    },
+    {
+      "mean_us_per_replay": 159.896,
+      "median_us_per_replay": 159.84,
+      "name": "q4k_g3_lanemap_gemv_vec_4096_4096",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 3036.96
+    },
+    {
+      "mean_us_per_replay": 136.761,
+      "median_us_per_replay": 136.72,
+      "name": "reduce_output_rmsnorm_1_4096",
+      "per_replay_count": 19,
+      "wall_us_per_replay": 2597.68
+    },
+    {
+      "mean_us_per_replay": 97.122,
+      "median_us_per_replay": 97.104,
+      "name": "q4k_warp_coop_q8_dp4a_direct_1024_4096",
+      "per_replay_count": 26,
+      "wall_us_per_replay": 2524.704
+    },
+    {
+      "mean_us_per_replay": 69.2,
+      "median_us_per_replay": 69.184,
+      "name": "reduce_output_rmsnorm_rope_8_128",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 2490.624
+    },
+    {
+      "mean_us_per_replay": 69.279,
+      "median_us_per_replay": 69.088,
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 2487.168
+    },
+    {
+      "mean_us_per_replay": 141.734,
+      "median_us_per_replay": 141.744,
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "per_replay_count": 17,
+      "wall_us_per_replay": 2409.648
+    },
+    {
+      "mean_us_per_replay": 54.939,
+      "median_us_per_replay": 54.944,
+      "name": "E_32_32_4",
+      "per_replay_count": 38,
+      "wall_us_per_replay": 2087.872
+    },
+    {
+      "mean_us_per_replay": 42.351,
+      "median_us_per_replay": 42.272,
+      "name": "E_8_8_16_2",
+      "per_replay_count": 36,
+      "wall_us_per_replay": 1521.792
+    },
+    {
+      "mean_us_per_replay": 30.938,
+      "median_us_per_replay": 30.944,
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "per_replay_count": 17,
+      "wall_us_per_replay": 526.048
+    },
+    {
+      "mean_us_per_replay": 45.36,
+      "median_us_per_replay": 45.344,
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "per_replay_count": 10,
+      "wall_us_per_replay": 453.44
+    },
+    {
+      "mean_us_per_replay": 312.738,
+      "median_us_per_replay": 312.48,
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 312.48
+    },
+    {
+      "mean_us_per_replay": 30.146,
+      "median_us_per_replay": 30.112,
+      "name": "q6k_q8_warp_direct_1024_4096",
+      "per_replay_count": 8,
+      "wall_us_per_replay": 240.896
+    },
+    {
+      "mean_us_per_replay": 40.755,
+      "median_us_per_replay": 40.736,
+      "name": "r_32_4_1187",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 40.736
+    },
+    {
+      "mean_us_per_replay": 11.126,
+      "median_us_per_replay": 11.104,
+      "name": "r_128_16_8_1187",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 11.104
+    },
+    {
+      "mean_us_per_replay": 5.163,
+      "median_us_per_replay": 5.12,
+      "name": "E_1187_32_4",
+      "per_replay_count": 2,
+      "wall_us_per_replay": 10.24
+    },
+    {
+      "mean_us_per_replay": 4.592,
+      "median_us_per_replay": 4.576,
+      "name": "r_32_32_4_32_4",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 4.576
+    },
+    {
+      "mean_us_per_replay": 3.009,
+      "median_us_per_replay": 3.072,
+      "name": "E_16_4_2_8_16_2_4_4",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 3.072
+    },
+    {
+      "mean_us_per_replay": 2.055,
+      "median_us_per_replay": 2.112,
+      "name": "E_2",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 2.112
+    },
+    {
+      "mean_us_per_replay": 1.847,
+      "median_us_per_replay": 1.824,
+      "name": "E",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 1.824
+    },
+    {
+      "mean_us_per_replay": 1.267,
+      "median_us_per_replay": 1.248,
+      "name": "r_16_8",
+      "per_replay_count": 1,
+      "wall_us_per_replay": 1.248
+    }
+  ],
+  "samples_ms_per_token": [
+    6.09992271875,
+    6.03736890625,
+    6.0282636875,
+    6.077910125,
+    6.06982365625,
+    6.14687059375,
+    6.1152549375,
+    6.11061465625
+  ],
+  "schema": "tinygrad.nv_phase0_current_ledger.v1",
+  "steady_replay_count": 258,
+  "token_stream_hash": "6fc3f3ab210057b4bd31f3b5033ab643fba0fed01c199712caa98974e3eda353",
+  "warmup": 3
+}

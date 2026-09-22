@@ -1,0 +1,66 @@
+{
+  "authority": {
+    "environment": {
+      "HCQ_NUM_COMPUTE": "2",
+      "HCQ_NV_READY_PLACEMENT": "0",
+      "NV_COMPILER_Q4_IMMA_K_PP512": "1",
+      "NV_COMPILER_Q4_IMMA_PP512": "1",
+      "NV_COMPILER_Q4_IMMA_QO_PP512": "1",
+      "NV_COMPILER_Q4_IMMA_UNROLL": "4",
+      "NV_COMPILER_Q6_IMMA_PP512": "1",
+      "NV_COMPILER_Q6_IMMA_PP512_ROLES": "ffn_down",
+      "NV_Q6DOWN_FORCED_CUT": "residual",
+      "PROFILE": "1",
+      "QK_PRIMITIVE": "1"
+    },
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "order": [
+      "control_0_observer_off",
+      "candidate_1_observer_on",
+      "control_2_observer_off"
+    ]
+  },
+  "correctness": {
+    "status": "PASS",
+    "token": 198
+  },
+  "decision": "STOP: fresh timed R9 contains no allocation, copyin, copyout, graph-copy, or buffer materialization event; lifecycle is not a recurring prefill lever.",
+  "lifecycle": {
+    "buffer_callback_bytes": {
+      "alloc": 0,
+      "copyin": 0,
+      "copyout": 0
+    },
+    "buffer_callback_events": {
+      "alloc": 0,
+      "copyin": 0,
+      "copyout": 0
+    },
+    "graph_copy_bytes": 0,
+    "graph_copy_device_us": 0,
+    "graph_copy_events": 0,
+    "graph_kind_complete": true,
+    "materialization_definition": "timed Buffer alloc plus HCQ Ops.COPY graph entries",
+    "materialization_events": 0,
+    "submission_records": 90,
+    "timed_buffer_samples": [],
+    "timed_graph_entries": 2062,
+    "timed_submission_records": 9
+  },
+  "next_packet": null,
+  "observer": {
+    "ceiling_pct": 2.0,
+    "control_drift_ms": 0.004159999999998831,
+    "medians_ms": {
+      "candidate_1_observer_on": 75.122962,
+      "control_0_observer_off": 74.763606,
+      "control_2_observer_off": 74.767766
+    },
+    "overhead_pct": 0.47786092673584657,
+    "substrate_status": "PASS"
+  },
+  "packet": "D-L0",
+  "schema": "tinygrad.nv_q6down_lifecycle_qualification.v1",
+  "status": "STOP"
+}

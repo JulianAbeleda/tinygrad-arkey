@@ -1,0 +1,240 @@
+{
+  "rows": [
+    {
+      "block": [
+        1,
+        1,
+        1
+      ],
+      "body_b_us": 0.48,
+      "buf_sizes": [
+        4096
+      ],
+      "clean_dispatch_d_us": 0.4934,
+      "clean_hcq_c_us": 0.9734,
+      "cubin_sha256": "fbd86f6dfecbb0e195d8fd09ea8810f6478002df732b8dcfec64e3f721c9ebac",
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 2.656,
+      "production_residual_r_us": 1.6826,
+      "regs_usage": 10,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 1.504,
+      "buf_sizes": [
+        610304,
+        4096,
+        4096
+      ],
+      "clean_dispatch_d_us": 0.4651,
+      "clean_hcq_c_us": 1.9691,
+      "cubin_sha256": "d9ff6b6e3089ad4bf7945fceb9cc0a7d731eaa15e0ffc3448ac3a3e68b3381ca",
+      "grid": [
+        1187,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 3.008,
+      "production_residual_r_us": 1.0389,
+      "regs_usage": 24,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 37.985,
+      "buf_sizes": [
+        512,
+        607744
+      ],
+      "clean_dispatch_d_us": 0.6726,
+      "clean_hcq_c_us": 38.6576,
+      "cubin_sha256": "b44a77ebeab0e95d1ba9573bbb3c9f804aa77f685ae4f37a59296c09a8fa009f",
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 39.296,
+      "production_residual_r_us": 0.6384,
+      "regs_usage": 77,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f"
+    },
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "body_b_us": 10.432,
+      "buf_sizes": [
+        512,
+        607744,
+        512
+      ],
+      "clean_dispatch_d_us": 0.3543,
+      "clean_hcq_c_us": 10.7863,
+      "cubin_sha256": "1ccaf75a7a2d936a67ec74c68aaa2e61e6d3f58e76585e3c8ff1c3c593c35ea4",
+      "grid": [
+        128,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 11.04,
+      "production_residual_r_us": 0.2537,
+      "regs_usage": 76,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 2176,
+      "symbol": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5"
+    },
+    {
+      "block": [
+        1,
+        1,
+        1
+      ],
+      "body_b_us": 0.48,
+      "buf_sizes": [
+        4096,
+        4096
+      ],
+      "clean_dispatch_d_us": 0.4746,
+      "clean_hcq_c_us": 0.9546,
+      "cubin_sha256": "97e7a09c1349c886cba9cb5a38e091cd624b4fa315089a6d9faa02d361a2a8fa",
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 2.944,
+      "production_residual_r_us": 1.9894,
+      "regs_usage": 8,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "body_b_us": 1.664,
+      "buf_sizes": [
+        1048576,
+        4096,
+        350060544
+      ],
+      "clean_dispatch_d_us": 0.4914,
+      "clean_hcq_c_us": 2.1554,
+      "cubin_sha256": "12acf0a3a6307b0c6561171b6c8c8b1bad28b3a7d8a026bf9ee5a05bdb08234c",
+      "grid": [
+        2,
+        4,
+        16
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 7.2,
+      "production_residual_r_us": 5.0446,
+      "regs_usage": 96,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 3.84,
+      "buf_sizes": [
+        16384,
+        1048576
+      ],
+      "clean_dispatch_d_us": 0.4568,
+      "clean_hcq_c_us": 4.2968,
+      "cubin_sha256": "5cfcbeef58d3b648de1fea8a72e1ac77d2ba577ba39bee0e61e571d8bfcccf74",
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 4.384,
+      "production_residual_r_us": 0.0872,
+      "regs_usage": 46,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "body_b_us": 1.216,
+      "buf_sizes": [
+        607744,
+        610304,
+        4096,
+        610304
+      ],
+      "clean_dispatch_d_us": 0.5214,
+      "clean_hcq_c_us": 1.7374,
+      "cubin_sha256": "a1a4ea230289ca45dbd62d6424ec22bbd3c34ee34200ec684f2b2764d8a06c4e",
+      "grid": [
+        1187,
+        1,
+        1
+      ],
+      "identity_residual_us": 0.0,
+      "island_id": "I_TAIL",
+      "production_p_us": 4.928,
+      "production_residual_r_us": 3.1906,
+      "regs_usage": 28,
+      "schema": "tinygrad.nv_installed_island.v1",
+      "semantic_role": "sampler_tail",
+      "shmem_usage": 1024,
+      "symbol": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "tinygrad.nv_decode_native_d512_host_partition.v1",
+  "date": "2026-08-04",
+  "commit": "8f40797e3d2ce41c79ea2a4e3e4a5aa60df8316e",
+  "route": "DEV=NV",
+  "depth": 512,
+  "repetitions_per_arm": 5,
+  "token_all_arms": 330,
+  "raw_payload": {
+    "path": "/tmp/nv_decode_host_partition_v2_20260804.json",
+    "sha256": "e2fcefe16d1044b1ba20a68f2b34d38fad1fab228402508860aa3d466958b438"
+  },
+  "marker_free_normal_median_us": {
+    "wall": 5616.546,
+    "pre_first_graph": 253.819,
+    "graph_call_cpu_sum_overlappable": 210.205,
+    "inter_graph_host_sum_overlappable": 177.725,
+    "last_graph_return_to_item_overlappable": 89.499,
+    "item_including_device_wait": 4867.864,
+    "python_yield_tail": 3.046,
+    "post_next_synchronize": 4.819
+  },
+  "marker_free_pre_item_drain_median_us": {
+    "wall": 5648.916,
+    "pre_first_graph_exposed": 247.557,
+    "graph_call_cpu_sum_overlappable": 202.541,
+    "inter_graph_host_sum_overlappable": 195.740,
+    "last_graph_return_to_item_overlappable": 90.842,
+    "pre_item_device_drain": 4831.324,
+    "item_after_drain_exposed": 83.247,
+    "python_yield_tail_exposed": 3.096,
+    "post_next_synchronize_exposed": 4.358,
+    "disjoint_exposed_sum": 338.458
+  },
+  "canonical_outside_window_us": 321.783933,
+  "reconciliation_us": 16.674067,
+  "reconciliation_fraction": 0.051818,
+  "acceptance_tolerance_us": 50.0,
+  "verdict": "RECONCILED",
+  "interpretation": {
+    "feedback_input_host_copy": "none; settled decode passes the previous output tensor directly as the next device input",
+    "scalar_output_copy": "bounded by item_after_drain_exposed; includes copyout/mapping and Tensor.item",
+    "submission_cpu": "observed but overlapped with the device window; not additive outside time",
+    "drain_perturbation_us": 32.370
+  }
+}

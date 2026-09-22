@@ -1,0 +1,243 @@
+{
+  "capture_seen": {
+    "flash_vec_llama_score_pv_32_128_8_widekv16": 72,
+    "q4k_g3_lanemap_gemv_vec_1024_4096": 20,
+    "q4k_g3_lanemap_gemv_vec_4096_4096": 36,
+    "q6k_v_four_warp_fp16_direct_1024_4096": 20,
+    "reduce_output_rmsnorm_rope_32_128": 72,
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": 72
+  },
+  "capture_tokens_out": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835
+  ],
+  "captured_occurrences": {
+    "flash_vec_llama_score_pv_32_128_8_widekv16": 1,
+    "q4k_g3_lanemap_gemv_vec_1024_4096": 1,
+    "q4k_g3_lanemap_gemv_vec_4096_4096": 1,
+    "q6k_v_four_warp_fp16_direct_1024_4096": 1,
+    "reduce_output_rmsnorm_rope_32_128": 1,
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": 1
+  },
+  "commit": "79b740fd997cf4b7c7ea25942daa6d1f29fa0cbf",
+  "fresh_production_score": {
+    "complete_replays": 5,
+    "median_us": 6.157778,
+    "per_replay_mean_us": [
+      6.176,
+      6.139556
+    ],
+    "steady_replays": 2,
+    "target_counts": [
+      36,
+      36
+    ]
+  },
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "48"
+  },
+  "method": "exact installed live programs/buffers; native NV HCQ; untimed hot score before every sample; only final score timestamped",
+  "n_per_arm": 3,
+  "production_profile_jsonl": "docs/task_workflow/evidence/nv-flash-wide-conditioning/l2-streaming-whole-dense-profile-r1.json.profile.jsonl",
+  "reconciliation": {
+    "cold_qkv_prefix_minus_hot_us": {
+      "stream_read_128mib_qkv_prefix": 1.216,
+      "stream_read_64mib_qkv_prefix": 0.0,
+      "stream_read_96mib_qkv_prefix": 1.024
+    },
+    "completions_minus_hot_us": -0.032,
+    "fresh_production_score_us": 6.157778,
+    "hot_midpoint_us": 4.544,
+    "nearest_stream_arm": "stream_read_96mib",
+    "nearest_stream_minus_production_us": -0.334,
+    "nearest_stream_us": 5.824,
+    "production_minus_hot_us": 1.614,
+    "qkv_prefix_minus_hot_us": 0.032,
+    "qkv_prefix_share_of_production_residual": 0.02,
+    "retained_production_score_us": 6.184889,
+    "stream_read_minus_hot_us": {
+      "stream_read_128mib": 1.152,
+      "stream_read_16mib": 0.0,
+      "stream_read_32mib": -0.032,
+      "stream_read_64mib": -0.064,
+      "stream_read_96mib": 1.28
+    }
+  },
+  "rows": {
+    "completions": {
+      "max_us": 4.512,
+      "mean_us": 4.512,
+      "median_us": 4.512,
+      "min_us": 4.512,
+      "samples_us": [
+        4.512,
+        4.512,
+        4.512
+      ]
+    },
+    "hot_a": {
+      "max_us": 4.576,
+      "mean_us": 4.555,
+      "median_us": 4.544,
+      "min_us": 4.544,
+      "samples_us": [
+        4.544,
+        4.544,
+        4.576
+      ]
+    },
+    "hot_c": {
+      "max_us": 4.608,
+      "mean_us": 4.565,
+      "median_us": 4.544,
+      "min_us": 4.544,
+      "samples_us": [
+        4.544,
+        4.608,
+        4.544
+      ]
+    },
+    "qkv_prefix": {
+      "max_us": 4.608,
+      "mean_us": 4.565,
+      "median_us": 4.576,
+      "min_us": 4.512,
+      "samples_us": [
+        4.576,
+        4.608,
+        4.512
+      ]
+    },
+    "stream_read_128mib": {
+      "max_us": 5.984,
+      "mean_us": 5.771,
+      "median_us": 5.696,
+      "min_us": 5.632,
+      "samples_us": [
+        5.632,
+        5.696,
+        5.984
+      ]
+    },
+    "stream_read_128mib_qkv_prefix": {
+      "max_us": 5.792,
+      "mean_us": 5.76,
+      "median_us": 5.76,
+      "min_us": 5.728,
+      "samples_us": [
+        5.76,
+        5.792,
+        5.728
+      ]
+    },
+    "stream_read_16mib": {
+      "max_us": 4.576,
+      "mean_us": 4.544,
+      "median_us": 4.544,
+      "min_us": 4.512,
+      "samples_us": [
+        4.544,
+        4.576,
+        4.512
+      ]
+    },
+    "stream_read_32mib": {
+      "max_us": 4.576,
+      "mean_us": 4.533,
+      "median_us": 4.512,
+      "min_us": 4.512,
+      "samples_us": [
+        4.512,
+        4.576,
+        4.512
+      ]
+    },
+    "stream_read_64mib": {
+      "max_us": 4.544,
+      "mean_us": 4.501,
+      "median_us": 4.48,
+      "min_us": 4.48,
+      "samples_us": [
+        4.48,
+        4.544,
+        4.48
+      ]
+    },
+    "stream_read_64mib_qkv_prefix": {
+      "max_us": 4.64,
+      "mean_us": 4.555,
+      "median_us": 4.544,
+      "min_us": 4.48,
+      "samples_us": [
+        4.544,
+        4.64,
+        4.48
+      ]
+    },
+    "stream_read_96mib": {
+      "max_us": 5.952,
+      "mean_us": 5.845,
+      "median_us": 5.824,
+      "min_us": 5.76,
+      "samples_us": [
+        5.952,
+        5.824,
+        5.76
+      ]
+    },
+    "stream_read_96mib_qkv_prefix": {
+      "max_us": 5.568,
+      "mean_us": 5.568,
+      "median_us": 5.568,
+      "min_us": 5.568,
+      "samples_us": [
+        5.568,
+        5.568,
+        5.568
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_wide_conditioning_probe.v1",
+  "shape": {
+    "capture_tokens": 8,
+    "depth": 512,
+    "max_context": 1024
+  },
+  "stream_read_mib": [
+    16,
+    32,
+    64,
+    96,
+    128
+  ],
+  "target": "flash_vec_llama_score_pv_32_128_8_widekv16",
+  "target_buf_sizes": [
+    135168,
+    16384,
+    4194304
+  ],
+  "target_global_size": [
+    8,
+    32,
+    1
+  ],
+  "target_local_size": [
+    32,
+    4,
+    1
+  ],
+  "target_vals": [
+    512
+  ]
+}

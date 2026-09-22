@@ -1,0 +1,15 @@
+{
+  "calls": [],
+  "census": {
+    "observed": 0,
+    "predicted": 36
+  },
+  "decision": "STOP: call 0: finalized graph has no graph-owned binding",
+  "exact_population": 36,
+  "full_t512_relaunch": false,
+  "packet": "F1.1",
+  "program": "nv_sm120_q16_grid_hd128_loop_attention",
+  "schema": "tinygrad.nv_prefill_flash_f1_live_capture.v1",
+  "source_graph": "docs/task_workflow/evidence/nv-prefill-flash-f1-population/live-abi.json",
+  "status": "STOP"
+}

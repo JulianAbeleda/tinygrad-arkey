@@ -49,5 +49,12 @@ def test_active_source_has_no_legacy_tensor_callers():
       if any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and
              node.func.attr == "custom_kernel" for node in ast.walk(tree)):
         callers.append(str(path.relative_to(root)))
-  assert sorted(callers) == ["tinygrad/nn/__init__.py", "tinygrad/tensor.py"], (
+  assert sorted(callers) == [
+    "test/unit/test_custom_kernel_shaped_param_fold.py",
+    "test/unit/test_rangeify_nested_precompile_body.py",
+    "test/unit/test_rangeify_war_after_dependency.py",
+    "tinygrad/nn/__init__.py",
+    "tinygrad/schedule/rangeify.py",
+    "tinygrad/tensor.py",
+  ], (
     "custom_kernel call syntax is reserved for direct internal UOp substrate callers")

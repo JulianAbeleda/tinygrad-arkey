@@ -1,0 +1,50 @@
+{
+  "schema": "tinygrad.nv_support_edge_trace.v1",
+  "date": "2026-08-19",
+  "branch": "nvidia-bringup-20260731",
+  "head": "d14e6964e",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "method": "tinygrad critical path = weighted longest path over /tmp/pipeline_serial_graph.jsonl lines 70-74 (596 nodes, 5 JIT groups). llama = one steady replay (762 kernels, 3902.7 us span) of CUPTI graph 6 in /tmp/llama_d512_20260817b.sqlite.",
+  "llama_kernel_symbols_only": [
+    "mul_mat_vec_q",
+    "quantize_q8_1",
+    "rms_norm_f32",
+    "rope_neox",
+    "k_set_rows",
+    "flash_attn_ext_vec",
+    "flash_attn_combine_results",
+    "k_get_rows_float",
+    "k_bin_bcast"
+  ],
+  "llama_fusion_fact": "llama has NO separate elementwise add, reduce, scatter, or glu kernels. The logical DOT x*y / x+y / glu nodes are fused into mul_mat_vec_q epilogues or rms_norm_f32. This is the structural source of llama's short exposed-support time.",
+  "llama_measured": {
+    "span_us": 3902.7,
+    "mmq_node_sum_us": 3592.1,
+    "exposed_non_mmq_us": 310.6,
+    "support_node_sum_us": 1426.7,
+    "support_hidden_behind_mmq_us": 1116.1,
+    "per_layer_cycle_us": 104.0,
+    "per_layer_mmq_us": 99.8,
+    "per_layer_exposed_support_us": 8.6
+  },
+  "tinygrad_measured": {
+    "critical_path_us": 4187.008,
+    "gemv_on_path_us": 3259.072,
+    "support_on_path_us": 927.936
+  },
+  "support_ledger_on_critical_path": {
+    "flash_us": 314.272,
+    "reduce_output_us": 235.296,
+    "rmsnorm_us": 154.656,
+    "residual_us": 135.488,
+    "scatter_vocab_us": 55.648,
+    "q8_provider_us": 32.576,
+    "note": "reduce_output, residual, and scatter_vocab have no llama critical-path equivalent: llama fuses them into rms_norm_f32 and mul_mat_vec_q epilogues (or does the token scatter outside the CUDA graph)."
+  },
+  "proven_vs_inferred": {
+    "proven": "tinygrad carries 927.9 us of non-gemv support on its critical path; llama exposes only 310.6 us of non-mmq work. The delta of 617 us is concentrated in reduce_output (235), residual (135), scatter (56), and extra flash exposure (llama flash is 2 overlapped kernels with ~127 us exposed vs tinygrad's 314 us serialized).",
+    "inferred": "Fusing tinygrad's reduce_output into the rms norm and the residual add into the gemv epilogue would remove ~370 us of separate kernels from every source-to-sink path. This is a structural guarantee (the chain gets no longer and loses those kernel boundaries), but the exact wall delta is a bounded measurement (launch/readback floor to ~426 us ceiling) and has not been A/B-tested yet."
+  },
+  "next_action": "Implement the two epilogue fusions (norm-reduce into rmsnorm; residual add into the O-gemv epilogue) plus the vocab-scatter fusion, then run the same-session flocked token-sha A/B against the 210.97 tok/s landed control."
+}

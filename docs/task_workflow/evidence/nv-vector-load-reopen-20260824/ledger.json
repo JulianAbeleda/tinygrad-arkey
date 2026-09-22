@@ -1,0 +1,104 @@
+{
+  "schema": "tinygrad.nv_vector_load_reopen_ledger.v1",
+  "date": "2026-08-24",
+  "target": {
+    "tok_per_s": 240.0,
+    "ms_per_token": 4.166666666666667
+  },
+  "root_cause": {
+    "broken_vector_schedule_invocations": 597,
+    "fixed_vector_schedule_invocations": 560,
+    "broken_e_32_32_4_invocations": 75,
+    "fixed_e_32_32_4_invocations": 38,
+    "extra_fp32_4096_copies": 37,
+    "broken_copy_row_us": 96.384,
+    "scalar_control_midpoint_copy_row_us": 55.024,
+    "hidden_copy_cost_us": 41.36,
+    "fixed_profile_node_sum_recovery_us": 47.616,
+    "fixed_profile_union_recovery_us": 48.375
+  },
+  "cold_ncu": {
+    "method": "production CUDA rendering, nvcc sm_120a, Nsight Compute --cache-control all",
+    "rows4096_k4096": {
+      "scalar_dram_bytes": 9453312,
+      "vector_dram_bytes": 9452800,
+      "scalar_duration_ns": 11168,
+      "vector_duration_ns": 9184,
+      "scalar_dram_pct": 48.22,
+      "vector_dram_pct": 58.66,
+      "scalar_instructions": 5238784,
+      "vector_instructions": 4784128
+    },
+    "rows1024_k4096": {
+      "scalar_dram_bytes": 2375424,
+      "vector_dram_bytes": 2375168,
+      "scalar_duration_ns": 5632,
+      "vector_duration_ns": 4640,
+      "scalar_dram_pct": 24.02,
+      "vector_dram_pct": 29.35,
+      "scalar_instructions": 1309696,
+      "vector_instructions": 1196032
+    }
+  },
+  "wall": {
+    "depth512_run_a": {
+      "control_a_ms": 4.72836484375,
+      "candidate_ms": 4.63458671875,
+      "control_c_ms": 4.71752528125,
+      "control_midpoint_ms": 4.7229450625,
+      "recovery_us": 88.3583437500004,
+      "verdict": "WALL_PASS"
+    },
+    "depth512_run_b": {
+      "control_a_ms": 4.73503228125,
+      "candidate_ms": 4.6589101875,
+      "control_c_ms": 4.7159100625,
+      "control_midpoint_ms": 4.725471171875,
+      "recovery_us": 66.56098437500013,
+      "verdict": "WALL_PASS"
+    },
+    "depth128": {
+      "control_a_ms": 6.663164375,
+      "candidate_ms": 6.59407175,
+      "control_c_ms": 6.6741735,
+      "control_midpoint_ms": 6.6686689375,
+      "recovery_us": 74.59718749999934,
+      "verdict": "WALL_PASS"
+    },
+    "gateup_depth512_reps9": {
+      "control_a_ms": 4.729900125,
+      "candidate_ms": 4.71422915625,
+      "control_c_ms": 4.7531320625,
+      "control_midpoint_ms": 4.7415160937500005,
+      "recovery_us": 27.28693750000044,
+      "verdict": "WALL_PASS"
+    },
+    "token_stream_hash": "28b0923439dde9076100800bfaed6a9a8a7e00e396691776a16514a609e0543a",
+    "all_brackets_bit_exact": true,
+    "conservative_current_ms": 4.6589101875,
+    "conservative_current_tok_per_s": 214.64247211354942,
+    "conservative_remaining_to_240_us": 492.2435208333331
+  },
+  "installed_default": {
+    "single_projection_vector_count": 83,
+    "single_projection_scalar_count": 0,
+    "gateup_vector_count": 36,
+    "schedule_invocations": 560,
+    "e_32_32_4_invocations": 38,
+    "profile_node_sum_us": 4463.36,
+    "profile_union_us": 4460.875,
+    "profile_overlap_us": 2.485
+  },
+  "remaining_llama_delta_us": {
+    "gemv_total": 359.967,
+    "kv_projection_completion": 104.127,
+    "down": 82.999,
+    "q_projection_completion": 71.452,
+    "gateup": 52.238,
+    "o_projection": 49.151,
+    "flash_score_combine": 140.187,
+    "vocab": 65.372,
+    "node_sum_total": 585.17
+  },
+  "verdict": "PROMOTED_VECTOR_LOADS_240_NOT_REACHED"
+}

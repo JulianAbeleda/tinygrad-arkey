@@ -1,0 +1,57 @@
+{
+  "contract": {
+    "candidate": "Q8 provider + four-warp Q6_K/Q8_1 packed-word-warp-provider output",
+    "control": "installed Q6_K FP16 in-kernel reduction",
+    "production_route_changed": false,
+    "quality_credit": false
+  },
+  "correctness": {
+    "nonzero_primitive_authority": "q6k_q8_warp_direct_microgate",
+    "zero_input_exact": true
+  },
+  "git_commit": "4597201c13c32684ef6e32fabb930b8634a96add",
+  "schema": "tinygrad.nv_q6k_vocab_q8_fullshape_gate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 151936,
+    "weight_bytes": 510504960
+  },
+  "timing": {
+    "candidate_b": [
+      333.85075,
+      334.1231875,
+      333.50075,
+      334.2553125,
+      334.1431875
+    ],
+    "candidate_median_us": 334.1231875,
+    "control_a": [
+      323.535125,
+      323.0035,
+      323.1713125,
+      322.4574375,
+      323.3153125
+    ],
+    "control_c": [
+      325.488125,
+      324.250875,
+      325.2765625,
+      323.7198125,
+      322.9853125
+    ],
+    "control_midpoint_median_us": 323.6271875,
+    "delta_us": 10.495999999999981,
+    "gate": "STOP",
+    "paired_candidate_minus_control": [
+      9.339125000000024,
+      10.495999999999981,
+      9.276812499999949,
+      11.166687500000023,
+      10.99287499999997
+    ],
+    "replays": 16,
+    "reps": 5
+  },
+  "variant": "packed-word-warp-provider",
+  "verdict": "NO_GO_FULLSHAPE"
+}

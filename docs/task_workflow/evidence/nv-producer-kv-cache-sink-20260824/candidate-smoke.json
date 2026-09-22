@@ -1,0 +1,270 @@
+{
+  "admitted_blocks": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "arm": "candidate",
+  "complete_replay_count": 13,
+  "count": 8,
+  "depth": 32,
+  "generic_store_names": [
+    "E_8_8_16_2"
+  ],
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2782",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "106.18",
+    "temperature.gpu": "48"
+  },
+  "group_size_histogram": {
+    "32": 13,
+    "64": 13,
+    "128": 13,
+    "144": 13,
+    "256": 13
+  },
+  "ledger": {
+    "node_count": 624.0,
+    "node_sum_us": 4556.576,
+    "overlap_us": 4.434,
+    "span_us": 5867.625,
+    "union_us": 4554.5
+  },
+  "max_context": 1024,
+  "mode": "profile-child",
+  "per_name_table": {
+    "E": {
+      "mean_us": 3.114,
+      "median_us": 3.136,
+      "per_replay_count": 2.0,
+      "replay_samples": 10
+    },
+    "E_1187_32_4": {
+      "mean_us": 4.899,
+      "median_us": 4.896,
+      "per_replay_count": 2.0,
+      "replay_samples": 10
+    },
+    "E_16_4_2_8_16_2_4_4": {
+      "mean_us": 3.322,
+      "median_us": 3.136,
+      "per_replay_count": 1.0,
+      "replay_samples": 10
+    },
+    "E_2": {
+      "mean_us": 1.99,
+      "median_us": 1.952,
+      "per_replay_count": 1.0,
+      "replay_samples": 10
+    },
+    "E_28start_pos2B129_8_4": {
+      "mean_us": 46.694,
+      "median_us": 46.72,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "E_32_32_4": {
+      "mean_us": 55.011,
+      "median_us": 54.944,
+      "per_replay_count": 38.0,
+      "replay_samples": 10
+    },
+    "E_8_8_16_2": {
+      "mean_us": 41.882,
+      "median_us": 41.84,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "native_finite_fp32_argmax_151936_t1024": {
+      "mean_us": 8.88,
+      "median_us": 8.88,
+      "per_replay_count": 1.0,
+      "replay_samples": 10
+    },
+    "q4k_fp16_mmvq_direct_vec_4096_12288_epi_ffnresadd": {
+      "mean_us": 358.336,
+      "median_us": 358.32,
+      "per_replay_count": 18.0,
+      "replay_samples": 10
+    },
+    "q4k_g3_lanemap_gemv_vec_1024_4096": {
+      "mean_us": 117.501,
+      "median_us": 117.36,
+      "per_replay_count": 28.0,
+      "replay_samples": 10
+    },
+    "q4k_g3_lanemap_gemv_vec_4096_4096": {
+      "mean_us": 160.358,
+      "median_us": 160.448,
+      "per_replay_count": 19.0,
+      "replay_samples": 10
+    },
+    "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096": {
+      "mean_us": 307.014,
+      "median_us": 306.912,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "q4k_g3_lanemap_gemv_w1w3vec16_12288_4096": {
+      "mean_us": 1327.811,
+      "median_us": 1328.4,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "q4k_warp_coop_q8_dp4a_direct_1024_4096": {
+      "mean_us": 96.304,
+      "median_us": 96.4,
+      "per_replay_count": 26.0,
+      "replay_samples": 10
+    },
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096": {
+      "mean_us": 140.8,
+      "median_us": 140.864,
+      "per_replay_count": 17.0,
+      "replay_samples": 10
+    },
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": {
+      "mean_us": 545.053,
+      "median_us": 544.784,
+      "per_replay_count": 18.0,
+      "replay_samples": 10
+    },
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "mean_us": 313.366,
+      "median_us": 312.832,
+      "per_replay_count": 1.0,
+      "replay_samples": 10
+    },
+    "q6k_q8_warp_direct_1024_4096": {
+      "mean_us": 30.41,
+      "median_us": 30.32,
+      "per_replay_count": 8.0,
+      "replay_samples": 10
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "mean_us": 46.192,
+      "median_us": 46.208,
+      "per_replay_count": 10.0,
+      "replay_samples": 10
+    },
+    "r_16_256": {
+      "mean_us": 126.355,
+      "median_us": 126.352,
+      "per_replay_count": 37.0,
+      "replay_samples": 10
+    },
+    "r_32_28start_pos2B129_16_8": {
+      "mean_us": 87.99,
+      "median_us": 88.08,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "r_32_32_4_32_4": {
+      "mean_us": 4.566,
+      "median_us": 4.576,
+      "per_replay_count": 1.0,
+      "replay_samples": 10
+    },
+    "r_4_2_8_16_4_28start_pos2B129": {
+      "mean_us": 196.81,
+      "median_us": 198.032,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "r_8_4_28start_pos2B129": {
+      "mean_us": 220.461,
+      "median_us": 224.208,
+      "per_replay_count": 72.0,
+      "replay_samples": 10
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "mean_us": 136.877,
+      "median_us": 136.912,
+      "per_replay_count": 19.0,
+      "replay_samples": 10
+    },
+    "reduce_output_rmsnorm_rope_32_128": {
+      "mean_us": 71.392,
+      "median_us": 71.28,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "reduce_output_rmsnorm_rope_8_128": {
+      "mean_us": 67.91,
+      "median_us": 67.968,
+      "per_replay_count": 36.0,
+      "replay_samples": 10
+    },
+    "rmsnorm_q8_1_llama_provider_4096": {
+      "mean_us": 30.794,
+      "median_us": 30.784,
+      "per_replay_count": 17.0,
+      "replay_samples": 10
+    }
+  },
+  "producer_names": [],
+  "reps": 1,
+  "schema": "tinygrad.nv_producer_kv_cache_sink_qualification.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      6.598358875
+    ],
+    "external_contention_high_limit_ms": 6.848358875,
+    "median_ms_per_token": 6.598358875,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      6.598358875
+    ],
+    "timed_token_count": 8,
+    "token_hashes": [
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881"
+    ],
+    "token_stream_hash": "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 10
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "tinygrad.nv.rmsnorm_scale_gateup_one_layer_wall.v1",
+  "verdict": "WALL_NO_GO",
+  "scope": {
+    "target": "NV sm_120",
+    "shape": {"ffn_rows": 12288, "hidden_dim": 4096},
+    "lease": "explicit block 0 only; normal model loads remain closed",
+    "timing": {"depth": 512, "count": 16, "reps": 5, "timed_tokens": 80, "composed": true}
+  },
+  "semantics": {
+    "count4_tokens_exact": true,
+    "argmax_exact": true,
+    "top10_exact": true,
+    "relative_l2": 0.000507516,
+    "relative_l2_limit": 0.001
+  },
+  "isolated_microgate": {
+    "control_midpoint_us": 93.10635,
+    "candidate_us": 86.6772,
+    "delta_us": -6.42915,
+    "identity_affine_bitwise_exact": true
+  },
+  "wall_ab_a": {
+    "a_ms_per_token": 5.415789625,
+    "b_ms_per_token": 5.4275018125,
+    "a2_ms_per_token": 5.422475125,
+    "control_midpoint_ms_per_token": 5.419132375,
+    "candidate_delta_us_per_token": 8.3694375,
+    "token_stream_hash": "db615a6ca0c48eb7a24978182128c6a5eebff7a650e89173bcf2a63ffe1f6c6e",
+    "hashes_match": true
+  },
+  "topology": {
+    "program_census": "not collected by the settled timing harness",
+    "conclusion": "unattributed integration regression; do not infer a program-count cause"
+  },
+  "action": "stop at one layer; no 4/8/18/36 lease progression or promotion"
+}

@@ -173,6 +173,15 @@ def warmstart_entry(quant: QuantFormat, role: str, shape: tuple[int, int, int]) 
       "m": m, "n": n, "k": k, "canonical_identity": row.canonical_identity, "one_buffer": False}
   return _ENTRY_CACHE[key]
 
+def generated_warmstart_entry(row:PackedWmmaRoute) -> dict[str, Any]:
+  """Build compiler state for a validated generated row without admitting it to production."""
+  from tinygrad.codegen.opt import Opt, OptOps
+  from tinygrad.codegen.opt.postrange import warmstart_key
+  context,transform=_candidate_context(row); m,n,k=row.shape
+  return {"key":warmstart_key({m,n},k,transform.storage_dtype), "opt":(Opt(OptOps.TC,0,(-1,2,1)),),
+          "context":context,"transform":transform,"m":m,"n":n,"k":k,
+          "canonical_identity":row.canonical_identity,"one_buffer":False}
+
 
 @dataclass(frozen=True)
 class PackedWmmaPrefillCandidate:

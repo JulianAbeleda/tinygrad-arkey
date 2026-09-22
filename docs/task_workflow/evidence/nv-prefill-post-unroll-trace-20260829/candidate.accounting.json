@@ -1,0 +1,61 @@
+{
+  "schema": "tinygrad.nv_prefill_post_unroll_exact_accounting.v1",
+  "source": "docs/task_workflow/evidence/nv-prefill-post-unroll-trace-20260829/candidate.profile.jsonl",
+  "selected_segments": "last six graph segments (one final replay)",
+  "launches": 1449,
+  "unknown_launches": 0,
+  "role_census": {
+    "residual_rope_kv_support": 937,
+    "norm_and_activation_conversion": 253,
+    "gate": 36,
+    "up": 36,
+    "activation_multiply": 36,
+    "k": 36,
+    "q": 36,
+    "flash_score_reduction": 36,
+    "o": 36,
+    "vocabulary": 3,
+    "output_token_transfer": 2,
+    "input_embed_graph_setup": 2
+  },
+  "active_us": {
+    "activation_multiply": 499.5199999999999,
+    "flash_score_reduction": 3330.9760000000015,
+    "gate": 10344.864000000001,
+    "input_embed_graph_setup": 6.112,
+    "k": 2221.312,
+    "norm_and_activation_conversion": 1376.896,
+    "o": 4489.760000000001,
+    "output_token_transfer": 9.312,
+    "q": 4492.064,
+    "residual_rope_kv_support": 501106.78399999876,
+    "up": 10603.68,
+    "vocabulary": 2919.8080000000004
+  },
+  "timeline": {
+    "first_device_timestamp_us": "1787981687007516.352",
+    "last_device_timestamp_us": "1787981687548934.08",
+    "device_span_us": "541417.728",
+    "interval_union_us": "541401.088",
+    "device_idle_us": "16.640",
+    "shared_overlap_us": "0",
+    "summed_active_us": "541401.088",
+    "duplicate_active_charge_us": "0.000",
+    "exclusive_us": {
+      "activation_multiply": "499.520",
+      "flash_score_reduction": "3330.976",
+      "gate": "10344.864",
+      "input_embed_graph_setup": "6.112",
+      "k": "2221.312",
+      "norm_and_activation_conversion": "1376.896",
+      "o": "4489.760",
+      "output_token_transfer": "9.312",
+      "q": "4492.064",
+      "residual_rope_kv_support": "501106.784",
+      "up": "10603.680",
+      "vocabulary": "2919.808"
+    },
+    "overlap_sets_us": {}
+  },
+  "boundary_identity": "profiled wall = device span = union + idle; host residual requires external wall"
+}

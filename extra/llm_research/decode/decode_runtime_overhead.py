@@ -12,11 +12,32 @@ decode timing begins; JIT capture is warmed in a separate request.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, os, pathlib, statistics, sys, tempfile, time
+import argparse, hashlib, json, os, pathlib, statistics, subprocess, sys, tempfile, time
 
 from extra.llm_research.decode.decode_harness import DEFAULT_MODEL, csv_ints, decode_run_profile
 
 SCHEMA = "tinygrad.decode.fixed_depth.v2"
+NV_STATE_FIELDS = ("pstate", "clocks.sm", "clocks.mem", "temperature.gpu", "temperature.gpu.tlimit", "temperature.memory",
+                   "power.draw.average", "power.draw.instant", "clocks_event_reasons.sw_power_cap",
+                   "clocks_event_reasons.hw_slowdown", "clocks_event_reasons.hw_thermal_slowdown",
+                   "clocks_event_reasons.sw_thermal_slowdown")
+
+
+def _nv_gpu_state() -> dict:
+  raw=subprocess.check_output(["nvidia-smi", f"--query-gpu={','.join(NV_STATE_FIELDS)}", "--format=csv,noheader,nounits"], text=True).strip()
+  values=[x.strip() for x in raw.split(",")]
+  if len(values) != len(NV_STATE_FIELDS): raise RuntimeError("nvidia-smi state field count mismatch")
+  return dict(zip(NV_STATE_FIELDS, values))
+
+def _evidence_json_default(value):
+  """Retain symbolic UOp evidence without making arbitrary objects printable."""
+  from tinygrad import UOp
+  from tinygrad.uop.ops import Ops
+  if isinstance(value, UOp):
+    return {"kind":"symbolic_uop_unresolved", "key":value.key.hex(), "op":value.op.name,
+            "dtype":str(value.dtype), "expression":str(value), "arg":repr(value.arg),
+            "bound_value":value.src[1].arg if value.op is Ops.BIND and len(value.src) > 1 else None}
+  raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
 
 
 def _atomic_json(path:pathlib.Path, payload:dict) -> None:
@@ -24,7 +45,7 @@ def _atomic_json(path:pathlib.Path, payload:dict) -> None:
   fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
   try:
     with os.fdopen(fd, "w") as f:
-      json.dump(payload, f, indent=2, sort_keys=True)
+      json.dump(payload, f, indent=2, sort_keys=True, default=_evidence_json_default)
       f.write("\n")
       f.flush()
       os.fsync(f.fileno())
@@ -70,6 +91,42 @@ def _captured_program_count(jit) -> int | None:
   return sum(count_target(call.src[0]) for call in captured.linear.src)
 
 
+def _captured_program_evidence(jit) -> list[dict]:
+  """Serialize exact PROGRAM identity and geometry from one selected captured JIT."""
+  from tinygrad.engine.metadata import PROGRAM_IDENTITY_FIELDS, resolve_call_metadata
+  from tinygrad.helpers import Metadata, dedup
+  from tinygrad.uop.ops import Ops, ProgramInfo
+  captured = getattr(jit, "captured", None)
+  if captured is None: return []
+
+  def program_calls(call, path:tuple[int, ...]):
+    target = call.src[0]
+    if target.op is Ops.PROGRAM: yield call, path
+    elif target.op is Ops.CUSTOM_FUNCTION and target.arg == "graph" and target.src:
+      for index, child in enumerate(target.src[0].src): yield from program_calls(child, (*path, index))
+
+  rows = []
+  for top_index, top_call in enumerate(captured.linear.src):
+    for call, path in program_calls(top_call, (top_index,)):
+      program = call.src[0]
+      if not isinstance(program.arg, ProgramInfo): continue
+      source = next((x.arg for x in program.src if x.op is Ops.SOURCE and isinstance(x.arg, str)), None)
+      binary = next((x.arg for x in program.src if x.op is Ops.BINARY and isinstance(x.arg, bytes)), None)
+      call_metadata = getattr(getattr(call, "arg", None), "metadata", ())
+      metadata = tuple(dedup((*call_metadata, *resolve_call_metadata(call)))) if isinstance(call_metadata, tuple) else resolve_call_metadata(call)
+      semantic = [{field:getattr(item, field) for field in PROGRAM_IDENTITY_FIELDS}
+                  for item in metadata if isinstance(item, Metadata) and all(hasattr(item, field) for field in PROGRAM_IDENTITY_FIELDS)]
+      rows.append({"ordinal":len(rows), "capture_path":list(path), "program_hash":program.key.hex(),
+                   "program_name":program.arg.name, "global_size":list(program.arg.global_size),
+                   "local_size":list(program.arg.local_size) if program.arg.local_size is not None else None,
+                   "program_provenance":list(program.arg.provenance) if program.arg.provenance is not None else None,
+                   "source_sha256":hashlib.sha256(source.encode()).hexdigest() if source is not None else None,
+                   "source_text":source,
+                   "binary_sha256":hashlib.sha256(binary).hexdigest() if binary is not None else None,
+                   "semantic_identities":semantic, "workload_roles":list(dict.fromkeys(x["role"] for x in semantic))})
+  return rows
+
+
 def _make_prompt(ids:list[int], depth:int) -> list[int]:
   if depth < 1: raise ValueError("fixed decode depth must be positive")
   if not ids: raise ValueError("tokenizer produced no deterministic prompt tokens")
@@ -82,9 +139,10 @@ def _reset(model) -> None:
   reset()
 
 
-def _prefill(model, prompt:list[int], chunk_size:int):
+def _prefill(model, prompt:list[int], chunk_size:int, expected_output_tokens:int|None=None):
   """Populate exact prompt KV through production generate and return its first sampled token."""
-  gen = model.generate(prompt.copy(), chunk_size=chunk_size, temperature=0.0)
+  gen = model.generate(prompt.copy(), chunk_size=chunk_size, temperature=0.0,
+                       expected_output_tokens=expected_output_tokens)
   first = int(next(gen))
   return gen, first
 
@@ -94,59 +152,96 @@ def _route(model, start_pos, token_extent:int) -> bool:
   return bool(model.config.flash_decode and should_use_flash_decode(start_pos, token_extent))
 
 
-def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> None:
+def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False) -> None:
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size)
+  gen, _ = _prefill(model, prompt, chunk_size, warmup_decode+1 if request_scoped_prewarm else None)
   try:
     for _ in range(warmup_decode): next(gen)
   finally: gen.close()
 
 
-def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int):
-  """Capture the second SDPA rollout and retain its runtime-only call bindings."""
+def _decode_jits(model) -> dict:
+  """Inventory concrete rollout JITs, including alternating slots and flash variants."""
+  result = {}
+  def visit(name, value):
+    if hasattr(value, "cnt") and hasattr(value, "captured"): result[name] = value
+    elif isinstance(value, (tuple, list)):
+      for index, child in enumerate(value): visit(f"{name}[{index}]", child)
+    elif isinstance(value, dict):
+      for key, child in value.items(): visit(f"{name}[{key!r}]", child)
+  for name, value in vars(model).items():
+    if name.startswith("rollout_"): visit(name, value)
+  return result
+
+
+def _used_decode_jits(model, before:dict) -> dict:
+  return {name:jit for name,jit in _decode_jits(model).items() if jit.cnt > before.get(name, 0)}
+
+
+def _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm):
   from tinygrad.engine.jit import observe_graph_admissions
   from tinygrad.helpers import Context
   _reset(model)
-  gen, _ = _prefill(model, prompt, chunk_size)
+  # Each alternating slot needs its own initial execution and capture.
+  count = max(warmup_decode, 6 if getattr(model, "_decode_feedback_pingpong_promoted", False) else 3)
+  gen, _ = _prefill(model, prompt, chunk_size, count+1 if request_scoped_prewarm else None)
+  before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
   try:
-    census = None
-    for index in range(warmup_decode):
-      if index == 1:
-        with Context(TRACEMETA=1), observe_graph_admissions() as census: next(gen)
-      else: next(gen)
+    with Context(TRACEMETA=1), observe_graph_admissions() as census:
+      for _ in range(count): next(gen)
   finally: gen.close()
-  if census is None or getattr(model.rollout_jit, "captured", None) is None:
-    raise RuntimeError("second SDPA rollout warmup did not capture rollout_jit")
-  return census
+  selected = _used_decode_jits(model, before)
+  if not selected or any(jit.captured is None for jit in selected.values()):
+    raise RuntimeError(f"normal decode warmup did not capture all selected JITs: {list(selected)}")
+  return census, selected, count
 
 
-def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int):
-  """Serialize exactly the second SDPA rollout capture; prefill remains unobserved."""
-  census = capture_decode_graph(model, prompt, chunk_size, warmup_decode)
+def capture_decode_graph(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
+  """Observe production decode warmup, including every selected alternating slot."""
+  return _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)[0]
+
+
+def _warm_depth_with_graph_census(model, prompt:list[int], chunk_size:int, warmup_decode:int, request_scoped_prewarm:bool=False):
+  census, selected, count = _capture_decode_graph(model, prompt, chunk_size, warmup_decode, request_scoped_prewarm)
   payload = census.to_dict()
-  payload["capture"] = {"phase": "decode", "route": "sdpa", "warmup_index": 2,
-                        "jit": "rollout_jit", "captured": True}
+  program_evidence = {name:_captured_program_evidence(jit) for name,jit in selected.items()}
+  source_evidence = {}
+  for rows in program_evidence.values():
+    for row in rows:
+      source = row.pop("source_text")
+      if source is None: continue
+      source_sha = row["source_sha256"]
+      if source_sha in source_evidence and source_evidence[source_sha] != source:
+        raise RuntimeError(f"source SHA collision in captured PROGRAM census: {source_sha}")
+      source_evidence[source_sha] = source
+  payload["capture"] = {"phase":"decode", "selected_jits":list(selected), "warmup_decode":count,
+                        "programs_by_jit":{name:_captured_program_count(jit) for name,jit in selected.items()},
+                        "program_evidence_by_jit":program_evidence, "source_text_by_sha256":source_evidence,
+                        "captured":True}
   return payload
 
 
-def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int) -> tuple[float, list[float], list[int], int]:
+def _measure_w(model, dev, prompt:list[int], chunk_size:int, nmeas:int, request_scoped_prewarm:bool=False,
+               capture_gpu_state:bool=False) -> tuple[float, list[float], list[int], int, dict|None, dict|None]:
   _reset(model)
-  gen, prelude = _prefill(model, prompt, chunk_size)
+  gen, prelude = _prefill(model, prompt, chunk_size, nmeas+1 if request_scoped_prewarm else None)
   latencies, generated = [], []
   try:
     dev.synchronize()
+    gpu_before = _nv_gpu_state() if capture_gpu_state else None
     for _ in range(nmeas):
       started = time.perf_counter()
       generated.append(int(next(gen)))
       latencies.append(time.perf_counter() - started)
+    gpu_after = _nv_gpu_state() if capture_gpu_state else None
   finally: gen.close()
-  return sum(latencies), latencies, generated, prelude
+  return sum(latencies), latencies, generated, prelude, gpu_before, gpu_after
 
 
-def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int):
+def _measure_d(model, dev, prompt:list[int], chunk_size:int, nmeas:int, max_context:int, request_scoped_prewarm:bool=False):
   from tinygrad import Tensor, UOp
   _reset(model)
-  gen, first = _prefill(model, prompt, chunk_size)
+  gen, first = _prefill(model, prompt, chunk_size, 1 if request_scoped_prewarm else None)
   gen.close()
   start = len(prompt)
   v_sp = UOp.variable("start_pos", 0, max_context - 1)
@@ -177,8 +272,17 @@ def main(argv:list[str] | None=None) -> int:
   ap.add_argument("--chunk-size", type=int, default=int(os.environ.get("QK_CHUNK_SIZE", 32)))
   ap.add_argument("--graph-admission-out", default=None,
                   help="optional atomic tinygrad.graph_admission_census.v1 export from second SDPA rollout warmup")
+  ap.add_argument("--graph-census-dir", default=None,
+                  help="optional directory for one atomic captured PROGRAM census per completed checkpoint")
+  ap.add_argument("--checkpoint-dir", default=None,
+                  help="optional directory for one atomic measurement artifact per completed checkpoint")
   ap.add_argument("--skip-dispatch-diagnostic", action="store_true",
                   help="omit D so W is the final GPU interval for external system tracing")
+  ap.add_argument("--request-scoped-prewarm", action="store_true",
+                  help="pass each request's measured output horizon to production generate prewarming")
+  ap.add_argument("--gpu-state", action="store_true", help="record NV clocks, power, and thermal state around each W repetition")
+  ap.add_argument("--single-graph-live-bands", action="store_true",
+                  help="diagnostic: disable direct-greedy/ping-pong capture and use the qualified full-logits graph")
   ap.add_argument("--out", required=True, help="unique output JSON for this invocation")
   args = ap.parse_args(argv)
   if args.reps < 1: raise ValueError("reps must be positive")
@@ -192,6 +296,10 @@ def main(argv:list[str] | None=None) -> int:
 
   dev = Device[Device.DEFAULT]
   model, tokenizer = load_model_and_tokenizer(args.model, profile.max_context, seed=20260617)
+  identity = _model_identity(args.model)
+  if args.single_graph_live_bands:
+    model._decode_direct_greedy_promoted = False
+    model._decode_feedback_pingpong_promoted = False
   base_ids = (tokenizer.prefix() if hasattr(tokenizer, "prefix") else []) + \
              tokenizer.encode("the quick brown fox jumps. " * 800)
 
@@ -199,21 +307,31 @@ def main(argv:list[str] | None=None) -> int:
   graph_census = None
   for depth in profile.ckpts:
     prompt = _make_prompt(base_ids, depth)
-    if args.graph_admission_out is not None:
+    if args.graph_admission_out is not None or args.graph_census_dir is not None:
       if graph_census is not None: raise ValueError("--graph-admission-out requires exactly one checkpoint")
-      graph_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode)
-      graph_census["capture"]["fixed_depth"] = depth
-    else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
+      depth_census = _warm_depth_with_graph_census(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
+      depth_census["capture"]["fixed_depth"] = depth
+      if args.graph_admission_out is not None: graph_census = depth_census
+      if args.graph_census_dir is not None:
+        _atomic_json(pathlib.Path(args.graph_census_dir).expanduser().resolve() / f"ctx-{depth}.json", depth_census)
+    else: _warm_depth(model, prompt, args.chunk_size, args.warmup_decode, args.request_scoped_prewarm)
     w_reps, d_reps = [], []
+    measured_jits = {}
     route_reps, prelude_reps, token_reps = [], [], []
     for rep in range(args.reps):
-      w_elapsed, per_token, generated, prelude = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
+      before = {name:jit.cnt for name,jit in _decode_jits(model).items()}
+      w_elapsed, per_token, generated, prelude, gpu_before, gpu_after = _measure_w(
+        model, dev, prompt, args.chunk_size, profile.nmeas, args.request_scoped_prewarm, args.gpu_state and Device.DEFAULT == "NV")
+      measured_jits.update(_used_decode_jits(model, before))
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
-                     "per_token_ms": [x * 1e3 for x in per_token]})
+                     "per_token_ms": [x * 1e3 for x in per_token], "gpu_state_before":gpu_before, "gpu_state_after":gpu_after})
       if args.skip_dispatch_diagnostic:
-        routes = ["flash" if _route(model, len(prompt), 1) else "sdpa"]
+        from tinygrad import UOp
+        route_sp = UOp.variable("reported_start_pos", 0, profile.max_context - 1).bind(len(prompt))
+        routes = ["flash" if _route(model, route_sp, 1) else "sdpa"]
       else:
-        d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
+        d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context,
+                                                    args.request_scoped_prewarm)
         d_reps.append({"rep": rep, "elapsed_s": d_elapsed, "tok_s": profile.nmeas / d_elapsed,
                        "final_token_id": final_token})
       route_reps.append(routes)
@@ -225,12 +343,11 @@ def main(argv:list[str] | None=None) -> int:
     w_ms = 1e3 / statistics.median(w_tok_s)
     d_ms = 1e3 / statistics.median(d_tok_s) if d_tok_s else None
     route_set = sorted({route for routes in route_reps for route in routes})
-    jits = [model.rollout_jit_flash if route == "flash" else model.rollout_jit for route in route_set]
-    programs = {route: _captured_program_count(jit) for route, jit in zip(route_set, jits)}
+    programs = {name:_captured_program_count(jit) for name,jit in measured_jits.items()}
     host_ms, host_pct = _host_residual(w_ms, d_ms) if d_ms is not None else (None, None)
     row = {"ctx": depth, "fixed_depth": depth, "decode_tokens": profile.nmeas, "reps": args.reps,
            "route_sequence": route_reps[0], "route_sequences_identical": all(x == route_reps[0] for x in route_reps),
-           "routes": route_set, "programs_per_token_by_route": programs,
+           "routes": route_set, "programs_per_token_by_selected_jit": programs,
            "wall_ms_W": w_ms, "dispatch_ms_D": d_ms, "host_sync_residual_ms": host_ms,
            "host_sync_pct_of_wall": host_pct, "tok_s_W": statistics.median(w_tok_s),
            "tok_s_D_diagnostic": statistics.median(d_tok_s) if d_tok_s else None,
@@ -245,6 +362,11 @@ def main(argv:list[str] | None=None) -> int:
     row["flash"] = route_set == ["flash"]
     row["route"] = route_set[0] if len(route_set) == 1 else "mixed"
     rows.append(row)
+    if args.checkpoint_dir is not None:
+      checkpoint = {"schema":"tinygrad.decode_runtime_checkpoint.v1", "created_unix_ns":time.time_ns(),
+                    "model":identity, "device":{"tinygrad_device":Device.DEFAULT, "runtime_type":type(dev).__name__},
+                    "max_context":profile.max_context, "nmeas":profile.nmeas, "reps":args.reps, "row":row}
+      _atomic_json(pathlib.Path(args.checkpoint_dir).expanduser().resolve() / f"ctx-{depth}.json", checkpoint)
     # --skip-dispatch-diagnostic leaves D unmeasured; the progress line must survive that.
     d_text = f"{d_ms:6.2f}ms ({row['tok_s_D_diagnostic']:.2f} tok/s)" if d_ms is not None else "omitted"
     print(f"ctx {depth:5}: W {w_ms:6.2f}ms ({row['tok_s_W']:.2f} tok/s) | "
@@ -255,7 +377,6 @@ def main(argv:list[str] | None=None) -> int:
 
   valid_host = [row["host_sync_pct_of_wall"] for row in rows if row["host_sync_pct_of_wall"] is not None]
   median_host = statistics.median(valid_host) if valid_host else None
-  identity = _model_identity(args.model)
   metal_replay = None
   memory_facts = None
   if Device.DEFAULT == "METAL":
@@ -278,7 +399,10 @@ def main(argv:list[str] | None=None) -> int:
               "workload": {"ckpts": list(profile.ckpts), "max_context": profile.max_context,
                            "decode_tokens": profile.nmeas, "reps": args.reps, "warmup_decode": args.warmup_decode,
                            "chunk_size": args.chunk_size, "temperature": 0.0, "seed": 20260617,
-                           "dispatch_diagnostic":not args.skip_dispatch_diagnostic},
+                           "dispatch_diagnostic":not args.skip_dispatch_diagnostic,
+                           "gpu_state":args.gpu_state,
+                           "request_scoped_prewarm":args.request_scoped_prewarm,
+                           "single_graph_live_bands":args.single_graph_live_bands},
               "runtime_settings": {"kv_cache": "int8+fp16_scale" if model.config.kv_quant else "fp16",
                                    "flash_decode_capable": bool(model.config.flash_decode),
                                    "flash_decode_mode": os.environ.get("FLASH_DECODE", "auto"),

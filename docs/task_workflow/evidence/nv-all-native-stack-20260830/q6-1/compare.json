@@ -1,0 +1,27 @@
+{
+  "authority": {
+    "candidate": "docs/task_workflow/evidence/nv-all-native-stack-20260830/q6-1/candidate.json",
+    "control": "docs/task_workflow/evidence/nv-all-native-stack-20260830/q6-1/control.json"
+  },
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "candidate_token": 198,
+    "control_token": 198,
+    "finite": true,
+    "max_abs": 0.1607046127319336,
+    "mean_abs": 0.031535085290670395,
+    "same_token": true
+  },
+  "performance": {
+    "candidate_faster": false
+  },
+  "schema": "tinygrad.nv_compiler_q6k_model_compare.v1",
+  "status": "FAIL",
+  "wall": {
+    "candidate_min_ms": 72.898575,
+    "candidate_minus_control_ms": 2.4919479999999936,
+    "candidate_tok_s": 7023.4569057076915,
+    "control_min_ms": 70.406627,
+    "control_tok_s": 7272.0427297277
+  }
+}

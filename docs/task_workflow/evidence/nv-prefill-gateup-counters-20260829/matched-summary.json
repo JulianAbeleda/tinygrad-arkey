@@ -1,0 +1,60 @@
+{
+  "schema": "tinygrad.nv_prefill_gateup_matched_counters.v1",
+  "target": "NVIDIA GeForce RTX 5090 sm_120",
+  "shape": {"m": 512, "n": 12288, "k": 4096},
+  "protocol": {
+    "cache_control": "none after three warmup launches",
+    "ncu_version": "2026.2.1.0",
+    "tiny": "exact compiler-owned cubin, real canonical blk.0 gate weight, deterministic legal compact-Q8 record",
+    "llama": "fresh llama-bench process, fourth matching Q4 mul_mat_q launch (first gate/up), same model and pp512"
+  },
+  "tiny": {
+    "duration_us": 409.312,
+    "grid": [96, 4, 1],
+    "block": [32, 2, 4],
+    "registers_per_thread": 222,
+    "shared_bytes_per_cta": 21504,
+    "waves_per_sm": 2.26,
+    "dram_bytes": 11866624,
+    "l2_requested_bytes": 412892384,
+    "shared_read_bytes": 452992456,
+    "shared_write_bytes": 228904888,
+    "instructions": 194359296,
+    "imma_instructions": 6291456,
+    "tensor_active_elapsed_pct": 14.653107,
+    "issue_active_pct": 37.438529,
+    "eligible_warps_per_cycle": 0.554234,
+    "long_scoreboard_per_issue_active": 0.535087,
+    "short_scoreboard_per_issue_active": 0.077354
+  },
+  "llama": {
+    "duration_us": 219.200,
+    "grid": [170, 1, 1],
+    "block": [32, 8, 1],
+    "registers_per_thread": 251,
+    "shared_bytes_per_cta": 58880,
+    "waves_per_sm": 1.0,
+    "dram_bytes": 48108800,
+    "l2_requested_bytes": 386983648,
+    "shared_read_bytes": 512364816,
+    "shared_write_bytes": 209618056,
+    "instructions": 156188112,
+    "imma_instructions": 6291456,
+    "tensor_active_elapsed_pct": 31.713239,
+    "issue_active_pct": 52.383165,
+    "eligible_warps_per_cycle": 0.806981,
+    "long_scoreboard_per_issue_active": 0.324272,
+    "short_scoreboard_per_issue_active": 0.082495
+  },
+  "ratios": {
+    "tiny_over_llama_duration": 1.867299270072993,
+    "tiny_over_llama_l2_requests": 1.066950467116378,
+    "tiny_over_llama_total_instructions": 1.2443923773148624,
+    "tiny_over_llama_imma_instructions": 1.0,
+    "tiny_over_llama_tensor_duty": 0.46205015514183206,
+    "tiny_over_llama_eligible_warps": 0.6867993174560492,
+    "tiny_over_llama_long_scoreboard": 1.6501178023387773
+  },
+  "verdict": "same useful IMMA count and similar on-chip traffic; remaining hot-body loss is instruction/issue scheduling and latency hiding, not extra matrix work or missing DRAM bandwidth",
+  "selected_test": "one-variable K64 fragment load-to-use scheduling or register-safe K-step interleave; require exact oracle, no spill, lower total instructions or long scoreboard, higher tensor duty, and a repeated native 72-role wall win before investment"
+}

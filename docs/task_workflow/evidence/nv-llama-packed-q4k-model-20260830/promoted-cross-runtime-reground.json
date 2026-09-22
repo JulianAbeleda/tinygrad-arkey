@@ -1,0 +1,154 @@
+{
+  "schema": "tinygrad.nv_promoted_cross_runtime_reground.v1",
+  "status": "PASS",
+  "method": "matched device-clock traces; active time is non-additive; exclusive time excludes overlap",
+  "tiny": {
+    "profile_replays": 6,
+    "selected_replay": 5,
+    "segments": 6,
+    "launches": 1575,
+    "unknown": 0,
+    "active_sum_ns": 40462784.0,
+    "device_union_ns": 40462784.0,
+    "device_span_ns": 40968192.0,
+    "device_idle_ns": 505408.0,
+    "category_launches": {
+      "input/embed": 2,
+      "norm/conversion": 307,
+      "support/RoPE/KV/residual": 613,
+      "qkv": 216,
+      "Flash": 36,
+      "o": 108,
+      "gate/up": 144,
+      "activation/multiply": 72,
+      "down": 72,
+      "vocabulary": 3,
+      "output/token": 2
+    },
+    "overlap_sets_us": {}
+  },
+  "llama": {
+    "launches": 1186,
+    "unknown": 0,
+    "device_union_ns": 32683341,
+    "device_span_ns": 32884783,
+    "device_idle_ns": 201442
+  },
+  "unprofiled": {
+    "tiny_min_ms": 41.592771,
+    "tiny_median_ms": 41.592771,
+    "llama_min_ms": 34.680367,
+    "llama_median_ms": 35.019399
+  },
+  "categories": [
+    {
+      "category": "input/embed",
+      "tiny_active_ns": 6176.0,
+      "llama_active_ns": 0,
+      "active_debt_ns": 6176.0,
+      "tiny_exclusive_ns": 6176.0,
+      "llama_exclusive_ns": 0,
+      "exclusive_debt_ns": 6176.0
+    },
+    {
+      "category": "norm/conversion",
+      "tiny_active_ns": 1817056.0,
+      "llama_active_ns": 2145511,
+      "active_debt_ns": -328455.0,
+      "tiny_exclusive_ns": 1817056.0,
+      "llama_exclusive_ns": 2109191,
+      "exclusive_debt_ns": -292135.0
+    },
+    {
+      "category": "qkv",
+      "tiny_active_ns": 4764928.0,
+      "llama_active_ns": 4819311,
+      "active_debt_ns": -54383.0,
+      "tiny_exclusive_ns": 4764928.0,
+      "llama_exclusive_ns": 4819311,
+      "exclusive_debt_ns": -54383.0
+    },
+    {
+      "category": "Flash",
+      "tiny_active_ns": 3374432.0,
+      "llama_active_ns": 1657447,
+      "active_debt_ns": 1716985.0,
+      "tiny_exclusive_ns": 3374432.0,
+      "llama_exclusive_ns": 1639559,
+      "exclusive_debt_ns": 1734873.0
+    },
+    {
+      "category": "o",
+      "tiny_active_ns": 4540928.0,
+      "llama_active_ns": 2397213,
+      "active_debt_ns": 2143715.0,
+      "tiny_exclusive_ns": 4540928.0,
+      "llama_exclusive_ns": 2397213,
+      "exclusive_debt_ns": 2143715.0
+    },
+    {
+      "category": "gate/up",
+      "tiny_active_ns": 12512896.0,
+      "llama_active_ns": 12197858,
+      "active_debt_ns": 315038.0,
+      "tiny_exclusive_ns": 12512896.0,
+      "llama_exclusive_ns": 12193858,
+      "exclusive_debt_ns": 319038.0
+    },
+    {
+      "category": "activation/multiply",
+      "tiny_active_ns": 848960.0,
+      "llama_active_ns": 903843,
+      "active_debt_ns": -54883.0,
+      "tiny_exclusive_ns": 848960.0,
+      "llama_exclusive_ns": 903843,
+      "exclusive_debt_ns": -54883.0
+    },
+    {
+      "category": "down",
+      "tiny_active_ns": 7088928.0,
+      "llama_active_ns": 6940482,
+      "active_debt_ns": 148446.0,
+      "tiny_exclusive_ns": 7088928.0,
+      "llama_exclusive_ns": 6940162,
+      "exclusive_debt_ns": 148766.0
+    },
+    {
+      "category": "support/RoPE/KV/residual",
+      "tiny_active_ns": 2578688.0,
+      "llama_active_ns": 1379275,
+      "active_debt_ns": 1199413.0,
+      "tiny_exclusive_ns": 2578688.0,
+      "llama_exclusive_ns": 1320458,
+      "exclusive_debt_ns": 1258230.0
+    },
+    {
+      "category": "final-row gather/prune",
+      "tiny_active_ns": 0.0,
+      "llama_active_ns": 5024,
+      "active_debt_ns": -5024.0,
+      "tiny_exclusive_ns": 0.0,
+      "llama_exclusive_ns": 1312,
+      "exclusive_debt_ns": -1312.0
+    },
+    {
+      "category": "vocabulary",
+      "tiny_active_ns": 2920064.0,
+      "llama_active_ns": 313154,
+      "active_debt_ns": 2606910.0,
+      "tiny_exclusive_ns": 2920064.0,
+      "llama_exclusive_ns": 310530,
+      "exclusive_debt_ns": 2609534.0
+    },
+    {
+      "category": "output/token",
+      "tiny_active_ns": 9728.0,
+      "llama_active_ns": 0,
+      "active_debt_ns": 9728.0,
+      "tiny_exclusive_ns": 9728.0,
+      "llama_exclusive_ns": 0,
+      "exclusive_debt_ns": 9728.0
+    }
+  ],
+  "causality": "Trace debts locate slower service but do not prove rollback recovery; promotion still requires a whole-model A/B."
+}

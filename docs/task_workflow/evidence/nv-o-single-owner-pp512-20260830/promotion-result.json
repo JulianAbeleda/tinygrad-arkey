@@ -1,0 +1,55 @@
+{
+  "schema": "tinygrad.nv_o_single_owner_pp512_promotion.v1",
+  "status": "PASS",
+  "decision": "PROMOTE",
+  "selector": "NV_LLAMA_O_SINGLE_OWNER_PP512",
+  "rollback": "NV_LLAMA_O_SINGLE_OWNER_PP512=0",
+  "wall": {
+    "control_a_median_ms": 37.245973,
+    "candidate_median_ms": 34.963556,
+    "control_c_median_ms": 37.035831,
+    "control_mean_ms": 37.140902,
+    "recovery_ms": 2.177346,
+    "throughput_gain_pct": 6.227472972142767,
+    "candidate_tok_s": 14643.81941013094,
+    "llama_median_ms": 35.019399,
+    "candidate_minus_llama_median_ms": -0.055843000000002974
+  },
+  "correctness": {
+    "tokens": [
+      198,
+      198,
+      198
+    ],
+    "finite": true,
+    "control_candidate_max_abs": 0.0,
+    "control_candidate_mean_abs": 0.0,
+    "allclose_rtol_0p02_atol_0p5": true,
+    "control_rollback_exact": true
+  },
+  "physical_census": {
+    "control": {
+      "launches": 1649,
+      "q4_main": 252,
+      "q6_main": 36,
+      "o_producer": 36,
+      "flash": 36,
+      "active_us": 36583.04
+    },
+    "candidate": {
+      "launches": 1613,
+      "q4_main": 216,
+      "q6_main": 36,
+      "o_producer": 36,
+      "flash": 36,
+      "active_us": 34745.088
+    },
+    "delta": {
+      "launches": -36,
+      "q4_main": -36,
+      "q6_main": 0,
+      "o_producer": 0,
+      "flash": 0
+    }
+  }
+}

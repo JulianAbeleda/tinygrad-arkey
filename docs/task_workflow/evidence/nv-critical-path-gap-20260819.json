@@ -1,0 +1,40 @@
+{
+  "schema": "tinygrad.nv_critical_path_gap.v1",
+  "date": "2026-08-19",
+  "branch": "nvidia-bringup-20260731",
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "finding": "Parity is decided by the dependency critical path, not by node_sum or overlap mass. tinygrad's critical path alone is longer than llama's entire graph span, so no amount of queue overlap can close the wall gap; the dependency structure itself must be relaxed.",
+  "tinygrad": {
+    "source": "/tmp/pipeline_serial_graph.jsonl lines 71-75 (steady decode token, 596 nodes, 5 JIT groups)",
+    "critical_path_us": 4187.008,
+    "critical_path_class_us": {
+      "gemv": 3259.072,
+      "flash": 314.272,
+      "reduce_output": 235.296,
+      "rmsnorm": 154.656,
+      "residual": 135.488,
+      "scatter_vocab": 55.648,
+      "q8_provider": 32.576
+    },
+    "non_gemv_on_critical_path_us": 927.936,
+    "note": "sum of per-group longest-path durations; no cross-group dependency edges, so token critical path is the sum of the five group critical paths"
+  },
+  "llama": {
+    "source": "/tmp/llama_d512_20260817b.sqlite graph 6",
+    "span_us": 3899.469,
+    "kernel_union_us": 3891.26,
+    "mmq_chain_us": 3588.286,
+    "non_mmq_exposed_union_us": 302.369,
+    "note": "critical path <= span; mmq chain plus non-mmq exposed union reproduces kernel_union"
+  },
+  "critical_path_gap_us": 287.539,
+  "busy_delta_reconciliation": {
+    "tinygrad_non_gemv_on_critical_path_us": 927.936,
+    "llama_non_mmq_exposed_union_us": 302.369,
+    "support_delta_us": 625.567,
+    "known_busy_delta_us": 628.8
+  },
+  "reframing": "The next lever is not more queues or better overlap of already-independent nodes. It is shortening tinygrad's critical path by moving flash, reduce_output, and residual support off the dependency chain, matching the edges llama uses to keep its support behind the mmq chain."
+}

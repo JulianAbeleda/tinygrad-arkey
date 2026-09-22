@@ -1,0 +1,1495 @@
+{
+  "llama": {
+    "k_norm": {
+      "dep_gap_us_median": 4.0,
+      "duration_us_max": 1.248,
+      "duration_us_median": 1.12,
+      "duration_us_min": 1.088,
+      "launch_gap_us_median": 0.192,
+      "n": 36,
+      "samples": [
+        {
+          "dep_gap_us": 4.8,
+          "duration_us": 1.152,
+          "end_us": 25.696,
+          "index": 9,
+          "launch_gap_us": 0.16,
+          "layer": 0,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 24.544
+        },
+        {
+          "dep_gap_us": 4.032,
+          "duration_us": 1.248,
+          "end_us": 133.185,
+          "index": 30,
+          "launch_gap_us": 0.192,
+          "layer": 1,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 131.937
+        },
+        {
+          "dep_gap_us": 4.033,
+          "duration_us": 1.12,
+          "end_us": 241.955,
+          "index": 51,
+          "launch_gap_us": 0.16,
+          "layer": 2,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 240.835
+        },
+        {
+          "dep_gap_us": 4.032,
+          "duration_us": 1.184,
+          "end_us": 350.5,
+          "index": 72,
+          "launch_gap_us": 0.192,
+          "layer": 3,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 349.316
+        },
+        {
+          "dep_gap_us": 4.096,
+          "duration_us": 1.12,
+          "end_us": 457.893,
+          "index": 93,
+          "launch_gap_us": 0.16,
+          "layer": 4,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 456.773
+        },
+        {
+          "dep_gap_us": 4.16,
+          "duration_us": 1.12,
+          "end_us": 555.942,
+          "index": 114,
+          "launch_gap_us": 0.192,
+          "layer": 5,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 554.822
+        },
+        {
+          "dep_gap_us": 4.032,
+          "duration_us": 1.12,
+          "end_us": 654.024,
+          "index": 135,
+          "launch_gap_us": 0.16,
+          "layer": 6,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 652.904
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.152,
+          "end_us": 761.321,
+          "index": 156,
+          "launch_gap_us": 0.192,
+          "layer": 7,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 760.169
+        },
+        {
+          "dep_gap_us": 4.16,
+          "duration_us": 1.152,
+          "end_us": 859.082,
+          "index": 177,
+          "launch_gap_us": 0.16,
+          "layer": 8,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 857.93
+        },
+        {
+          "dep_gap_us": 4.064,
+          "duration_us": 1.12,
+          "end_us": 957.675,
+          "index": 198,
+          "launch_gap_us": 0.16,
+          "layer": 9,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 956.555
+        },
+        {
+          "dep_gap_us": 4.096,
+          "duration_us": 1.12,
+          "end_us": 1064.685,
+          "index": 219,
+          "launch_gap_us": 0.192,
+          "layer": 10,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1063.565
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.12,
+          "end_us": 1162.446,
+          "index": 240,
+          "launch_gap_us": 0.192,
+          "layer": 11,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1161.326
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 1.088,
+          "end_us": 1261.871,
+          "index": 261,
+          "launch_gap_us": 0.192,
+          "layer": 12,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1260.783
+        },
+        {
+          "dep_gap_us": 4.096,
+          "duration_us": 1.12,
+          "end_us": 1369.68,
+          "index": 282,
+          "launch_gap_us": 0.16,
+          "layer": 13,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1368.56
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.12,
+          "end_us": 1468.05,
+          "index": 303,
+          "launch_gap_us": 0.16,
+          "layer": 14,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1466.93
+        },
+        {
+          "dep_gap_us": 4.224,
+          "duration_us": 1.152,
+          "end_us": 1567.187,
+          "index": 324,
+          "launch_gap_us": 0.16,
+          "layer": 15,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1566.035
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.152,
+          "end_us": 1675.092,
+          "index": 345,
+          "launch_gap_us": 0.192,
+          "layer": 16,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1673.94
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 1.12,
+          "end_us": 1772.693,
+          "index": 366,
+          "launch_gap_us": 0.192,
+          "layer": 17,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1771.573
+        },
+        {
+          "dep_gap_us": 4.064,
+          "duration_us": 1.088,
+          "end_us": 1871.063,
+          "index": 387,
+          "launch_gap_us": 0.192,
+          "layer": 18,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1869.975
+        },
+        {
+          "dep_gap_us": 4.064,
+          "duration_us": 1.12,
+          "end_us": 1979.16,
+          "index": 408,
+          "launch_gap_us": 0.192,
+          "layer": 19,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1978.04
+        },
+        {
+          "dep_gap_us": 4.256,
+          "duration_us": 1.088,
+          "end_us": 2077.401,
+          "index": 429,
+          "launch_gap_us": 0.192,
+          "layer": 20,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2076.313
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 1.12,
+          "end_us": 2176.442,
+          "index": 450,
+          "launch_gap_us": 0.192,
+          "layer": 21,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2175.322
+        },
+        {
+          "dep_gap_us": 3.872,
+          "duration_us": 1.12,
+          "end_us": 2282.94,
+          "index": 471,
+          "launch_gap_us": 0.16,
+          "layer": 22,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2281.82
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.12,
+          "end_us": 2380.317,
+          "index": 492,
+          "launch_gap_us": 0.192,
+          "layer": 23,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2379.197
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 1.12,
+          "end_us": 2479.102,
+          "index": 513,
+          "launch_gap_us": 0.192,
+          "layer": 24,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2477.982
+        },
+        {
+          "dep_gap_us": 3.872,
+          "duration_us": 1.12,
+          "end_us": 2585.535,
+          "index": 534,
+          "launch_gap_us": 0.192,
+          "layer": 25,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2584.415
+        },
+        {
+          "dep_gap_us": 3.872,
+          "duration_us": 1.184,
+          "end_us": 2683.201,
+          "index": 555,
+          "launch_gap_us": 0.192,
+          "layer": 26,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2682.017
+        },
+        {
+          "dep_gap_us": 3.872,
+          "duration_us": 1.216,
+          "end_us": 2781.89,
+          "index": 576,
+          "launch_gap_us": 0.192,
+          "layer": 27,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2780.674
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.12,
+          "end_us": 2888.131,
+          "index": 597,
+          "launch_gap_us": 0.192,
+          "layer": 28,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2887.011
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 1.12,
+          "end_us": 2985.444,
+          "index": 618,
+          "launch_gap_us": 0.192,
+          "layer": 29,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2984.324
+        },
+        {
+          "dep_gap_us": 3.936,
+          "duration_us": 1.088,
+          "end_us": 3084.262,
+          "index": 639,
+          "launch_gap_us": 0.192,
+          "layer": 30,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3083.174
+        },
+        {
+          "dep_gap_us": 4.16,
+          "duration_us": 1.152,
+          "end_us": 3191.655,
+          "index": 660,
+          "launch_gap_us": 0.16,
+          "layer": 31,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3190.503
+        },
+        {
+          "dep_gap_us": 3.872,
+          "duration_us": 1.152,
+          "end_us": 3299.208,
+          "index": 681,
+          "launch_gap_us": 0.192,
+          "layer": 32,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3298.056
+        },
+        {
+          "dep_gap_us": 3.936,
+          "duration_us": 1.12,
+          "end_us": 3407.434,
+          "index": 702,
+          "launch_gap_us": 0.192,
+          "layer": 33,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3406.314
+        },
+        {
+          "dep_gap_us": 3.936,
+          "duration_us": 1.152,
+          "end_us": 3516.171,
+          "index": 723,
+          "launch_gap_us": 0.16,
+          "layer": 34,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3515.019
+        },
+        {
+          "dep_gap_us": 3.904,
+          "duration_us": 1.152,
+          "end_us": 3624.108,
+          "index": 744,
+          "launch_gap_us": 0.192,
+          "layer": 35,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3622.956
+        }
+      ],
+      "tag": "llama_k_norm"
+    },
+    "q_norm": {
+      "dep_gap_us_median": 0.192,
+      "duration_us_max": 1.408,
+      "duration_us_median": 1.152,
+      "duration_us_min": 1.088,
+      "launch_gap_us_median": 0.192,
+      "n": 36,
+      "samples": [
+        {
+          "dep_gap_us": 0.352,
+          "duration_us": 1.408,
+          "end_us": 13.44,
+          "index": 3,
+          "launch_gap_us": 0.352,
+          "layer": 0,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 12.032
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 122.113,
+          "index": 24,
+          "launch_gap_us": 0.192,
+          "layer": 1,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 120.961
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 231.298,
+          "index": 45,
+          "launch_gap_us": 0.192,
+          "layer": 2,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 230.178
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 339.588,
+          "index": 66,
+          "launch_gap_us": 0.192,
+          "layer": 3,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 338.468
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 447.909,
+          "index": 87,
+          "launch_gap_us": 0.192,
+          "layer": 4,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 446.757
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 545.958,
+          "index": 108,
+          "launch_gap_us": 0.192,
+          "layer": 5,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 544.806
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.088,
+          "end_us": 643.431,
+          "index": 129,
+          "launch_gap_us": 0.192,
+          "layer": 6,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 642.343
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 751.465,
+          "index": 150,
+          "launch_gap_us": 0.16,
+          "layer": 7,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 750.313
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 848.906,
+          "index": 171,
+          "launch_gap_us": 0.16,
+          "layer": 8,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 847.754
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 946.699,
+          "index": 192,
+          "launch_gap_us": 0.16,
+          "layer": 9,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 945.547
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.184,
+          "end_us": 1054.669,
+          "index": 213,
+          "launch_gap_us": 0.16,
+          "layer": 10,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1053.485
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 1152.654,
+          "index": 234,
+          "launch_gap_us": 0.192,
+          "layer": 11,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1151.534
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 1251.119,
+          "index": 255,
+          "launch_gap_us": 0.16,
+          "layer": 12,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1249.967
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 1359.6,
+          "index": 276,
+          "launch_gap_us": 0.192,
+          "layer": 13,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1358.48
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 1458.194,
+          "index": 297,
+          "launch_gap_us": 0.192,
+          "layer": 14,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1457.074
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 1556.403,
+          "index": 318,
+          "launch_gap_us": 0.192,
+          "layer": 15,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1555.251
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 1664.852,
+          "index": 339,
+          "launch_gap_us": 0.192,
+          "layer": 16,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1663.7
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 1762.773,
+          "index": 360,
+          "launch_gap_us": 0.16,
+          "layer": 17,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1761.621
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 1860.311,
+          "index": 381,
+          "launch_gap_us": 0.192,
+          "layer": 18,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1859.191
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 1969.208,
+          "index": 402,
+          "launch_gap_us": 0.192,
+          "layer": 19,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 1968.056
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 2067.321,
+          "index": 423,
+          "launch_gap_us": 0.16,
+          "layer": 20,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2066.169
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.184,
+          "end_us": 2165.338,
+          "index": 444,
+          "launch_gap_us": 0.16,
+          "layer": 21,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2164.154
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 2273.148,
+          "index": 465,
+          "launch_gap_us": 0.192,
+          "layer": 22,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2272.028
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 2370.461,
+          "index": 486,
+          "launch_gap_us": 0.192,
+          "layer": 23,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2369.341
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.152,
+          "end_us": 2467.966,
+          "index": 507,
+          "launch_gap_us": 0.16,
+          "layer": 24,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2466.814
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 2575.775,
+          "index": 528,
+          "launch_gap_us": 0.192,
+          "layer": 25,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2574.623
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 2673.313,
+          "index": 549,
+          "launch_gap_us": 0.192,
+          "layer": 26,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2672.193
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.216,
+          "end_us": 2771.202,
+          "index": 570,
+          "launch_gap_us": 0.16,
+          "layer": 27,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2769.986
+        },
+        {
+          "dep_gap_us": 0.16,
+          "duration_us": 1.12,
+          "end_us": 2878.179,
+          "index": 591,
+          "launch_gap_us": 0.16,
+          "layer": 28,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2877.059
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 2975.492,
+          "index": 612,
+          "launch_gap_us": 0.192,
+          "layer": 29,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 2974.372
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.121,
+          "end_us": 3073.734,
+          "index": 633,
+          "launch_gap_us": 0.192,
+          "layer": 30,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3072.613
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 3180.743,
+          "index": 654,
+          "launch_gap_us": 0.192,
+          "layer": 31,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3179.591
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 3288.232,
+          "index": 675,
+          "launch_gap_us": 0.192,
+          "layer": 32,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3287.112
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.12,
+          "end_us": 3396.841,
+          "index": 696,
+          "launch_gap_us": 0.192,
+          "layer": 33,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3395.721
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.152,
+          "end_us": 3505.515,
+          "index": 717,
+          "launch_gap_us": 0.192,
+          "layer": 34,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3504.363
+        },
+        {
+          "dep_gap_us": 0.192,
+          "duration_us": 1.088,
+          "end_us": 3613.484,
+          "index": 738,
+          "launch_gap_us": 0.192,
+          "layer": 35,
+          "name": "_Z12rms_norm_f32ILi256ELb1ELb0EEvPKfPfilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_",
+          "start_us": 3612.396
+        }
+      ],
+      "tag": "llama_q_norm"
+    }
+  },
+  "schema": "tinygrad.nv_qk_head_norm_capture_split.v1",
+  "sources": {
+    "llama_pdl0_dag": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-pdl0-dag.json",
+    "tinygrad_capture": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-tinygrad-capture.json"
+  },
+  "tinygrad": {
+    "k_norm": {
+      "dep_gap_us_median": 4.25,
+      "duration_us_max": 3.0,
+      "duration_us_median": 2.5,
+      "duration_us_min": 2.25,
+      "launch_gap_us_median": 0.0,
+      "n": 36,
+      "samples": [
+        {
+          "dep_gap_us": 4.75,
+          "duration_us": 2.5,
+          "end_us": 48.5,
+          "id": 11,
+          "launch_gap_us": 0.0,
+          "layer": 11,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 46.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 187.75,
+          "id": 28,
+          "launch_gap_us": 0.0,
+          "layer": 28,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 185.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 38646.0,
+          "id": 45,
+          "launch_gap_us": 0.0,
+          "layer": 45,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 38643.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 38768.5,
+          "id": 62,
+          "launch_gap_us": 0.0,
+          "layer": 62,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 38766.0
+        },
+        {
+          "dep_gap_us": 1.75,
+          "duration_us": 2.25,
+          "end_us": 38894.25,
+          "id": 80,
+          "launch_gap_us": 0.0,
+          "layer": 80,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 38892.0
+        },
+        {
+          "dep_gap_us": 64238.25,
+          "duration_us": 3.0,
+          "end_us": 103240.25,
+          "id": 98,
+          "launch_gap_us": 0.0,
+          "layer": 98,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103237.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 3.0,
+          "end_us": 103368.5,
+          "id": 115,
+          "launch_gap_us": 0.0,
+          "layer": 115,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103365.5
+        },
+        {
+          "dep_gap_us": 1.0,
+          "duration_us": 2.5,
+          "end_us": 103492.25,
+          "id": 133,
+          "launch_gap_us": 0.0,
+          "layer": 133,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103489.75
+        },
+        {
+          "dep_gap_us": 1.0,
+          "duration_us": 2.5,
+          "end_us": 103606.25,
+          "id": 151,
+          "launch_gap_us": 0.0,
+          "layer": 151,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103603.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 103719.5,
+          "id": 168,
+          "launch_gap_us": 0.0,
+          "layer": 168,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103717.0
+        },
+        {
+          "dep_gap_us": 1.0,
+          "duration_us": 2.5,
+          "end_us": 103840.75,
+          "id": 186,
+          "launch_gap_us": 0.0,
+          "layer": 186,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103838.25
+        },
+        {
+          "dep_gap_us": 1.0,
+          "duration_us": 2.25,
+          "end_us": 103952.75,
+          "id": 204,
+          "launch_gap_us": 0.0,
+          "layer": 204,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 103950.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 104065.5,
+          "id": 221,
+          "launch_gap_us": 0.0,
+          "layer": 221,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 104063.0
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 560712.75,
+          "id": 236,
+          "launch_gap_us": 0.0,
+          "layer": 236,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 560710.25
+        },
+        {
+          "dep_gap_us": 1.75,
+          "duration_us": 2.75,
+          "end_us": 560828.75,
+          "id": 254,
+          "launch_gap_us": 0.0,
+          "layer": 254,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 560826.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 560942.75,
+          "id": 271,
+          "launch_gap_us": 0.0,
+          "layer": 271,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 560940.25
+        },
+        {
+          "dep_gap_us": 1.25,
+          "duration_us": 2.5,
+          "end_us": 561066.0,
+          "id": 289,
+          "launch_gap_us": 0.0,
+          "layer": 289,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561063.5
+        },
+        {
+          "dep_gap_us": 1.25,
+          "duration_us": 2.25,
+          "end_us": 561181.75,
+          "id": 307,
+          "launch_gap_us": 0.0,
+          "layer": 307,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561179.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561291.5,
+          "id": 324,
+          "launch_gap_us": 0.0,
+          "layer": 324,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561289.0
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.25,
+          "end_us": 561417.5,
+          "id": 339,
+          "launch_gap_us": 0.0,
+          "layer": 339,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561415.25
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 561535.75,
+          "id": 354,
+          "launch_gap_us": 0.0,
+          "layer": 354,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561533.25
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 561652.5,
+          "id": 369,
+          "launch_gap_us": 0.0,
+          "layer": 369,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561650.0
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 561781.0,
+          "id": 384,
+          "launch_gap_us": 0.0,
+          "layer": 384,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561778.5
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 561900.0,
+          "id": 399,
+          "launch_gap_us": 0.0,
+          "layer": 399,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 561897.5
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 562015.5,
+          "id": 414,
+          "launch_gap_us": 0.0,
+          "layer": 414,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 562013.0
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 562142.5,
+          "id": 429,
+          "launch_gap_us": 0.0,
+          "layer": 429,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 562140.0
+        },
+        {
+          "dep_gap_us": 4.0,
+          "duration_us": 2.5,
+          "end_us": 562259.75,
+          "id": 444,
+          "launch_gap_us": 0.0,
+          "layer": 444,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 562257.25
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 562376.5,
+          "id": 459,
+          "launch_gap_us": 0.0,
+          "layer": 459,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 562374.0
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.25,
+          "end_us": 562502.25,
+          "id": 474,
+          "launch_gap_us": 0.0,
+          "layer": 474,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 562500.0
+        },
+        {
+          "dep_gap_us": 4.5,
+          "duration_us": 2.5,
+          "end_us": 605397.75,
+          "id": 489,
+          "launch_gap_us": 0.0,
+          "layer": 489,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 605395.25
+        },
+        {
+          "dep_gap_us": 4.5,
+          "duration_us": 2.75,
+          "end_us": 605516.75,
+          "id": 504,
+          "launch_gap_us": 0.0,
+          "layer": 504,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 605514.0
+        },
+        {
+          "dep_gap_us": 4.5,
+          "duration_us": 2.25,
+          "end_us": 605644.75,
+          "id": 519,
+          "launch_gap_us": 0.0,
+          "layer": 519,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 605642.5
+        },
+        {
+          "dep_gap_us": 4.5,
+          "duration_us": 2.5,
+          "end_us": 605770.75,
+          "id": 534,
+          "launch_gap_us": 0.0,
+          "layer": 534,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 605768.25
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 605900.25,
+          "id": 549,
+          "launch_gap_us": 0.0,
+          "layer": 549,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 605897.75
+        },
+        {
+          "dep_gap_us": 4.25,
+          "duration_us": 2.5,
+          "end_us": 606027.75,
+          "id": 564,
+          "launch_gap_us": 0.0,
+          "layer": 564,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 606025.25
+        },
+        {
+          "dep_gap_us": 4.5,
+          "duration_us": 2.25,
+          "end_us": 606154.0,
+          "id": 579,
+          "launch_gap_us": 0.0,
+          "layer": 579,
+          "name": "reduce_output_rmsnorm_8_128",
+          "start_us": 606151.75
+        }
+      ],
+      "tag": "tinygrad_k_norm"
+    },
+    "q_norm": {
+      "dep_gap_us_median": 0.0,
+      "duration_us_max": 3.5,
+      "duration_us_median": 2.5,
+      "duration_us_min": 2.25,
+      "launch_gap_us_median": 0.0,
+      "n": 36,
+      "samples": [
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 3.5,
+          "end_us": 33.0,
+          "id": 10,
+          "launch_gap_us": 0.0,
+          "layer": 10,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 29.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 174.0,
+          "id": 27,
+          "launch_gap_us": 0.0,
+          "layer": 27,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 171.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 38632.0,
+          "id": 44,
+          "launch_gap_us": 0.0,
+          "layer": 44,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 38629.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 38755.5,
+          "id": 61,
+          "launch_gap_us": 0.0,
+          "layer": 61,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 38753.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 3.25,
+          "end_us": 38879.25,
+          "id": 79,
+          "launch_gap_us": 0.0,
+          "layer": 79,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 38876.0
+        },
+        {
+          "dep_gap_us": 64251.75,
+          "duration_us": 3.0,
+          "end_us": 103245.5,
+          "id": 97,
+          "launch_gap_us": 0.5,
+          "layer": 97,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103242.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.25,
+          "end_us": 103354.25,
+          "id": 114,
+          "launch_gap_us": 0.0,
+          "layer": 114,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103352.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.25,
+          "end_us": 103478.0,
+          "id": 132,
+          "launch_gap_us": 0.0,
+          "layer": 132,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103475.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 103592.0,
+          "id": 150,
+          "launch_gap_us": 0.0,
+          "layer": 150,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103589.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 103705.75,
+          "id": 167,
+          "launch_gap_us": 0.0,
+          "layer": 167,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103703.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 103827.0,
+          "id": 185,
+          "launch_gap_us": 0.0,
+          "layer": 185,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103824.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 103939.0,
+          "id": 203,
+          "launch_gap_us": 0.0,
+          "layer": 203,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 103936.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 104052.5,
+          "id": 220,
+          "launch_gap_us": 0.0,
+          "layer": 220,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 104049.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 560697.0,
+          "id": 235,
+          "launch_gap_us": 0.0,
+          "layer": 235,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 560694.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 560814.0,
+          "id": 253,
+          "launch_gap_us": 0.0,
+          "layer": 253,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 560811.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 560929.75,
+          "id": 270,
+          "launch_gap_us": 0.0,
+          "layer": 270,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 560927.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561052.25,
+          "id": 288,
+          "launch_gap_us": 0.0,
+          "layer": 288,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561049.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 561167.0,
+          "id": 306,
+          "launch_gap_us": 0.0,
+          "layer": 306,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561164.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561278.75,
+          "id": 323,
+          "launch_gap_us": 0.0,
+          "layer": 323,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561276.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 561404.5,
+          "id": 338,
+          "launch_gap_us": 0.0,
+          "layer": 338,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561401.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561522.5,
+          "id": 353,
+          "launch_gap_us": 0.0,
+          "layer": 353,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561520.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561639.25,
+          "id": 368,
+          "launch_gap_us": 0.0,
+          "layer": 368,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561636.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 561767.5,
+          "id": 383,
+          "launch_gap_us": 0.0,
+          "layer": 383,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561765.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 561886.5,
+          "id": 398,
+          "launch_gap_us": 0.0,
+          "layer": 398,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561883.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 562002.0,
+          "id": 413,
+          "launch_gap_us": 0.0,
+          "layer": 413,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 561999.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 3.0,
+          "end_us": 562128.75,
+          "id": 428,
+          "launch_gap_us": 0.0,
+          "layer": 428,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 562125.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 562246.5,
+          "id": 443,
+          "launch_gap_us": 0.0,
+          "layer": 443,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 562243.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 562362.5,
+          "id": 458,
+          "launch_gap_us": 0.0,
+          "layer": 458,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 562360.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 562489.0,
+          "id": 473,
+          "launch_gap_us": 0.0,
+          "layer": 473,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 562486.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 605382.75,
+          "id": 488,
+          "launch_gap_us": 0.0,
+          "layer": 488,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 605380.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 605502.5,
+          "id": 503,
+          "launch_gap_us": 0.0,
+          "layer": 503,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 605500.0
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.75,
+          "end_us": 605631.0,
+          "id": 518,
+          "launch_gap_us": 0.0,
+          "layer": 518,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 605628.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 605757.0,
+          "id": 533,
+          "launch_gap_us": 0.0,
+          "layer": 533,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 605754.5
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 3.25,
+          "end_us": 605886.5,
+          "id": 548,
+          "launch_gap_us": 0.0,
+          "layer": 548,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 605883.25
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 606014.25,
+          "id": 563,
+          "launch_gap_us": 0.0,
+          "layer": 563,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 606011.75
+        },
+        {
+          "dep_gap_us": 0.0,
+          "duration_us": 2.5,
+          "end_us": 606140.5,
+          "id": 578,
+          "launch_gap_us": 0.0,
+          "layer": 578,
+          "name": "reduce_output_rmsnorm_32_128",
+          "start_us": 606138.0
+        }
+      ],
+      "tag": "tinygrad_q_norm"
+    }
+  }
+}

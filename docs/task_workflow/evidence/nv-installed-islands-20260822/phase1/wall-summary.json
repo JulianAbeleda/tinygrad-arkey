@@ -1,0 +1,53 @@
+{
+  "schema": "tinygrad.nv_installed_island.phase1_wall.v1",
+  "session": "2026-08-22T22:30Z",
+  "lock": "/tmp/gpu-bench.lock",
+  "clock_lock": "sudo nvidia-smi -pm 1 && sudo nvidia-smi -lgc 2850 && sudo nvidia-smi -lmc 14001",
+  "clock_observed": {
+    "graphics_mhz": 2842,
+    "memory_mhz": 14001,
+    "pstate": "P0",
+    "persistence_mode": "Enabled"
+  },
+  "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+  "depth": 512,
+  "tinygrad": {
+    "command": "decode_runtime_overhead.py --ckpts 512 --max-context 4608 --nmeas 40 --reps 5",
+    "control_a_wall_us": 4776.511,
+    "control_b_wall_us": 4766.335,
+    "control_midpoint_us": 4771.423,
+    "control_spread_us": 10.176,
+    "control_tok_s": 209.58,
+    "profiled_wall_us": 6593.154,
+    "profiled_tok_s": 151.67,
+    "profiler_tax_us": 1821.731,
+    "profiler_tax_pct": 38.18,
+    "token_sha256": "dbd3026bb808fd57a5c7466963b0309168ee3d5ca58ccaf829cacdea9e0d491b",
+    "token_sha_identical_all_arms": true,
+    "route": "flash",
+    "decode_node_count": 596,
+    "decode_group_sizes": [32, 64, 128, 256, 116],
+    "profiled_node_sum_us": 4619.712,
+    "profiled_union_us": 4614.0,
+    "profiled_overlap_us": 5.023,
+    "profiled_span_us": 5674.5
+  },
+  "llama": {
+    "binary": "/home/ubuntu/env/llama.cpp/build-cuda/bin/llama-bench",
+    "binary_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8",
+    "command": "llama-bench -m Qwen3-8B-Q4_K_M.gguf -ngl 99 -fa 1 -p 512 -n 20 -d 512 -r 5",
+    "pdl_on_wall_us": 4037.319,
+    "pdl_on_tok_s": 247.75,
+    "pdl_off_wall_us": 4352.438,
+    "pdl_off_tok_s": 229.76,
+    "decode_node_count": 762,
+    "pdl_off_node_sum_us": 3897.896,
+    "pdl_off_span_us": 4039.689
+  },
+  "gap": {
+    "tinygrad_control_midpoint_minus_llama_pdl_on_us": 734.104,
+    "target_240_wall_us": 4166.666667,
+    "remaining_to_240_us": 604.756
+  },
+  "profiler_observable_statement": "The HCQ graph profile inserts two GPU timestamp semaphores per kernel and reports duration = end_timestamp - start_timestamp. That interval contains the kernel body plus the timestamp-command front-end/dispatch resolution and any dependency wait, so it is a body+front-end composite, not a pure body measure. The profiler tax on endpoint wall is material (+1821.731 us/token) and must not be subtracted from individual rows by an unverified uniform factor."
+}

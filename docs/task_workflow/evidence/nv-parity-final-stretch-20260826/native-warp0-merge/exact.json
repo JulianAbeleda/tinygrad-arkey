@@ -1,0 +1,17 @@
+{
+  "bit_exact": true,
+  "max_abs": 0.0,
+  "rows": [
+    {
+      "kernel": "rmsnorm_native_1_4096",
+      "mode": "all_threads",
+      "sha": "38715931597c4534ae6ea40a7e3f211e043f400f243fb8e42ddcc6dede6e091d"
+    },
+    {
+      "kernel": "rmsnorm_native_1_4096_warp0merge",
+      "mode": "warp0",
+      "sha": "38715931597c4534ae6ea40a7e3f211e043f400f243fb8e42ddcc6dede6e091d"
+    }
+  ],
+  "schema": "tinygrad.nv_rmsnorm_warp0_merge_exact.v1"
+}

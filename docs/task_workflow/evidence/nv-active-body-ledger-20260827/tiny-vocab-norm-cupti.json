@@ -1,0 +1,16 @@
+{
+  "norm": {
+    "n": 1100,
+    "median_active_us": 2.016,
+    "mean_active_us": 2.003399090909091,
+    "min_us": 1.983,
+    "max_us": 2.144
+  },
+  "vocab": {
+    "n": 15,
+    "median_active_us": 317.402,
+    "mean_active_us": 320.6186666666667,
+    "min_us": 315.994,
+    "max_us": 366.36
+  }
+}

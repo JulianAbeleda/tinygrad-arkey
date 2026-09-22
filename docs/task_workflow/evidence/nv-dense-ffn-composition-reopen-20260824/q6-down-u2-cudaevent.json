@@ -1,0 +1,34 @@
+{
+  "commit": "1d1690f15309df73ce4e966319f0bae8a4562b0d",
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q6k_fp16_packed_lanemap_u2_4096_12288_epi_ffnresadd' for 'sm_120a'",
+    "ptxas info    : Function properties for q6k_fp16_packed_lanemap_u2_4096_12288_epi_ffnresadd",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 8.891 ms"
+  ],
+  "schema": "tinygrad.nv_q6k_down_cold_counters.v1",
+  "shape": {
+    "block": 128,
+    "grid": 4096,
+    "k": 12288,
+    "rows": 4096
+  },
+  "symbol": "q6k_fp16_packed_lanemap_u2_4096_12288_epi_ffnresadd",
+  "timing": {
+    "median": 13.0054,
+    "samples": [
+      13.1846,
+      13.0054,
+      12.9962,
+      12.9891,
+      13.0214,
+      13.0118,
+      12.9923
+    ],
+    "unit": "us_per_launch_cuda_event"
+  },
+  "unroll": 2,
+  "weight_halfwords": 20643840
+}

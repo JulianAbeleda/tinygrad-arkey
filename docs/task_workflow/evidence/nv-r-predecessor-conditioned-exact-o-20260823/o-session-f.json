@@ -1,0 +1,506 @@
+{
+  "adjudication": {
+    "position_only_C6_minus_C3_us": 0.0,
+    "real_prefix_minus_position_C5_minus_C6_us": 0.016
+  },
+  "arm_medians_us": {
+    "C0": 8.672,
+    "C2": 8.192,
+    "C3": 8.384,
+    "C4": 8.352,
+    "C5": 8.4,
+    "C6": 8.384
+  },
+  "arm_output_checksums": {
+    "C0": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+    "C2": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+    "C3": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+    "C4": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+    "C5": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+    "C6": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946"
+  },
+  "arm_runs": [
+    {
+      "arm": "C0",
+      "durations_us": [
+        8.576,
+        8.864,
+        8.576,
+        8.608,
+        8.672,
+        8.512,
+        8.64,
+        8.8,
+        8.512,
+        8.864,
+        8.8,
+        8.704,
+        8.576,
+        8.704,
+        8.352,
+        8.64,
+        8.672,
+        8.704,
+        8.608,
+        8.832
+      ],
+      "median_us": 8.656
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        7.968,
+        8.128,
+        8.352,
+        8.32,
+        8.16,
+        8.288,
+        8.32,
+        8.096,
+        8.288,
+        8.16,
+        8.704,
+        8.832,
+        8.192,
+        8.128,
+        8.768,
+        8.224,
+        8.128,
+        8.096,
+        8.064,
+        8.032
+      ],
+      "median_us": 8.176
+    },
+    {
+      "arm": "C3",
+      "durations_us": [
+        8.256,
+        8.16,
+        8.32,
+        8.64,
+        8.448,
+        8.224,
+        8.608,
+        8.224,
+        8.544,
+        8.416,
+        8.16,
+        8.256,
+        8.512,
+        8.8,
+        8.288,
+        8.544,
+        8.192,
+        8.48,
+        8.352,
+        8.608
+      ],
+      "median_us": 8.384
+    },
+    {
+      "arm": "C4",
+      "durations_us": [
+        8.32,
+        8.16,
+        8.288,
+        9.088,
+        8.704,
+        8.16,
+        8.288,
+        8.16,
+        8.384,
+        8.192,
+        8.352,
+        8.416,
+        8.096,
+        8.32,
+        8.672,
+        8.608,
+        8.256,
+        8.096,
+        8.704,
+        8.224
+      ],
+      "median_us": 8.304
+    },
+    {
+      "arm": "C6",
+      "durations_us": [
+        8.512,
+        8.384,
+        8.416,
+        8.576,
+        8.576,
+        8.192,
+        8.32,
+        8.32,
+        8.288,
+        8.48,
+        8.48,
+        8.224,
+        8.32,
+        8.352,
+        8.608,
+        8.384,
+        8.192,
+        8.512,
+        8.256,
+        8.736
+      ],
+      "median_us": 8.384
+    },
+    {
+      "arm": "C5",
+      "durations_us": [
+        8.32,
+        8.576,
+        8.48,
+        8.576,
+        8.224,
+        8.544,
+        8.448,
+        8.288,
+        8.352,
+        8.256,
+        8.544,
+        8.352,
+        8.544,
+        8.352,
+        8.288,
+        8.576,
+        8.384,
+        8.416,
+        8.192,
+        8.448
+      ],
+      "median_us": 8.4
+    },
+    {
+      "arm": "C6",
+      "durations_us": [
+        8.16,
+        8.192,
+        8.608,
+        8.384,
+        8.672,
+        8.192,
+        8.288,
+        8.416,
+        8.608,
+        8.416,
+        8.32,
+        8.288,
+        8.416,
+        8.352,
+        8.448,
+        8.288,
+        8.512,
+        8.544,
+        8.448,
+        8.224
+      ],
+      "median_us": 8.4
+    },
+    {
+      "arm": "C4",
+      "durations_us": [
+        8.256,
+        8.352,
+        8.576,
+        8.512,
+        8.256,
+        8.576,
+        8.32,
+        8.288,
+        8.416,
+        8.416,
+        8.704,
+        8.384,
+        8.544,
+        8.544,
+        8.928,
+        8.544,
+        8.192,
+        8.32,
+        8.448,
+        8.352
+      ],
+      "median_us": 8.416
+    },
+    {
+      "arm": "C3",
+      "durations_us": [
+        8.448,
+        8.384,
+        8.16,
+        8.48,
+        8.096,
+        8.576,
+        8.48,
+        8.384,
+        8.32,
+        8.512,
+        8.32,
+        8.832,
+        8.288,
+        8.384,
+        8.288,
+        8.416,
+        8.32,
+        8.416,
+        8.448,
+        8.224
+      ],
+      "median_us": 8.384
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        8.128,
+        8.736,
+        8.128,
+        8.736,
+        8.192,
+        8.96,
+        8.32,
+        8.064,
+        8.192,
+        8.128,
+        8.192,
+        8.48,
+        8.288,
+        8.16,
+        8.288,
+        8.064,
+        8.192,
+        8.576,
+        8.096,
+        8.288
+      ],
+      "median_us": 8.192
+    },
+    {
+      "arm": "C0",
+      "durations_us": [
+        8.896,
+        8.672,
+        8.736,
+        8.64,
+        8.864,
+        8.672,
+        8.608,
+        8.736,
+        8.736,
+        8.608,
+        8.608,
+        8.64,
+        8.832,
+        8.544,
+        8.608,
+        8.64,
+        8.64,
+        8.8,
+        8.672,
+        8.704
+      ],
+      "median_us": 8.672
+    }
+  ],
+  "buffer_sizes": {
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": [
+      798720,
+      16384,
+      18874368
+    ],
+    "flash_fused_gmax_combine_f16_32_128": [
+      8192,
+      798720
+    ],
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": [
+      16384,
+      9437184,
+      8192,
+      16384
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      8192,
+      16384,
+      8192
+    ]
+  },
+  "buffer_vas": {
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": [
+      157971505152,
+      157971447808,
+      157064101888
+    ],
+    "flash_fused_gmax_combine_f16_32_128": [
+      142686027776,
+      157971505152
+    ],
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": [
+      157973954560,
+      138525971776,
+      142686027776,
+      157971308544
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      157974110208,
+      157974081536,
+      142858915840
+    ]
+  },
+  "capture_identity": {
+    "dependencies": {
+      "combine_out_to_o_in": true,
+      "score_out_to_combine_in": true
+    },
+    "family_occurrence": 0,
+    "prefix_contiguous": true,
+    "prefix_count": 14,
+    "prefix_names": [
+      "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "q4k_g3_lanemap_gemv_4096_4096",
+      "q4k_g3_lanemap_gemv_1024_4096",
+      "q6k_v_four_warp_fp16_direct_1024_4096",
+      "reduce_output_rmsnorm_32_128",
+      "reduce_output_rmsnorm_8_128",
+      "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+      "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b"
+    ],
+    "prefix_sequence": [
+      1451,
+      1452,
+      1453,
+      1454,
+      1455,
+      1456,
+      1457,
+      1458,
+      1459,
+      1460,
+      1461,
+      1462,
+      1463,
+      1464
+    ],
+    "sequence": {
+      "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 1465,
+      "flash_fused_gmax_combine_f16_32_128": 1466,
+      "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": 1467
+    }
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cubin_sha256": {
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": "2b974ac133ccc23faeb95420041da0d86f0c08e6873addbd4f376caa7688a6d7",
+    "flash_fused_gmax_combine_f16_32_128": "885232287deb30e3b491bd212f563c10b4eeefe013892ce24be6c0303edbe9b6",
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "gpu_state_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "101.86",
+    "pstate": "P0",
+    "temperature.gpu": "51"
+  },
+  "gpu_state_before": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "89.11",
+    "pstate": "P0",
+    "temperature.gpu": "50"
+  },
+  "identity": {
+    "C2_minus_C0_us": -0.48,
+    "C3_minus_C2_us": 0.192,
+    "C4_minus_C3_us": -0.032,
+    "C5_minus_C4_us": 0.048,
+    "P_minus_C0_us": 0.768,
+    "P_minus_C5_us": 1.04,
+    "identity_residual_us": 0.0
+  },
+  "installed_P": {
+    "all_us": [
+      9.76,
+      9.792,
+      9.376,
+      9.44,
+      9.28,
+      9.568,
+      9.536,
+      9.984,
+      9.344
+    ],
+    "complete_replay_count": 9,
+    "median_us": 9.44,
+    "steady_us": [
+      9.376,
+      9.44,
+      9.28,
+      9.568,
+      9.536,
+      9.984,
+      9.344
+    ],
+    "target_counts": [
+      36,
+      36,
+      36,
+      36,
+      36,
+      36,
+      36,
+      36,
+      36
+    ],
+    "warmup_dropped": 2
+  },
+  "n_per_block": 24,
+  "occurrence": 0,
+  "order": [
+    "C0",
+    "C2",
+    "C3",
+    "C4",
+    "C6",
+    "C5",
+    "C6",
+    "C4",
+    "C3",
+    "C2",
+    "C0"
+  ],
+  "production_output_checksum": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+  "schema": "tinygrad.nv_r_predecessor_conditioned_exact_o.v1",
+  "token_ids": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ],
+  "token_sha256": "fc90421da972a70fd043dd57f4d30e53c4dd78918a3292725bdb42e63750585a",
+  "verdict": "MEASURED_IDENTITY",
+  "warmup_per_block": 4
+}

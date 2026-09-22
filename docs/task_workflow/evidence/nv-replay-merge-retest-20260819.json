@@ -1,0 +1,40 @@
+{
+  "schema": "tinygrad.nv_replay_merge_retest.v1",
+  "date": "2026-08-19",
+  "branch": "nvidia-bringup-20260731",
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "claim_under_test": "merging the 5 sequential JIT replay groups into one whole-token graph enables cross-group pipelining and closes host gap.",
+  "method": "same-session flocked A/B, fresh process per arm, HCQ_NUM_COMPUTE=2, HCQ_NV_READY_PLACEMENT=1, NO_MEMORY_PLANNER=0, exact token sha gate.",
+  "control": {
+    "jit_batch_size": 32,
+    "tok_s_median": 210.32694002345096,
+    "wall_us_per_token": 4754.50267991586,
+    "tok_s_samples": [210.76848712722378, 210.37944768178116, 207.6271727859115, 210.2744323651208],
+    "token_sha_reps": [
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+    ]
+  },
+  "candidate": {
+    "jit_batch_size": 1024,
+    "tok_s_median": 209.12033745792624,
+    "wall_us_per_token": 4781.935665158316,
+    "tok_s_samples": [211.34358443088766, 206.55857506650167, 209.2295573051878, 209.01111761066468],
+    "token_sha_reps": [
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+      "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+    ]
+  },
+  "delta": {
+    "candidate_minus_control_tok_s": -1.2066025655247188,
+    "candidate_minus_control_wall_us": 27.43298524245529
+  },
+  "token_sha_identical": true,
+  "conclusion": "RE-TEST CLOSED NEGATIVE. Whole-token replay merge is 27.4 us/token slower at landed HEAD despite identical tokens. Cross-group pipelining is not the missing lever; the JIT_BATCH_SIZE=1024 route stays dropped."
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from collections import defaultdict, deque
 from typing import Any, ClassVar, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
-import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal, ctypes, json, time
+import importlib, inspect, functools, pathlib, os, contextlib, contextvars, re, atexit, pickle, decimal, ctypes, json, time
 from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored, ContextVar
 from tinygrad.helpers import Context, CCACHE, ALLOW_DEVICE_USAGE, MAX_BUFFER_SIZE, cpu_events, ProfileEvent, ProfilePointEvent, suppress_finalizing
 from tinygrad.helpers import select_by_name, select_first_inited, DEV, TracingKey, size_to_str, pluralize
@@ -165,6 +165,7 @@ class Buffer:
       # page-rounded above `self.nbytes` (the requested size); both are recorded so the difference is visible.
       if ALLOC_TRACE and (va:=getattr((buf:=self._bufs[self.device]), 'va_addr', None)) is not None:
         self._at_alloc_id = alloc_trace_record_alloc(self.device, va, getattr(buf, 'size', self.nbytes), self.nbytes)
+      _buffer_observe("alloc", self.device, self.nbytes)
     return self
   def deallocate(self):
     assert self.device in self._bufs, "buffer must be allocated to deallocate"
@@ -217,12 +218,14 @@ class Buffer:
     assert len(mv) == self.nbytes, f"size mismatch, {len(mv)=} != {self.dtype=} {self.size=}"
     assert self.is_initialized(), "can't copyin to unallocated buffer"
     self.allocator._copyin(self._buf, mv)
+    _buffer_observe("copyin", self.device, len(mv))
     return self
   def copyout(self, mv:memoryview) -> memoryview:
     mv = flat_mv(mv)
     assert len(mv) == self.nbytes, f"size mismatch, {len(mv)=} != {self.dtype=} {self.size=}"
     assert self.is_initialized(), "can't copyout unallocated buffer"
     self.allocator._copyout(mv, self._buf)
+    _buffer_observe("copyout", self.device, len(mv))
     return mv
   def view(self, size:int, dtype:DType, offset:int) -> Buffer:
     assert offset < self.nbytes, "offset must be less than nbytes"
@@ -339,6 +342,12 @@ def _dispatch_trace_dump(dev, exc:BaseException) -> None:
     for d, n, p, t, _, _ in history[-8:]: print(f"    {d} {n} pid={p} timeline={t}")
 
 ALLOC_TRACE = ContextVar("ALLOC_TRACE", 0)  # 1 = record every allocation and dispatch to a fixed ring; dump at exit or via alloc_trace_dump().
+BUFFER_OBSERVER:contextvars.ContextVar = contextvars.ContextVar("BUFFER_OBSERVER", default=None)
+def install_buffer_observer(observer): return BUFFER_OBSERVER.set(observer)
+def remove_buffer_observer(token): BUFFER_OBSERVER.reset(token)
+def _buffer_observe(kind, device, nbytes):
+  observer = BUFFER_OBSERVER.get()
+  if observer is not None: observer(kind=kind, device=device, bytes=nbytes, timestamp_ns=time.monotonic_ns())
 
 # FAULT-TO-ALLOCATION ATTRIBUTION RING (docs/gpu-page-fault-population-analysis-20260725.md, the TCP /
 # real-VA fault population -- BUG 2 in docs/gpu-fault-fix-scope-20260725.md). Those faults land in

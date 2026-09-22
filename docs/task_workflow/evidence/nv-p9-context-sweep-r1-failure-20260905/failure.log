@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 412, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 305, in main
+    _atomic_json(pathlib.Path(args.graph_census_dir).expanduser().resolve() / f"ctx-{depth}.json", depth_census)
+  File "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/decode_runtime_overhead.py", line 38, in _atomic_json
+    json.dump(payload, f, indent=2, sort_keys=True)
+  File "/usr/lib/python3.12/json/__init__.py", line 179, in dump
+    for chunk in iterable:
+  File "/usr/lib/python3.12/json/encoder.py", line 432, in _iterencode
+    yield from _iterencode_dict(o, _current_indent_level)
+  File "/usr/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 326, in _iterencode_list
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 326, in _iterencode_list
+    yield from chunks
+  File "/usr/lib/python3.12/json/encoder.py", line 439, in _iterencode
+    o = _default(o)
+        ^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/encoder.py", line 180, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type UOp is not JSON serializable

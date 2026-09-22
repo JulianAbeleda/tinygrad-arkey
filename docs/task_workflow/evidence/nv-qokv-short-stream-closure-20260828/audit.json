@@ -1,0 +1,44 @@
+{
+  "schema": "tinygrad.nv_qokv_short_stream_closure.v1",
+  "date": "2026-08-28",
+  "decision": "CP_ASYNC_EXACT_BUT_SERVICE_NEGATIVE__CROSS_LAUNCH_PERSISTENCE_NEEDS_NEW_RUNTIME_SUBSTRATE",
+  "production_route_modified": false,
+  "booked_recovery_us": 0.0,
+  "selected_primitive": {
+    "name": "exact Q4_K row-local cp.async staging",
+    "why_new": "real global-to-shared asynchronous copy; not static stripe, multi-row CTA, block unroll, full-grid aggregation, runtime row queue, or PDL",
+    "source": "extra/llm_research/decode/nv_q4k_o_async_pipeline_microgate.py",
+    "source_sha256": "b277189c9d0ec9d6b96295a24e6062d75d1ed9f36009b1122f2284254c50e1c7",
+    "authority": "async-r9-counters.json",
+    "authority_sha256": "c352081a53928a88108209872ff4703e9134b2f02351e51c3dccfcc36ab85104"
+  },
+  "correctness": {
+    "fixtures": 3,
+    "candidate_fixture_comparisons": 6,
+    "bitwise_all": true
+  },
+  "medians_us": {
+    "control": {"hot": 5.015808, "rotated_cold": 9.690},
+    "async_one_stage": {"hot": 5.230656, "rotated_cold": 10.169},
+    "async_two_stage": {"hot": 5.427072, "rotated_cold": 10.584}
+  },
+  "counter_summary": {
+    "control": {"dram_bytes": 9469696, "dram_peak_pct": 51.08, "instructions": 4800512, "long_scoreboard_pct": 74.69},
+    "async_one_stage": {"dram_bytes": 9469440, "dram_peak_pct": 45.82, "instructions": 4960256, "long_scoreboard_pct": 63.66},
+    "async_two_stage": {"dram_bytes": 9470464, "dram_peak_pct": 48.43, "instructions": 5464064, "long_scoreboard_pct": 65.65}
+  },
+  "persistent_service_blocker": {
+    "precise_missing_substrate": [
+      "device-visible task descriptor ring populated by live graph producers",
+      "resident-grid admission and bounded SM reservation",
+      "release/acquire epoch protocol and wrap-safe ownership",
+      "graph replay pointer rebinding for task descriptors",
+      "abort, drain, and deadlock-safe progress protocol"
+    ],
+    "why_prefilled_queue_is_not_a_test": "a finite queue populated before launch is a fused full-grid kernel and cannot test removal of successive QMD ramps"
+  },
+  "prior_static_stripe": {
+    "authority": "docs/task_workflow/evidence/nv-qokv-roofline-20260827/stripe-gate-r9.json",
+    "authority_sha256": "f10da4e287d841e64fb00d5fd13d07ae348ca81df6b17de1ddd2d74b6f156e80"
+  }
+}

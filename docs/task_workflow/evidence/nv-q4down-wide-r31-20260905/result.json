@@ -1,0 +1,313 @@
+{
+  "schema": "tinygrad.nv_q4down_matched_ab.v4",
+  "status": "PASS",
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "z": "docs/task_workflow/evidence/nv-q4down-capture-20260829/z.npy",
+    "z_shape": [
+      512,
+      12288
+    ],
+    "z_dtype": "float16",
+    "z_sha256": "c1a31d73c201d2682bce8b0798054c9bf2a3bfcabd4efc1f71fd6f48772c61d1"
+  },
+  "census": {
+    "metadata_type12_names": [
+      {
+        "metadata_name": "blk.4.ffn_down.weight",
+        "block": 4
+      },
+      {
+        "metadata_name": "blk.5.ffn_down.weight",
+        "block": 5
+      },
+      {
+        "metadata_name": "blk.7.ffn_down.weight",
+        "block": 7
+      },
+      {
+        "metadata_name": "blk.8.ffn_down.weight",
+        "block": 8
+      },
+      {
+        "metadata_name": "blk.10.ffn_down.weight",
+        "block": 10
+      },
+      {
+        "metadata_name": "blk.11.ffn_down.weight",
+        "block": 11
+      },
+      {
+        "metadata_name": "blk.13.ffn_down.weight",
+        "block": 13
+      },
+      {
+        "metadata_name": "blk.14.ffn_down.weight",
+        "block": 14
+      },
+      {
+        "metadata_name": "blk.16.ffn_down.weight",
+        "block": 16
+      },
+      {
+        "metadata_name": "blk.17.ffn_down.weight",
+        "block": 17
+      },
+      {
+        "metadata_name": "blk.19.ffn_down.weight",
+        "block": 19
+      },
+      {
+        "metadata_name": "blk.20.ffn_down.weight",
+        "block": 20
+      },
+      {
+        "metadata_name": "blk.22.ffn_down.weight",
+        "block": 22
+      },
+      {
+        "metadata_name": "blk.23.ffn_down.weight",
+        "block": 23
+      },
+      {
+        "metadata_name": "blk.25.ffn_down.weight",
+        "block": 25
+      },
+      {
+        "metadata_name": "blk.26.ffn_down.weight",
+        "block": 26
+      },
+      {
+        "metadata_name": "blk.28.ffn_down.weight",
+        "block": 28
+      },
+      {
+        "metadata_name": "blk.29.ffn_down.weight",
+        "block": 29
+      }
+    ],
+    "expected_mains": 18,
+    "candidate_mains": 18,
+    "control_mains": 18,
+    "candidate_program_names": {
+      "q8_compact_record_fp16_k12288": 18,
+      "r_4_32_32_2_4_2_2_4_4_192_2_2_2_406f6d10db61ff2425ae06d364289b2ec5e80c97c3f5a259e836ab9d120e8acf": 18
+    },
+    "control_program_names": {
+      "q8_ds4_fp16_down_pp512": 18,
+      "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_": 18,
+      "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_": 18
+    },
+    "candidate_calls": 36,
+    "control_calls": 54,
+    "census_ok": true
+  },
+  "correctness": {
+    "finite_candidate": true,
+    "finite_control": true,
+    "max_abs": 0.01215595006942749,
+    "mean_abs": 4.315502883400768e-05,
+    "distinct_activation_candidate": true,
+    "distinct_activation_control": true,
+    "second_activation_allclose": true,
+    "allclose_rtol_0p02_atol_0p5": true
+  },
+  "timing_ms": {
+    "status": "LIVE_GRAPH_R31",
+    "candidate_samples": [
+      6.527526,
+      6.515754,
+      6.493072,
+      6.493944,
+      6.490687,
+      6.54516,
+      7.66396,
+      6.532546,
+      6.532926,
+      6.532435,
+      6.526093,
+      7.650435,
+      6.539228,
+      6.533848,
+      6.537756,
+      6.537344,
+      7.659642,
+      6.545089,
+      7.672255,
+      7.656175,
+      7.656356,
+      6.544218,
+      6.537605,
+      7.562229,
+      6.358708,
+      6.363959,
+      6.356024,
+      6.371683,
+      7.473963,
+      7.478532,
+      7.563462
+    ],
+    "control_samples": [
+      3.732358,
+      3.868594,
+      3.81377,
+      3.809252,
+      3.660744,
+      3.678868,
+      3.718512,
+      3.711178,
+      3.708673,
+      3.713573,
+      3.885105,
+      3.716037,
+      3.73355,
+      3.689097,
+      3.720685,
+      4.035167,
+      3.886608,
+      3.885385,
+      3.872652,
+      3.88794,
+      3.715296,
+      3.86656,
+      3.883953,
+      3.880726,
+      3.591865,
+      3.587846,
+      3.740914,
+      3.596924,
+      3.608426,
+      3.750813,
+      3.918687
+    ],
+    "candidate_median": 6.537605,
+    "control_median": 3.73355,
+    "candidate_delta_median": 2.804055,
+    "orders": [
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ],
+      [
+        "llama",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "llama"
+      ]
+    ]
+  }
+}

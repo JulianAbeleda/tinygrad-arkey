@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """M1g: sweep K (== K-tile loop-iteration count) through the committed lane
-(`extra/llm_research/prefill/metal_precontract_lane.py`) to test the loop-carried
+(`extra/llm_research/prefill/precontract_probe_lane.py`) to test the loop-carried
 write-after-read hazard theory from `build_precontract_lds_stage`'s single-buffer
 (`bc=1`, `slot_base=0` every iteration) LDS reuse.
 
@@ -24,7 +24,7 @@ from __future__ import annotations
 import sys, json, time
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, admit_probe_config, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, admit_probe_config, run_precontract_probe
 
 QUANT, ROLE = "Q4_K", "ffn_gate_up"
 M, N = 512, 12288

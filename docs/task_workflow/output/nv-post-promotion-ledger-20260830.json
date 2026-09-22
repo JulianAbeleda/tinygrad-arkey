@@ -1,0 +1,23 @@
+{
+  "schema": "tinygrad.nv.post_promotion_ledger.v1",
+  "date": "2026-08-30",
+  "wall": {
+    "candidate_mean_ms": 38.4729335,
+    "llama_min_ms": 34.680367,
+    "llama_median_ms": 35.019399,
+    "gap_to_llama_median_ms": 3.4535345
+  },
+  "recovery": {
+    "vocabulary_ms": 2.5914185,
+    "o_ceiling_ms": 0.0662,
+    "flash_category_debt_ms": 1.716985
+  },
+  "accounting_rule": "wall_gap_and_category_debts_are_not_additive",
+  "decisions": {
+    "vocabulary": "retained_measured_recovery",
+    "o_fusion": "rejected_below_threshold",
+    "support_rope_kv": "no_isolated_ge_0_5ms_primitive",
+    "flash": "only_remaining_category_lever_above_threshold_exact_llama_abi_unavailable"
+  },
+  "next_build": "clean_room_flash"
+}

@@ -1,0 +1,22 @@
+{
+  "commit": "7c2b6707b6ce02257cc69f2d748a32c7d440ed20",
+  "exact": true,
+  "median": {
+    "persistent_cold_us": 1675.664023,
+    "persistent_hot_us": 1674.811002,
+    "standalone_cold_us": 12.53,
+    "standalone_hot_us": 9.906
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'standalone_qkv' for 'sm_120a'\nptxas info    : Function properties for standalone_qkv\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 9.714 ms\nptxas info    : Compiling entry function 'persistent_qkv_live' for 'sm_120a'\nptxas info    : Function properties for persistent_qkv_live\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 40 registers, used 1 barriers\nptxas info    : Compile time = 11.890 ms\n",
+  "samples": [
+    {
+      "persistent_cold_us": 1675.664023,
+      "persistent_hot_us": 1674.811002,
+      "rep": 0,
+      "standalone_cold_us": 12.53,
+      "standalone_hot_us": 9.906
+    }
+  ],
+  "schema": "tinygrad.nv_persistent_qkv_live_ring.v1",
+  "stdout": "sm=170 resident_blocks=169 warps=1352\nbitwise=1 finite=1\nrep=0 standalone_hot=9.906000 persistent_hot=1674.811002 standalone_cold=12.530000 persistent_cold=1675.664023\n"
+}

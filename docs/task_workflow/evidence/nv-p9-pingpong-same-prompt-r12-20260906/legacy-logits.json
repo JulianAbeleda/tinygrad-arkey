@@ -1,0 +1,35 @@
+{
+  "argmax_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208
+  ],
+  "arm": "legacy",
+  "callify_redirect": 0,
+  "contract": null,
+  "logits_sha256": "1d6c6891b7f20f9aef4da6d0272e29238c41b04a65a6a9457ba9af63989e3a40",
+  "mode": "logits",
+  "route_still_promoted": false,
+  "sample_argmax_match": true,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "shape": [
+    8,
+    1,
+    151936
+  ],
+  "tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208
+  ]
+}

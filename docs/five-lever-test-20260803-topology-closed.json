@@ -1,0 +1,64 @@
+{
+  "compute_ops": 14,
+  "shared_inputs": [
+    {
+      "input": "MUL",
+      "input_shape": "[1, 1, 4096]",
+      "readers": [
+        "gemv_1",
+        "gemv_3",
+        "gemv_5"
+      ],
+      "reader_kinds": [
+        "gemv",
+        "gemv",
+        "gemv"
+      ],
+      "count": 3
+    },
+    {
+      "input": "MUL",
+      "input_shape": "[1, 1, 4096]",
+      "readers": [
+        "gemv_11",
+        "gemv_12"
+      ],
+      "reader_kinds": [
+        "gemv",
+        "gemv"
+      ],
+      "count": 2
+    }
+  ],
+  "sole_consumers": [
+    {
+      "producer": "reduce_0",
+      "producer_kind": "reduce",
+      "consumer": "MUL"
+    },
+    {
+      "producer": "reduce_2",
+      "producer_kind": "reduce",
+      "consumer": "MUL"
+    },
+    {
+      "producer": "reduce_4",
+      "producer_kind": "reduce",
+      "consumer": "MUL"
+    },
+    {
+      "producer": "reduce_10",
+      "producer_kind": "reduce",
+      "consumer": "MUL"
+    }
+  ],
+  "immediate_reduces": [
+    {
+      "reduce_shape": "[1024, 1]",
+      "input_from": [
+        "CALL"
+      ]
+    }
+  ],
+  "label": "block0 depth=512 flash=False CLOSED kv=False"
+}

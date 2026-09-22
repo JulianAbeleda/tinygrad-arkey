@@ -1,0 +1,125 @@
+import pytest
+from extra.llm_research.boltbeam_kernel_provider import candidate_hash, generate_route_bound_candidate
+from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+
+def _candidate(family, parameters, route, component):
+  return {"schema":"boltbeam.route_bound_candidate.v1","target":"nvidia_sm120","family":family,"parameters":parameters,
+          "authorities":[{"route_id":route,"component":component}]}
+
+@pytest.mark.parametrize("candidate", [
+  _candidate("q4_gate_up.v1", {"vector_loads":False}, "decode_q4k_gate_up_four_warp_vector", "q4_gate_up_four_warp"),
+  _candidate("q4_kv_pair.v1", {"rows":1024,"k":4096}, "decode_q4k_kv_pair", "q4_kv_pair"),
+  _candidate("q6_v.v1", {}, "decode_q6k_v_four_warp_fp16_geometry", "q6_v_four_warp_fp16"),
+  _candidate("q6_ffn_down.v1", {"rows_per_block":1,"packed_lanemap":True,"unroll_blocks":None,
+    "split_weight_stream":False}, "decode_q6k_ffn_down_fp16_geometry", "q6_ffn_down_fp16"),
+  _candidate("q4_ffn_down.v1", {"block_count":3,"resadd":True,"load_style":"vector"},
+    "decode_q4k_ffn_down_fp16_geometry", "q4_ffn_down_fp16"),
+  _candidate("q4_w1w3.v1", {"rows":12288,"k":4096,"load_style":"vector","store_fp16":False},
+    "decode_q4k_w1w3_fusion", "q4_w1w3_fused"),
+  _candidate("finite_argmax.v1", {"n":151936,"threads":1024,"host_mirror":False},
+    "decode_native_argmax", "finite_fp32_argmax"),
+  _candidate("kv_rope_store.v1", {"Hkv":8,"Hd":128,"max_context":4096,"vparts":1},
+    "decode_kv_store_fusion", "kv_rope_store"),
+  _candidate("q4_k_four_warp.v1", {"rows":1024,"k":4096}, "decode_q4k_k_four_warp", "q4_k_four_warp"),
+  _candidate("shared_q8_provider.v1", {"k":4096,"source_dtype":"fp16"},
+    "decode_shared_q8_attention", "shared_q8_provider"),
+  _candidate("decode_rmsnorm.v1", {"rows":1,"dim":4096,"eps":1e-6,"warps_per_row":16,
+    "x_dtype":"dtypes.float","weight_dtype":"dtypes.half","out_dtype":"dtypes.float","x_rank":1},
+    "decode_rmsnorm_native_lowering", "decode_rmsnorm"),
+])
+def test_route_bound_packed_family_generates_registered_emitter(candidate):
+  generated = generate_route_bound_candidate(candidate, candidate_hash(candidate))
+  assert generated.kind == "uop" and callable(generated.artifact)
+
+def test_route_bound_provider_rejects_identity_drift():
+  candidate = _candidate("q6_v.v1", {}, "decode_q6k_v_four_warp_fp16_geometry", "q6_v_four_warp_fp16")
+  with pytest.raises(ValueError): generate_route_bound_candidate(candidate, "0" * 64)
+
+def test_lowering_returns_emitter_and_matching_ticket():
+  emitter,ticket = lower_authorized_candidate({"family":"q6_v.v1"},
+    (("decode_q6k_v_four_warp_fp16_geometry","q6_v_four_warp_fp16"),))
+  assert callable(emitter) and ticket.tickets[0].component == "q6_v_four_warp_fp16"
+
+def test_symbolic_lowering_binding_is_outside_candidate_identity():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import UOp
+  candidate={"family":"shared_q8_attention_consumer.v1","rows":1024,"variant":"q4_cooperative",
+             "direct_output":True,"block_count_binding":"cooperative_blocks"}
+  authorities=(("decode_q4_direct_shared_q8_attention","shared_q8_q4_direct"),)
+  first,ticket1=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
+  second,ticket2=lower_authorized_candidate(candidate,authorities,lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,8)})
+  assert callable(first) and callable(second) and ticket1.tickets[0].candidate_hash == ticket2.tickets[0].candidate_hash
+
+def test_multi_output_symbolic_provider():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import UOp
+  emitter,ticket=lower_authorized_candidate({"family":"shared_q8_multi_output.v1","variant":"q4kv_pair",
+    "rows":1024,"block_count_binding":"cooperative_blocks"},
+    (("decode_shared_q8_q4kv_pair","shared_q8_q4_kv_pair"),),
+    lowering_bindings={"cooperative_blocks":UOp.const(dtypes.weakint,4)})
+  assert callable(emitter) and ticket.tickets[0].component == "shared_q8_q4_kv_pair"
+
+def test_rmsnorm_q8_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=1,dim=4096,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=16,lanes=32,per_lane=8)
+  emitter,_=lower_authorized_candidate({"family":"rmsnorm_q8_provider.v1","rows":1,"dim":4096,"eps":1e-6,
+    "recipe":"sumsq_rsqrt_affine","warps":16,"x_dtype":"dtypes.float","weight_dtype":"dtypes.half",
+    "spec_binding":"reduce_output_spec"},(("decode_shared_q8_attention","shared_q8_provider"),),
+    lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)
+
+def test_reduce_output_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=8,dim=128,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=8,lanes=32,per_lane=4,epilogue="rope")
+  emitter,_=lower_authorized_candidate({"family":"reduce_output.v1","spec_repr":repr(spec),
+    "x_dtype":"dtypes.float","weight_dtype":"dtypes.half","spec_binding":"reduce_output_spec"},
+    (("decode_qk_norm_rope","qk_reduce_norm_rope"),),lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)
+
+def test_q6_checked_spec_binding():
+  from tinygrad.llm.decode_kernels import q6k_spec_for_role
+  spec=q6k_spec_for_role(4096,12288,parts=1,row_tile=2,use_coop=True,target="NV:sm_120",reduction="in_kernel",epilogue="")
+  emitter,_=lower_authorized_candidate({"family":"q6_gemv_route.v1","rows":4096,"k":12288,"row_tile":2,
+    "reduction":"in_kernel","epilogue":"","spec_binding":"q6_spec"},
+    (("decode_q6k_coop_generated","q6_gemv"),),lowering_bindings={"q6_spec":spec})
+  assert callable(emitter)
+
+def test_cache_sink_checked_spec_binding():
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import Ops, ReduceOutputSpec
+  spec=ReduceOutputSpec(rows=8,dim=128,eps=1e-6,out_dtype=dtypes.float32,affine=True,
+    recipe="sumsq_rsqrt_affine",reduce_op=Ops.ADD,warps=8,lanes=32,per_lane=4,epilogue="rope")
+  emitter,_=lower_authorized_candidate({"family":"qk_norm_rope_cache_sink.v1","spec_repr":repr(spec),
+    "producer_dtype":"dtypes.float","weight_dtype":"dtypes.half","cache_dtype":"dtypes.half","max_context":4096,
+    "spec_binding":"reduce_output_spec"},(("decode_producer_kv_cache_sink","qk_norm_rope_cache_sink"),),
+    lowering_bindings={"reduce_output_spec":spec})
+  assert callable(emitter)
+
+def test_flash_spec_checked_binding():
+  class Spec:
+    def __repr__(self): return "flash-spec-v1"
+    def emit_tile(self, tc): return lambda *args: tc
+    def emit_combine(self): return lambda *args: None
+  spec=Spec()
+  emitter,_=lower_authorized_candidate({"family":"flash_decode_spec_combine.v1","candidate_id":"flash.candidate",
+    "spec_repr":repr(spec),"spec_binding":"flash_spec"},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),),lowering_bindings={"flash_spec":spec})
+  assert callable(emitter)
+
+def test_wide_flash_combine_provider():
+  emitter,_=lower_authorized_candidate({"family":"flash_decode_wide_combine.v1","candidate_id":"wide",
+    "Hd":128,"Hq":32,"splits":32,"output_fp16":True,"register_weights":False,
+    "successor_prefetch_groups":0,"output_q8":False,"output_q8_fine":False},
+    (("decode_flash_llama_vec_wide","flash_decode_combine"),))
+  assert callable(emitter)
+
+def test_direct_provider_queue_is_empty():
+  from pathlib import Path
+  root=Path(__file__).parents[2] / "tinygrad" / "llm"
+  misses=[f"{path.name}:{line_no}" for path in root.glob("*.py") for line_no,line in enumerate(path.read_text().splitlines(),1)
+          if "boltbeam_ticket=tickets_for_candidate" in line]
+  assert misses == []

@@ -1,0 +1,611 @@
+{
+  "schema": "tinygrad.nv_multi_queue_probe.driver.v1",
+  "device": "NV sm_120 RTX 5090",
+  "n": 33554432,
+  "matmul": 2048,
+  "engines": [
+    0,
+    0
+  ],
+  "grid_div": 1,
+  "per_arm_timeout_s": 900,
+  "arms": [
+    {
+      "mode": "shared",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726293,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": null,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "pass",
+          "check": "cross-gpfifo semaphore dep (hash + max-error contract)",
+          "timestamps_us": [
+            [
+              1785843677851774.5,
+              1785843677851780.5
+            ],
+            [
+              1785843677851833.0,
+              1785843677851838.5
+            ]
+          ],
+          "span_us": 64.0,
+          "node_sum_us": 11.5,
+          "overlap": -4.565217391304348,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "hashes": {
+            "out_c": "051845608e897c46158d7acf999fc47c46b8b2428dbe4beebfccf330f9d7da12",
+            "out_e": "aab778badc2bc2b9ce200e3c4a85fceccb0801d494ae3e03a24eae5e92dd33f6",
+            "ref_c": "051845608e897c46158d7acf999fc47c46b8b2428dbe4beebfccf330f9d7da12",
+            "ref_e": "aab778badc2bc2b9ce200e3c4a85fceccb0801d494ae3e03a24eae5e92dd33f6"
+          },
+          "max_err_c": 0.0,
+          "max_err_e": 0.0,
+          "error_bound": 0.001,
+          "ref_abs_max_c": 2097150.0,
+          "ref_abs_max_e": 2097151.0
+        },
+        {
+          "name": "R2",
+          "status": "pass",
+          "check": "serial calibration (span vs node-sum timestamp tolerance)",
+          "timestamps_us": [
+            [
+              1785843678326968.8,
+              1785843678327195.5
+            ],
+            [
+              1785843678327196.8,
+              1785843678327449.0
+            ]
+          ],
+          "span_us": 480.25,
+          "node_sum_us": 479.0,
+          "overlap": -0.0026096033402922755,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "abs_delta_us": 1.25,
+          "pct_delta": 0.2609603340292276,
+          "timestamp_tol_pct": 2.0,
+          "timestamp_tol_abs_us": 10.0
+        },
+        {
+          "name": "R3",
+          "status": "FAIL",
+          "check": "2-queue elementwise overlap",
+          "timestamps_us": [
+            [
+              1785843678917163.2,
+              1785843678917408.0
+            ],
+            [
+              1785843678917408.5,
+              1785843678917664.0
+            ]
+          ],
+          "span_us": 500.75,
+          "node_sum_us": 500.25,
+          "overlap": -0.0009995002498750624,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "grid_div": 1,
+          "hashes": {
+            "out": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1"
+            ],
+            "ref": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            0.0
+          ],
+          "error_bound": 0.001,
+          "ref_abs_maxes": [
+            2.0,
+            4.0
+          ],
+          "hash_match": [
+            true,
+            true
+          ],
+          "numeric_ok": true
+        },
+        {
+          "name": "R4",
+          "status": "FAIL",
+          "check": "3-queue elementwise overlap",
+          "timestamps_us": [
+            [
+              1785843681486909.2,
+              1785843681487188.5
+            ],
+            [
+              1785843681487189.0,
+              1785843681487442.0
+            ],
+            [
+              1785843681487442.8,
+              1785843681487698.5
+            ]
+          ],
+          "span_us": 789.25,
+          "node_sum_us": 788.0,
+          "overlap": -0.0015862944162436548,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "grid_div": 1,
+          "hashes": {
+            "out": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1",
+              "5d9e8be1ce6d1d0d1f98ec9f2060265e41b6353f38b5e48c6643d85ec772fc0f"
+            ],
+            "ref": [
+              "10b4129404049877185282f6322223d4d1178722549d62440823ffa74a49a9a6",
+              "e9fb04f7e765a5f7bd18ce3dbd57876291e43ee7ac3964c91644500bae082ec1",
+              "5d9e8be1ce6d1d0d1f98ec9f2060265e41b6353f38b5e48c6643d85ec772fc0f"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "error_bound": 0.001,
+          "ref_abs_maxes": [
+            2.0,
+            4.0,
+            6.0
+          ],
+          "hash_match": [
+            true,
+            true,
+            true
+          ],
+          "numeric_ok": true
+        },
+        {
+          "name": "R5",
+          "status": "FAIL",
+          "check": "2-queue matmul overlap + correctness",
+          "timestamps_us": [
+            [
+              1785843684253088.2,
+              1785843684255735.2
+            ],
+            [
+              1785843684255735.5,
+              1785843684258370.8
+            ]
+          ],
+          "span_us": 5282.5,
+          "node_sum_us": 5282.25,
+          "overlap": -4.732831653178096e-05,
+          "arm": {
+            "mode": "shared",
+            "exit_code": 0,
+            "timed_out": false
+          },
+          "M": 2048,
+          "hashes": {
+            "out": [
+              "3122bf9f8288775454bc64e19bac9b27c58de07e0c9a5f9f6c80c24214faa62e",
+              "5084bae3990e72d69baff8c4107e91794aeb7f5c29d363fc67950afb05940f13"
+            ],
+            "ref": [
+              "3122bf9f8288775454bc64e19bac9b27c58de07e0c9a5f9f6c80c24214faa62e",
+              "7758797b8a98d8639faf775a4c258228ff82326084a695b984e079e6a4d35308"
+            ]
+          },
+          "max_errs": [
+            0.0,
+            1.1920928955078125e-07
+          ],
+          "error_bound": 0.01,
+          "ref_abs_maxes": [
+            1.0,
+            2.0
+          ],
+          "hash_match": [
+            true,
+            false
+          ],
+          "numeric_ok": true
+        }
+      ],
+      "errors": []
+    },
+    {
+      "mode": "ctxshare",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726294,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_GPFIFO_SCHEDULE",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726294,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726298,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_GPFIFO_SCHEDULE",
+          "kind": "NVA06F",
+          "group": 3404726277,
+          "channel": 3404726298,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726277,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R2",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R3",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R4",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R5",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "ctxshare",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        }
+      ],
+      "errors": [
+        "R1 execution error: ",
+        "R2 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R3 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R4 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R5 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)"
+      ]
+    },
+    {
+      "mode": "group",
+      "exit_code": 0,
+      "timed_out": false,
+      "rm_ops": [
+        {
+          "op": "CHANNEL_GROUP_ALLOC",
+          "kind": "KEPLER_CHANNEL_GROUP_A",
+          "group": 3404726292,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726292,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726292,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_GPFIFO_SCHEDULE",
+          "kind": "NVA06F",
+          "group": 3404726292,
+          "channel": 3404726296,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726292,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_GROUP_ALLOC",
+          "kind": "KEPLER_CHANNEL_GROUP_A",
+          "group": 3404726298,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CTXSHARE_ALLOC",
+          "kind": "FERMI_CONTEXT_SHARE_A",
+          "group": 3404726298,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "CHANNEL_ALLOC",
+          "kind": "NVA06F",
+          "group": 3404726298,
+          "channel": 3404726302,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06F_GPFIFO_SCHEDULE",
+          "kind": "NVA06F",
+          "group": 3404726298,
+          "channel": 3404726302,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        },
+        {
+          "op": "NVA06C_GPFIFO_SCHEDULE",
+          "kind": "NVA06C",
+          "group": 3404726298,
+          "channel": null,
+          "engine_type": 0,
+          "status": "ok",
+          "error": null
+        }
+      ],
+      "experiments": [
+        {
+          "name": "R1",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R2",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R3",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R4",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        },
+        {
+          "name": "R5",
+          "status": "FAIL",
+          "check": "execution error",
+          "error": "Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+          "timestamps_us": [],
+          "span_us": null,
+          "node_sum_us": null,
+          "overlap": null,
+          "arm": {
+            "mode": "group",
+            "exit_code": 0,
+            "timed_out": false
+          }
+        }
+      ],
+      "errors": [
+        "R1 execution error: ",
+        "R2 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R3 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R4 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)",
+        "R5 execution error: Wait timeout: 30000 ms! (the signal is not set to 12, but 11)"
+      ]
+    }
+  ],
+  "verdict": "CONSTRUCTION_BLOCKED",
+  "verdict_basis": "R1 executed but failed its hash/error contract in arm(s) ['ctxshare', 'group']; no arm has a passing R1, so this is a blocked construction, not a no-overlap result"
+}

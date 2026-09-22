@@ -1,0 +1,99 @@
+{
+  "correctness": [
+    {
+      "bitwise": false,
+      "candidate_sha256": "23e789583420a708259575c8c0ce20d7c86875bc8e501316907b6cd97a158ed1",
+      "case": "normal",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "de6a6661e3396d975c2c661727646f0a0ee97d06fd5fe58d14bff4062016ebf9",
+      "max_abs": 1.30385160446167e-08
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "case": "zero",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": false,
+      "candidate_sha256": "bf2da781b0e4659f52e73a4e67871224b934f75ebff37027a952c63036d5fedd",
+      "case": "dynamic",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "7fe62732a370eb7fc742e0bee037c36c9c31c8fd0cc947b6027a2675d3b925da",
+      "max_abs": 4.76837158203125e-06
+    },
+    {
+      "bitwise": false,
+      "candidate_sha256": "38ffb02ef1dff69a772540db5e2b2bac1629ef7e1972cb97119901ab3ef2be2c",
+      "case": "normal",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "985d2ef2e4eef296a4ae9f59bbd9db10b84bbda23d15f85775d098ebc987be7e",
+      "max_abs": 7.62939453125e-06
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "case": "zero",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "e02eeca4bc9eb8b25bf6c4c272a176a506860033ba00a9a75d5c1e8ee3b24b15",
+      "case": "dynamic",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "e02eeca4bc9eb8b25bf6c4c272a176a506860033ba00a9a75d5c1e8ee3b24b15",
+      "max_abs": 0.0
+    }
+  ],
+  "device": "NV",
+  "git_commit": "c56d33c1465623758b0cb07bf2a17d4075bf8ea2",
+  "schema": "tinygrad.nv_flash_vec_llama_microgate.v1",
+  "shape": {
+    "Hd": 128,
+    "Hkv": 8,
+    "Hq": 32,
+    "L": 144,
+    "MAXC": 4608,
+    "S": 4,
+    "Tc": 513
+  },
+  "timing": {
+    "candidate_b": [
+      65.5614,
+      65.46637,
+      65.62256500000001,
+      65.411165,
+      65.060305
+    ],
+    "candidate_median": 65.46637,
+    "control_a": [
+      65.705015,
+      65.065265,
+      65.71273500000001,
+      66.09730499999999,
+      65.96486
+    ],
+    "control_c": [
+      65.24465500000001,
+      65.841175,
+      65.282875,
+      65.26254,
+      65.10018
+    ],
+    "control_midpoint_median": 65.4876375,
+    "delta": -0.021267500000007544,
+    "replays": 200,
+    "reps": 5,
+    "unit": "us_per_included_graph"
+  }
+}

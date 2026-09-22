@@ -1,0 +1,94 @@
+{
+  "schema": "tinygrad.nv_post_flash_vocab_ledger.v1",
+  "date": "2026-08-24",
+  "target": {
+    "tok_per_s": 240.0,
+    "us_per_token": 4166.666667
+  },
+  "flash_combine": {
+    "verdict": "REJECTED_NO_WALL",
+    "production_lane_width": 32,
+    "bitwise_exact_widths": [32, 64, 128],
+    "calls_per_token": 36,
+    "width64": {
+      "control_device_us_per_token": 103.568,
+      "candidate_device_us_per_token": 125.392,
+      "device_delta_us_per_token": 21.824,
+      "node_sum_delta_us_per_token": 20.768,
+      "profiled_wall_delta_us_per_token": 37.797
+    },
+    "width128": {
+      "control_device_us_per_token": 103.568,
+      "candidate_device_us_per_token": 96.08,
+      "device_recovery_us_per_token": 7.488,
+      "wall_reps9": {
+        "control_a_ms_per_token": 4.60641609375,
+        "candidate_ms_per_token": 4.604076375,
+        "control_c_ms_per_token": 4.599669125,
+        "control_midpoint_ms_per_token": 4.603042609375,
+        "recovery_us_per_token": -1.033765625,
+        "all_token_hashes_equal": true,
+        "verdict": "NO_GO_WALL"
+      }
+    }
+  },
+  "native_vocab_argmax": {
+    "verdict": "PROMOTED",
+    "target": {"backend": "NV", "architecture": "sm_120"},
+    "threads": 1024,
+    "finite_fp32_semantic_cases": ["random", "first_index_ties", "signed_zero", "all_equal", "finite_extrema"],
+    "all_semantic_cases_exact": true,
+    "control_reduce_device_us_per_token": 53.12,
+    "native_device_us_per_token": 8.864,
+    "wall_reps9": {
+      "control_a_ms_per_token": 4.6057195,
+      "candidate_ms_per_token": 4.54933359375,
+      "control_c_ms_per_token": 4.60571903125,
+      "control_midpoint_ms_per_token": 4.605719265625,
+      "recovery_us_per_token": 56.385671875,
+      "speedup_pct": 1.239427066,
+      "all_token_hashes_equal": true,
+      "verdict": "WALL_PASS"
+    },
+    "rollback_env": "TINYGRAD_NATIVE_ARGMAX_DISABLE=1"
+  },
+  "installed_current": {
+    "scheduled_nodes": 516,
+    "node_sum_us": 4352.288,
+    "union_us": 4349.5,
+    "overlap_us": 2.788,
+    "previous_scheduled_nodes": 517,
+    "previous_node_sum_us": 4393.776,
+    "previous_union_us": 4390.75,
+    "scheduled_node_change": -1,
+    "node_sum_change_us": -41.488,
+    "union_change_us": -41.25
+  },
+  "current_wall_endpoint": {
+    "ms_per_token": 4.5788125,
+    "tok_per_s": 218.397237275,
+    "previous_ms_per_token": 4.6359459375,
+    "recovery_us_per_token": 57.1334375,
+    "remaining_to_240_us": 412.145833333,
+    "latency_reduction_still_needed_pct": 9.8915
+  },
+  "remaining_llama_delta_us": {
+    "node_sum_total": 474.018,
+    "norm_4096_accounting_caveat": 115.42,
+    "flash_score": 82.24,
+    "kv_projection": 73.12,
+    "flash_combine": 66.69,
+    "down": 57.91,
+    "gate_up": 53.65,
+    "q_projection": 51.42,
+    "o_projection": 48.86,
+    "vocab_inferred_after_promotion": 23.952
+  },
+  "next_sequence": [
+    "production_conditioned_kv_and_flash_boundary_launch_elimination",
+    "projection_achieved_rate_or_output_transport_without_changing_dram_bytes",
+    "fresh_wall_and_installed_reledger"
+  ],
+  "verification": {"focused_tests_passed": 104},
+  "verdict": "ONE_PROMOTION_FLASH_NO_GO_218_397_TOK_S_240_NOT_REACHED"
+}

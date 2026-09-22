@@ -1,0 +1,211 @@
+{
+  "cuda_order": [
+    "no_pdl",
+    "pdl_end",
+    "pdl_start",
+    "pdl_prologue",
+    "no_pdl"
+  ],
+  "evidence_dir": "docs/task_workflow/evidence/nv-split-phase-pdl-causal-design-review-20260820",
+  "gates": {
+    "checksum": {
+      "cuda_no_pdl": true,
+      "cuda_pdl_end": true,
+      "cuda_pdl_prologue": true,
+      "cuda_pdl_start": true,
+      "native_no_pdl": true,
+      "native_pdl_end": true,
+      "native_pdl_prologue": true,
+      "native_pdl_start": true,
+      "native_qmd_latch": true
+    },
+    "cuda_pdl_fired": true,
+    "cuda_trigger_position_moves_launch": true,
+    "cuda_wait_placement_moves_wait": false,
+    "native_in_kernel_pdl_overlaps": true,
+    "native_qmd_latch_overlaps": true
+  },
+  "native_order": [
+    "no_pdl",
+    "pdl_end",
+    "pdl_start",
+    "pdl_prologue",
+    "qmd_latch",
+    "no_pdl"
+  ],
+  "reps": 12,
+  "results": {
+    "cuda_no_pdl_0": {
+      "binary_path": "/tmp/nv-pdl-phase-c/no_pdl/probe",
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 501.248,
+        "overlap_us": -0.64,
+        "producer_us": 500.64,
+        "trigger_shadow_us": null,
+        "wait_us": 0.064,
+        "wall_us": 527.296
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "72615fa0de7ae76c5ae8e4b45ede68333143f8dfc216286388b290f6bf2b50e4"
+    },
+    "cuda_no_pdl_4": {
+      "binary_path": "/tmp/nv-pdl-phase-c/no_pdl/probe",
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 501.248,
+        "overlap_us": -0.64,
+        "producer_us": 500.64,
+        "trigger_shadow_us": null,
+        "wait_us": 0.064,
+        "wall_us": 527.232
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "72615fa0de7ae76c5ae8e4b45ede68333143f8dfc216286388b290f6bf2b50e4"
+    },
+    "cuda_pdl_end_1": {
+      "binary_path": "/tmp/nv-pdl-phase-c/pdl_end/probe",
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 100.384,
+        "overlap_us": -0.352,
+        "producer_us": 100.032,
+        "trigger_shadow_us": 100.032,
+        "wait_us": 0.064,
+        "wall_us": 126.464
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "5bef18bbd8c94f928a839551809eac705c00bb9ca5459eadd08b5ec397992591"
+    },
+    "cuda_pdl_prologue_3": {
+      "binary_path": "/tmp/nv-pdl-phase-c/pdl_prologue/probe",
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 100.384,
+        "overlap_us": -0.352,
+        "producer_us": 100.032,
+        "trigger_shadow_us": 100.032,
+        "wait_us": 0.064,
+        "wall_us": 126.368
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "6385b93d5aac9cac544a42cafc72f9dc00be129f786e3f417b2769d30b10095e"
+    },
+    "cuda_pdl_start_2": {
+      "binary_path": "/tmp/nv-pdl-phase-c/pdl_start/probe",
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 0.704,
+        "overlap_us": 99.456,
+        "producer_us": 100.16,
+        "trigger_shadow_us": 0.0,
+        "wait_us": 99.776,
+        "wall_us": 126.432
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": "5410c6d28d0d6a89c09818ebe6dd1bf53553edd6a83ab34d83e011fdaea6b6d1"
+    },
+    "native_no_pdl_0": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 501.216,
+        "overlap_us": -0.576,
+        "producer_us": 500.64,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 527.744
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_no_pdl_5": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 501.216,
+        "overlap_us": -0.576,
+        "producer_us": 500.64,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 528.064
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_end_1": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 401.088,
+        "overlap_us": 99.776,
+        "producer_us": 500.896,
+        "trigger_shadow_us": 100.032,
+        "wait_us": 100.192,
+        "wall_us": 527.296
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_prologue_3": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 401.056,
+        "overlap_us": 99.808,
+        "producer_us": 500.896,
+        "trigger_shadow_us": 100.032,
+        "wait_us": 100.256,
+        "wall_us": 527.264
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_pdl_start_2": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 400.928,
+        "overlap_us": 99.84,
+        "producer_us": 500.768,
+        "trigger_shadow_us": -0.192,
+        "wait_us": 100.224,
+        "wall_us": 526.976
+      },
+      "qmd_latch_fields": null,
+      "reps": 11,
+      "source_sha256": null
+    },
+    "native_qmd_latch_4": {
+      "binary_path": null,
+      "checksum_correct_all": true,
+      "median": {
+        "launch_shadow_us": 400.864,
+        "overlap_us": 99.776,
+        "producer_us": 500.64,
+        "trigger_shadow_us": null,
+        "wait_us": 0.0,
+        "wall_us": 426.016
+      },
+      "qmd_latch_fields": {
+        "arrive_at_latch_id": 7,
+        "arrive_at_latch_valid": 1,
+        "enable_program_pre_exit": 1,
+        "pre_exit_at_last_cta_launch": 1
+      },
+      "reps": 11,
+      "source_sha256": null
+    }
+  },
+  "schema": "tinygrad.nv_pdl_phase_c_driver.v1",
+  "warmup": 1
+}

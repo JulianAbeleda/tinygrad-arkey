@@ -1,0 +1,70 @@
+{
+  "bitwise_identical": true,
+  "median": {
+    "cold_candidate_us": 12.052,
+    "cold_control_us": 15.792,
+    "cold_recovery_us": 3.74,
+    "hot_candidate_us": 8.736,
+    "hot_control_us": 11.384,
+    "hot_recovery_us": 2.6479999999999997
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 66 registers, used 1 barriers\nptxas info    : Compile time = 19.314 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_pair_vec_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_pair_vec_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 67 registers, used 0 barriers\nptxas info    : Compile time = 16.289 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 61 registers, used 0 barriers\nptxas info    : Compile time = 9.414 ms",
+  "reps": 7,
+  "samples": [
+    {
+      "cold_candidate_us": 11.848,
+      "cold_control_us": 16.41,
+      "hot_candidate_us": 8.8944,
+      "hot_control_us": 11.504,
+      "rep": 0
+    },
+    {
+      "cold_candidate_us": 12.052,
+      "cold_control_us": 15.878001,
+      "hot_candidate_us": 8.7272,
+      "hot_control_us": 11.3992,
+      "rep": 1
+    },
+    {
+      "cold_candidate_us": 12.292,
+      "cold_control_us": 15.768,
+      "hot_candidate_us": 8.7392,
+      "hot_control_us": 11.384,
+      "rep": 2
+    },
+    {
+      "cold_candidate_us": 12.096,
+      "cold_control_us": 15.546,
+      "hot_candidate_us": 8.7648,
+      "hot_control_us": 11.396,
+      "rep": 3
+    },
+    {
+      "cold_candidate_us": 11.868,
+      "cold_control_us": 15.798,
+      "hot_candidate_us": 8.708,
+      "hot_control_us": 11.3504,
+      "rep": 4
+    },
+    {
+      "cold_candidate_us": 11.844,
+      "cold_control_us": 15.732,
+      "hot_candidate_us": 8.7216,
+      "hot_control_us": 11.3208,
+      "rep": 5
+    },
+    {
+      "cold_candidate_us": 12.066,
+      "cold_control_us": 15.792,
+      "hot_candidate_us": 8.736,
+      "hot_control_us": 11.352,
+      "rep": 6
+    }
+  ],
+  "schema": "tinygrad.q4k_ordinary_qkv_full_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "kv_rows": 1024,
+    "q_rows": 4096
+  }
+}

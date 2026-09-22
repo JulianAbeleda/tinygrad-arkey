@@ -1,0 +1,1 @@
+{"max_abs": 3.814697265625e-06, "mean_abs": 7.105838051302271e-08, "bad_tiles": 0, "worst": [24, 3], "signature": "extern \"C\" __global__ void __launch_bounds__(256) q4_qo_streamk(float* data0_6291456, float* partials, int* partial_ids, const unsigned int* data1_7077888, const unsigned int* data2_594432) {"}

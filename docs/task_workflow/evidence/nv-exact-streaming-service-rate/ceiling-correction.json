@@ -1,0 +1,44 @@
+{
+  "schema": "tinygrad.nv_exact_streaming_service_rate_ceiling.v1",
+  "date": "2026-08-25",
+  "source_ledger": "docs/task_workflow/evidence/nv-full-qkv-producer-substrate-20260825/campaign-ledger.json",
+  "family_points": [
+    {"family": "gate_up", "mean_payload_mb_per_launch": 56.623104, "mean_us_per_launch": 35.384889},
+    {"family": "down", "mean_payload_mb_per_launch": 34.799611, "mean_us_per_launch": 23.679111},
+    {"family": "Q", "mean_payload_mb_per_launch": 9.437184, "mean_us_per_launch": 8.321778},
+    {"family": "O", "mean_payload_mb_per_launch": 9.437184, "mean_us_per_launch": 8.468444},
+    {"family": "K_V", "mean_payload_mb_per_launch": 5.259278, "mean_us_per_launch": 6.552889}
+  ],
+  "least_squares_size_model": {
+    "form": "time_us = fixed_ramp_us + payload_mb * slope_us_per_mb",
+    "fixed_ramp_us": 3.270245,
+    "slope_us_per_mb": 0.571634,
+    "asymptotic_payload_rate_gb_s": 1749.373,
+    "projection_population_launches": 180,
+    "fixed_ramp_mass_us": 588.644,
+    "fitted_projection_mass_us": 2966.656,
+    "observed_projection_mass_us": 2966.656
+  },
+  "old_uniform_rate_model": {
+    "modeled_device_time_us": 3697.380,
+    "modeled_tok_per_s": 270.462,
+    "claimed_distance_from_current_us": 653.396,
+    "status": "SUPERSEDED_FOR_CLAIMABLE_HEADROOM"
+  },
+  "corrected_interpretation": {
+    "finding": "Small exact projection bodies pay a fixed launch/latency-ramp term and cannot be normalized to the long-body steady-state rate.",
+    "current_weight_body_mass_us": 3280.512,
+    "retained_non_weight_device_mass_us": 826.738,
+    "size_aware_device_time_us": 4107.250,
+    "status": "CURRENT_DEVICE_UNION_EXPLAINED_NOT_A_NEW_HARDWARE_BOUND"
+  },
+  "candidate_results": [
+    {"candidate": "Q4 vector one-warp-per-row packed 2 rows per CTA", "bit_exact": true, "control_us": 4.8972, "candidate_us": 5.1775, "result": "PRIMITIVE_NO_GO"},
+    {"candidate": "Q4 vector one-warp-per-row packed 4 rows per CTA", "bit_exact": true, "control_us": 4.8821, "candidate_us": 5.2113, "result": "PRIMITIVE_NO_GO"},
+    {"candidate": "Q4 vector one-warp-per-row packed 8 rows per CTA", "bit_exact": true, "control_us": 4.9024, "candidate_us": 5.6493, "result": "PRIMITIVE_NO_GO"},
+    {"candidate": "Q6 V packed lane map", "bit_exact": false, "max_abs_diff": 0.000005722046, "result": "EXACT_GATE_FAIL"},
+    {"candidate": "Q6 V exact two-block unroll", "bit_exact": true, "control_midpoint_us": 125.498064, "candidate_us": 125.978668, "result": "PRIMITIVE_NO_GO_HOST_AMORTIZED"}
+  ],
+  "decision": "UNIFORM_RATE_CEILING_REJECTED_SIZE_AWARE_RAMP_WALL_PROMOTED",
+  "booked_wall_recovery_us": 0.0
+}

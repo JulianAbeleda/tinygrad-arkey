@@ -1,0 +1,27 @@
+{
+  "generated_unroll8": {
+    "sass_lines": 9051,
+    "mma": 288,
+    "barriers": 18,
+    "ldg": 234,
+    "lds": 0,
+    "stg": 67,
+    "address_ops": 239,
+    "cubin_bytes": 159856
+  },
+  "llama_q4_main": {
+    "sass_lines": 7828,
+    "mma": 256,
+    "barriers": 9,
+    "ldg": 114,
+    "lds": 88,
+    "stg": 128,
+    "address_ops": 817,
+    "cubin_bytes": 173928
+  },
+  "tool": "triton nvdisasm -c",
+  "symbols": [
+    "q4_down_streamk",
+    "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_"
+  ]
+}

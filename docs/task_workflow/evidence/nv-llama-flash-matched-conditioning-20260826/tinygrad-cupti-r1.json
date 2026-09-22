@@ -1,0 +1,297 @@
+{
+  "capture_seen": {
+    "flash_vec_llama_score_pv_32_128_8_widekv16": 72,
+    "q4k_g3_lanemap_gemv_vec_1024_4096": 20,
+    "q4k_g3_lanemap_gemv_vec_4096_4096": 36,
+    "q6k_v_four_warp_fp16_direct_1024_4096": 20,
+    "reduce_output_rmsnorm_rope_32_128": 72,
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": 72
+  },
+  "capture_tokens_out": [
+    13876,
+    38835,
+    34208,
+    13
+  ],
+  "captured_occurrences": {
+    "flash_vec_llama_score_pv_32_128_8_widekv16": 1,
+    "q4k_g3_lanemap_gemv_vec_1024_4096": 1,
+    "q4k_g3_lanemap_gemv_vec_4096_4096": 1,
+    "q6k_v_four_warp_fp16_direct_1024_4096": 1,
+    "reduce_output_rmsnorm_rope_32_128": 1,
+    "reduce_output_rmsnorm_rope_kv_cache_8_128": 1
+  },
+  "commit": "79b740fd997cf4b7c7ea25942daa6d1f29fa0cbf",
+  "fresh_production_score": {
+    "complete_replays": 1,
+    "median_us": 6.715556,
+    "per_replay_mean_us": [
+      6.715556
+    ],
+    "steady_replays": 1,
+    "target_counts": [
+      36
+    ]
+  },
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "47"
+  },
+  "method": "exact installed live programs/buffers; native NV HCQ; untimed hot score before every sample; only final score timestamped",
+  "n_per_arm": 8,
+  "production_profile_jsonl": "docs/task_workflow/evidence/nv-llama-flash-matched-conditioning-20260826/tinygrad-cupti-r1.json.profile.jsonl",
+  "reconciliation": {
+    "cold_qkv_prefix_minus_hot_us": {
+      "stream_read_128mib_qkv_prefix": 1.24,
+      "stream_read_64mib_qkv_prefix": 0.088,
+      "stream_read_96mib_qkv_prefix": 1.08
+    },
+    "completions_minus_hot_us": 0.04,
+    "fresh_production_score_us": 6.715556,
+    "hot_midpoint_us": 4.504,
+    "nearest_stream_arm": "stream_read_128mib",
+    "nearest_stream_minus_production_us": -0.972,
+    "nearest_stream_us": 5.744,
+    "production_minus_hot_us": 2.212,
+    "qkv_prefix_minus_hot_us": 0.056,
+    "qkv_prefix_share_of_production_residual": 0.025,
+    "retained_production_score_us": 6.184889,
+    "stream_read_minus_hot_us": {
+      "stream_read_128mib": 1.24,
+      "stream_read_16mib": 0.008,
+      "stream_read_32mib": 0.04,
+      "stream_read_64mib": 0.024,
+      "stream_read_96mib": 1.112
+    }
+  },
+  "rows": {
+    "completions": {
+      "max_us": 4.576,
+      "mean_us": 4.532,
+      "median_us": 4.544,
+      "min_us": 4.48,
+      "samples_us": [
+        4.544,
+        4.544,
+        4.512,
+        4.576,
+        4.544,
+        4.48,
+        4.544,
+        4.512
+      ]
+    },
+    "hot_a": {
+      "max_us": 4.576,
+      "mean_us": 4.504,
+      "median_us": 4.496,
+      "min_us": 4.48,
+      "samples_us": [
+        4.576,
+        4.512,
+        4.512,
+        4.48,
+        4.48,
+        4.48,
+        4.48,
+        4.512
+      ]
+    },
+    "hot_c": {
+      "max_us": 4.64,
+      "mean_us": 4.536,
+      "median_us": 4.512,
+      "min_us": 4.512,
+      "samples_us": [
+        4.544,
+        4.512,
+        4.64,
+        4.512,
+        4.544,
+        4.512,
+        4.512,
+        4.512
+      ]
+    },
+    "qkv_prefix": {
+      "max_us": 4.608,
+      "mean_us": 4.568,
+      "median_us": 4.56,
+      "min_us": 4.544,
+      "samples_us": [
+        4.544,
+        4.576,
+        4.544,
+        4.576,
+        4.608,
+        4.544,
+        4.544,
+        4.608
+      ]
+    },
+    "stream_read_128mib": {
+      "max_us": 6.08,
+      "mean_us": 5.8,
+      "median_us": 5.744,
+      "min_us": 5.632,
+      "samples_us": [
+        5.888,
+        5.728,
+        5.728,
+        5.632,
+        6.08,
+        5.92,
+        5.76,
+        5.664
+      ]
+    },
+    "stream_read_128mib_qkv_prefix": {
+      "max_us": 5.888,
+      "mean_us": 5.732,
+      "median_us": 5.744,
+      "min_us": 5.568,
+      "samples_us": [
+        5.6,
+        5.888,
+        5.888,
+        5.6,
+        5.76,
+        5.568,
+        5.824,
+        5.728
+      ]
+    },
+    "stream_read_16mib": {
+      "max_us": 4.64,
+      "mean_us": 4.524,
+      "median_us": 4.512,
+      "min_us": 4.48,
+      "samples_us": [
+        4.512,
+        4.64,
+        4.512,
+        4.48,
+        4.512,
+        4.544,
+        4.512,
+        4.48
+      ]
+    },
+    "stream_read_32mib": {
+      "max_us": 4.64,
+      "mean_us": 4.544,
+      "median_us": 4.544,
+      "min_us": 4.48,
+      "samples_us": [
+        4.48,
+        4.512,
+        4.64,
+        4.544,
+        4.48,
+        4.544,
+        4.544,
+        4.608
+      ]
+    },
+    "stream_read_64mib": {
+      "max_us": 4.576,
+      "mean_us": 4.528,
+      "median_us": 4.528,
+      "min_us": 4.48,
+      "samples_us": [
+        4.512,
+        4.48,
+        4.544,
+        4.544,
+        4.512,
+        4.576,
+        4.544,
+        4.512
+      ]
+    },
+    "stream_read_64mib_qkv_prefix": {
+      "max_us": 4.672,
+      "mean_us": 4.592,
+      "median_us": 4.592,
+      "min_us": 4.512,
+      "samples_us": [
+        4.672,
+        4.608,
+        4.576,
+        4.544,
+        4.512,
+        4.64,
+        4.64,
+        4.544
+      ]
+    },
+    "stream_read_96mib": {
+      "max_us": 5.76,
+      "mean_us": 5.604,
+      "median_us": 5.616,
+      "min_us": 5.44,
+      "samples_us": [
+        5.44,
+        5.664,
+        5.728,
+        5.76,
+        5.504,
+        5.504,
+        5.6,
+        5.632
+      ]
+    },
+    "stream_read_96mib_qkv_prefix": {
+      "max_us": 5.824,
+      "mean_us": 5.596,
+      "median_us": 5.584,
+      "min_us": 5.44,
+      "samples_us": [
+        5.824,
+        5.44,
+        5.696,
+        5.568,
+        5.6,
+        5.44,
+        5.568,
+        5.632
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_wide_conditioning_probe.v1",
+  "shape": {
+    "capture_tokens": 4,
+    "depth": 512,
+    "max_context": 1024
+  },
+  "stream_read_mib": [
+    16,
+    32,
+    64,
+    96,
+    128
+  ],
+  "target": "flash_vec_llama_score_pv_32_128_8_widekv16",
+  "target_buf_sizes": [
+    135168,
+    16384,
+    4194304
+  ],
+  "target_global_size": [
+    8,
+    32,
+    1
+  ],
+  "target_local_size": [
+    32,
+    4,
+    1
+  ],
+  "target_vals": [
+    512
+  ]
+}

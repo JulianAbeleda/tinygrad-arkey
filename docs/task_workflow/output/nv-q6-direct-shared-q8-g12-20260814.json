@@ -1,0 +1,60 @@
+{
+  "schema": "tinygrad.nv_q6_direct_shared_q8_g12_gate.v1",
+  "date": "2026-08-14",
+  "git_commit": "f31828e93",
+  "device": "NV",
+  "arch": "sm_120",
+  "mode": "fused-timing-reverse-bracket",
+  "flags": {
+    "fused_groups": 12,
+    "cooperative_q4": true,
+    "q6_direct_output": true,
+    "composed": true,
+    "settled_continuous": true,
+    "depth": 512,
+    "count": 32,
+    "max_context": 1024,
+    "reps": 5
+  },
+  "wall": {
+    "control_a_ms_per_token": 5.0805794375,
+    "candidate_ms_per_token": 5.03689309375,
+    "control_c_ms_per_token": 5.07130884375,
+    "control_midpoint_ms_per_token": 5.075944140625,
+    "candidate_minus_control_ms_per_token": -0.039051046875,
+    "candidate_speedup_pct": 0.775300292226877,
+    "all_token_hashes_equal": true,
+    "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+    "verdict": "WALL_PASS_NEGATIVE"
+  },
+  "semantic": {
+    "schema": "tinygrad.nv_shared_q8_progressive_qualification.semantic_comparison.v1",
+    "finite": true,
+    "tokens_equal": true,
+    "argmax_equal": true,
+    "top_k": 10,
+    "top_k_sets_equal": true,
+    "top_k_order_equal": true,
+    "relative_l2": 0.0005006654530624455,
+    "relative_l2_max": 0.001,
+    "max_abs": 0.010866641998291016,
+    "min_baseline_top1_margin": 1.219045639038086,
+    "perturbation_vs_min_margin": 0.017828113485341815,
+    "perturbation_vs_min_margin_max": 1.0,
+    "semantic_pass": true
+  },
+  "census": {
+    "q6_direct_consumer_count": 12,
+    "q6_direct_expected_count": 12,
+    "q8_provider_count": 24,
+    "cooperative_q4_consumer_count": 60,
+    "fused_rmsnorm_q8_provider_count": 24,
+    "finite": true
+  },
+  "primitive_census_us": {
+    "q6k_q8_warp_direct_1024_4096": 3.0,
+    "q6k_gen_partial_1024_4096_4": 57.7,
+    "evidence": "DEBUG=4 profiler census, native RTX 5090"
+  },
+  "note": "Research evidence only. The closed-default q6_direct_output lease is not promoted by this artifact; the full promotion protocol remains pending."
+}

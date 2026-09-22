@@ -1,0 +1,705 @@
+{
+  "full_token_dag": {
+    "cross_group_edge_count": 12,
+    "edge_checks": {
+      "dag_only": 738,
+      "e2_only": 1015,
+      "expected": 1394,
+      "matched": 379,
+      "ran": true
+    },
+    "group_checks": [
+      {
+        "critical_path_diff_us": 217.632,
+        "critical_path_us": 221.472,
+        "group": "0",
+        "issues": [
+          "serialized diff 204.256 us > 1.000",
+          "critical-path diff 217.632 us > 1.000"
+        ],
+        "n": 32,
+        "ok": false,
+        "serialized_diff_us": 204.256,
+        "serialized_us": 249.312
+      },
+      {
+        "critical_path_diff_us": 55163.616,
+        "critical_path_us": 490.528,
+        "group": "1",
+        "issues": [
+          "serialized diff 58835.360 us > 1.000",
+          "critical-path diff 55163.616 us > 1.000"
+        ],
+        "n": 64,
+        "ok": false,
+        "serialized_diff_us": 58835.36,
+        "serialized_us": 536.928
+      },
+      {
+        "critical_path_diff_us": 137684.544,
+        "critical_path_us": 1012.32,
+        "group": "2",
+        "issues": [
+          "serialized diff 143190.464 us > 1.000",
+          "critical-path diff 137684.544 us > 1.000"
+        ],
+        "n": 128,
+        "ok": false,
+        "serialized_diff_us": 143190.464,
+        "serialized_us": 1086.272
+      },
+      {
+        "critical_path_diff_us": 248114.848,
+        "critical_path_us": 2132.32,
+        "group": "3",
+        "issues": [
+          "node count 230 != E2 256",
+          "serialized diff 260148.416 us > 1.000",
+          "critical-path diff 248114.848 us > 1.000"
+        ],
+        "n": 230,
+        "ok": false,
+        "serialized_diff_us": 260148.416,
+        "serialized_us": 2305.888
+      }
+    ],
+    "independence_assumption": false,
+    "path": "docs/task_workflow/evidence/nv-attention-token-lifecycle-reopen-20260824/full-token-dag.json",
+    "per_group_summary": {
+      "0": {
+        "critical_path_us": 221.472,
+        "n": 32,
+        "serialized_us": 249.312
+      },
+      "1": {
+        "critical_path_us": 490.528,
+        "n": 64,
+        "serialized_us": 536.928
+      },
+      "2": {
+        "critical_path_us": 1012.32,
+        "n": 128,
+        "serialized_us": 1086.272
+      },
+      "3": {
+        "critical_path_us": 2132.32,
+        "n": 230,
+        "serialized_us": 2305.888
+      }
+    },
+    "schedules": {
+      "critical_path_us": 3856.64,
+      "queues_2": {
+        "saving_pct": 7.6,
+        "saving_us": 318.624,
+        "span_us": 3859.776
+      },
+      "queues_3": {
+        "saving_pct": 7.7,
+        "saving_us": 321.76,
+        "span_us": 3856.64
+      },
+      "saving_pct": 7.7,
+      "saving_us": 321.76,
+      "serialized_us": 4178.4
+    },
+    "unknown_dep_node_count": 0
+  },
+  "merged_not_legal": {
+    "critical_path_us": 409333.024,
+    "cross_group_edges": 0,
+    "reason": "per-group HCQGraph captures lack cross-group edges; cross_group_edges=0 means 'not recorded', never 'proven absent'",
+    "schedule_2q_pct": 50.0,
+    "schedule_2q_us": 6717699.136,
+    "schedule_3q_pct": 66.7,
+    "schedule_3q_us": 4479007.84,
+    "serialized_us": 13435115.104
+  },
+  "pass": false,
+  "per_group_rows": [
+    {
+      "critical_path_us": 3.84,
+      "group": "0",
+      "label": "1",
+      "n": 32,
+      "serialized_us": 45.056
+    },
+    {
+      "critical_path_us": 55654.144,
+      "group": "1",
+      "label": "2",
+      "n": 64,
+      "serialized_us": 59372.288
+    },
+    {
+      "critical_path_us": 138696.864,
+      "group": "2",
+      "label": "3",
+      "n": 128,
+      "serialized_us": 144276.736
+    },
+    {
+      "critical_path_us": 250247.168,
+      "group": "3",
+      "label": "4",
+      "n": 256,
+      "serialized_us": 262454.304
+    },
+    {
+      "critical_path_us": 403760.0,
+      "group": "4",
+      "label": "5",
+      "n": 394,
+      "serialized_us": 422498.816
+    },
+    {
+      "critical_path_us": 2.592,
+      "group": "5",
+      "label": "6",
+      "n": 32,
+      "serialized_us": 36.576
+    },
+    {
+      "critical_path_us": 55831.04,
+      "group": "6",
+      "label": "7",
+      "n": 64,
+      "serialized_us": 59558.72
+    },
+    {
+      "critical_path_us": 138999.36,
+      "group": "7",
+      "label": "8",
+      "n": 128,
+      "serialized_us": 144592.672
+    },
+    {
+      "critical_path_us": 250881.664,
+      "group": "8",
+      "label": "9",
+      "n": 256,
+      "serialized_us": 263108.992
+    },
+    {
+      "critical_path_us": 404610.624,
+      "group": "9",
+      "label": "10",
+      "n": 394,
+      "serialized_us": 423030.56
+    },
+    {
+      "critical_path_us": 2.272,
+      "group": "10",
+      "label": "11",
+      "n": 32,
+      "serialized_us": 37.92
+    },
+    {
+      "critical_path_us": 55787.392,
+      "group": "11",
+      "label": "12",
+      "n": 64,
+      "serialized_us": 59513.312
+    },
+    {
+      "critical_path_us": 139112.256,
+      "group": "12",
+      "label": "13",
+      "n": 128,
+      "serialized_us": 144707.52
+    },
+    {
+      "critical_path_us": 250757.184,
+      "group": "13",
+      "label": "14",
+      "n": 256,
+      "serialized_us": 262983.392
+    },
+    {
+      "critical_path_us": 405217.984,
+      "group": "14",
+      "label": "15",
+      "n": 394,
+      "serialized_us": 423645.568
+    },
+    {
+      "critical_path_us": 2.176,
+      "group": "15",
+      "label": "16",
+      "n": 32,
+      "serialized_us": 37.568
+    },
+    {
+      "critical_path_us": 56063.232,
+      "group": "16",
+      "label": "17",
+      "n": 64,
+      "serialized_us": 59789.76
+    },
+    {
+      "critical_path_us": 138957.216,
+      "group": "17",
+      "label": "18",
+      "n": 128,
+      "serialized_us": 144554.016
+    },
+    {
+      "critical_path_us": 250898.464,
+      "group": "18",
+      "label": "19",
+      "n": 256,
+      "serialized_us": 263125.472
+    },
+    {
+      "critical_path_us": 405119.968,
+      "group": "19",
+      "label": "20",
+      "n": 394,
+      "serialized_us": 423543.744
+    },
+    {
+      "critical_path_us": 2.272,
+      "group": "20",
+      "label": "21",
+      "n": 32,
+      "serialized_us": 37.728
+    },
+    {
+      "critical_path_us": 55867.488,
+      "group": "21",
+      "label": "22",
+      "n": 64,
+      "serialized_us": 59592.544
+    },
+    {
+      "critical_path_us": 139198.272,
+      "group": "22",
+      "label": "23",
+      "n": 128,
+      "serialized_us": 144791.968
+    },
+    {
+      "critical_path_us": 251778.944,
+      "group": "23",
+      "label": "24",
+      "n": 256,
+      "serialized_us": 264005.984
+    },
+    {
+      "critical_path_us": 405658.688,
+      "group": "24",
+      "label": "25",
+      "n": 394,
+      "serialized_us": 424409.12
+    },
+    {
+      "critical_path_us": 2.208,
+      "group": "25",
+      "label": "26",
+      "n": 32,
+      "serialized_us": 37.504
+    },
+    {
+      "critical_path_us": 55975.776,
+      "group": "26",
+      "label": "27",
+      "n": 64,
+      "serialized_us": 59700.416
+    },
+    {
+      "critical_path_us": 139461.792,
+      "group": "27",
+      "label": "28",
+      "n": 128,
+      "serialized_us": 145056.32
+    },
+    {
+      "critical_path_us": 251570.048,
+      "group": "28",
+      "label": "29",
+      "n": 256,
+      "serialized_us": 263793.824
+    },
+    {
+      "critical_path_us": 406118.528,
+      "group": "29",
+      "label": "30",
+      "n": 394,
+      "serialized_us": 424540.256
+    },
+    {
+      "critical_path_us": 2.24,
+      "group": "30",
+      "label": "31",
+      "n": 32,
+      "serialized_us": 37.792
+    },
+    {
+      "critical_path_us": 56117.632,
+      "group": "31",
+      "label": "32",
+      "n": 64,
+      "serialized_us": 59844.096
+    },
+    {
+      "critical_path_us": 139488.128,
+      "group": "32",
+      "label": "33",
+      "n": 128,
+      "serialized_us": 145081.44
+    },
+    {
+      "critical_path_us": 251938.944,
+      "group": "33",
+      "label": "34",
+      "n": 256,
+      "serialized_us": 264168.896
+    },
+    {
+      "critical_path_us": 406835.392,
+      "group": "34",
+      "label": "35",
+      "n": 394,
+      "serialized_us": 425581.248
+    },
+    {
+      "critical_path_us": 2.208,
+      "group": "35",
+      "label": "36",
+      "n": 32,
+      "serialized_us": 37.632
+    },
+    {
+      "critical_path_us": 56170.944,
+      "group": "36",
+      "label": "37",
+      "n": 64,
+      "serialized_us": 59899.04
+    },
+    {
+      "critical_path_us": 139748.576,
+      "group": "37",
+      "label": "38",
+      "n": 128,
+      "serialized_us": 145339.712
+    },
+    {
+      "critical_path_us": 252467.392,
+      "group": "38",
+      "label": "39",
+      "n": 256,
+      "serialized_us": 264691.648
+    },
+    {
+      "critical_path_us": 407021.824,
+      "group": "39",
+      "label": "40",
+      "n": 394,
+      "serialized_us": 425771.648
+    },
+    {
+      "critical_path_us": 1.824,
+      "group": "40",
+      "label": "41",
+      "n": 32,
+      "serialized_us": 35.04
+    },
+    {
+      "critical_path_us": 56166.624,
+      "group": "41",
+      "label": "42",
+      "n": 64,
+      "serialized_us": 59893.504
+    },
+    {
+      "critical_path_us": 139871.648,
+      "group": "42",
+      "label": "43",
+      "n": 128,
+      "serialized_us": 145463.36
+    },
+    {
+      "critical_path_us": 252597.088,
+      "group": "43",
+      "label": "44",
+      "n": 256,
+      "serialized_us": 264825.856
+    },
+    {
+      "critical_path_us": 407653.024,
+      "group": "44",
+      "label": "45",
+      "n": 394,
+      "serialized_us": 426465.568
+    },
+    {
+      "critical_path_us": 1.856,
+      "group": "45",
+      "label": "46",
+      "n": 32,
+      "serialized_us": 35.008
+    },
+    {
+      "critical_path_us": 56252.832,
+      "group": "46",
+      "label": "47",
+      "n": 64,
+      "serialized_us": 59980.032
+    },
+    {
+      "critical_path_us": 139824.0,
+      "group": "47",
+      "label": "48",
+      "n": 128,
+      "serialized_us": 145419.36
+    },
+    {
+      "critical_path_us": 252611.936,
+      "group": "48",
+      "label": "49",
+      "n": 256,
+      "serialized_us": 264838.784
+    },
+    {
+      "critical_path_us": 408041.568,
+      "group": "49",
+      "label": "50",
+      "n": 394,
+      "serialized_us": 426466.88
+    },
+    {
+      "critical_path_us": 1.984,
+      "group": "50",
+      "label": "51",
+      "n": 32,
+      "serialized_us": 35.232
+    },
+    {
+      "critical_path_us": 56348.992,
+      "group": "51",
+      "label": "52",
+      "n": 64,
+      "serialized_us": 60075.232
+    },
+    {
+      "critical_path_us": 140021.28,
+      "group": "52",
+      "label": "53",
+      "n": 128,
+      "serialized_us": 145616.992
+    },
+    {
+      "critical_path_us": 252898.368,
+      "group": "53",
+      "label": "54",
+      "n": 256,
+      "serialized_us": 265120.448
+    },
+    {
+      "critical_path_us": 408249.76,
+      "group": "54",
+      "label": "55",
+      "n": 394,
+      "serialized_us": 426994.752
+    },
+    {
+      "critical_path_us": 2.176,
+      "group": "55",
+      "label": "56",
+      "n": 32,
+      "serialized_us": 37.408
+    },
+    {
+      "critical_path_us": 56470.24,
+      "group": "56",
+      "label": "57",
+      "n": 64,
+      "serialized_us": 60196.576
+    },
+    {
+      "critical_path_us": 140121.312,
+      "group": "57",
+      "label": "58",
+      "n": 128,
+      "serialized_us": 145716.256
+    },
+    {
+      "critical_path_us": 253036.32,
+      "group": "58",
+      "label": "59",
+      "n": 256,
+      "serialized_us": 265265.952
+    },
+    {
+      "critical_path_us": 408499.2,
+      "group": "59",
+      "label": "60",
+      "n": 394,
+      "serialized_us": 426923.072
+    },
+    {
+      "critical_path_us": 2.176,
+      "group": "60",
+      "label": "61",
+      "n": 32,
+      "serialized_us": 37.984
+    },
+    {
+      "critical_path_us": 56616.8,
+      "group": "61",
+      "label": "62",
+      "n": 64,
+      "serialized_us": 60344.576
+    },
+    {
+      "critical_path_us": 140305.6,
+      "group": "62",
+      "label": "63",
+      "n": 128,
+      "serialized_us": 145899.04
+    },
+    {
+      "critical_path_us": 253295.936,
+      "group": "63",
+      "label": "64",
+      "n": 256,
+      "serialized_us": 265519.52
+    },
+    {
+      "critical_path_us": 408948.416,
+      "group": "64",
+      "label": "65",
+      "n": 394,
+      "serialized_us": 427373.056
+    },
+    {
+      "critical_path_us": 2.176,
+      "group": "65",
+      "label": "66",
+      "n": 32,
+      "serialized_us": 37.92
+    },
+    {
+      "critical_path_us": 56495.296,
+      "group": "66",
+      "label": "67",
+      "n": 64,
+      "serialized_us": 60223.936
+    },
+    {
+      "critical_path_us": 140310.816,
+      "group": "67",
+      "label": "68",
+      "n": 128,
+      "serialized_us": 145903.616
+    },
+    {
+      "critical_path_us": 253809.664,
+      "group": "68",
+      "label": "69",
+      "n": 256,
+      "serialized_us": 266033.376
+    },
+    {
+      "critical_path_us": 409311.552,
+      "group": "69",
+      "label": "70",
+      "n": 394,
+      "serialized_us": 428058.496
+    },
+    {
+      "critical_path_us": 221.472,
+      "group": "70",
+      "label": "71",
+      "n": 32,
+      "serialized_us": 249.312
+    },
+    {
+      "critical_path_us": 490.528,
+      "group": "71",
+      "label": "72",
+      "n": 64,
+      "serialized_us": 536.928
+    },
+    {
+      "critical_path_us": 1012.32,
+      "group": "72",
+      "label": "73",
+      "n": 128,
+      "serialized_us": 1086.272
+    },
+    {
+      "critical_path_us": 2132.32,
+      "group": "73",
+      "label": "74",
+      "n": 230,
+      "serialized_us": 2305.888
+    },
+    {
+      "critical_path_us": 409333.024,
+      "group": "74",
+      "label": "75",
+      "n": 394,
+      "serialized_us": 428083.456
+    },
+    {
+      "critical_path_us": 253974.752,
+      "group": "75",
+      "label": "76",
+      "n": 256,
+      "serialized_us": 266202.176
+    },
+    {
+      "critical_path_us": 140435.2,
+      "group": "76",
+      "label": "77",
+      "n": 128,
+      "serialized_us": 146029.248
+    },
+    {
+      "critical_path_us": 56549.376,
+      "group": "77",
+      "label": "78",
+      "n": 64,
+      "serialized_us": 60277.216
+    },
+    {
+      "critical_path_us": 2.176,
+      "group": "78",
+      "label": "79",
+      "n": 32,
+      "serialized_us": 37.536
+    },
+    {
+      "critical_path_us": 2106.208,
+      "group": "79",
+      "label": "80",
+      "n": 230,
+      "serialized_us": 2274.4
+    },
+    {
+      "critical_path_us": 1010.176,
+      "group": "80",
+      "label": "81",
+      "n": 128,
+      "serialized_us": 1083.712
+    },
+    {
+      "critical_path_us": 487.392,
+      "group": "81",
+      "label": "82",
+      "n": 64,
+      "serialized_us": 535.68
+    },
+    {
+      "critical_path_us": 218.112,
+      "group": "82",
+      "label": "83",
+      "n": 32,
+      "serialized_us": 244.64
+    }
+  ],
+  "reference_source": "profile JSONL (docs/task_workflow/evidence/nv-attention-token-lifecycle-reopen-20260824/full-dag.profile.jsonl)",
+  "schema": "tinygrad.full_token_dag.validate.v1",
+  "tolerance_us": 1.0
+}

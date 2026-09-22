@@ -1,0 +1,255 @@
+{
+  "arms": [
+    "installed",
+    "q_first_full",
+    "phased_one_task",
+    "interleaved_one_task"
+  ],
+  "bitwise_identical": true,
+  "commit": "7c2b6707b6ce02257cc69f2d748a32c7d440ed20",
+  "median": {
+    "installed": {
+      "cold_us": 14.28,
+      "hot_us": 8.49888
+    },
+    "interleaved_one_task": {
+      "cold_us": 11.759,
+      "hot_us": 6.804032
+    },
+    "phased_one_task": {
+      "cold_us": 12.0,
+      "hot_us": 6.809024
+    },
+    "q_first_full": {
+      "cold_us": 11.811,
+      "hot_us": 6.943232
+    }
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'q4k_projection_group_one_task_interleaved_6144_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_projection_group_one_task_interleaved_6144_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 10.040 ms\nptxas info    : Compiling entry function 'q4k_projection_group_one_task_phased_6144_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_projection_group_one_task_phased_6144_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.731 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 49 registers, used 1 barriers\nptxas info    : Compile time = 16.235 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_pair_vec_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_pair_vec_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 67 registers, used 0 barriers\nptxas info    : Compile time = 15.821 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 7.947 ms",
+  "samples": [
+    {
+      "arm": 0,
+      "cold_us": 14.299,
+      "hot_us": 8.485248,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.86,
+      "hot_us": 6.89632,
+      "rep": 0
+    },
+    {
+      "arm": 2,
+      "cold_us": 12.161,
+      "hot_us": 6.765312,
+      "rep": 0
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.924,
+      "hot_us": 6.768256,
+      "rep": 0
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.046,
+      "hot_us": 8.469504,
+      "rep": 1
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.855,
+      "hot_us": 6.919744,
+      "rep": 1
+    },
+    {
+      "arm": 2,
+      "cold_us": 12.0,
+      "hot_us": 6.788288,
+      "rep": 1
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.656,
+      "hot_us": 6.79168,
+      "rep": 1
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.018,
+      "hot_us": 8.5088,
+      "rep": 2
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.699,
+      "hot_us": 6.943168,
+      "rep": 2
+    },
+    {
+      "arm": 2,
+      "cold_us": 11.875,
+      "hot_us": 6.79296,
+      "rep": 2
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.68,
+      "hot_us": 6.812352,
+      "rep": 2
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.215,
+      "hot_us": 8.502976,
+      "rep": 3
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.757,
+      "hot_us": 6.943232,
+      "rep": 3
+    },
+    {
+      "arm": 2,
+      "cold_us": 12.319,
+      "hot_us": 6.796992,
+      "rep": 3
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.934,
+      "hot_us": 6.796672,
+      "rep": 3
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.292,
+      "hot_us": 8.50304,
+      "rep": 4
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.935,
+      "hot_us": 6.943424,
+      "rep": 4
+    },
+    {
+      "arm": 2,
+      "cold_us": 11.825,
+      "hot_us": 6.809024,
+      "rep": 4
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.585,
+      "hot_us": 6.804032,
+      "rep": 4
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.502,
+      "hot_us": 8.494784,
+      "rep": 5
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.934,
+      "hot_us": 6.93408,
+      "rep": 5
+    },
+    {
+      "arm": 2,
+      "cold_us": 11.844,
+      "hot_us": 6.813376,
+      "rep": 5
+    },
+    {
+      "arm": 3,
+      "cold_us": 12.161,
+      "hot_us": 6.804032,
+      "rep": 5
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.28,
+      "hot_us": 8.494784,
+      "rep": 6
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.732,
+      "hot_us": 6.952448,
+      "rep": 6
+    },
+    {
+      "arm": 2,
+      "cold_us": 12.183,
+      "hot_us": 6.817344,
+      "rep": 6
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.759,
+      "hot_us": 6.820032,
+      "rep": 6
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.497,
+      "hot_us": 8.49888,
+      "rep": 7
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.627,
+      "hot_us": 6.962048,
+      "rep": 7
+    },
+    {
+      "arm": 2,
+      "cold_us": 12.0,
+      "hot_us": 6.835328,
+      "rep": 7
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.86,
+      "hot_us": 6.844928,
+      "rep": 7
+    },
+    {
+      "arm": 0,
+      "cold_us": 14.069,
+      "hot_us": 8.525376,
+      "rep": 8
+    },
+    {
+      "arm": 1,
+      "cold_us": 11.811,
+      "hot_us": 6.980992,
+      "rep": 8
+    },
+    {
+      "arm": 2,
+      "cold_us": 11.69,
+      "hot_us": 6.85408,
+      "rep": 8
+    },
+    {
+      "arm": 3,
+      "cold_us": 11.744,
+      "hot_us": 6.852992,
+      "rep": 8
+    }
+  ],
+  "schema": "tinygrad.q4k_striped_projection_group_microgate.v1",
+  "shape": {
+    "input_width": 4096,
+    "k_rows": 1024,
+    "q_rows": 4096,
+    "v_rows": 1024,
+    "weight_bytes": 14155776
+  }
+}

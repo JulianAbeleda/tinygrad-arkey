@@ -1,0 +1,110 @@
+{
+  "all_windows_exact": true,
+  "arms": {
+    "candidate": {
+      "timed": {
+        "median_ms_per_token": 3.8714072,
+        "samples_ms_per_token": [
+          3.8714072
+        ],
+        "token_hashes": [
+          "14451464c2678e3f9c61651215c536194522e4d795b256c7b39a0ce6447da8fa"
+        ]
+      },
+      "warm": [
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13
+      ]
+    },
+    "control_a": {
+      "timed": {
+        "median_ms_per_token": 4.0530982,
+        "samples_ms_per_token": [
+          4.0530982
+        ],
+        "token_hashes": [
+          "14451464c2678e3f9c61651215c536194522e4d795b256c7b39a0ce6447da8fa"
+        ]
+      },
+      "warm": [
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13
+      ]
+    },
+    "control_c": {
+      "timed": {
+        "median_ms_per_token": 4.0675596,
+        "samples_ms_per_token": [
+          4.0675596
+        ],
+        "token_hashes": [
+          "14451464c2678e3f9c61651215c536194522e4d795b256c7b39a0ce6447da8fa"
+        ]
+      },
+      "warm": [
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13
+      ]
+    }
+  },
+  "batch": 16,
+  "count": 5,
+  "depth": 512,
+  "mode": "production",
+  "reps": 1,
+  "schema": "tinygrad.nv_token_delivery_batch_gate.v2",
+  "tokens_per_second": {
+    "candidate": 258.3040089402117,
+    "control": 246.28546716991326,
+    "delta": 12.018541770298441
+  },
+  "walls_us_per_token": {
+    "candidate": 3871.4072,
+    "control_a": 4053.0982,
+    "control_c": 4067.5596,
+    "control_midpoint": 4060.3289,
+    "delta": -188.92169999999987
+  }
+}

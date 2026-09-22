@@ -1,0 +1,36 @@
+{
+  "branch": "nvidia-bringup-20260731",
+  "date": "2026-08-19",
+  "device_medians_us": {
+    "serial_1x4096": 5.088,
+    "serial_k_8x128": 1.248,
+    "serial_q_32x128": 1.28,
+    "warp_1x4096": 2.08,
+    "warp_k_8x128": 1.152,
+    "warp_q_32x128": 1.184
+  },
+  "finding": "warp-reduce body is 2.45x faster than the bitwise serial chain for 1x4096 (2.08 vs 5.09 us) but only 1.08x for q/k 32x128/8x128. fp16-output norms (ffn/attn) are bitwise-identical (no SHA flip); fp32-output norms (q/k/output) flip. The big 1x4096 win is therefore NOT gated on the bitwise contract for fp16 norms - it is gated on the opaque-boundary materialization (+142us / 144 copies from M3 record).",
+  "gpu": "RTX 5090 sm_120 DEV=CUDA",
+  "head": "d14e6964e",
+  "method": "nsys CUPTI kernel duration, 400 back-to-back launches + 20 warmup per kernel, isolated realized buffers",
+  "schema": "tinygrad.nv_norm_body_device_timing.v1",
+  "sha_flip": {
+    "ffn_1x4096 (fp16)": {
+      "same_sha": true
+    },
+    "k_8x128 (fp32)": {
+      "same_sha": false
+    },
+    "out_1x4096 (fp32)": {
+      "same_sha": false
+    },
+    "q_32x128 (fp32)": {
+      "same_sha": false
+    }
+  },
+  "speedup_warp_vs_serial": {
+    "1x4096": 2.45,
+    "k_8x128": 1.08,
+    "q_32x128": 1.08
+  }
+}

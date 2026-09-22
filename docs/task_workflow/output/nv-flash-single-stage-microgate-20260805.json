@@ -1,0 +1,129 @@
+{
+  "correctness": [
+    {
+      "bitwise": true,
+      "candidate_sha256": "3662308fd112a64851fe2cce5c187708846bdb8b8b6d1beadd5609bede20d8ee",
+      "case": "normal",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "3662308fd112a64851fe2cce5c187708846bdb8b8b6d1beadd5609bede20d8ee",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "case": "zero",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "d92291d4d217046a31f4b04a5a67fdfe0fb91249e1ffa27eeb58b027ef3dcbc8",
+      "case": "dynamic",
+      "dtype": "fp32",
+      "finite": true,
+      "legacy_sha256": "d92291d4d217046a31f4b04a5a67fdfe0fb91249e1ffa27eeb58b027ef3dcbc8",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "7a7d3474765784ae906a4e1fbf34edd20116de1de01269733dfa5628b55d18a5",
+      "case": "normal",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "7a7d3474765784ae906a4e1fbf34edd20116de1de01269733dfa5628b55d18a5",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "case": "zero",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "max_abs": 0.0
+    },
+    {
+      "bitwise": true,
+      "candidate_sha256": "d07d78ec9fb00655af28b92d4e142ca4e1bfb9353ba09d2766da4b7d1dd056cb",
+      "case": "dynamic",
+      "dtype": "fp16",
+      "finite": true,
+      "legacy_sha256": "d07d78ec9fb00655af28b92d4e142ca4e1bfb9353ba09d2766da4b7d1dd056cb",
+      "max_abs": 0.0
+    }
+  ],
+  "device": "NV",
+  "git_commit": "5b70ac4cb4b4c3f9b114d1d62b2f720459355bed",
+  "resources": {
+    "candidate": [
+      {
+        "lcmem_usage": 576,
+        "name": "flash_single_stage_d512_f32_32_128",
+        "regs_usage": 64,
+        "shmem_usage": 43136,
+        "slm_per_thread": 576,
+        "source_sha256": "9b8bb8d8a16d9bb6235c5dd647008ba09432a41b7136b503fc6f502491d136a5"
+      }
+    ],
+    "legacy": [
+      {
+        "lcmem_usage": 576,
+        "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "regs_usage": 40,
+        "shmem_usage": 10240,
+        "slm_per_thread": 576,
+        "source_sha256": "a7b07af4f0efe2c421a5e9e020fdba7c5b9c7ee5d58dbeb1eea673871ab45d63"
+      },
+      {
+        "lcmem_usage": 576,
+        "name": "flash_fused_gmax_combine_32_128",
+        "regs_usage": 36,
+        "shmem_usage": 2176,
+        "slm_per_thread": 576,
+        "source_sha256": "53a8c93f438079e6ab864b5e6d49fda726a0b541ba689b3fd8ed4151dc653afe"
+      }
+    ]
+  },
+  "schema": "tinygrad.nv_flash_single_stage_microgate.v1",
+  "shape": {
+    "Hd": 128,
+    "Hkv": 8,
+    "Hq": 32,
+    "L": 128,
+    "MAXC": 4608,
+    "S": 4,
+    "Tc": 513
+  },
+  "timing": {
+    "candidate_b": [
+      125.53312,
+      123.64277,
+      156.572465,
+      159.98378,
+      146.516715
+    ],
+    "candidate_median": 146.516715,
+    "control_a": [
+      63.926970000000004,
+      63.858335,
+      63.61453,
+      63.283604999999994,
+      63.491400000000006
+    ],
+    "control_c": [
+      65.01982,
+      64.701075,
+      64.27437,
+      64.40872,
+      64.278975
+    ],
+    "control_midpoint_median": 64.01162500000001,
+    "delta": 82.50509,
+    "replays": 200,
+    "reps": 5,
+    "unit": "us_per_included_graph"
+  }
+}

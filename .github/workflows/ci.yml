@@ -1,0 +1,37 @@
+name: nv-branch checks
+
+on:
+  push:
+    branches: [nvidia-bringup-20260731]
+  pull_request:
+
+jobs:
+  tripwire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install deps
+        run: pip install --quiet numpy pytest
+      - name: tripwire suite (CPU only)
+        env:
+          DEV: CPU
+        run: |
+          # Mirrors .githooks/pre-push (working agreement Rule 1): branches that
+          # do not carry the tripwire tests skip the run.
+          files=""
+          for f in \
+            test/unit/test_attention_semantic.py \
+            test/unit/test_nested_composite_reduce.py \
+            test/unit/test_shared_q8_attention_landing.py \
+            test/unit/test_m4_resadd_landing.py \
+            test/unit/test_target_capability_facts.py; do
+            [ -f "$f" ] && files="$files $f"
+          done
+          if [ -z "$files" ]; then
+            echo "no tripwire tests on this branch; skipping"
+            exit 0
+          fi
+          python3 -m pytest $files -q --no-header

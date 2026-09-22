@@ -1,0 +1,72 @@
+{
+  "schema": "tinygrad.nv_q6_direct_shared_q8_promotion.v1",
+  "date": "2026-08-14",
+  "branch": "nvidia-bringup-20260731",
+  "device": "NV",
+  "architecture": "sm_120",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "scope": "docs/task_workflow/input/nv-q6-direct-shared-q8-promotion-scope-20260814.md",
+  "verdict": "PASS",
+  "route": "decode_q6_direct_shared_q8_attention",
+  "lease": "max17 blocks 1-12 and 14-18 (8 real Q6-K V blocks, 9 Q4-K V blocks)",
+  "wall": {
+    "protocol": "settled-continuous reverse bracket, control -> candidate -> control, 32-token windows x5 reps",
+    "d512": {
+      "control_midpoint_ms_per_token": 5.0984394375,
+      "candidate_ms_per_token": 5.02031921875,
+      "candidate_minus_control_ms_per_token": -0.07812021875,
+      "candidate_speedup_pct": 1.556080706,
+      "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905"
+    },
+    "d2048": {
+      "control_midpoint_ms_per_token": 5.385999296875,
+      "candidate_ms_per_token": 5.30486225,
+      "candidate_minus_control_ms_per_token": -0.081137046875,
+      "candidate_speedup_pct": 1.529484519,
+      "token_stream_hash": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905"
+    },
+    "d4096": {
+      "control_midpoint_ms_per_token": 5.808757828125,
+      "candidate_ms_per_token": 5.75536021875,
+      "candidate_minus_control_ms_per_token": -0.053397609375,
+      "candidate_speedup_pct": 0.927789180,
+      "token_stream_hash": "186fa9837857d43b1b99bf44f1633d633f6f18c8fb5ae6c296589b053bb2d29a"
+    },
+    "note": "all depths negative; candidate and both controls bitwise-identical token streams. The non-interleaved gate's d2048 wall was drift noise (180.766 vs 181.281 tok/s); this reverse bracket is the wall authority."
+  },
+  "census": {
+    "candidate": {"fused_providers": 34, "cooperative_q4": 86, "legacy_shared_q4": 0, "ordinary_providers": 0, "q6_direct": 16},
+    "control": {"fused_providers": 34, "cooperative_q4": 86, "legacy_shared_q4": 0, "ordinary_providers": 0, "q6_direct": 0},
+    "expected_q6_direct": 16,
+    "note": "8 real Q6-K V blocks x two captures; Q4-K V blocks keep the cooperative Q4 consumer."
+  },
+  "semantic": {
+    "finite": true,
+    "tokens_equal": true,
+    "argmax_equal": true,
+    "top_k_sets_equal": true,
+    "top_k_order_equal": true,
+    "relative_l2": 0.0005643201815341571,
+    "relative_l2_max": 0.001,
+    "max_abs": 0.011685371398925781,
+    "min_baseline_top1_margin": 1.2177848815917969,
+    "perturbation_vs_min_margin": 0.01919119144204113,
+    "semantic_pass": true,
+    "gate_pass": true
+  },
+  "record_equals_candidate": {
+    "record_d512_census_q6_direct": 16,
+    "record_d512_census_coop_q4": 86,
+    "record_d512_census_fused": 34,
+    "record_d512_census_legacy": 0,
+    "record_d512_census_ordinary": 0,
+    "record_q6k_q8_warp_direct_present": true,
+    "note": "post-flip checked-in record equals the forced-open candidate state (q6_direct=16), proving record-open == forced-open."
+  },
+  "pg3_legacy_render": {"name": "q4k_g3_lanemap_gemv_4096_4096", "sha256": "27857cb8ca03", "unmoved": true},
+  "unit_tests": "test_shared_q8_attention_boundary.py + test_shared_q8_attention_landing.py: 21 passed",
+  "artifacts": {
+    "gate": "/tmp/nv_shared_q8_q6_direct_gate_final.json",
+    "wall_bracket": "/tmp/nv_shared_q8_q6_direct_wall_bracket.json"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "q4-1-vs-q4-0.compare.v1",
+  "status": "PASS",
+  "same_token": true,
+  "finite": true,
+  "max_abs": 0.14420700073242188,
+  "mean_abs": 0.023866668343544006,
+  "allclose": true
+}

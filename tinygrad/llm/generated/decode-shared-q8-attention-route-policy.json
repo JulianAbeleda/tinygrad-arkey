@@ -1,0 +1,11 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_shared_q8_attention",
+  "description": "Decode shared-Q8 attention group promotion record. The original max17 lease covers blocks 1-12 and 14-18. The current composed-substrate extension additionally admits block 25: its reps-9 control/candidate/control bracket recovered 23.738 us/token while beating both controls, and its fresh prompted full-logit gate passed with identical tokens/argmax/top-10 order, relative L2 0.000367 <= 0.001, and perturbation-to-margin 0.080 <= 1.0. The resulting max18 lease is blocks 1-12, 14-18, and 25; block 0 and block 13 remain excluded, as do all unqualified tail blocks. Evidence: docs/task_workflow/evidence/nv-ranked-wall-tests-20260826/ and docs/task_workflow/output/nv-ranked-wall-tests-result.md.",
+  "promoted_targets": [
+    {
+      "backend": "NV",
+      "architecture": "sm_120"
+    }
+  ]
+}

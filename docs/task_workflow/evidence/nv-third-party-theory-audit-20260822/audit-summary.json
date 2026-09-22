@@ -1,0 +1,217 @@
+{
+  "schema": "tinygrad.nv_third_party_theory_audit.v1",
+  "claim_labels": ["MEASURED", "INFERRED", "UNMEASURED"],
+  "provenance": {
+    "tinygrad_commit": "6570abc025514273faa100c66b979e531585a1e1",
+    "tinygrad_branch": "nvidia-bringup-20260731",
+    "preexisting_tracked_diff_sha256": "017935b7de60675857c624e71ae0e84b3839cbccb7c982706d194c865302c7a5",
+    "locked_wall_tinygrad_commit": "07e9b2abe1ef99a2ce026c4e6e6e40f427a3d2b5",
+    "llama_claimed_commit": "ac4cddeb0",
+    "llama_bench_sha256": "947eb29052871f151719762c2fc265024e14f833b98df7801af9eb09da1625a8",
+    "python_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+    "model_sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "gpu_uuid": "GPU-c800ade9-21ea-2e55-f75c-6d7a458fb186",
+    "driver": "595.84",
+    "depth": 512,
+    "fresh_processes": true,
+    "lock": "/tmp/gpu-bench.lock",
+    "timing_order": "control/candidate/control"
+  },
+  "locked_wall_ledger_us": {
+    "tinygrad": {
+      "node_sum": 4519.316,
+      "resident_overlap": 0.0,
+      "resident_union": 4519.316,
+      "host_gap": 268.971,
+      "wall": 4788.2868,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    "llama": {
+      "node_sum": 5015.666,
+      "resident_overlap": 1125.132,
+      "resident_union": 3890.534,
+      "host_gap": 168.322,
+      "wall": 4058.8565205,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    "tinygrad_minus_llama": {
+      "node_sum": -496.35,
+      "resident_overlap": -1125.132,
+      "resident_union": 628.782,
+      "host_gap": 100.649,
+      "wall": 729.4302795,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    "arithmetic_residual": 0.0
+  },
+  "useful_identity": {
+    "refuted_identity": "resident_union = useful_body - useful_overlap",
+    "corrected_identity": "resident_union = useful_body - useful_overlap + spin_only_union",
+    "full_h1_earliest_us": {
+      "node_sum": 5432.089714,
+      "resident_overlap": 1384.003714,
+      "resident_union": 4048.086,
+      "spin_sum": 1336.245429,
+      "useful_body": 4095.844286,
+      "useful_overlap": 111.563857,
+      "useful_union": 3984.280429,
+      "spin_only_union": 63.805571,
+      "refuted_identity_residual": 63.805571,
+      "corrected_identity_residual": 0.0
+    },
+    "full_h1_latest_us": {
+      "node_sum": 5432.089714,
+      "resident_overlap": 1384.003714,
+      "resident_union": 4048.086,
+      "spin_sum": 3739.030143,
+      "useful_body": 1693.059571,
+      "useful_overlap": 72.917571,
+      "useful_union": 1620.142,
+      "spin_only_union": 2427.944,
+      "refuted_identity_residual": 2427.944,
+      "corrected_identity_residual": 0.0
+    }
+  },
+  "fresh_pdl_control_us": {
+    "pdl_on_median": {
+      "node_sum": 5008.638,
+      "resident_union": 3885.9585,
+      "resident_overlap": 1122.6795
+    },
+    "pdl_off": {
+      "node_sum": 3878.254,
+      "resident_union": 3878.254,
+      "resident_overlap": 0.0,
+      "span": 4018.961
+    },
+    "on_minus_off": {
+      "node_sum": 1130.384,
+      "resident_union": 7.7045,
+      "resident_overlap": 1122.6795
+    }
+  },
+  "probes": [
+    {
+      "probe": 1,
+      "name": "FFN norm/output one-pass fold",
+      "verdict": "NO_GO_WALL",
+      "wall_delta_us": 59.6021875,
+      "control_a_us": 4722.508,
+      "candidate_us": 4780.66896875,
+      "control_b_us": 4719.6255625,
+      "control_bracket_us": 4721.06678125,
+      "token_sha256": "f25083e5d0a754131283b40c03f52e688fee9f175bea7ae106805e7d628d7905",
+      "logits_sha256": "c36d7268975c5b10a8619db9753ebf008c57ab5356eae112ccb128098b81d523",
+      "old_pair_node_sum_us": 185.152,
+      "fused_row_node_sum_us": 254.592,
+      "fused_minus_old_node_sum_us": 69.44,
+      "node_sum_total": null,
+      "resident_union": null,
+      "resident_overlap": null,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    {
+      "probe": 2,
+      "name": "anchor mapping",
+      "verdict": "UNMEASURED",
+      "wall_delta_us": null,
+      "tinygrad_dot_body_us": 2968.608,
+      "llama_pdl_off_dot_body_us": 2633.088,
+      "device_body_delta_us": 335.52,
+      "rows_us": {
+        "Q_plus_reduction": {"tinygrad": 333.504, "llama": 249.092, "delta": 84.412},
+        "O": {"tinygrad": 335.04, "llama": 259.809, "delta": 75.231},
+        "gate_up": {"tinygrad": 1369.696, "llama": 1268.37, "delta": 101.326},
+        "down": {"tinygrad": 930.368, "llama": 855.817, "delta": 74.551}
+      },
+      "tinygrad_full_token_profile": {
+        "node_sum": 4677.92,
+        "resident_union": 4671.5,
+        "resident_overlap": 5.5
+      },
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    {
+      "probe": 3,
+      "name": "flash score launch/body split",
+      "verdict": "UNMEASURED",
+      "wall_delta_us": null,
+      "installed_row_delta_us": 64.54,
+      "isolated_body_delta_us": 14.976,
+      "launch_l2_timeline_residual_us": 49.564,
+      "per_call_isolated_us": {"tinygrad_a": 4.16, "llama_b": 3.744, "tinygrad_c": 4.16},
+      "node_sum": null,
+      "resident_union": null,
+      "resident_overlap": null,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    {
+      "probe": 4,
+      "name": "useful overlap versus dependency shadow",
+      "verdict": "UNMEASURED",
+      "wall_delta_us": null,
+      "llama_full_token_dram_bytes_pdl_on": 4727503616,
+      "llama_full_token_dram_bytes_pdl_off": 4727499264,
+      "dram_delta_bytes": 4352,
+      "dram_delta_fraction": 0.000000920510139,
+      "node_sum": null,
+      "resident_union": null,
+      "resident_overlap": null,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    {
+      "probe": 5,
+      "name": "effective bandwidth with DRAM counters",
+      "verdict": "UNMEASURED",
+      "wall_delta_us": null,
+      "llama_pdl_off_dram_bytes": 4727499264,
+      "llama_ncu_kernel_time_us": 5112.96,
+      "llama_ncu_effective_gb_s": 924.611,
+      "tinygrad_nv_dram_bytes": null,
+      "tinygrad_nv_effective_gb_s": null,
+      "tinygrad_cuda_fallback_dram_bytes": 2494133248,
+      "tinygrad_cuda_fallback_ncu_kernel_time_us": 4191.008,
+      "tinygrad_cuda_fallback_effective_gb_s": 595.115,
+      "node_sum": null,
+      "resident_union": null,
+      "resident_overlap": null,
+      "useful_body": null,
+      "useful_overlap": null
+    },
+    {
+      "probe": 6,
+      "name": "submit-ahead handoff",
+      "verdict": "WALL_NEUTRAL",
+      "wall_delta_us": -3.689953125,
+      "control_a_us": 4647.859625,
+      "candidate_us": 4640.491125,
+      "control_b_us": 4640.50253125,
+      "control_bracket_us": 4644.181078125,
+      "token_sha256": "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+      "node_sum": null,
+      "resident_union": null,
+      "resident_overlap": null,
+      "useful_body": null,
+      "useful_overlap": null
+    }
+  ],
+  "ranked_device_excess_ceiling_us": [
+    {"rank": 1, "row": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096", "delta_us": 101.326},
+    {"rank": 2, "row": "Q projection plus r_32_32_4_4 reduction", "delta_us": 84.412},
+    {"rank": 3, "row": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096", "delta_us": 75.231},
+    {"rank": 4, "row": "q4k/q6k *_4096_12288_epi_ffnresadd", "delta_us": 74.551},
+    {"rank": 5, "row": "vocab q6k_gen_coop plus reduction tail", "delta_us": 67.612},
+    {"rank": 6, "row": "flash_fused_gmax_combine_f16_32_128", "delta_us": 66.943},
+    {"rank": 7, "row": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "delta_us": 64.54},
+    {"rank": 8, "row": "K projection plus r_8_32_4_4 reduction", "delta_us": 58.368},
+    {"rank": 9, "row": "V projection plus r_8_32_4_4 reduction", "delta_us": 53.855}
+  ]
+}

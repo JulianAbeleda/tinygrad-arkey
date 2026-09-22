@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "source": "get_runtime(NV, program_uop)",
+  "resources": {
+    "producer": {
+      "name": "q8_ds4_fp16_pp512",
+      "regs_usage": 21,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 2688,
+      "lib_bytes": 11120,
+      "uop_name": "q8_ds4_fp16_pp512",
+      "uop_lib_bytes": null
+    },
+    "main": {
+      "name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "regs_usage": 251,
+      "shared_size_bytes": 58880,
+      "local_size_bytes": 576,
+      "max_threads": 256,
+      "lib_bytes": 173928,
+      "uop_name": "_Z15dense_mul_mat_qIL9ggml_type12ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "uop_lib_bytes": null
+    },
+    "fixup": {
+      "name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "regs_usage": 84,
+      "shared_size_bytes": 1024,
+      "local_size_bytes": 576,
+      "max_threads": 640,
+      "lib_bytes": 51640,
+      "uop_name": "_Z30dense_mul_mat_q_stream_k_fixupIL9ggml_type12ELi128ELb0EEvPfS1_5uint3iiiS2_iS2_iS2_",
+      "uop_lib_bytes": null
+    }
+  }
+}

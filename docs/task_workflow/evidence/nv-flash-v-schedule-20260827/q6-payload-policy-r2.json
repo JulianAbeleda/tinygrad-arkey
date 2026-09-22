@@ -1,0 +1,82 @@
+{
+  "device": "NV",
+  "exact": {
+    "bitwise_equal": true,
+    "sha256": {
+      "candidate": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+      "control": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe"
+    }
+  },
+  "policy": {
+    "abi": "unchanged",
+    "evict_first": "ql/qh payload only",
+    "retained": "scales and d metadata"
+  },
+  "schema": "tinygrad.nv_q6_ffn_down_payload_policy_microgate.v1",
+  "shape": {
+    "k": 12288,
+    "rows": 4096,
+    "weight_halfwords": 20643840
+  },
+  "timing": {
+    "candidate_recovery_us": -0.7396219999999971,
+    "medians": {
+      "control": 131.3639215,
+      "payload_stream": 132.1035435
+    },
+    "replays": 1000,
+    "reps": 9,
+    "samples": {
+      "control": [
+        [
+          132.181575,
+          131.316381,
+          131.619003,
+          131.644809,
+          131.306235,
+          130.56552,
+          130.490943,
+          132.127718,
+          132.441978
+        ],
+        [
+          131.546266,
+          131.10884,
+          130.932175,
+          130.9137,
+          130.615972,
+          131.06973,
+          132.10370600000002,
+          132.684947,
+          131.842245
+        ]
+      ],
+      "payload_stream": [
+        [
+          132.832377,
+          132.779761,
+          132.790783,
+          132.670411,
+          133.366805,
+          133.408732,
+          133.34241,
+          132.636279,
+          133.33498
+        ],
+        [
+          133.522975,
+          133.404938,
+          133.38510200000002,
+          132.532861,
+          131.13835200000003,
+          131.23521100000002,
+          131.366071,
+          131.08086600000001,
+          131.37471
+        ]
+      ]
+    },
+    "unit": "us_per_graph_replay_host_synchronized"
+  },
+  "verdict": "NO_GO_PRIMITIVE"
+}

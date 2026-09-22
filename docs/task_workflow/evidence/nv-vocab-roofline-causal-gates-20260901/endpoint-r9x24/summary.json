@@ -1,0 +1,20 @@
+{
+  "accepted_windows": {
+    "candidate": 9,
+    "control_a": 9,
+    "control_c": 9
+  },
+  "all_token_hashes_equal": true,
+  "candidate_minus_control_us": -28.438020833333688,
+  "candidate_ms": 4.035563125,
+  "candidate_speedup_pct": 0.7046853178225065,
+  "control_a_ms": 4.067713333333334,
+  "control_c_ms": 4.0602889583333335,
+  "control_midpoint_ms": 4.064001145833334,
+  "protocol": "frozen_r9x24_d512",
+  "schema": "tinygrad.nv_vocab_fp16_four_warp_endpoint_bracket.v1",
+  "token_stream_hashes": [
+    "7e0b38ec59adc79a268f665ee525b602869c1930794239eb45ba21e9e0a22e3e"
+  ],
+  "verdict": "PROMOTION_PASS"
+}

@@ -1,0 +1,1447 @@
+{
+  "calls": [
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 24,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 37,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 18,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 63,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 108,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 25,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 70,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 115,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 160,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 205,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 250,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 39,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 84,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 129,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 174,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 219,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 264,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 309,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 354,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 399,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 444,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 489,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 22,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 67,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 112,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 157,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 202,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 247,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 292,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 337,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 382,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 427,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 472,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 517,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 562,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    },
+    {
+      "args": [
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 2097152
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        },
+        {
+          "dtype": "dtypes.half",
+          "size": 524288
+        }
+      ],
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "index": 607,
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "local_size": [
+        32,
+        1,
+        1
+      ],
+      "name": "nv_sm120_q16_grid_hd128_loop_attention",
+      "outs": [
+        0
+      ]
+    }
+  ],
+  "fused_score_reduction": true,
+  "schema": "tinygrad.nv_prefill_flash_program_abi.v1",
+  "status": "PASS"
+}

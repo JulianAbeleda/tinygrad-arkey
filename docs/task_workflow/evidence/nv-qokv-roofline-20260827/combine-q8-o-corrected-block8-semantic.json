@@ -1,0 +1,77 @@
+{
+  "blocks": 8,
+  "comparison": {
+    "argmax_equal": true,
+    "finite": true,
+    "historical_max_abs_gate": {
+      "atol": 0.01,
+      "pass": false,
+      "status": "reported_non_authoritative"
+    },
+    "max_abs": 0.06522023677825928,
+    "min_baseline_top1_margin": 7.245023727416992,
+    "perturbation_vs_min_margin": 0.018004147186281665,
+    "perturbation_vs_min_margin_max": 1.0,
+    "relative_l2": 0.0017235448721254255,
+    "relative_l2_max": 0.001,
+    "semantic_pass": false,
+    "tokens_equal": true,
+    "top_k": 10,
+    "top_k_order_equal": false,
+    "top_k_sets_equal": true
+  },
+  "rows": {
+    "candidate": {
+      "arm": "candidate",
+      "blocks": 8,
+      "count": 11,
+      "depth": 512,
+      "finite": true,
+      "schema": "tinygrad.nv_flash_combine_q8_o_qualification.v1",
+      "shape": [
+        11,
+        151936
+      ],
+      "tokens": [
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974
+      ]
+    },
+    "control": {
+      "arm": "control",
+      "blocks": 0,
+      "count": 11,
+      "depth": 512,
+      "finite": true,
+      "schema": "tinygrad.nv_flash_combine_q8_o_qualification.v1",
+      "shape": [
+        11,
+        151936
+      ],
+      "tokens": [
+        38835,
+        34208,
+        13,
+        279,
+        3974,
+        13876,
+        38835,
+        34208,
+        13,
+        279,
+        3974
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_combine_q8_o_qualification.v1",
+  "verdict": "FAIL"
+}

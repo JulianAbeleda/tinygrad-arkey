@@ -1,0 +1,3 @@
+# Q6 attention-V direct gate
+
+The existing compiler Q6 binding was run for `blk.0.attn_v.weight` using the real Qwen3 GGUF, shape `(M,N,K)=(512,1024,4096)`, with nine direct samples. The gate passed finite/allclose correctness (`max_abs=0.0003051758`, no unwritten sentinels), exact candidate identity, canonical packed Q6 words, and no expanded/group partial allocation. The direct candidate median was `95.616 us` (minimum `94.368 us`). Resource audit reported 96 registers, 8,704 shared bytes, and zero local/stack bytes. This is a direct single-role gate; it does not yet qualify the 18-role production route.

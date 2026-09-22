@@ -1,0 +1,53 @@
+{
+  "arm": "control_a",
+  "count": 24,
+  "depth": 256,
+  "max_context": 512,
+  "model": "/home/ubuntu/models/Mamser-Qwen3-0.6B-Q8_0.gguf",
+  "relax_internal_membar": false,
+  "reps": 7,
+  "schema": "tinygrad.nv_qmd_membar_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      6.991404416666667,
+      7.094953583333333,
+      7.21981675,
+      7.323810125,
+      7.43325775,
+      7.552846416666667,
+      7.630321041666667
+    ],
+    "external_contention_high_limit_ms": 8.696949374999999,
+    "median_ms_per_token": 7.323810125,
+    "prelude_token": 34208,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      6.991404416666667,
+      7.094953583333333,
+      7.21981675,
+      7.323810125,
+      7.43325775,
+      7.552846416666667,
+      7.630321041666667
+    ],
+    "timed_token_count": 168,
+    "token_hashes": [
+      "e815ef87c6e76d469e0be1813b1311404061fc1240f3dd9843b5afa89a8442ae",
+      "78dc079072b206eeae6ab135690a0f166b7772b10e4ce193da2ce18cca1e50b5",
+      "71ddad19d800c95683733cb7d8d6a6c4a8d33f8d1e4204bdd2a2fdca725f88c1",
+      "2b7949256ab4135a8375a1ffad17060f227dca9501830bd9785c1c091a053450",
+      "3e15b860d7717375f56fcbd3bbf6a179e8134bdaad9c0178fd03960fb4ff0e16",
+      "91a19ef705a9c01e5e08b172afb1c10b1af2f89c08f1ba19ce6f13d2559bd26f",
+      "99817a69128f7803d69d71c78ce26b2abeff38a8c72e7833734a124c8fa90d32"
+    ],
+    "token_stream_hash": "f0da187b3ed7d1302b66c2b81fc55c8086caececaa9740c62c915784b2bbfcf4",
+    "warmup_tokens": [
+      13,
+      24494,
+      44622,
+      118599,
+      104529,
+      53482
+    ]
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "tinygrad.nv_multi_queue_probe.v1",
+  "device": "NV sm_120 RTX 5090",
+  "n": 33554432,
+  "matmul": 2048,
+  "gpfifo_engine_types": [
+    0,
+    0,
+    0
+  ],
+  "gpfifo_creation_errors": [],
+  "verdict": "FAIL",
+  "experiments": [
+    {
+      "name": "E1",
+      "status": "pass",
+      "check": "cross-gpfifo semaphore dep",
+      "max_err_c": 0.0,
+      "max_err_e": 0.0
+    },
+    {
+      "name": "E2",
+      "status": "pass",
+      "check": "serial calibration",
+      "dur_us": [
+        224.25,
+        253.0
+      ],
+      "span_us": 478.75,
+      "node_sum_us": 477.25,
+      "overlap": -0.003143006809848088
+    },
+    {
+      "name": "E3",
+      "status": "FAIL",
+      "check": "2-queue elementwise overlap",
+      "dur_us": [
+        243.5,
+        254.5
+      ],
+      "span_us": 498.25,
+      "node_sum_us": 498.0,
+      "overlap": -0.000502008032128514
+    },
+    {
+      "name": "E4",
+      "status": "FAIL",
+      "check": "3-queue elementwise overlap",
+      "dur_us": [
+        285.0,
+        252.75,
+        256.25
+      ],
+      "span_us": 795.25,
+      "node_sum_us": 794.0,
+      "overlap": -0.0015743073047858943
+    },
+    {
+      "name": "E5",
+      "status": "FAIL",
+      "check": "2-queue matmul overlap + correctness",
+      "M": 2048,
+      "dur_us": [
+        2643.75,
+        2630.0
+      ],
+      "span_us": 5274.5,
+      "node_sum_us": 5273.75,
+      "overlap": -0.0001422137947380896,
+      "numeric_ok": true
+    }
+  ]
+}

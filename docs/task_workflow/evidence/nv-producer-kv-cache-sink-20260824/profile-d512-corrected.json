@@ -1,0 +1,37 @@
+{
+  "schema": "tinygrad.nv_producer_kv_cache_sink_profile_corrected.v1",
+  "source_profiles": {
+    "control": "profile-d512_arms/control.profile.jsonl",
+    "candidate": "profile-d512_arms/candidate.profile.jsonl"
+  },
+  "parser_correction": "Control replay groups are 32+64+128+256+36 nodes. Candidate deletes the 36-node tail, so its replay groups are exactly 32+64+128+256. The generic tail-inference parser incorrectly counted the next token's 32-node prefix as a candidate tail; qualification.py now parses the exact arm topology and rejects prefill prefixes followed by 394 nodes.",
+  "all_token_hashes_equal": true,
+  "token_stream_hash": "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+  "control": {
+    "steady_replays": 34,
+    "node_count": 516,
+    "node_sum_us": 4348.016,
+    "union_us": 4343.875,
+    "overlap_us": 4.428,
+    "kv_store_calls": 36,
+    "kv_store_us": 42.240,
+    "k_norm_rope_calls": 36,
+    "k_norm_rope_us": 69.168
+  },
+  "candidate": {
+    "steady_replays": 34,
+    "node_count": 480,
+    "node_sum_us": 4300.976,
+    "union_us": 4298.625,
+    "overlap_us": 3.655,
+    "kv_store_calls": 0,
+    "producer_cache_sink_calls": 36,
+    "producer_cache_sink_us": 67.360
+  },
+  "delta_candidate_minus_control": {
+    "node_count": -36,
+    "node_sum_us": -47.040,
+    "union_us": -45.250,
+    "overlap_us": -0.773
+  }
+}

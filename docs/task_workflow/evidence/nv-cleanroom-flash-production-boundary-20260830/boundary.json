@@ -1,0 +1,56 @@
+{
+  "capture": {
+    "B": 1,
+    "Hd": 128,
+    "Hkv": 8,
+    "Hq": 32,
+    "T": 512,
+    "k_dtype": "dtypes.half",
+    "k_finite": true,
+    "k_sha256": "78029aae038f7e4c799cd9eae8a017ec9c53b5636b587b3899c89914109f7dc3",
+    "k_shape": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "k_strides_bytes": [
+      1048576,
+      131072,
+      256,
+      2
+    ],
+    "q_dtype": "dtypes.float",
+    "q_finite": true,
+    "q_sha256": "30e23c2f83d4f1e20de45b8ec810393f37d26baaf10d6fdd6e5c5f639b6293f3",
+    "q_shape": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "q_strides_bytes": [
+      8388608,
+      262144,
+      512,
+      4
+    ],
+    "start_pos": 0,
+    "v_dtype": "dtypes.half",
+    "v_finite": true,
+    "v_sha256": "097fb8639ef24cfd9891b5331422144bbeaaaeadd3f865a057742d799dc6f03f",
+    "v_shape": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "v_strides_bytes": [
+      1048576,
+      131072,
+      256,
+      2
+    ]
+  },
+  "schema": "tinygrad.nv_pp512_flash_cache_after.v1"
+}

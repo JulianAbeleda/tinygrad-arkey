@@ -1,0 +1,224 @@
+{
+  "branch": "nvidia-bringup-20260731",
+  "ceiling_arithmetic": {
+    "landed_gap_vs_llama_same_session_us": 681.2,
+    "llama_bench_wall_us": 3931.0,
+    "llama_same_session_wall_us": 4058.9,
+    "perfect_pipelining_gap_vs_llama_same_session_us": 338.1,
+    "perfect_zero_tax_pipelining_tok_s": 227.43,
+    "perfect_zero_tax_pipelining_wall_us": 4396.984
+  },
+  "claim_under_test": "tinygrad's remaining llama gap is caused by graph pipelining; adding equivalent overlap closes it.",
+  "conclusion": "DISPROVEN as the missing lever. The landed 2-GPFFIO schedule is already the ideal 2-queue schedule (aux-node counts match in 4/5 groups), and the same-session wall A/B realizes only 114.7us of the 457.6us ideal GPU saving (25.1%). Even perfect zero-tax pipelining would cap at ~4397us/token (227.4 tok/s), still ~338us below llama's same-session wall. The remaining gap is dependency-critical-path time plus host gap, not unexploited graph pipelining.",
+  "date": "2026-08-19",
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "ideal_2queue_schedule": {
+    "critical_path_us": 4187.008,
+    "groups": [
+      {
+        "aux_nodes_ideal": 11,
+        "aux_nodes_landed": 11,
+        "critical_path_us": 156.928,
+        "group": 0,
+        "n": 32,
+        "saving_2q_us": 32.416,
+        "schedule_2q_us": 156.928,
+        "serial_us": 189.344
+      },
+      {
+        "aux_nodes_ideal": 19,
+        "aux_nodes_landed": 19,
+        "critical_path_us": 418.976,
+        "group": 1,
+        "n": 64,
+        "saving_2q_us": 46.208,
+        "schedule_2q_us": 418.976,
+        "serial_us": 465.184
+      },
+      {
+        "aux_nodes_ideal": 42,
+        "aux_nodes_landed": 41,
+        "critical_path_us": 711.232,
+        "group": 2,
+        "n": 128,
+        "saving_2q_us": 92.704,
+        "schedule_2q_us": 712.736,
+        "serial_us": 805.44
+      },
+      {
+        "aux_nodes_ideal": 72,
+        "aux_nodes_landed": 72,
+        "critical_path_us": 1680.256,
+        "group": 3,
+        "n": 256,
+        "saving_2q_us": 198.528,
+        "schedule_2q_us": 1680.48,
+        "serial_us": 1879.008
+      },
+      {
+        "aux_nodes_ideal": 28,
+        "aux_nodes_landed": 28,
+        "critical_path_us": 1219.616,
+        "group": 4,
+        "n": 116,
+        "saving_2q_us": 87.712,
+        "schedule_2q_us": 1219.616,
+        "serial_us": 1307.328
+      }
+    ],
+    "note": "landed greedy placement already matches the ideal aux-node set in 4 of 5 groups; group 2 differs by 3 short nodes",
+    "saving_2q_us": 457.568,
+    "saving_pct": 9.85,
+    "schedule_2q_us": 4188.736,
+    "serialized_us": 4646.304
+  },
+  "llama": {
+    "kernel_union_us": 3891.26,
+    "node_sum_us": 5015.651,
+    "nodes": 762.0,
+    "overlap_anatomy": {
+      "elementwise": {
+        "exposed_vs_mmq_us": 1.248,
+        "hidden_behind_mmq_us": 0.608,
+        "node_sum_us": 1.856,
+        "nodes": 1.0,
+        "union_us": 1.856
+      },
+      "flash_combine": {
+        "exposed_vs_mmq_us": 52.192,
+        "hidden_behind_mmq_us": 137.696,
+        "node_sum_us": 189.729,
+        "nodes": 36.0,
+        "union_us": 189.729
+      },
+      "flash_score": {
+        "exposed_vs_mmq_us": 75.105,
+        "hidden_behind_mmq_us": 98.656,
+        "node_sum_us": 173.696,
+        "nodes": 36.0,
+        "union_us": 173.696
+      },
+      "get_rows": {
+        "exposed_vs_mmq_us": 2.08,
+        "hidden_behind_mmq_us": 0.0,
+        "node_sum_us": 2.848,
+        "nodes": 2.0,
+        "union_us": 2.08
+      },
+      "kv_set_rows": {
+        "exposed_vs_mmq_us": 74.656,
+        "hidden_behind_mmq_us": 0.0,
+        "node_sum_us": 74.656,
+        "nodes": 36.0,
+        "union_us": 74.656
+      },
+      "mmq": {
+        "exposed_vs_mmq_us": 3588.286,
+        "hidden_behind_mmq_us": 0.0,
+        "node_sum_us": 3588.286,
+        "nodes": 217.0,
+        "union_us": 3588.286
+      },
+      "quantize_q8_1": {
+        "exposed_vs_mmq_us": 105.6,
+        "hidden_behind_mmq_us": 443.937,
+        "node_sum_us": 549.734,
+        "nodes": 217.0,
+        "union_us": 549.734
+      },
+      "rms_norm": {
+        "exposed_vs_mmq_us": 151.49,
+        "hidden_behind_mmq_us": 156.0,
+        "node_sum_us": 307.841,
+        "nodes": 145.0,
+        "union_us": 307.841
+      },
+      "rope": {
+        "exposed_vs_mmq_us": 94.432,
+        "hidden_behind_mmq_us": 32.833,
+        "node_sum_us": 127.297,
+        "nodes": 72.0,
+        "union_us": 127.297
+      }
+    },
+    "overlap_mass_us": 1124.967,
+    "span_us": 3899.469
+  },
+  "method": {
+    "ideal_schedule": "longest-tail 2-queue list schedule over the captured per-group dependency DAG; omits cross-queue wait tax, so it is an upper bound",
+    "llama": "CUPTI graph-node ledger, graph 6, 47 steady replays of the 762-node decode graph (/tmp/llama_d512_20260817b.sqlite)",
+    "tinygrad_dag": "fresh PROFILE=1 HCQ graph capture of one steady decode token at HEAD under HCQ_NUM_COMPUTE=1 (serial), 596 nodes in 5 groups",
+    "wall_ab": "same-session flocked A/B, fresh process per arm, 3 settle + 24 measured tokens x4 reps, token sha gate"
+  },
+  "model": "Qwen3-8B-Q4_K_M.gguf",
+  "schema": "tinygrad.nv_graph_pipelining_claim_test.v1",
+  "tinygrad_serial_dag": {
+    "groups": [
+      {
+        "aux_nodes_ideal": 11,
+        "aux_nodes_landed": 11,
+        "critical_path_us": 156.928,
+        "group": 0,
+        "n": 32,
+        "saving_2q_us": 32.416,
+        "schedule_2q_us": 156.928,
+        "serial_us": 189.344
+      },
+      {
+        "aux_nodes_ideal": 19,
+        "aux_nodes_landed": 19,
+        "critical_path_us": 418.976,
+        "group": 1,
+        "n": 64,
+        "saving_2q_us": 46.208,
+        "schedule_2q_us": 418.976,
+        "serial_us": 465.184
+      },
+      {
+        "aux_nodes_ideal": 42,
+        "aux_nodes_landed": 41,
+        "critical_path_us": 711.232,
+        "group": 2,
+        "n": 128,
+        "saving_2q_us": 92.704,
+        "schedule_2q_us": 712.736,
+        "serial_us": 805.44
+      },
+      {
+        "aux_nodes_ideal": 72,
+        "aux_nodes_landed": 72,
+        "critical_path_us": 1680.256,
+        "group": 3,
+        "n": 256,
+        "saving_2q_us": 198.528,
+        "schedule_2q_us": 1680.48,
+        "serial_us": 1879.008
+      },
+      {
+        "aux_nodes_ideal": 28,
+        "aux_nodes_landed": 28,
+        "critical_path_us": 1219.616,
+        "group": 4,
+        "n": 116,
+        "saving_2q_us": 87.712,
+        "schedule_2q_us": 1219.616,
+        "serial_us": 1307.328
+      }
+    ],
+    "node_sum_us": 4646.304,
+    "nodes": 596,
+    "observed_overlap_us": 0.0,
+    "span_us": 4646.804
+  },
+  "wall_ab": {
+    "landed_tok_s": 210.9678240117408,
+    "landed_wall_us": 4740.059,
+    "realized_overlap_us": 114.492,
+    "realized_vs_ideal_pct": 25.0,
+    "serial_tok_s": 205.99224201774925,
+    "serial_wall_us": 4854.552,
+    "token_sha": "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+    "token_sha_identical": true
+  }
+}

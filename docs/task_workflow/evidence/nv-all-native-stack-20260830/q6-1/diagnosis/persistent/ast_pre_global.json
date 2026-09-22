@@ -1,0 +1,54 @@
+{
+  "schema": "tinygrad.nv_q6_persistent_ast_probe.v2",
+  "status": "PASS",
+  "pre_global": {
+    "role": "ffn_down",
+    "full_shape": [
+      "512",
+      "1024",
+      "4096"
+    ],
+    "axis_table": [
+      {
+        "index": 0,
+        "extent": "512",
+        "axis_type": "AxisType.LOOP",
+        "range": {
+          "op": "RANGE",
+          "dtype": "dtypes.weakint",
+          "arg": "(1, AxisType.LOOP)",
+          "src": 1
+        }
+      },
+      {
+        "index": 1,
+        "extent": "1024",
+        "axis_type": "AxisType.LOOP",
+        "range": {
+          "op": "RANGE",
+          "dtype": "dtypes.weakint",
+          "arg": "(2, AxisType.LOOP)",
+          "src": 1
+        }
+      },
+      {
+        "index": 2,
+        "extent": "4096",
+        "axis_type": "AxisType.REDUCE",
+        "range": {
+          "op": "RANGE",
+          "dtype": "dtypes.weakint",
+          "arg": "(0, AxisType.REDUCE)",
+          "src": 1
+        }
+      }
+    ]
+  },
+  "owner_proof": {
+    "owners": 128,
+    "iterations": 8,
+    "tiles": 1024,
+    "bijection": true
+  },
+  "persistent_transform": "NOT_APPLIED: callback is observational; M-axis retag requires verified AxisType transition API"
+}

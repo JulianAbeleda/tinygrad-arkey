@@ -1,0 +1,63 @@
+{
+  "correctness": {
+    "repeat_q8_bitwise_equal": true
+  },
+  "device": "NV",
+  "git_commit": "5b70ac4cb4b4c3f9b114d1d62b2f720459355bed",
+  "hypothesis": {
+    "common_activation_consumers": 3,
+    "llama_observed_reuse_consumers": 1,
+    "native_candidate": "one tinygrad Q8_1 producer feeding three Q6 DP4A consumers"
+  },
+  "payload": {
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "schema": "tinygrad.q6k_shared_q8_reuse_microgate.v1",
+  "timing": {
+    "candidate_b": [
+      79.591148,
+      81.183508,
+      79.276482,
+      79.837992,
+      81.111894,
+      80.052252,
+      80.132622,
+      81.56778800000001,
+      80.028368
+    ],
+    "candidate_median": 80.052252,
+    "control_a": [
+      168.313854,
+      168.377514,
+      169.383576,
+      168.686634,
+      169.43325,
+      169.52119399999998,
+      170.37597200000002,
+      168.697554,
+      170.717392
+    ],
+    "control_c": [
+      170.01861,
+      169.433674,
+      169.45012599999998,
+      170.776746,
+      171.242038,
+      172.38259200000002,
+      177.090818,
+      170.378002,
+      175.591078
+    ],
+    "control_midpoint_median": 170.080161,
+    "delta": -90.02790900000001,
+    "gate": "PASS",
+    "replays": 500,
+    "reps": 9,
+    "unit": "us_per_three_projection_graph"
+  },
+  "topology": {
+    "debug2_first_capture_baseline_calls": 7,
+    "debug2_first_capture_shared_calls": 6,
+    "interpretation": "three distinct Q6 consumers retained; shared producer is not CSE-elided consumers"
+  }
+}

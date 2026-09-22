@@ -1,0 +1,29 @@
+{
+  "schema": "tinygrad.nv_q6_schedule_variant_screen.v1",
+  "variants": {
+    "default": {
+      "status": "COMPILED",
+      "identity": "86f29fc02669f23a032a7d6b1f5f2d96315ee9dbc8fd3d3e4ffe6e95f5ebe98f",
+      "roles": [
+        "attn_v",
+        "ffn_down"
+      ]
+    },
+    "warp41": {
+      "status": "FAIL",
+      "error": "RuntimeError: expected one compiler Q6 attn_v PROGRAM, found 0"
+    },
+    "warp14": {
+      "status": "FAIL",
+      "error": "RuntimeError: expected one compiler Q6 attn_v PROGRAM, found 0"
+    },
+    "tile64x64": {
+      "status": "FAIL",
+      "error": "RuntimeError: expected one compiler Q6 attn_v PROGRAM, found 0"
+    },
+    "tile128x32": {
+      "status": "FAIL",
+      "error": "RuntimeError: expected one compiler Q6 attn_v PROGRAM, found 0"
+    }
+  }
+}

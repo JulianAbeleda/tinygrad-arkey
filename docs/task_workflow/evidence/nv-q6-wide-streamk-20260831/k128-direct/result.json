@@ -1,0 +1,82 @@
+{
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "identity": "060bd3ef2d75a3d8116e184c3d4335aaa0a564bc59b41cddc8f5bfbd4d69863c",
+  "geometry": {
+    "tile": [
+      128,
+      128,
+      128
+    ],
+    "waves": [
+      2,
+      4
+    ],
+    "threads": 256,
+    "global_size": [
+      32,
+      4,
+      1
+    ],
+    "local_size": [
+      32,
+      2,
+      4
+    ],
+    "ctas": 128
+  },
+  "correctness": {
+    "finite": true,
+    "reference_finite": true,
+    "unwritten_sentinels": 0,
+    "nonzero": 2097152,
+    "max_abs": 0.001220703125,
+    "mean_abs": 3.766872760024853e-05,
+    "allclose_rtol2e5_atol2e3": true,
+    "tensor_path_matches_direct": true
+  },
+  "compiler": {
+    "ordinary_matmul": true,
+    "expanded_global_weight_allocation": false,
+    "group_partial_allocation": false,
+    "candidate_identity": "060bd3ef2d75a3d8116e184c3d4335aaa0a564bc59b41cddc8f5bfbd4d69863c",
+    "candidate_identity_exact": true,
+    "signed_imma": true,
+    "sass": {
+      "cubin": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/k128-direct/wide_k128.cubin",
+      "sass": "docs/task_workflow/evidence/nv-q6-wide-streamk-20260831/k128-direct/wide_k128.sass",
+      "returncode": 0,
+      "imma": 128,
+      "bar": 2,
+      "ldsm": 0,
+      "local_load": 544,
+      "local_store": 563,
+      "resources": {
+        "registers": 128,
+        "stack_bytes": 2216,
+        "shared_bytes": 41984,
+        "local_bytes": 0
+      }
+    }
+  },
+  "timing": {
+    "samples_us": [
+      3481.984,
+      3436.48,
+      3418.432,
+      3437.536,
+      3435.968,
+      3422.848,
+      3463.744,
+      3434.496,
+      3425.568
+    ],
+    "min_us": 3418.432,
+    "median_us": 3435.968,
+    "max_us": 3481.984
+  },
+  "passed": false
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "tinygrad.nv_decode_parity_p3_matched_q6k_role.v1",
+  "evidence": "DIAGNOSTIC_ISOLATED_PRIMITIVE_NOT_TOKEN_WALL",
+  "shape": {"role": "attn_kv", "quant": "Q6_K", "rows": 1024, "k": 4096},
+  "operand_contract": {
+    "q6_payload_sha256": "471cd71dca41f517e81c66da2a2bf02728877033eaec678233391138c19a681f",
+    "q8_payload_sha256": "144a2dcfe3dcc987b2c71c01c112cdb4a14b2e268eb70e133d12f147f78a2e37",
+    "tinygrad_activation_bridge": "same Q8_1 payload independently decoded then rounded to fp16",
+    "max_abs_fp16_bridge_vs_q8": 0.000244140625
+  },
+  "tinygrad": {
+    "kernel": "q6k_gen_partial_1024_4096_4",
+    "required_tail": "Tensor.sum(axis=1).contiguous()",
+    "cuda_graph_nodes": 2,
+    "event_us_per_replay_reps": [42.999935150146484, 42.99494552612305, 42.9950065612793, 42.98969650268555, 42.9918098449707],
+    "median_event_us_per_replay": 42.99494552612305,
+    "correctness_max_abs": 7.62939453125e-06,
+    "raw_artifact": {"path": "/tmp/tinygrad_q6k_matched_1024x4096.json", "sha256": "737bc0d28e0750daff5e35b361df480b27b2943f5b8fb51e99a3d92d446b89f5"}
+  },
+  "llama_exact": {
+    "q8_cubin_sha256": "51a664abe112ef4bb51e7eaeda992fe08612e7c69e181ff8f89bc680369e979f",
+    "q6_cubin_sha256": "57c0a9caeee467316fc295b9447a61873d5578eb2a5a28b36e58f237e605bd88",
+    "captured_graph": {"nodes": 2, "edges": 1, "node_functions": ["q8", "q6"], "dependency_edges": [[0, 1]]},
+    "event_us_per_replay_reps": [4.1058878898620605, 4.101056098937988, 4.0979838371276855, 4.098112106323242, 4.098559856414795],
+    "median_event_us_per_replay": 4.098559856414795,
+    "q8_only_median_event_us_per_launch": 3.363231897354126,
+    "single_replay_median_event_us": 5.472000222653151,
+    "correctness_max_abs": 3.5762786865234375e-06,
+    "q8_field_census": {"d_mismatch_blocks": 0, "qs_mismatch_bytes": 0, "s_mismatch_blocks": 124, "total_byte_mismatches": 131, "dequant_max_abs_diff": 0.0}
+  },
+  "ratio_tinygrad_to_llama": 10.489780151456309,
+  "non_claims": ["not decode token wall", "not an exact tinygrad Q8 producer replacement", "do not add q8-only direct throughput to graph throughput"]
+}

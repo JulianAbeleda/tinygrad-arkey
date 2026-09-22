@@ -1,0 +1,33 @@
+{
+  "active_sum_us": "541401.088",
+  "active_us": {
+    "down": "461006.816",
+    "other_support": "525.088",
+    "residual_rope_kv_transport": "79869.184",
+    "v": "0"
+  },
+  "classified_launches": 1449,
+  "closure": {
+    "difference_us": "40294.304",
+    "sum_category_active_us": "541401.088",
+    "support_bucket_active_us": "501106.784"
+  },
+  "instrumentation_warning": "PROFILE=1 trace is instrumentation-perturbed and is not unprofiled wall authority.",
+  "launch_counts": {
+    "down": 36,
+    "other_support": 180,
+    "residual_rope_kv_transport": 1233,
+    "v": 0
+  },
+  "launches": 1449,
+  "ownership_basis": {
+    "down": "exact captured program-name allowlist for the two per-layer N=12288 down programs",
+    "other_support": "q8 compact producer calls",
+    "residual_rope_kv_transport": "all remaining non-down graph-owned programs",
+    "v": "zero: no V-owned identity admitted/present in this route"
+  },
+  "schema": "tinygrad.nv_post_unroll_support_attribution.v1",
+  "selected_segments": "last six graph segments (one final replay)",
+  "source": "docs/task_workflow/evidence/nv-prefill-post-unroll-trace-20260829/candidate.profile.jsonl",
+  "unknown_launches": 0
+}

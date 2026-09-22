@@ -1,0 +1,30 @@
+{
+  "tiny_hot": {
+    "n": 120,
+    "median_us": 3.872,
+    "mean_us": 3.8705499999999997,
+    "min_us": 3.776,
+    "max_us": 4.16
+  },
+  "tiny_cold96": {
+    "n": 100,
+    "median_us": 4.448,
+    "mean_us": 4.4743900000000005,
+    "min_us": 4.32,
+    "max_us": 4.769
+  },
+  "llama_hot": {
+    "n": 100,
+    "median_us": 3.872,
+    "mean_us": 3.87757,
+    "min_us": 3.808,
+    "max_us": 3.937
+  },
+  "llama_cold96": {
+    "n": 100,
+    "median_us": 4.768,
+    "mean_us": 4.7703999999999995,
+    "min_us": 4.608,
+    "max_us": 4.992
+  }
+}

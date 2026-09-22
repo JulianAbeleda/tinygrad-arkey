@@ -1,0 +1,47 @@
+{
+  "schema": "nv.q6.region_c_scale_accum.v1",
+  "passed": true,
+  "exact_fp32": true,
+  "max_abs": 0.015625,
+  "max_rel": 0.02295907773077488,
+  "replicas": 4096,
+  "timing_us": {
+    "min": 10.336,
+    "median": 10.432,
+    "samples": [
+      11.36,
+      10.336,
+      10.432,
+      10.4,
+      10.464,
+      10.4,
+      10.336,
+      10.4,
+      10.432,
+      10.496,
+      10.496,
+      10.496,
+      10.432,
+      10.496,
+      10.4
+    ]
+  },
+  "sass": {
+    "ffma": 60,
+    "fadd": 0,
+    "fmul": 52,
+    "i2fp": 64,
+    "stg": 4,
+    "ldg": 120,
+    "ldl": 0,
+    "stl": 0,
+    "bar": 0,
+    "imma": 0
+  },
+  "resources": {
+    "registers": 80,
+    "shared_bytes": 1024,
+    "local_bytes": 576
+  },
+  "artifacts": "docs/task_workflow/evidence/nv-q6-region-c-20260831/artifacts"
+}

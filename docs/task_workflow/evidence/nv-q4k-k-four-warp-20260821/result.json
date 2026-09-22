@@ -1,0 +1,79 @@
+{
+  "census": {
+    "candidate_programs_per_replay": 1,
+    "control_programs_per_replay": 1
+  },
+  "correctness": {
+    "candidate_vs_installed_max_abs": 2.1457672119140625e-06,
+    "candidate_vs_installed_relative_l2": 2.456184155225134e-07,
+    "full_logit_status": "not run; primitive is default-off and cannot be promoted from this gate",
+    "oracle_max_abs": 3.5762786865234375e-07,
+    "oracle_rows": [
+      0,
+      1,
+      17,
+      255,
+      511,
+      767,
+      1023
+    ],
+    "oracle_tol": 0.019358462095260622,
+    "pass": true
+  },
+  "git_commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "payload": {
+    "q4_sha256": "c60f7944e5f42746646c617d8f98d5945675a534444e9339b0c3ac410acdc566",
+    "x_sha256": "33e43ba5fd77a479233633ed2299ce25fcf412eb292ad34044cfd93df75a5c05"
+  },
+  "representation": {
+    "activation": "production fp16",
+    "approximation": false,
+    "weights": "production packed Q4_K uint32"
+  },
+  "schema": "tinygrad.q4k_k_four_warp_microgate.v1",
+  "shape": {
+    "blocks_per_warp": 4,
+    "k": 4096,
+    "k_blocks": 16,
+    "rows": 1024,
+    "warps_per_row": 4
+  },
+  "timing": {
+    "candidate_b": [
+      122.42530500000001,
+      122.17087,
+      122.28008,
+      126.51138499999999,
+      122.64146000000001,
+      122.68204,
+      122.54528
+    ],
+    "candidate_median": 122.54528,
+    "control_a": [
+      122.52489,
+      122.48486000000001,
+      122.51441999999999,
+      121.48208000000001,
+      121.45503000000001,
+      121.64498499999999,
+      121.80959999999999
+    ],
+    "control_c": [
+      121.915445,
+      121.56388000000001,
+      122.28443499999999,
+      121.72343500000001,
+      122.56021000000001,
+      121.723385,
+      121.51163500000001
+    ],
+    "control_midpoint_median": 121.76651749999999,
+    "delta": 0.7787625000000133,
+    "gate": "FAIL",
+    "material_win_threshold": "candidate <= 0.95 * control midpoint",
+    "ratio": 1.0063955389050196,
+    "replays": 200,
+    "reps": 7,
+    "unit": "us_per_kernel"
+  }
+}

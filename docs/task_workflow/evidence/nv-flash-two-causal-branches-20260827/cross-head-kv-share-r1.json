@@ -1,0 +1,183 @@
+{
+  "device": "NV",
+  "exact": {
+    "qg1_control": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg2_control": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg2_shared": {
+      "bitwise_equal_to_qg1": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e79ba9fa860dc8df4c5dc2e8a762a8c80ec8c2858fe3e2815da41abfd6de29ed"
+    },
+    "qg4_control": {
+      "bitwise_equal_to_qg1": false,
+      "max_abs_delta": 9.5367431640625e-07,
+      "mismatched_fp16_words": 1,
+      "sha256": "ffcee361af50f582909c2a4671fc35f131fe4f536bc185ee19616a2376e22a28"
+    },
+    "qg4_shared": {
+      "bitwise_equal_to_qg1": false,
+      "max_abs_delta": 9.5367431640625e-07,
+      "mismatched_fp16_words": 1,
+      "sha256": "ffcee361af50f582909c2a4671fc35f131fe4f536bc185ee19616a2376e22a28"
+    }
+  },
+  "geometry": {
+    "qg1_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 1,
+      "split_count": 6,
+      "warps": 768
+    },
+    "qg2_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 2,
+      "split_count": 12,
+      "warps": 768
+    },
+    "qg2_shared": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 0.5,
+      "query_group_size": 2,
+      "split_count": 12,
+      "warps": 768
+    },
+    "qg4_control": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 1.0,
+      "query_group_size": 4,
+      "split_count": 24,
+      "warps": 768
+    },
+    "qg4_shared": {
+      "ctas": 192,
+      "global_kv_request_fraction_vs_control": 0.25,
+      "query_group_size": 4,
+      "split_count": 24,
+      "warps": 768
+    }
+  },
+  "passing_query_groups": [
+    2
+  ],
+  "schema": "tinygrad.nv_flash_cross_head_kv_share_microgate.v1",
+  "shape": {
+    "hd": 128,
+    "hkv": 8,
+    "hq": 32,
+    "max_context": 1024,
+    "tc": 641,
+    "token_bound": 768
+  },
+  "timing": {
+    "medians": {
+      "qg2_control": 72.45244500000001,
+      "qg2_shared": 72.193364,
+      "qg4_control": 72.452627,
+      "qg4_shared": 72.40507199999999
+    },
+    "replays": 500,
+    "reps": 7,
+    "samples": {
+      "qg1_control": [],
+      "qg2_control": [
+        [
+          73.51027400000001,
+          73.175998,
+          73.065298,
+          73.01579,
+          72.436116,
+          72.50605999999999,
+          73.06562
+        ],
+        [
+          71.90158199999999,
+          71.929192,
+          71.879942,
+          71.701144,
+          71.433746,
+          71.83959200000001,
+          71.820156
+        ]
+      ],
+      "qg2_shared": [
+        [
+          72.474444,
+          72.447258,
+          72.445732,
+          72.121474,
+          72.403218,
+          72.57001600000001,
+          72.63601399999999
+        ],
+        [
+          71.76080999999999,
+          71.77211199999999,
+          71.73755,
+          71.93947,
+          72.109292,
+          71.986534,
+          72.081444
+        ]
+      ],
+      "qg4_control": [
+        [
+          73.08537799999999,
+          72.989026,
+          72.936972,
+          72.83362799999999,
+          72.47662799999999,
+          72.536236,
+          72.47256200000001
+        ],
+        [
+          72.463726,
+          72.26989999999999,
+          72.24153,
+          72.04946000000001,
+          72.07162600000001,
+          71.90136199999999,
+          71.960408
+        ]
+      ],
+      "qg4_shared": [
+        [
+          72.31442,
+          72.354712,
+          72.49550199999999,
+          72.2583,
+          72.108952,
+          72.147644,
+          72.30907
+        ],
+        [
+          72.676408,
+          72.61183199999999,
+          72.410332,
+          72.50107399999999,
+          72.362986,
+          72.34819999999999,
+          72.63311
+        ]
+      ]
+    },
+    "shared_recovery_us": {
+      "qg2": 0.259081000000009,
+      "qg4": 0.04755500000001689
+    },
+    "unit": "us_per_tile_plus_combine_host_synchronized"
+  },
+  "verdict": "PRIMITIVE_PASS"
+}

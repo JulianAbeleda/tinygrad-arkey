@@ -1,0 +1,291 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_broad_cta.v1",
+  "baselines": {
+    "current_main_us": 318.8,
+    "llama_main_us": 201.216,
+    "llama_5pct_gate_us": 211.2768
+  },
+  "gate": {
+    "required_projected_recovery_us": 23.5,
+    "passed": true,
+    "decision": "INVEST_FULL_ROUTE"
+  },
+  "arms": [
+    {
+      "prefetch_second_panel": true,
+      "combined_initial_publish": false,
+      "factor_dA": false,
+      "oracle_publisher": false,
+      "shape": {
+        "rows": 128,
+        "cols": 128,
+        "k": 256,
+        "replicas": 1,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "payload_shared_bytes": 57344,
+        "launch_shared_bytes": 58368
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          13.12,
+          12.96,
+          12.928,
+          13.088,
+          12.992,
+          12.992,
+          13.088,
+          12.96,
+          13.248,
+          13.056,
+          13.088,
+          13.088,
+          12.992,
+          12.992,
+          13.12,
+          13.056,
+          12.96,
+          13.056,
+          13.12,
+          12.992,
+          13.12,
+          12.992,
+          12.992,
+          12.928,
+          13.056,
+          13.024,
+          12.96,
+          12.96,
+          12.928,
+          12.96,
+          13.152
+        ],
+        "min_us": 12.928,
+        "median_us": 12.992,
+        "max_us": 13.248
+      },
+      "projection": {
+        "launch_floor_us": 4.0,
+        "owner_work_units": 36.141176470588235,
+        "projected_full_main_us": 328.98145882352947,
+        "projected_recovery_us": -10.181458823529454,
+        "screening_only": true
+      },
+      "compiler": {
+        "render_ms": 6250.256083905697,
+        "compile_wall_ms": 207.5231410562992,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-publisher-1-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch/nv_q6_oracle_broad_cta_prefetch.cu",
+        "source_bytes": 129934,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-publisher-1-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch/nv_q6_oracle_broad_cta_prefetch.cubin",
+        "cubin_sha256": "91d75afe633d3f338ae08173518d8b12ac8675416508a1e24577f863cd2ba2d5"
+      },
+      "sass": {
+        "instruction_total": 3552,
+        "families": {
+          "BAR": 4,
+          "BRA": 6,
+          "BRX": 2,
+          "BSSY": 1,
+          "BSYNC": 1,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 43,
+          "IDP": 1,
+          "IMAD": 1043,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 6,
+          "LDCU": 2,
+          "LDG": 49,
+          "LDS": 172,
+          "LDSM": 32,
+          "LEA": 19,
+          "LOP3": 26,
+          "MOV": 86,
+          "NOP": 11,
+          "PRMT": 26,
+          "S2R": 9,
+          "SHF": 103,
+          "STG": 64,
+          "STS": 42,
+          "UIADD3": 1,
+          "UISETP": 1,
+          "UMOV": 2,
+          "VIMNMX": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        }
+      },
+      "feasible": true
+    },
+    {
+      "prefetch_second_panel": true,
+      "combined_initial_publish": false,
+      "factor_dA": false,
+      "oracle_publisher": true,
+      "shape": {
+        "rows": 128,
+        "cols": 128,
+        "k": 256,
+        "replicas": 1,
+        "block": [
+          256,
+          1,
+          1
+        ],
+        "payload_shared_bytes": 57344,
+        "launch_shared_bytes": 58368
+      },
+      "correctness": {
+        "exact": true,
+        "finite": true,
+        "max_abs": 0.0
+      },
+      "timing": {
+        "samples_us": [
+          8.352,
+          8.16,
+          8.288,
+          8.256,
+          8.352,
+          8.288,
+          8.288,
+          8.288,
+          8.288,
+          8.192,
+          8.16,
+          8.224,
+          8.288,
+          8.064,
+          8.256,
+          8.32,
+          8.16,
+          8.192,
+          8.128,
+          8.256,
+          8.128,
+          8.16,
+          8.128,
+          8.256,
+          8.224,
+          8.288,
+          8.224,
+          8.16,
+          8.128,
+          8.256,
+          8.192
+        ],
+        "min_us": 8.064,
+        "median_us": 8.224,
+        "max_us": 8.352
+      },
+      "projection": {
+        "launch_floor_us": 4.0,
+        "owner_work_units": 36.141176470588235,
+        "projected_full_main_us": 156.6603294117647,
+        "projected_recovery_us": 162.1396705882353,
+        "screening_only": true
+      },
+      "compiler": {
+        "render_ms": 7063.812815118581,
+        "compile_wall_ms": 47.30253107845783,
+        "source": "docs/task_workflow/evidence/nv-q6-oracle-publisher-1-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch_oracle_publisher/nv_q6_oracle_broad_cta_prefetch_oracle_publisher.cu",
+        "source_bytes": 138522,
+        "cubin": "docs/task_workflow/evidence/nv-q6-oracle-publisher-1-20260831/artifacts/nv_q6_oracle_broad_cta_prefetch_oracle_publisher/nv_q6_oracle_broad_cta_prefetch_oracle_publisher.cubin",
+        "cubin_sha256": "a2d902a7264a6515561ec32a7be5536ecb29ce49e0de73a50bc5feef92569dc2"
+      },
+      "sass": {
+        "instruction_total": 3976,
+        "families": {
+          "BAR": 4,
+          "BRA": 1,
+          "EXIT": 1,
+          "FFMA": 512,
+          "FMUL": 512,
+          "HADD2": 4,
+          "I2FP": 512,
+          "IADD": 65,
+          "IDP": 1,
+          "IMAD": 1042,
+          "IMMA": 256,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 105,
+          "LDS": 168,
+          "LDSM": 32,
+          "LEA": 44,
+          "LOP3": 205,
+          "MOV": 130,
+          "NOP": 13,
+          "PRMT": 86,
+          "S2R": 4,
+          "SHF": 139,
+          "STG": 64,
+          "STS": 71
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        }
+      },
+      "feasible": true
+    }
+  ]
+}

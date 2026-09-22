@@ -1,0 +1,115 @@
+{
+  "schema": "tinygrad.nv_q4down_matched_ab.v1",
+  "status": "FAIL",
+  "fixture": {
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "z": "docs/task_workflow/evidence/nv-q4down-capture-20260829/z.npy",
+    "z_shape": [
+      512,
+      12288
+    ],
+    "z_dtype": "float16",
+    "z_sha256": "c1a31d73c201d2682bce8b0798054c9bf2a3bfcabd4efc1f71fd6f48772c61d1"
+  },
+  "census": {
+    "metadata_type12_names": [
+      {
+        "metadata_name": "blk.4.ffn_down.weight",
+        "block": 4
+      },
+      {
+        "metadata_name": "blk.5.ffn_down.weight",
+        "block": 5
+      },
+      {
+        "metadata_name": "blk.7.ffn_down.weight",
+        "block": 7
+      },
+      {
+        "metadata_name": "blk.8.ffn_down.weight",
+        "block": 8
+      },
+      {
+        "metadata_name": "blk.10.ffn_down.weight",
+        "block": 10
+      },
+      {
+        "metadata_name": "blk.11.ffn_down.weight",
+        "block": 11
+      },
+      {
+        "metadata_name": "blk.13.ffn_down.weight",
+        "block": 13
+      },
+      {
+        "metadata_name": "blk.14.ffn_down.weight",
+        "block": 14
+      },
+      {
+        "metadata_name": "blk.16.ffn_down.weight",
+        "block": 16
+      },
+      {
+        "metadata_name": "blk.17.ffn_down.weight",
+        "block": 17
+      },
+      {
+        "metadata_name": "blk.19.ffn_down.weight",
+        "block": 19
+      },
+      {
+        "metadata_name": "blk.20.ffn_down.weight",
+        "block": 20
+      },
+      {
+        "metadata_name": "blk.22.ffn_down.weight",
+        "block": 22
+      },
+      {
+        "metadata_name": "blk.23.ffn_down.weight",
+        "block": 23
+      },
+      {
+        "metadata_name": "blk.25.ffn_down.weight",
+        "block": 25
+      },
+      {
+        "metadata_name": "blk.26.ffn_down.weight",
+        "block": 26
+      },
+      {
+        "metadata_name": "blk.28.ffn_down.weight",
+        "block": 28
+      },
+      {
+        "metadata_name": "blk.29.ffn_down.weight",
+        "block": 29
+      }
+    ],
+    "expected_mains": 18,
+    "candidate_mains": 18,
+    "control_mains": 18,
+    "producer_records": 18
+  },
+  "correctness": {
+    "finite_candidate": true,
+    "finite_control": true,
+    "max_abs": 2.695646286010742,
+    "mean_abs": 0.005390220787376165,
+    "allclose_rtol_0p02_atol_0p5": false
+  },
+  "timing_ms": {
+    "candidate_samples": [
+      369.983615
+    ],
+    "candidate_min": 369.983615,
+    "candidate_median": 369.983615,
+    "control_samples": [
+      379.334499
+    ],
+    "control_min": 379.334499,
+    "control_median": 379.334499,
+    "candidate_minus_control_min": -9.350884000000008,
+    "candidate_minus_control_median": -9.350884000000008
+  }
+}

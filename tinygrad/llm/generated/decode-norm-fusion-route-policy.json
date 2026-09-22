@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_norm_fusion",
+  "description": "L1 M3 fused decode RMSNorm promotion record (l1-decode-plumbing-fusion-design-20260802.md section 6 norm family). Measured NON-LANDING on NV sm_120 (2026-08-02): the opaque custom-kernel boundary materializes one contiguous copy per norm call (144/token), so the fused family regresses the M2 baseline (1021 -> 1093 kernels/token; 173.45 -> 168.4 tok/s at d512) despite byte-identical tokens (sha 9d6b3787... 3/3, first token 151936 3/3). Evidence and reopen conditions: docs/task_workflow/input/m3-fused-norm-measurement-record-20260802.md. No target is promoted; the machinery is exercised by unit tests and ready for a copy-free boundary or launch-overhead work.",
+  "promoted_targets": []
+}

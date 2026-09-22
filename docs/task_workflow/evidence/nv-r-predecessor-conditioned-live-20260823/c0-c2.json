@@ -1,0 +1,95 @@
+{
+  "C0_median_us": 6.112,
+  "C0_us": [
+    6.208,
+    6.112,
+    6.112,
+    6.144,
+    6.08,
+    6.08,
+    6.176,
+    6.144,
+    6.112,
+    6.08,
+    6.112,
+    6.08,
+    6.08,
+    6.176,
+    6.144,
+    6.08,
+    6.08,
+    6.048,
+    6.08,
+    6.112
+  ],
+  "C2_median_us": 5.696,
+  "C2_minus_C0_us": -0.416,
+  "C2_us": [
+    5.632,
+    5.632,
+    5.632,
+    5.696,
+    5.728,
+    5.696,
+    5.76,
+    5.568,
+    5.6,
+    5.696,
+    5.664,
+    5.696,
+    5.76,
+    5.696,
+    5.664,
+    5.664,
+    5.728,
+    5.728,
+    5.76,
+    5.728
+  ],
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "layer": 0,
+  "production_output_checksum": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+  "provider": "rmsnorm_q8_1_llama_provider_4096",
+  "provider_buf_size": [
+    8192,
+    16384,
+    8192
+  ],
+  "provider_cubin_sha": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+  "provider_global_size": [
+    8,
+    1,
+    1
+  ],
+  "provider_local_size": [
+    32,
+    16,
+    1
+  ],
+  "provider_output_idx": 0,
+  "provider_vals": [],
+  "replay_matches_production": true,
+  "replay_output_checksum": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+  "schema": "tinygrad.nv_r_predecessor_conditioned_live.v1",
+  "target": "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+  "target_buf_size": [
+    65536,
+    9437184,
+    8192
+  ],
+  "target_cubin_sha": "94cf0d6ac72135e6d520675e88ad9047c8c19597e8a34d5178bc12322e738702",
+  "target_global_size": [
+    4096,
+    1,
+    1
+  ],
+  "target_local_size": [
+    128,
+    1,
+    1
+  ],
+  "target_vals": [
+    512
+  ],
+  "verdict": "MEASURED"
+}

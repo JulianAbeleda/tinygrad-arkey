@@ -1,0 +1,16 @@
+{
+  "weight": "blk.4.ffn_down.weight",
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "allclose": true,
+  "read_only": true,
+  "control_median_us": 363.924,
+  "candidate_median_us": 356.59,
+  "control_min_us": 357.722,
+  "candidate_min_us": 349.578,
+  "programs": {
+    "q8_compact_record_fp16_k12288": 1,
+    "q4_down_streamk": 1,
+    "q4k_imma_fixup_active": 1
+  }
+}

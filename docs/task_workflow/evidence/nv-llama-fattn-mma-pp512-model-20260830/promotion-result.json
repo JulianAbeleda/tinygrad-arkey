@@ -1,0 +1,57 @@
+{
+  "schema": "tinygrad.nv_llama_fattn_mma_pp512_promotion.v1",
+  "status": "PASS",
+  "decision": "PROMOTE",
+  "selector": "NV_LLAMA_FATTN_MMA_PP512",
+  "rollback": "NV_LLAMA_FATTN_MMA_PP512=0",
+  "wall": {
+    "control_a_median_ms": 38.564027,
+    "candidate_median_ms": 37.307464,
+    "control_c_median_ms": 38.810683,
+    "control_mean_ms": 38.687355,
+    "recovery_ms": 1.3798909999999935,
+    "control_tok_s": 13234.298390262142,
+    "candidate_tok_s": 13723.79532417427,
+    "throughput_gain_pct": 3.698699541732431
+  },
+  "correctness": {
+    "tokens": [
+      198,
+      198,
+      198
+    ],
+    "finite": true,
+    "candidate_repeat_exact": true,
+    "control_candidate_max_abs": 0.23819375038146973,
+    "control_candidate_mean_abs": 0.037184905260801315,
+    "control_candidate_allclose_rtol_0p02_atol_0p5": true,
+    "control_rollback_exact": true
+  },
+  "census": {
+    "control_a_flash": 0,
+    "candidate_flash": 36,
+    "control_c_flash": 0,
+    "candidate_full": {
+      "producer": 36,
+      "q4_main_total": 216,
+      "q4_fixup_total": 216,
+      "q6_down_producer": 18,
+      "q6_main_total": 36,
+      "q6_fixup_total": 36,
+      "q4_down_producer": 18,
+      "qkv_ds4_producer": 36,
+      "qkv_d4_producer": 18,
+      "o_producer": 36,
+      "compiler_o_producer": 0,
+      "gate_up_epilogue": 0,
+      "flash_mma_pp512": 36
+    }
+  },
+  "isolated": {
+    "status": "PASS",
+    "max_abs": 0.00013744831085205078,
+    "mean_abs": 4.102512775716605e-06,
+    "relative_l2": 0.00040561362402513623,
+    "allclose_atol_2e_4_rtol_2e_4": true
+  }
+}

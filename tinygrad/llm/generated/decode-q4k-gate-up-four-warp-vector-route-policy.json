@@ -1,0 +1,7 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "description": "Promotes the typed-output Q4_K four-warp plus vector-load gate/up kernel after bit-exact, 462-node census, and d512 reps=9 wall qualification. TINYGRAD_Q4K_GATE_UP_FOUR_WARP_DISABLE=1 restores the installed one-warp vector route.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "depth": 512,
+  "limitations": [
+    "llama-bench and tinygrad use different prompts and generated-token protocols",
+    "llama state snapshots are process boundaries; tinygrad snapshots are timed-window boundaries",
+    "ordered R3 bracket; clocks observed rather than locked"
+  ],
+  "llama_a_median_ms": 4.06401755,
+  "llama_a_samples_ns": [
+    168627328,
+    162560702,
+    162282789
+  ],
+  "llama_c_median_ms": 4.0814551,
+  "llama_c_samples_ns": [
+    169111799,
+    163258204,
+    162889591
+  ],
+  "llama_mean_control_medians_ms": 4.072736325,
+  "reps": 3,
+  "schema": "tinygrad.nv.promoted_endpoint_bracket.v1",
+  "tinygrad_latency_delta_pct": 0.11318673712554794,
+  "tinygrad_median_ms": 4.077346122357994,
+  "tinygrad_samples_ms": [
+    4.079382700001588,
+    4.07030172427767,
+    4.077346122357994
+  ],
+  "tinygrad_throughput_delta_pct": -0.11305876959319949,
+  "tinygrad_tokens_identical": true,
+  "tokens": 40
+}

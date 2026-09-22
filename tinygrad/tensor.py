@@ -43,6 +43,128 @@ def _fromnp(x: 'numpy.ndarray') -> UOp:
   ret.buffer.allocate(x)
   return ret.reshape(x.shape)
 
+def _bounded_after_output_identity(after: UOp) -> bool:
+  """Accept AFTER(BUFFER, CALL) as an invocation-owned output identity.
+
+  The decode q4k GEMV producer is an opaque custom-kernel CALL (precompile
+  False, no precompiled_output_slots), so the generic precompiled-output
+  proofs cannot see it.  This bounded proof accepts only an AFTER whose base
+  is a plain BUFFER/PARAM appearing exactly once among the call's arguments
+  (its output slot) and whose body provably stores through the PARAM for that
+  same slot.  Every other shape (movement legs on the base, aliased or
+  missing output argument, no body store proof) fails closed.
+  """
+  if after.op is not Ops.AFTER or len(after.src) != 2: return False
+  base, call = after.src
+  if base.op not in (Ops.BUFFER, Ops.PARAM) or base.numel() != after.numel() or base.dtype != after.dtype: return False
+  if call.op is not Ops.CALL or len(call.src) < 2: return False
+  matches = [slot for slot, arg in enumerate(call.src[1:]) if arg is base]
+  if len(matches) != 1: return False
+  output_slot = matches[0]
+  body = call.src[0]
+  if body.op is not Ops.SINK: return False
+  from tinygrad.uop.ops import ParamArg
+  for u in body.toposort():
+    if u.op is not Ops.STORE or not len(u.src): continue
+    target = u.src[0]
+    while target.op in (Ops.RESHAPE, Ops.INDEX) and len(target.src): target = target.src[0]
+    if target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot: return True
+  return False
+
+def _bounded_opaque_after_output_identity(after: UOp) -> bool:
+  """Accept a bounded opaque custom-kernel output (decode q4k GEMV and the
+  warp-coop partials kernels, precompile=False).
+
+  Opaque custom kernels have no precompiled-output slot contract and their
+  bodies store through registers, so the strict PARAM-slot proof cannot see
+  them.  The load-bearing bounded property is the alias structure: the
+  AFTER's base view (equal-span RESHAPE legs walked) appears exactly once
+  among the call's arguments, so it is the kernel's unique output buffer, and
+  an aliased input/output argument is rejected.  This mirrors the
+  PERMUTE-carrier re-proof used at lowering so marker creation and rangeify
+  agree on the same invocation.
+  """
+  if after.op is not Ops.AFTER or len(after.src) != 2: return False
+  base, call = after.src
+  if call.op is not Ops.CALL or len(call.src) < 2: return False
+  # A precompiled function has its own output-slot contract gated behind the
+  # redirect flag; this proof is only for opaque custom kernels (precompile=False).
+  if bool(getattr(call.arg, "precompile", False)): return False
+  base_buf = base
+  while base_buf.op is Ops.RESHAPE and len(base_buf.src) and base_buf.src[0].numel() == base_buf.numel():
+    base_buf = base_buf.src[0]
+  if base_buf.op not in (Ops.BUFFER, Ops.PARAM) or base_buf.numel() != after.numel() or base_buf.dtype != after.dtype:
+    return False
+  matches = 0
+  for arg in call.src[1:]:
+    a = arg
+    while a.op is Ops.RESHAPE and len(a.src) and a.src[0].numel() == a.numel(): a = a.src[0]
+    if a is base_buf: matches += 1
+  return matches == 1
+
+def _bounded_reduce_output_identity(x: UOp) -> bool:
+  """Accept ``REDUCE(RESHAPE(AFTER(...)))`` as a bounded kernel-output identity.
+
+  The warp-coop q4k GEMV publishes four partials per row; the ordinary q/k
+  chain reduces them (REDUCE over the trailing axis) before the norm.  Two
+  spellings reach this proof: the production graph (the marker walk strips
+  PERMUTE/RESHAPE/MS legs and lands directly on the REDUCE) and the
+  materialized spelling ``CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))``
+  (callify inserts the CONTIGUOUS redirect, and the hermetic fixture spells
+  it explicitly).  The REDUCE is itself a kernel output, and its input
+  carries the same bounded invocation proof as the direct-AFTER spelling (a
+  precompile GETTUPLE before callify, an AFTER at rangeify).  Equal-span
+  RESHAPE legs are transparent; every unexpected leg fails closed.
+  """
+  if x.op is Ops.CONTIGUOUS:
+    if len(x.src) != 1: return False
+    x = x.src[0]
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected: x = x.src[0]
+  if x.op is not Ops.REDUCE or len(x.src) != 1: return False
+  expected = x.src[0].numel()
+  u = x.src[0]
+  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
+  return (_bounded_after_output_identity(u) or u.has_precompiled_output_identity()
+          or _bounded_opaque_after_output_identity(u))
+
+def _bounded_residual_sum_identity(x: UOp) -> bool:
+  """Accept ``ADD(a, b)`` as a bounded residual-sum identity.
+
+  The decode block residual ``h = x + attn_out`` feeds the ffn-norm. Each
+  operand is an invocation-owned producer: the block-input precompiled output
+  (the GETTUPLE spelling at creation, a PARAM after callify) and the attention
+  output (a custom-kernel AFTER on the flash route, a SDPA REDUCE on CPU). The
+  marker binds the same residual value at lowering: the ffn_down residual slot
+  is a second consumer, so the scheduler materializes ``h`` once and the fused
+  body reads that shared buffer rather than duplicating the residual ADD.
+  """
+  if x.op is not Ops.ADD or len(x.src) != 2: return False
+  expected = x.numel()
+  if x.src[0] is x.src[1]: return False
+  return all(s.numel() == expected and _bounded_residual_operand_identity(s) for s in x.src)
+
+def _bounded_residual_operand_identity(s: UOp) -> bool:
+  """One operand of the decode residual ``h = x + attn_out`` is invocation-owned:
+  the block-input function parameter after callify, a precompiled function
+  output (the GETTUPLE spelling at creation), a bounded custom-kernel AFTER, or
+  a compute node (the SDPA/flash attention output REDUCE) the scheduler realizes
+  within the same invocation.  A materialized BUFFER/SLICE, movement-only views,
+  and constants are excluded so a lazy ``x+x`` or ``x+1`` never becomes a
+  residual-sum identity; the caller's numel guard also rejects scalar constants
+  broadcast into the residual add."""
+  u = s
+  # RESHAPE carries its shape descriptor as a second src, so walk by src[0] with a
+  # truthy src-length guard (same spelling as _plain_identity_buffer_view).
+  while u.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(u.src) and u.src[0].numel() == u.numel():
+    u = u.src[0]
+  if u.op is Ops.PARAM or u.has_precompiled_output_identity(): return True
+  if _bounded_after_output_identity(u) or _bounded_opaque_after_output_identity(u): return True
+  # A compute node (REDUCE/MUL/ADD/CAST/...) is realized within this call;
+  # materialized leaves, movement legs, and constants are not invocation-owned producers.
+  return u.op not in {Ops.CONST, Ops.BUFFER, Ops.SLICE, Ops.RESHAPE, Ops.PERMUTE, Ops.EXPAND,
+                      Ops.SHRINK, Ops.PAD, Ops.FLIP, Ops.COPY, Ops.CONTIGUOUS, Ops.BIND, Ops.MEMORY_SEMANTIC}
+
 def _get_winograd_matcols(mat, dims:int, shp:tuple[sint, ...], dtype:DType) -> list[list[Tensor]]:
   return [[Tensor.cat(*[Tensor.full(shp[:dim] + (1,) + shp[dim+1:], float(m[k]), dtype=dtype, buffer=False) for m in mat], dim=dim)
            for k in range(len(mat[0]))] for dim in range(dims)]
@@ -213,14 +335,29 @@ class Tensor(RandMixin):
     # realization ownership. Waiting until rangeify is too late: ATTENTION can
     # itself become a scheduled producer and retain its bounded primitive even
     # when the lowering chooses the ordinary fallback.
-    from tinygrad.schedule.rangeify import lower_attention_semantic
+    from tinygrad.schedule.rangeify import lower_attention_semantic, lower_rmsnorm_semantic
     raw_sink = UOp.sink(*[x.uop for x in (self,)+lst])
     attention_map = {u:lower_attention_semantic(u) for u in raw_sink.toposort() if u.op is Ops.ATTENTION}
     if attention_map: _apply_map_to_tensors(attention_map, name="attention semantic")
+    rmsnorm_map = {u:lower_rmsnorm_semantic(u) for u in raw_sink.toposort() if u.op is Ops.RMSNORM}
+    if rmsnorm_map: _apply_map_to_tensors(rmsnorm_map, name="rmsnorm semantic")
     sink = UOp.sink(*[x.uop for x in (self,)+lst])
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
-    return create_linear_with_vars(big_sink)
+    linear, var_vals = create_linear_with_vars(big_sink)
+    # Position-invariant decode graphs reference the UNBOUND position variable while the
+    # bound value lives with the eager caller (llama.cpp: positions are launch-time data,
+    # never graph structure). The JIT supplies var_vals from its own input args; eager
+    # realize merges the per-tensor carrier, but only for variables the schedule uses.
+    carrier: dict[str, int] = {}
+    for t in (self,)+lst:
+      for nm, val in (getattr(t, "_var_vals", None) or {}).items():
+        if nm in carrier and carrier[nm] != val: raise RuntimeError(f"bind mismatch on {nm}, {carrier[nm]} != {val}")
+        carrier[nm] = val
+    if carrier:
+      used_vars = {v.expr for v in linear.variables()}
+      var_vals = {**{nm: val for nm, val in carrier.items() if nm in used_vars}, **var_vals}
+    return linear, var_vals
 
   def schedule_linear(self, *lst:Tensor) -> UOp:
     """Creates the schedule needed to realize these Tensor(s)."""
@@ -229,11 +366,14 @@ class Tensor(RandMixin):
     return linear
 
   @disable_gc()
-  def realize(self, *lst:Tensor, do_update_stats=True) -> Tensor:
+  def realize(self, *lst:Tensor, do_update_stats=True, var_vals:dict[str, int]|None=None) -> Tensor:
     """Triggers the computation needed to create these Tensor(s)."""
     if len(to_realize:=[x for x in (self,)+lst if x.uop.device is not None and not x.uop.has_buffer_identity()]):
-      linear, var_vals = Tensor.linear_with_vars(*to_realize)
-      run_linear(linear, var_vals, update_stats=do_update_stats)
+      linear, graph_var_vals = Tensor.linear_with_vars(*to_realize)
+      # A position-invariant decode graph references the UNBOUND start_pos variable;
+      # the JIT supplies the concrete value from its input args (llama.cpp style:
+      # fixed graph, positions are launch-time data, never graph structure).
+      run_linear(linear, graph_var_vals if var_vals is None else var_vals, update_stats=do_update_stats)
     return self
 
   def replace(self, x:Tensor) -> Tensor:
@@ -281,6 +421,8 @@ class Tensor(RandMixin):
       raise JitError("cannot access tensor data during JIT capture, the value will be baked in")
     x = self.cast(self.dtype.base).contiguous()
     if self.uop.device is None or isinstance(self.device, tuple): x = x.clone("CPU")
+    # carry the position var_vals carrier through the data-access view chain (cast/contiguous/clone)
+    if (vv := getattr(self, "_var_vals", None)): x._var_vals = vv
     return cast(Buffer, x.realize().uop.buffer).ensure_allocated()
   def _data(self) -> memoryview: return self._buffer().as_memoryview()
 
@@ -1236,7 +1378,20 @@ class Tensor(RandMixin):
     # Softmax keeps a broadcasted reduction view. Materialize it before the
     # PV contraction: consuming that view directly as a matmul operand can
     # alias its reduction-axis indexing and produce incorrect results.
-    out = qk.cast(self.dtype).softmax(-1).contiguous().dropout(dropout_p) @ fallback_value
+    qk_cast = qk.cast(self.dtype)
+    if not all_int(qk.shape):
+      # Symbolic prefill (KV extent is a variable): materialize each reduce output at its
+      # reduced shape. Otherwise the scheduler re-fuses max/sum into the elementwise
+      # consumers with KV in the grid, lowering softmax to two full KV loops per output
+      # element (O(KV^2), observed 50ms at KV=4096). This decomposition is arithmetic-
+      # identical to softmax(); the contiguous() points only force kernel boundaries.
+      qk_max = qk_cast.max(-1, keepdim=True).detach().contiguous()
+      qk_exp = (qk_cast - qk_max).exp()
+      qk_sum = qk_exp.sum(-1, keepdim=True).contiguous()
+      softmaxed = (qk_exp * qk_sum.reciprocal()).contiguous()
+    else:
+      softmaxed = qk_cast.softmax(-1).contiguous()
+    out = softmaxed.dropout(dropout_p) @ fallback_value
     # Dropout is stochastic and intentionally remains on the ordinary path.
     if dropout_p != 0: return out
     primitive = self._online_attention_primitive(fallback_key, fallback_value, attn_mask, scale, qk_dtype, out.dtype)
@@ -1248,6 +1403,86 @@ class Tensor(RandMixin):
     src = (out.uop,) + ((primitive.uop,) if primitive is not None else ()) + (q.uop, key.uop, value.uop) + \
           ((attn_mask.uop,) if attn_mask is not None else ())
     return Tensor(UOp(Ops.ATTENTION, out.uop.dtype, src=src, arg=spec), device=out.device)
+
+  def _semantic_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float) -> Tensor:
+    """Create an explicit RMSNorm semantic boundary with a correct fallback.
+
+    `Ops.RMSNORM` owns the complete normalization contract while its first
+    source is the ordinary graph (the value this marker replaces). Rangeify
+    may replace this marker only after it has a proven fused lowering;
+    otherwise it returns that source unchanged. Admission is deliberately
+    narrow here and re-checked fail-closed at lowering: decode-shaped rows
+    only, so prefill (rows >> 32) never receives a marker.
+    """
+    from tinygrad.uop.ops import RMSNormSpec
+    if not all_int(x.shape) or len(x.shape) == 0: return out
+    dim = x.shape[-1]
+    if dim < 32 or dim % 32: return out
+    rows = prod(x.shape[:-1])
+    if not isinstance(rows, int) or rows < 1 or rows > 32: return out
+    if x.dtype not in (dtypes.float32, dtypes.float16): return out
+    spec = RMSNormSpec(dim, eps, out.dtype, True)
+    src = (out.uop, x.uop, weight.uop)
+    return Tensor(UOp(Ops.RMSNORM, out.dtype, src=src, arg=spec), device=out.device)
+
+  def _semantic_reduce_output_rmsnorm(self, x:Tensor, out:Tensor, weight:Tensor, eps:float,
+                                      freqs:Tensor|None=None) -> Tensor:
+    """Default-off cooperative reduction/output marker with an exact fallback."""
+    from tinygrad.uop.ops import ReduceOutputSpec, memory_semantic_owner
+    if not all_int(x.shape) or len(x.shape) == 0: return out
+    dim = x.shape[-1]
+    rows = prod(x.shape[:-1])
+    # Decode norm shapes are the admit set.  Single-row keeps the historical
+    # dim >= 32 general case; the fp32 q/k norms are multi-row (8/32 rows) at
+    # 128 or 4096 elements per row.  Everything else keeps the ordinary
+    # fallback (no marker).
+    if not isinstance(dim, int) or not isinstance(rows, int) or rows not in (1, 8, 32) or dim < 32 or dim % 32: return out
+    if rows != 1 and dim not in (128, 4096): return out
+    if x.dtype not in (dtypes.float16, dtypes.float32) or out.dtype not in (dtypes.float16, dtypes.float32): return out
+    # Warp/lane/per-lane association mirrors the ordinary reduce shape: one
+    # warp per row for the multi-row q/k norms (32 lanes per warp, the row
+    # split across lanes), and one warp per 256 elements for single-row.  Any
+    # dim this cannot tile exactly keeps the ordinary fallback (no marker).
+    if rows == 1:
+      warps = max(1, min(16, dim // 256))
+      per_lane, rem = divmod(dim, warps * 32)
+    else:
+      warps = rows
+      per_lane, rem = divmod(dim, 32)
+    if rem or per_lane < 1: return out
+    # In production a block result is explicitly CONTIGUOUS before its semantic
+    # role wrapper.  Accept only that one promised materialization when its
+    # source is itself an exact precompiled function result.  This is not
+    # generic movement stripping: ADD/CAST/SHRINK/EXPAND and arbitrary
+    # CONTIGUOUS values remain ineligible.
+    identity_uop = x.uop
+    # Pure RESHAPE / MEMORY_SEMANTIC / PERMUTE views are offset-0 and preserve
+    # the producer's identity.  PERMUTE is admitted only as a pure permutation
+    # of a single producer; the walk stays closed to SHRINK/EXPAND/ADD/CAST,
+    # so a non-trivial chain stops here and fails the identity checks below.
+    while identity_uop.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.PERMUTE}:
+      if identity_uop.op is Ops.PERMUTE and len(identity_uop.src) != 1: break
+      identity_uop = identity_uop.src[0]
+    precompiled_contiguous = identity_uop.op is Ops.CONTIGUOUS and identity_uop.src[0].has_precompiled_output_identity()
+    after_identity = _bounded_after_output_identity(identity_uop)
+    reduce_identity = _bounded_reduce_output_identity(identity_uop)
+    residual_sum_identity = _bounded_residual_sum_identity(identity_uop)
+    owned_contiguous_candidate = (x.uop.op is Ops.MEMORY_SEMANTIC and len(x.uop.src) == 1 and
+                                  x.uop.src[0].op is Ops.CONTIGUOUS and memory_semantic_owner(x.uop) is not None)
+    identity = not owned_contiguous_candidate and (identity_uop.has_buffer_identity() or
+      identity_uop.has_precompiled_output_identity() or precompiled_contiguous or after_identity or reduce_identity)
+    if freqs is not None:
+      if rows not in (8, 32) or dim != 128 or freqs.dtype != dtypes.float32 or len(freqs.shape) != 2 or freqs.shape[1] != dim: return out
+      epilogue, extra = "rope", (freqs.uop,)
+    else:
+      epilogue, extra = "identity", ()
+    return Tensor(UOp(Ops.REDUCE_OUTPUT, out.dtype, (out.uop, x.uop, weight.uop, *extra),
+                      ReduceOutputSpec(rows, dim, eps, out.dtype, input_identity_at_marker=identity,
+                                       owned_contiguous_candidate=owned_contiguous_candidate,
+                                       reduce_input_at_marker=reduce_identity,
+                                       residual_sum_at_marker=residual_sum_identity,
+                                       warps=warps, lanes=32, per_lane=per_lane,
+                                       epilogue=epilogue)), device=out.device)
 
   def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
                                   scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:
@@ -1479,9 +1714,11 @@ def _metadata_wrapper(fn: Callable[P, T]) -> Callable[P, T]:
     else: caller = ""
 
     token = _METADATA.set(Metadata(name=fn.__name__, caller=caller))
-    with cpu_profile(TracingKey(fn.__name__), "USER"):
-      ret = fn(*args, **kwargs)
-    _METADATA.set(token)
+    try:
+      with cpu_profile(TracingKey(fn.__name__), "USER"):
+        ret = fn(*args, **kwargs)
+    finally:
+      _METADATA.set(token)
     return ret
   return _wrapper
 

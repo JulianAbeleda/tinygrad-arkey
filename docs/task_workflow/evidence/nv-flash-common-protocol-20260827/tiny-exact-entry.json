@@ -1,0 +1,727 @@
+{
+  "capture": {
+    "matching_chain_count": 6,
+    "selected_call_count": 752,
+    "tokens": [
+      13876,
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876,
+      38835
+    ]
+  },
+  "chain_names": [
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+    "rmsnorm_q8_1_llama_provider_4096",
+    "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+    "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+    "reduce_output_rmsnorm_rope_32_128",
+    "reduce_output_rmsnorm_rope_kv_cache_8_128",
+    "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1"
+  ],
+  "commit": "8a7b1a9ba39e0020eacd2cb314e5963929f6bddc",
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2917",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Disabled",
+    "pstate": "P0",
+    "temperature.gpu": "55"
+  },
+  "launch_manifest": [
+    {
+      "buf_meta": [
+        {
+          "size": 24576,
+          "va_addr": 157201723392
+        },
+        {
+          "size": 28311552,
+          "va_addr": 138834812736
+        },
+        {
+          "size": 28311552,
+          "va_addr": 138863140672
+        },
+        {
+          "size": 8192,
+          "va_addr": 157179826176
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/q4k_gate_up_four_warp_vec_fp16_12288_4096.cubin",
+        "regs_usage": 47,
+        "sha256": "1c194fb341766114e36f2a9ac624922fdc90f7a3932f135deffdd08a1766afee",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        12288,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157201747968
+        },
+        {
+          "size": 41287680,
+          "va_addr": 138793525056
+        },
+        {
+          "size": 24576,
+          "va_addr": 157201723392
+        },
+        {
+          "size": 16384,
+          "va_addr": 157201707008
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd.cubin",
+        "regs_usage": 40,
+        "sha256": "d62ff2aa5f6e09bce99ff96bb3e6485925310fb184b09aed7bfd502082b7443d",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 8192,
+          "va_addr": 157201764352
+        },
+        {
+          "size": 16384,
+          "va_addr": 157201747968
+        },
+        {
+          "size": 8192,
+          "va_addr": 142858932224
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/rmsnorm_q8_1_llama_provider_4096.cubin",
+        "regs_usage": 30,
+        "sha256": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "local_size": [
+        32,
+        16,
+        1
+      ],
+      "name": "rmsnorm_q8_1_llama_provider_4096",
+      "vals": []
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157201772544
+        },
+        {
+          "size": 9437184,
+          "va_addr": 138903265600
+        },
+        {
+          "size": 8192,
+          "va_addr": 157201764352
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/q4k_warp_coop_q8_dp4a_direct_4096_4096.cubin",
+        "regs_usage": 37,
+        "sha256": "8333b53cff03bf17d26a41c3dfa1ab25685a5688a24556d77fe096e5894de27c",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        4096,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_warp_coop_q8_dp4a_direct_4096_4096",
+      "vals": [
+        700
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 4096,
+          "va_addr": 157201788928
+        },
+        {
+          "size": 4096,
+          "va_addr": 157201793024
+        },
+        {
+          "size": 2359296,
+          "va_addr": 138891452224
+        },
+        {
+          "size": 3440640,
+          "va_addr": 138912703296
+        },
+        {
+          "size": 8192,
+          "va_addr": 157201764352
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096.cubin",
+        "regs_usage": 40,
+        "sha256": "b3a8d07028669f08f79d131f27adbd9d959cb1b1e24f5d88ad86b2a43ecc1e13",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        1024,
+        1,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "name": "q4k_q6k_warp_coop_q8_dp4a_pair_direct_1024_4096",
+      "vals": [
+        700
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 16384,
+          "va_addr": 157201797120
+        },
+        {
+          "size": 16384,
+          "va_addr": 157201772544
+        },
+        {
+          "size": 4096,
+          "va_addr": 142858113024
+        },
+        {
+          "size": 524288,
+          "va_addr": 156850200576
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/reduce_output_rmsnorm_rope_32_128.cubin",
+        "regs_usage": 38,
+        "sha256": "e3e8c872fbe3fd8dd570b8db49ccaf62c77d277e2dcdd7479f4572955cd4488e",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        32,
+        1,
+        1
+      ],
+      "local_size": [
+        4,
+        8,
+        1
+      ],
+      "name": "reduce_output_rmsnorm_rope_32_128",
+      "vals": [
+        700
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 4194304,
+          "va_addr": 157047246848
+        },
+        {
+          "size": 4096,
+          "va_addr": 157201788928
+        },
+        {
+          "size": 4096,
+          "va_addr": 142858117120
+        },
+        {
+          "size": 4096,
+          "va_addr": 157201793024
+        },
+        {
+          "size": 524288,
+          "va_addr": 156850200576
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/reduce_output_rmsnorm_rope_kv_cache_8_128.cubin",
+        "regs_usage": 26,
+        "sha256": "50b238f0ebdb66f3460ad8305052362a7703c3748d063ac1dbcdae56b37287d3",
+        "shmem_usage": 2176
+      },
+      "global_size": [
+        8,
+        1,
+        1
+      ],
+      "local_size": [
+        2,
+        16,
+        1
+      ],
+      "name": "reduce_output_rmsnorm_rope_kv_cache_8_128",
+      "vals": [
+        700
+      ]
+    },
+    {
+      "buf_meta": [
+        {
+          "size": 102400,
+          "va_addr": 157201813504
+        },
+        {
+          "size": 16384,
+          "va_addr": 157201797120
+        },
+        {
+          "size": 4194304,
+          "va_addr": 157047246848
+        }
+      ],
+      "cubin": {
+        "path": "docs/task_workflow/evidence/nv-flash-common-protocol-20260827/tiny-exact-entry/cubins/flash_vec_llama_score_pv_32_128_6_widekv16_vtail1.cubin",
+        "regs_usage": 96,
+        "sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+        "shmem_usage": 4224
+      },
+      "global_size": [
+        6,
+        32,
+        1
+      ],
+      "local_size": [
+        32,
+        4,
+        1
+      ],
+      "name": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1",
+      "vals": [
+        700
+      ]
+    }
+  ],
+  "method": "exact common-layer captured programs/live buffers; target reheat; cumulative prefix; only final score timestamped",
+  "n_per_arm": 20,
+  "reconciliation": {
+    "cumulative_hops": {
+      "full_entry_chain": {
+        "increment_from_prior_checkpoint_us": 0.064,
+        "score_minus_hot_us": 0.528
+      },
+      "previous_ffn": {
+        "increment_from_prior_checkpoint_us": 0.16,
+        "score_minus_hot_us": 0.384
+      },
+      "previous_ffn_provider": {
+        "increment_from_prior_checkpoint_us": -0.048,
+        "score_minus_hot_us": 0.336
+      },
+      "previous_gate_up": {
+        "increment_from_prior_checkpoint_us": 0.224,
+        "score_minus_hot_us": 0.224
+      },
+      "through_kv_projection": {
+        "increment_from_prior_checkpoint_us": 0.0,
+        "score_minus_hot_us": 0.528
+      },
+      "through_q_completion": {
+        "increment_from_prior_checkpoint_us": -0.064,
+        "score_minus_hot_us": 0.464
+      },
+      "through_q_projection": {
+        "increment_from_prior_checkpoint_us": 0.192,
+        "score_minus_hot_us": 0.528
+      }
+    },
+    "first_checkpoint_over_hot_0p25us": "previous_ffn",
+    "full_entry_minus_hot_us": 0.528,
+    "hot_midpoint_us": 4.432
+  },
+  "rows": {
+    "completions_only": {
+      "max_us": 4.512,
+      "mean_us": 4.43,
+      "median_us": 4.432,
+      "min_us": 4.288,
+      "samples_us": [
+        4.512,
+        4.416,
+        4.48,
+        4.416,
+        4.416,
+        4.352,
+        4.288,
+        4.416,
+        4.48,
+        4.512,
+        4.48,
+        4.48,
+        4.352,
+        4.384,
+        4.512,
+        4.48,
+        4.448,
+        4.384,
+        4.48,
+        4.32
+      ]
+    },
+    "full_entry_chain": {
+      "max_us": 5.184,
+      "mean_us": 4.955,
+      "median_us": 4.96,
+      "min_us": 4.864,
+      "samples_us": [
+        4.96,
+        4.928,
+        4.96,
+        4.928,
+        4.96,
+        4.96,
+        5.184,
+        4.896,
+        4.992,
+        4.896,
+        4.864,
+        5.056,
+        4.992,
+        4.96,
+        4.896,
+        4.896,
+        4.96,
+        4.928,
+        4.96,
+        4.928
+      ]
+    },
+    "hot_a": {
+      "max_us": 4.608,
+      "mean_us": 4.426,
+      "median_us": 4.448,
+      "min_us": 4.32,
+      "samples_us": [
+        4.384,
+        4.48,
+        4.384,
+        4.48,
+        4.32,
+        4.608,
+        4.352,
+        4.48,
+        4.352,
+        4.448,
+        4.32,
+        4.48,
+        4.352,
+        4.512,
+        4.352,
+        4.448,
+        4.448,
+        4.48,
+        4.384,
+        4.448
+      ]
+    },
+    "hot_c": {
+      "max_us": 4.512,
+      "mean_us": 4.402,
+      "median_us": 4.416,
+      "min_us": 4.288,
+      "samples_us": [
+        4.448,
+        4.32,
+        4.384,
+        4.384,
+        4.512,
+        4.32,
+        4.416,
+        4.416,
+        4.448,
+        4.352,
+        4.448,
+        4.416,
+        4.448,
+        4.416,
+        4.48,
+        4.288,
+        4.48,
+        4.32,
+        4.416,
+        4.32
+      ]
+    },
+    "previous_ffn": {
+      "max_us": 5.12,
+      "mean_us": 4.837,
+      "median_us": 4.816,
+      "min_us": 4.736,
+      "samples_us": [
+        4.768,
+        4.832,
+        4.8,
+        4.8,
+        4.736,
+        4.864,
+        4.832,
+        4.832,
+        4.768,
+        4.8,
+        4.832,
+        4.736,
+        4.864,
+        4.8,
+        4.8,
+        4.96,
+        4.768,
+        5.12,
+        4.832,
+        4.992
+      ]
+    },
+    "previous_ffn_provider": {
+      "max_us": 5.024,
+      "mean_us": 4.797,
+      "median_us": 4.768,
+      "min_us": 4.704,
+      "samples_us": [
+        4.768,
+        5.024,
+        5.024,
+        4.704,
+        4.768,
+        4.768,
+        4.704,
+        4.832,
+        4.704,
+        4.768,
+        4.8,
+        4.768,
+        4.736,
+        4.928,
+        4.768,
+        4.864,
+        4.704,
+        4.704,
+        4.8,
+        4.8
+      ]
+    },
+    "previous_gate_up": {
+      "max_us": 4.832,
+      "mean_us": 4.675,
+      "median_us": 4.656,
+      "min_us": 4.544,
+      "samples_us": [
+        4.672,
+        4.608,
+        4.768,
+        4.736,
+        4.64,
+        4.672,
+        4.608,
+        4.64,
+        4.736,
+        4.832,
+        4.64,
+        4.704,
+        4.576,
+        4.672,
+        4.64,
+        4.8,
+        4.64,
+        4.64,
+        4.544,
+        4.736
+      ]
+    },
+    "provider_only": {
+      "max_us": 4.544,
+      "mean_us": 4.442,
+      "median_us": 4.432,
+      "min_us": 4.352,
+      "samples_us": [
+        4.416,
+        4.512,
+        4.416,
+        4.544,
+        4.384,
+        4.448,
+        4.48,
+        4.448,
+        4.416,
+        4.48,
+        4.416,
+        4.448,
+        4.416,
+        4.416,
+        4.416,
+        4.416,
+        4.448,
+        4.448,
+        4.352,
+        4.512
+      ]
+    },
+    "qkv_only": {
+      "max_us": 4.576,
+      "mean_us": 4.531,
+      "median_us": 4.544,
+      "min_us": 4.48,
+      "samples_us": [
+        4.48,
+        4.576,
+        4.544,
+        4.512,
+        4.544,
+        4.544,
+        4.512,
+        4.544,
+        4.544,
+        4.48,
+        4.512,
+        4.576,
+        4.512,
+        4.576,
+        4.544,
+        4.48,
+        4.48,
+        4.576,
+        4.544,
+        4.544
+      ]
+    },
+    "through_kv_projection": {
+      "max_us": 5.152,
+      "mean_us": 4.981,
+      "median_us": 4.96,
+      "min_us": 4.864,
+      "samples_us": [
+        4.96,
+        4.928,
+        4.864,
+        5.056,
+        5.152,
+        4.896,
+        4.864,
+        5.024,
+        5.12,
+        5.152,
+        4.928,
+        4.992,
+        4.896,
+        4.96,
+        4.864,
+        5.024,
+        5.024,
+        5.024,
+        4.928,
+        4.96
+      ]
+    },
+    "through_q_completion": {
+      "max_us": 5.184,
+      "mean_us": 4.92,
+      "median_us": 4.896,
+      "min_us": 4.832,
+      "samples_us": [
+        4.864,
+        4.928,
+        5.024,
+        4.896,
+        4.928,
+        4.896,
+        4.832,
+        4.896,
+        4.864,
+        4.96,
+        4.864,
+        5.024,
+        4.832,
+        4.896,
+        4.896,
+        4.928,
+        5.184,
+        4.96,
+        4.864,
+        4.864
+      ]
+    },
+    "through_q_projection": {
+      "max_us": 5.184,
+      "mean_us": 4.974,
+      "median_us": 4.96,
+      "min_us": 4.832,
+      "samples_us": [
+        4.96,
+        4.96,
+        5.184,
+        4.96,
+        5.152,
+        4.992,
+        4.928,
+        4.992,
+        4.992,
+        4.896,
+        4.928,
+        4.896,
+        4.896,
+        5.184,
+        4.928,
+        5.024,
+        4.832,
+        4.992,
+        4.928,
+        4.864
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_entry_hop_ledger.v1",
+  "shape": {
+    "depth": 512,
+    "max_context": 1024
+  }
+}

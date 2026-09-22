@@ -61,6 +61,16 @@ class Renderer:
   has_threads: bool = False
   has_shared: bool = True
   has_aux: bool = False # additional program info, eg. image shapes
+  # Graph-authored post-barrier predicated regions are opt-in.  String/IR
+  # renderers which already implement structured IF/ENDIF set this true;
+  # native ISA renderers stay fail-closed until they have a proved lowering.
+  supports_post_barrier_regions: bool = False
+  # Split register bridging across a PostBarrierRegion anchor is CUDA-only and
+  # must never fall back to ordinary lexical RegionLoad rendering.
+  supports_region_load_bridge: bool = False
+  # Explicit ABI promise for one immutable, non-aliasing GLOBAL pointer. This
+  # is opt-in because not every renderer can preserve const/restrict spelling.
+  supports_const_restrict_pointer: bool = False
   # NOTE: these two should be in (x,y,z) order to match the max_sizes argument in get_grouped_dims
   global_max: tuple[int, ...]|None = (0x8FFFFFFF,) * (3) # TODO: Ops.SPECIAL int32 indexes right now
   local_max: tuple[int, ...]|None = (0x8FFFFFFF,) * (3) # TODO: Ops.SPECIAL int32 indexes right now

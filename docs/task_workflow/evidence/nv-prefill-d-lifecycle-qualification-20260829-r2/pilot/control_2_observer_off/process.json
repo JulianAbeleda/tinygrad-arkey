@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/usr/bin/python3",
+    "-m",
+    "extra.llm_research.prefill.nv_compiler_q6k_model_arm",
+    "--arm",
+    "candidate",
+    "--roles",
+    "ffn_down",
+    "--model",
+    "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "--max-context",
+    "4608",
+    "--warmups",
+    "1",
+    "--rounds",
+    "9",
+    "--out",
+    "docs/task_workflow/evidence/nv-prefill-d-lifecycle-qualification-20260829-r2/pilot/control_2_observer_off/model.json"
+  ],
+  "returncode": 0,
+  "stdout_tail": "ntion\": 36, \"q8_compact_record_fp16\": 108, \"q8_compact_record_fp16_q6_ffn_down\": 18, \"r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6\": 1, \"r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561\": 73, \"r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2\": 36, \"r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e\": 72, \"r_8_128_32_2_2_2_2_2_2_192_2_2_2_e7b50137881894b03e7c8a05e6d8f1cd1d1f2effd185e444406c3532cf771c74\": 18, \"r_8_32_32_2_2_2_2_2_2_64_2_2_2_46e76ef8e7f36dda3cb7b9ed68b09d12dd58ca17ae49b6f377546a11c49b15d9\": 36, \"r_8_32_8_4_4_16_101af4cba4c325fa1cf1243686d10094252566e2d3df70d2f8849fe60db9f98f\": 36}, \"replay\": {\"distinct_activation_output\": true, \"finite\": true, \"first_token\": 198, \"replay_token\": 198, \"same_activation_exact\": true, \"same_logits_exact\": true, \"same_logits_max_abs\": 0.0, \"same_logits_mean_abs\": 0.0, \"same_token\": true}, \"route\": {\"active_q6_roles\": [\"ffn_down\"], \"default_enabled\": false, \"gate_up_identity\": \"c0d2b181a6de5751180a48cc5c1b1d1c8977770845951d3196a6596877493d28\", \"k_identity\": \"50c7576b59193b8ecedf58701515f45e288ce8dde993db3a492badebbead057e\", \"q6_identities\": {\"attn_v\": \"c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565\", \"ffn_down\": \"77d681357cdf89ae284fd64344eb192f37377ff39108418b15e52615af25cb3e\"}}, \"runtime_policy\": {\"HCQ_NUM_COMPUTE\": \"2\", \"HCQ_NV_MULTI_QUEUE_CUT_POLICY\": \"/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json\", \"HCQ_NV_MULTI_QUEUE_INDICES\": \"\", \"HCQ_NV_MULTI_QUEUE_PROGRAMS\": \"\", \"HCQ_NV_READY_PLACEMENT\": \"0\"}, \"schema\": \"tinygrad.nv_compiler_q6k_model_arm.v1\", \"status\": \"PASS\", \"token\": 198, \"wall\": {\"median_ms\": 74.767766, \"min_ms\": 74.743361, \"samples_ms\": [74.772255, 74.767766, 74.773918, 74.743361, 74.757937, 74.760112, 74.771674, 74.763969, 74.935952], \"tok_s\": 6850.106727204842}}\n",
+  "stderr_tail": ""
+}

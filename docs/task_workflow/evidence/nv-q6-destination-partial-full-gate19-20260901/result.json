@@ -1,0 +1,1002 @@
+{
+  "schema": "tinygrad.nv_q6_destination_partial_full_gate.v1",
+  "correctness": {
+    "active_partials_permutation_bit_exact": true,
+    "unused_candidate_nan": true,
+    "final_output_bit_exact": true,
+    "finite": true
+  },
+  "compiler": {
+    "anchor_main": {
+      "source": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/anchor_main.cu",
+      "source_bytes": 177839,
+      "source_sha256": "dde8a977bba6475eefdd347c0673148aad274154faa6fb881c5c7c47cff484e2",
+      "cubin": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/anchor_main.cubin",
+      "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+      "render_ms": 9707.08964113146,
+      "compile_ms": 370.89480413123965,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/anchor_main.cubin",
+        "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+        "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+        "instruction_total": 5136,
+        "families": {
+          "BAR": 4,
+          "BRA": 4,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2": 69,
+          "I2F": 8,
+          "I2FP": 1024,
+          "IADD": 72,
+          "IADD3": 3,
+          "IDP": 1,
+          "IMAD": 25,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 109,
+          "LDS": 176,
+          "LDSM": 32,
+          "LEA": 42,
+          "LOP3": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF": 67,
+          "STG": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 12,
+          "UISETP": 2,
+          "ULEA": 3,
+          "ULOP3": 1,
+          "UMOV": 7,
+          "UPLOP3": 4,
+          "USEL": 2,
+          "USHF": 3,
+          "UVIMNMX": 2
+        },
+        "opcodes": {
+          "BAR.SYNC.DEFER_BLOCKING": 4,
+          "BRA": 2,
+          "BRA.U": 2,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F.F16.F32": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2.F32": 69,
+          "I2F.S16": 4,
+          "I2F.S8": 4,
+          "I2FP.F32.S32": 1024,
+          "IADD": 41,
+          "IADD.64": 31,
+          "IADD3": 3,
+          "IDP.2A.LO.U16.U8": 1,
+          "IMAD": 17,
+          "IMAD.WIDE": 7,
+          "IMAD.WIDE.U32": 1,
+          "IMMA.16816.S8.S8": 256,
+          "ISETP.LT.U32.AND": 1,
+          "LDC": 1,
+          "LDC.64": 3,
+          "LDCU.64": 1,
+          "LDG.E": 36,
+          "LDG.E.U16": 73,
+          "LDS": 136,
+          "LDS.128": 36,
+          "LDS.64": 4,
+          "LDSM.16.M88.2": 32,
+          "LEA": 42,
+          "LOP3.LUT": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3.LUT": 1,
+          "PRMT": 77,
+          "S2R": 8,
+          "S2UR": 3,
+          "SHF.L.U32": 21,
+          "SHF.R.S32.HI": 4,
+          "SHF.R.U32.HI": 42,
+          "STG.E": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 9,
+          "UIMAD.WIDE.U32": 3,
+          "UISETP.GE.AND": 1,
+          "UISETP.NE.U32.AND": 1,
+          "ULEA": 2,
+          "ULEA.HI": 1,
+          "ULOP3.LUT": 1,
+          "UMOV": 7,
+          "UPLOP3.LUT": 4,
+          "USEL": 2,
+          "USHF.R.U32.HI": 3,
+          "UVIMNMX.S32": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/sass/anchor_main-6eb663b3a3fd628e.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/sass/anchor_main-6eb663b3a3fd628e.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_main/sass/anchor_main-6eb663b3a3fd628e.resources.txt"
+      }
+    },
+    "candidate_main": {
+      "source": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/candidate_main.cu",
+      "source_bytes": 177876,
+      "source_sha256": "d051b2e1ad5df9a7c63f9e95782f7f8de11764effab991939e7e262b21852c0e",
+      "cubin": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/candidate_main.cubin",
+      "cubin_sha256": "fc93c201002b45e1b2d4ae45db8fc43fa32f277af788474bfd92377cd0733685",
+      "render_ms": 9359.535488765687,
+      "compile_ms": 278.62404100596905,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/candidate_main.cubin",
+        "cubin_sha256": "fc93c201002b45e1b2d4ae45db8fc43fa32f277af788474bfd92377cd0733685",
+        "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+        "instruction_total": 5136,
+        "families": {
+          "BAR": 4,
+          "BRA": 4,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2": 69,
+          "I2F": 8,
+          "I2FP": 1024,
+          "IADD": 72,
+          "IADD3": 3,
+          "IDP": 1,
+          "IMAD": 25,
+          "IMMA": 256,
+          "ISETP": 1,
+          "LDC": 4,
+          "LDCU": 1,
+          "LDG": 109,
+          "LDS": 176,
+          "LDSM": 32,
+          "LEA": 42,
+          "LOP3": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3": 1,
+          "PRMT": 77,
+          "S2R": 7,
+          "S2UR": 4,
+          "SHF": 66,
+          "STG": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 12,
+          "UISETP": 2,
+          "ULEA": 3,
+          "ULOP3": 1,
+          "UMOV": 7,
+          "UPLOP3": 4,
+          "USEL": 2,
+          "USHF": 4,
+          "UVIMNMX": 2
+        },
+        "opcodes": {
+          "BAR.SYNC.DEFER_BLOCKING": 4,
+          "BRA": 2,
+          "BRA.U": 2,
+          "CS2R": 52,
+          "EXIT": 1,
+          "F2F.F16.F32": 8,
+          "FADD": 1024,
+          "FMUL": 1544,
+          "HADD2.F32": 69,
+          "I2F.S16": 4,
+          "I2F.S8": 4,
+          "I2FP.F32.S32": 1024,
+          "IADD": 41,
+          "IADD.64": 31,
+          "IADD3": 3,
+          "IDP.2A.LO.U16.U8": 1,
+          "IMAD": 17,
+          "IMAD.WIDE": 7,
+          "IMAD.WIDE.U32": 1,
+          "IMMA.16816.S8.S8": 256,
+          "ISETP.LT.U32.AND": 1,
+          "LDC": 1,
+          "LDC.64": 3,
+          "LDCU.64": 1,
+          "LDG.E": 36,
+          "LDG.E.U16": 73,
+          "LDS": 136,
+          "LDS.128": 36,
+          "LDS.64": 4,
+          "LDSM.16.M88.2": 32,
+          "LEA": 41,
+          "LEA.HI": 1,
+          "LOP3.LUT": 211,
+          "MOV": 115,
+          "NOP": 8,
+          "PLOP3.LUT": 1,
+          "PRMT": 77,
+          "S2R": 7,
+          "S2UR": 4,
+          "SHF.L.U32": 20,
+          "SHF.R.S32.HI": 4,
+          "SHF.R.U32.HI": 42,
+          "STG.E": 64,
+          "STS": 73,
+          "UIADD3": 13,
+          "UIMAD": 9,
+          "UIMAD.WIDE.U32": 3,
+          "UISETP.GE.AND": 1,
+          "UISETP.NE.U32.AND": 1,
+          "ULEA": 2,
+          "ULEA.HI": 1,
+          "ULOP3.LUT": 1,
+          "UMOV": 7,
+          "UPLOP3.LUT": 4,
+          "USEL": 2,
+          "USHF.L.U32": 1,
+          "USHF.R.U32.HI": 3,
+          "UVIMNMX.S32": 2
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 0,
+          "shared_static_bytes": 1024,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/sass/candidate_main-fc93c201002b45e1.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/sass/candidate_main-fc93c201002b45e1.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_main/sass/candidate_main-fc93c201002b45e1.resources.txt"
+      }
+    },
+    "anchor_fixup": {
+      "source": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/anchor_fixup.cu",
+      "source_bytes": 25261,
+      "source_sha256": "232cdd9fd88d51326419983712f08fdf2962f75fec77119a3faf14bfc7d582a4",
+      "cubin": "docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/anchor_fixup.cubin",
+      "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+      "render_ms": 211.85526391491294,
+      "compile_ms": 12.842967174947262,
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/anchor_fixup.cubin",
+        "cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+        "symbol": "nv_q6_ordered_fixup_all_partials",
+        "instruction_total": 672,
+        "families": {
+          "BRA": 10,
+          "CS2R": 121,
+          "EXIT": 1,
+          "FADD": 192,
+          "HFMA2": 3,
+          "IADD": 2,
+          "IMAD": 8,
+          "ISETP": 8,
+          "LDC": 5,
+          "LDCU": 1,
+          "LDG": 196,
+          "LDL": 4,
+          "LEA": 1,
+          "LOP3": 8,
+          "MOV": 7,
+          "NOP": 15,
+          "S2R": 4,
+          "SEL": 5,
+          "SHF": 9,
+          "STG": 64,
+          "STL": 8
+        },
+        "opcodes": {
+          "BRA": 10,
+          "CS2R": 121,
+          "EXIT": 1,
+          "FADD": 192,
+          "HFMA2": 3,
+          "IADD": 2,
+          "IMAD.WIDE": 6,
+          "IMAD.WIDE.U32": 2,
+          "ISETP.GE.AND": 3,
+          "ISETP.GT.AND": 5,
+          "LDC": 1,
+          "LDC.64": 4,
+          "LDCU.64": 1,
+          "LDG.E": 196,
+          "LDL.LU": 4,
+          "LEA": 1,
+          "LOP3.LUT": 8,
+          "MOV": 7,
+          "NOP": 15,
+          "S2R": 4,
+          "SEL": 5,
+          "SHF.L.U32": 8,
+          "SHF.R.U32.HI": 1,
+          "STG.E": 64,
+          "STL": 8
+        },
+        "resources": {
+          "registers": 255,
+          "stack_bytes": 16,
+          "shared_static_bytes": 0,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 4,
+            "STL": 8,
+            "pcs": [
+              "0xd0",
+              "0xe0",
+              "0xf0",
+              "0x100",
+              "0x990",
+              "0x9a0",
+              "0x9b0",
+              "0x9c0",
+              "0x17d0",
+              "0x17e0",
+              "0x17f0",
+              "0x1800"
+            ],
+            "stack_offsets": {
+              "0x0": 3,
+              "0x4": 3,
+              "0x8": 3,
+              "0xc": 3
+            }
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      },
+      "sass_artifacts": {
+        "sass_json": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/sass/anchor_fixup-483de2ee3eed3597.sass.json",
+        "disassembly": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/sass/anchor_fixup-483de2ee3eed3597.nvdisasm",
+        "resources": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/anchor_fixup/sass/anchor_fixup-483de2ee3eed3597.resources.txt"
+      }
+    },
+    "candidate_fixup": {
+      "cubin_sha256": "f22d72755e1b3836f2f6ca0b41da13ead66889f4643dfa8b99b4f93b1ae1a081",
+      "sass": {
+        "schema": "tinygrad.nv_q6_sass_census.v1",
+        "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-q6-destination-partial-full-gate19-20260901/artifacts/candidate_fixup/candidate_fixup.cubin",
+        "cubin_sha256": "f22d72755e1b3836f2f6ca0b41da13ead66889f4643dfa8b99b4f93b1ae1a081",
+        "symbol": "nv_q6_destination_major_fixup",
+        "instruction_total": 72,
+        "families": {
+          "BRA": 2,
+          "EXIT": 1,
+          "FADD": 3,
+          "HFMA2": 1,
+          "IADD": 5,
+          "IMAD": 12,
+          "ISETP": 3,
+          "LDC": 7,
+          "LDCU": 1,
+          "LDG": 7,
+          "LEA": 3,
+          "LOP3": 5,
+          "NOP": 14,
+          "S2R": 3,
+          "SHF": 1,
+          "STG": 1,
+          "UIADD3": 1,
+          "UISETP": 1,
+          "UMOV": 1
+        },
+        "opcodes": {
+          "BRA": 1,
+          "BRA.U": 1,
+          "EXIT": 1,
+          "FADD": 3,
+          "HFMA2": 1,
+          "IADD": 5,
+          "IMAD": 2,
+          "IMAD.SHL.U32": 4,
+          "IMAD.WIDE": 4,
+          "IMAD.WIDE.U32": 2,
+          "ISETP.GE.AND": 3,
+          "LDC": 1,
+          "LDC.64": 6,
+          "LDCU.64": 1,
+          "LDG.E": 7,
+          "LEA": 3,
+          "LOP3.LUT": 5,
+          "NOP": 14,
+          "S2R": 3,
+          "SHF.L.U32": 1,
+          "STG.E": 1,
+          "UIADD3": 1,
+          "UISETP.NE.U32.AND": 1,
+          "UMOV": 1
+        },
+        "resources": {
+          "registers": 24,
+          "stack_bytes": 0,
+          "shared_static_bytes": 0,
+          "local_static_bytes": 0
+        },
+        "spill_regions": {
+          "pre_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "mma_span": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          },
+          "post_mma": {
+            "LDL": 0,
+            "STL": 0,
+            "pcs": [],
+            "stack_offsets": {}
+          }
+        },
+        "notes": [
+          "Static instruction census only; these are not hardware performance counters.",
+          "pre_mma/mma_span/post_mma are bounded by the first and last IMMA PCs and are not source-level attribution."
+        ]
+      }
+    }
+  },
+  "timing": {
+    "anchor": {
+      "main": {
+        "samples_us": [
+          232.448,
+          231.424,
+          231.264,
+          231.072,
+          229.12,
+          232.032,
+          230.688,
+          231.68,
+          229.216,
+          231.552,
+          230.56,
+          230.72,
+          229.664,
+          231.232,
+          231.456,
+          230.976,
+          231.296,
+          230.368,
+          230.848,
+          229.952,
+          229.152,
+          231.968,
+          232.064,
+          230.944,
+          230.4,
+          232.256,
+          229.92,
+          232.096,
+          231.168,
+          232.352,
+          230.144
+        ],
+        "min_us": 229.12,
+        "median_us": 231.072,
+        "max_us": 232.448
+      },
+      "fixup": {
+        "samples_us": [
+          26.24,
+          25.536,
+          24.832,
+          25.44,
+          24.736,
+          25.408,
+          24.864,
+          25.536,
+          24.8,
+          25.408,
+          24.704,
+          25.6,
+          24.8,
+          25.696,
+          25.344,
+          25.344,
+          25.312,
+          25.76,
+          25.376,
+          25.76,
+          25.184,
+          25.504,
+          24.576,
+          25.92,
+          24.928,
+          25.696,
+          24.768,
+          26.048,
+          24.864,
+          25.6,
+          24.992
+        ],
+        "min_us": 24.576,
+        "median_us": 25.376,
+        "max_us": 26.24
+      },
+      "total": {
+        "samples_us": [
+          258.688,
+          256.96000000000004,
+          256.096,
+          256.512,
+          253.856,
+          257.44,
+          255.552,
+          257.216,
+          254.01600000000002,
+          256.96,
+          255.264,
+          256.32,
+          254.464,
+          256.928,
+          256.8,
+          256.32,
+          256.608,
+          256.128,
+          256.224,
+          255.712,
+          254.33599999999998,
+          257.472,
+          256.64,
+          256.864,
+          255.328,
+          257.952,
+          254.688,
+          258.144,
+          256.032,
+          257.952,
+          255.136
+        ],
+        "min_us": 253.856,
+        "median_us": 256.32,
+        "max_us": 258.688
+      }
+    },
+    "candidate": {
+      "main": {
+        "samples_us": [
+          228.032,
+          228.96,
+          229.312,
+          227.104,
+          228.896,
+          228.16,
+          228.8,
+          226.08,
+          226.976,
+          226.784,
+          227.328,
+          226.528,
+          227.072,
+          227.072,
+          228.928,
+          227.584,
+          229.248,
+          226.752,
+          230.048,
+          227.232,
+          229.696,
+          228.288,
+          229.184,
+          228.128,
+          227.712,
+          228.96,
+          230.24,
+          227.936,
+          230.368,
+          228.416,
+          230.688
+        ],
+        "min_us": 226.08,
+        "median_us": 228.16,
+        "max_us": 230.688
+      },
+      "fixup": {
+        "samples_us": [
+          7.776,
+          7.36,
+          7.743999999999999,
+          7.264,
+          7.648000000000001,
+          7.264,
+          7.743999999999999,
+          7.296,
+          7.68,
+          7.264,
+          7.712,
+          7.264,
+          7.648000000000001,
+          7.232,
+          7.743999999999999,
+          7.232,
+          7.712,
+          7.2,
+          7.712,
+          7.296,
+          7.68,
+          7.264,
+          7.743999999999999,
+          7.296,
+          8.288,
+          7.488,
+          7.712,
+          7.264,
+          7.808000000000001,
+          7.392,
+          7.68
+        ],
+        "min_us": 7.2,
+        "median_us": 7.648000000000001,
+        "max_us": 8.288
+      },
+      "total": {
+        "samples_us": [
+          235.80800000000002,
+          236.32000000000002,
+          237.056,
+          234.36800000000002,
+          236.54399999999998,
+          235.424,
+          236.544,
+          233.376,
+          234.656,
+          234.048,
+          235.04,
+          233.792,
+          234.72,
+          234.304,
+          236.672,
+          234.816,
+          236.95999999999998,
+          233.952,
+          237.76,
+          234.528,
+          237.376,
+          235.55200000000002,
+          236.928,
+          235.42399999999998,
+          236.0,
+          236.448,
+          237.952,
+          235.20000000000002,
+          238.176,
+          235.808,
+          238.368
+        ],
+        "min_us": 233.376,
+        "median_us": 235.808,
+        "max_us": 238.368
+      }
+    }
+  },
+  "paired": {
+    "main": {
+      "median_us": -2.8160000000000025,
+      "mad_us": 0.9280000000000257,
+      "wins": 28,
+      "samples_us": [
+        -4.415999999999997,
+        -2.4639999999999986,
+        -1.9519999999999982,
+        -3.9679999999999893,
+        -0.22400000000001796,
+        -3.872000000000014,
+        -1.8879999999999768,
+        -5.599999999999994,
+        -2.240000000000009,
+        -4.768000000000001,
+        -3.2319999999999993,
+        -4.192000000000007,
+        -2.5919999999999845,
+        -4.159999999999997,
+        -2.5279999999999916,
+        -3.391999999999996,
+        -2.048000000000002,
+        -3.6159999999999854,
+        -0.8000000000000114,
+        -2.719999999999999,
+        0.5440000000000111,
+        -3.6799999999999784,
+        -2.8799999999999955,
+        -2.8160000000000025,
+        -2.6880000000000166,
+        -3.2959999999999923,
+        0.3200000000000216,
+        -4.159999999999997,
+        -0.8000000000000114,
+        -3.936000000000007,
+        0.5439999999999827
+      ]
+    },
+    "fixup": {
+      "median_us": -18.112000000000002,
+      "mad_us": 0.5120000000000005,
+      "wins": 31,
+      "samples_us": [
+        -18.464,
+        -18.176000000000002,
+        -17.088,
+        -18.176000000000002,
+        -17.088,
+        -18.144000000000002,
+        -17.12,
+        -18.240000000000002,
+        -17.12,
+        -18.144000000000002,
+        -16.992,
+        -18.336000000000002,
+        -17.152,
+        -18.464000000000002,
+        -17.6,
+        -18.112000000000002,
+        -17.6,
+        -18.560000000000002,
+        -17.664,
+        -18.464000000000002,
+        -17.504,
+        -18.240000000000002,
+        -16.832,
+        -18.624000000000002,
+        -16.64,
+        -18.208000000000002,
+        -17.056,
+        -18.784,
+        -17.056,
+        -18.208000000000002,
+        -17.312
+      ]
+    },
+    "total": {
+      "median_us": -20.640000000000015,
+      "mad_us": 1.5039999999999907,
+      "wins": 31,
+      "samples_us": [
+        -22.879999999999967,
+        -20.640000000000015,
+        -19.039999999999992,
+        -22.143999999999977,
+        -17.312000000000012,
+        -22.01599999999999,
+        -19.00799999999998,
+        -23.840000000000003,
+        -19.360000000000014,
+        -22.911999999999978,
+        -20.224000000000018,
+        -22.52799999999999,
+        -19.744,
+        -22.623999999999995,
+        -20.128000000000014,
+        -21.50399999999999,
+        -19.648000000000025,
+        -22.175999999999988,
+        -18.464,
+        -21.183999999999997,
+        -16.95999999999998,
+        -21.91999999999996,
+        -19.71199999999999,
+        -21.439999999999998,
+        -19.328000000000003,
+        -21.50399999999999,
+        -16.73599999999999,
+        -22.94399999999999,
+        -17.855999999999995,
+        -22.144000000000005,
+        -16.768
+      ]
+    }
+  },
+  "orders": [
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "anchor"
+    ],
+    [
+      "anchor",
+      "candidate"
+    ]
+  ],
+  "promotion_gate": true
+}

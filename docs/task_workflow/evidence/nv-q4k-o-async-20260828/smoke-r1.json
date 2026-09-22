@@ -1,0 +1,280 @@
+{
+  "arms": {
+    "async_one_stage": {
+      "actual_async_sass": true,
+      "cold_recovery_us": 0.9440000000000008,
+      "hot_recovery_us": -0.09919999999999973,
+      "scoreboard_candidate_pct": null,
+      "scoreboard_control_pct": null,
+      "scoreboard_reduced": true,
+      "verdict": "ADVANCE_TO_PRODUCTION_WALL"
+    },
+    "async_two_stage": {
+      "actual_async_sass": true,
+      "cold_recovery_us": 1.4560000000000004,
+      "hot_recovery_us": -0.39039999999999964,
+      "scoreboard_candidate_pct": null,
+      "scoreboard_control_pct": null,
+      "scoreboard_reduced": true,
+      "verdict": "ADVANCE_TO_PRODUCTION_WALL"
+    }
+  },
+  "commit": "aa8388c1731e6c5db5dbc7641dd878a0227b1493",
+  "correctness": {
+    "bitwise_all": true,
+    "fixtures": [
+      {
+        "arm": 1,
+        "finite": true,
+        "fixture": 0,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "arm": 2,
+        "finite": true,
+        "fixture": 0,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "arm": 1,
+        "finite": true,
+        "fixture": 1,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "arm": 2,
+        "finite": true,
+        "fixture": 1,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "arm": 1,
+        "finite": true,
+        "fixture": 2,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      },
+      {
+        "arm": 2,
+        "finite": true,
+        "fixture": 2,
+        "max_abs": 0.0,
+        "mismatched_words": 0
+      }
+    ]
+  },
+  "medians": {
+    "async_one_stage": {
+      "cold_us": 7.744,
+      "hot_us": 5.4144
+    },
+    "async_two_stage": {
+      "cold_us": 7.232,
+      "hot_us": 5.7056
+    },
+    "control": {
+      "cold_us": 8.688,
+      "hot_us": 5.3152
+    }
+  },
+  "method": "installed exact O versus cooperative one/two-stage cp.async global-to-shared Q4_K staging; hot and 16-copy rotated-cold r1",
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_async2_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 45 registers, used 1 barriers, 1152 bytes smem",
+    "ptxas info    : Compile time = 11.957 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_async1_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_async1_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 45 registers, used 1 barriers, 576 bytes smem",
+    "ptxas info    : Compile time = 9.305 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.072 ms"
+  ],
+  "samples": [
+    {
+      "arm": 0,
+      "cold_us": 8.688,
+      "hot_us": 5.3152,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 7.744,
+      "hot_us": 5.4144,
+      "rep": 0
+    },
+    {
+      "arm": 2,
+      "cold_us": 7.232,
+      "hot_us": 5.7056,
+      "rep": 0
+    }
+  ],
+  "sass": {
+    "async_one_stage": {
+      "async_global_to_shared": 2,
+      "available": true,
+      "instructions": 341,
+      "ldg": 12,
+      "ldg_128": 2,
+      "ldg_64": 8,
+      "opcodes": {
+        "BAR.SYNC.DEFER_BLOCKING": 2,
+        "BRA": 1,
+        "BRA.U": 1,
+        "DEPBAR.LE": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 4,
+        "IADD.64": 2,
+        "IMAD": 6,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 5,
+        "LDC": 1,
+        "LDC.64": 4,
+        "LDCU.64": 1,
+        "LDG.E": 1,
+        "LDG.E.64": 8,
+        "LDGDEPBAR": 1,
+        "LDGSTS.E.128": 2,
+        "LDS": 4,
+        "LDS.128": 1,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LOP3.LUT": 53,
+        "MOV": 1,
+        "NOP": 8,
+        "S2R": 3,
+        "SHF.R.U32.HI": 49,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 1
+      }
+    },
+    "async_two_stage": {
+      "async_global_to_shared": 4,
+      "available": true,
+      "instructions": 399,
+      "ldg": 15,
+      "ldg_128": 4,
+      "ldg_64": 8,
+      "opcodes": {
+        "BAR.SYNC.DEFER_BLOCKING": 2,
+        "BRA": 2,
+        "BRA.U": 3,
+        "BSSY.RECONVERGENT": 1,
+        "BSYNC.RECONVERGENT": 1,
+        "DEPBAR.LE": 2,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 10,
+        "IADD.64": 8,
+        "IMAD": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 9,
+        "ISETP.NE.U32.AND": 1,
+        "LDC": 1,
+        "LDC.64": 4,
+        "LDCU.64": 2,
+        "LDG.E": 1,
+        "LDG.E.64": 8,
+        "LDGDEPBAR": 2,
+        "LDGSTS.E.128": 4,
+        "LDS": 4,
+        "LDS.128": 1,
+        "LEA": 6,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 56,
+        "MOV": 3,
+        "NOP": 16,
+        "S2R": 3,
+        "S2UR": 2,
+        "SHF.R.U32.HI": 49,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 2,
+        "UISETP.NE.U32.AND": 2,
+        "ULEA": 2,
+        "UMOV": 5
+      }
+    },
+    "control": {
+      "async_global_to_shared": 0,
+      "available": true,
+      "instructions": 344,
+      "ldg": 14,
+      "ldg_128": 1,
+      "ldg_64": 8,
+      "opcodes": {
+        "BRA": 1,
+        "BRA.U": 1,
+        "EXIT": 1,
+        "FADD": 6,
+        "FFMA": 64,
+        "FMUL": 16,
+        "HADD2.F32": 34,
+        "HFMA2": 1,
+        "I2FP.F32.U32": 48,
+        "IADD": 2,
+        "IADD.64": 7,
+        "IMAD.SHL.U32": 1,
+        "IMAD.WIDE.U32": 7,
+        "LDC": 1,
+        "LDC.64": 2,
+        "LDCU.64": 4,
+        "LDG.E": 5,
+        "LDG.E.128": 1,
+        "LDG.E.64": 8,
+        "LEA": 1,
+        "LEA.HI": 1,
+        "LEA.HI.X": 1,
+        "LOP3.LUT": 55,
+        "NOP": 14,
+        "S2R": 2,
+        "SHF.L.U64.HI": 1,
+        "SHF.R.U32.HI": 48,
+        "SHF.R.U64": 1,
+        "SHFL.BFLY": 5,
+        "STG.E": 1,
+        "UIADD3": 1,
+        "UISETP.NE.U32.AND": 1,
+        "UMOV": 2
+      }
+    }
+  },
+  "schema": "tinygrad.nv_q4k_o_async_pipeline_microgate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 4096,
+    "weight_bytes": 9437184
+  },
+  "threshold": {
+    "actual_async_sass_required": true,
+    "cold_recovery_us_per_call": 0.15,
+    "scoreboard_must_reduce": true
+  }
+}

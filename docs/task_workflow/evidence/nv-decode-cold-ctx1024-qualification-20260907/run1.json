@@ -1,0 +1,111 @@
+{
+  "depth": 1024,
+  "first_decode_ms": 4.519992013229057,
+  "first_decode_token": {
+    "count": 1,
+    "first_token_ids": [
+      13
+    ],
+    "sha256": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "token_ids": [
+      13
+    ]
+  },
+  "gpu_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2572",
+    "clocks_event_reasons.hw_slowdown": "Not Active",
+    "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+    "clocks_event_reasons.sw_power_cap": "Not Active",
+    "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+    "power.draw.average": "92.47",
+    "power.draw.instant": "74.44",
+    "pstate": "P0",
+    "temperature.gpu": "45",
+    "temperature.gpu.tlimit": "45",
+    "temperature.memory": "N/A"
+  },
+  "max_context": 1536,
+  "model": {
+    "identity_sha256": "ddaa2f07ee1176ba8175ee247b874cb838740d76441b078b4c802605d1ffb731",
+    "mtime_ns": 1781138912862342896,
+    "path": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488
+  },
+  "ordinary_environment": true,
+  "phases": {
+    "first_decode": {
+      "elapsed_s": 0.004519992013229057,
+      "nvidia_total_mib": 32607,
+      "nvidia_used_mib": 30538,
+      "tinygrad_live_bytes": 19259343980
+    },
+    "model_construct": {
+      "elapsed_s": 18.21073022999917,
+      "nvidia_total_mib": 32607,
+      "nvidia_used_mib": 18472,
+      "tinygrad_live_bytes": 19005016896
+    },
+    "prefill_and_prelude": {
+      "elapsed_s": 246.2029728849884,
+      "nvidia_total_mib": 32607,
+      "nvidia_used_mib": 30538,
+      "tinygrad_live_bytes": 19259343980
+    },
+    "process_start": {
+      "nvidia_total_mib": 32607,
+      "nvidia_used_mib": 117,
+      "tinygrad_live_bytes": 0
+    }
+  },
+  "prelude_token": {
+    "count": 1,
+    "first_token_ids": [
+      34208
+    ],
+    "sha256": "6b52e544981213b2dcf309613a2eeab3b8882e816c44aaa4886db357a234c567",
+    "token_ids": [
+      34208
+    ]
+  },
+  "process_elapsed_s": 266.64411963900784,
+  "programs_per_token": {
+    "rollout_jit_flash_live[10]": 418
+  },
+  "request_scoped_prewarm": false,
+  "route": "flash",
+  "schema": "tinygrad.decode.cold_first_request.v1",
+  "selected_jits": [
+    "rollout_jit_flash_live[10]"
+  ],
+  "steady_median_ms": 4.235946995322593,
+  "steady_min_ms": 4.217472014715895,
+  "steady_per_token_ms": [
+    4.606644011801109,
+    4.2488520266488194,
+    4.246977012371644,
+    4.224916978273541,
+    4.217632988002151,
+    4.217472014715895
+  ],
+  "steady_tokens": {
+    "count": 6,
+    "first_token_ids": [
+      279,
+      3974,
+      13876,
+      38835,
+      34208,
+      13
+    ],
+    "sha256": "eec41190265a30716a721d798597b5ec48b918582c2561a4838a3ec0554cc5fe",
+    "token_ids": [
+      279,
+      3974,
+      13876,
+      38835,
+      34208,
+      13
+    ]
+  }
+}

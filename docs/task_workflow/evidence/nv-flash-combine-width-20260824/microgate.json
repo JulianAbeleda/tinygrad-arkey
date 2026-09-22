@@ -1,0 +1,88 @@
+{
+  "device": "NV",
+  "exact": {
+    "128": {
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e7408851422a005c33aede064316b2bc9450635a0c6d51df5d16f11860e4cd21"
+    },
+    "32": {
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e7408851422a005c33aede064316b2bc9450635a0c6d51df5d16f11860e4cd21"
+    },
+    "64": {
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0,
+      "mismatched_fp16_words": 0,
+      "sha256": "e7408851422a005c33aede064316b2bc9450635a0c6d51df5d16f11860e4cd21"
+    }
+  },
+  "git_commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "payload_sha256": "f0399b567651a51c4d0a2425557cd8fe108f116ece437c74b56b38e8a8604ee8",
+  "schema": "tinygrad.nv_flash_combine_width_microgate.v1",
+  "shape": {
+    "head_dim": 128,
+    "heads": 32,
+    "output_dtype": "float16",
+    "splits": 48
+  },
+  "timing": {
+    "best_recovery_us": 0.21909800000000246,
+    "best_width": 64,
+    "medians": {
+      "128": 118.775132,
+      "32_control_midpoint": 118.061083,
+      "64": 117.841985
+    },
+    "replays": 1000,
+    "reps": 7,
+    "samples": {
+      "128": [
+        [
+          118.74851799999999,
+          118.775132,
+          118.82232,
+          118.82755999999999,
+          118.264301,
+          118.255325,
+          119.057836
+        ]
+      ],
+      "32": [
+        [
+          117.624778,
+          116.819812,
+          117.409019,
+          117.079452,
+          117.23608,
+          116.788054,
+          116.968337
+        ],
+        [
+          119.387133,
+          119.160275,
+          119.13450900000001,
+          119.042714,
+          118.989455,
+          118.917663,
+          118.560784
+        ]
+      ],
+      "64": [
+        [
+          116.464903,
+          118.223689,
+          117.841985,
+          117.73625,
+          117.95361100000001,
+          117.814043,
+          118.01682799999999
+        ]
+      ]
+    },
+    "unit": "us_per_launch_host_synchronized"
+  }
+}

@@ -6,7 +6,7 @@ import pytest
 from tinygrad import dtypes
 from tinygrad.uop.ops import UOp
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability,
-  FlashDecodeTileSpec, describe_flash_decode_attention)
+  FlashDecodeTileSpec, _adaptive_split_lease_admitted, describe_flash_decode_attention, flash_decode_coarse_split_override)
 
 
 def _tile_inputs(hq:int, split_count:int, max_context:int=8192):
@@ -87,31 +87,34 @@ def test_real_metal_renderer_now_reports_flash_decode_capability():
 
 @pytest.mark.parametrize("hq,split_count,query_group_size,stage_width", [(32, 48, None, 1), (40, 32, 2, 4)])
 def test_production_emitters_are_structurally_identical_to_promoted_emitters(hq, split_count, query_group_size, stage_width):
-  """This is a migration parity gate, not a runtime dependency: the production module itself has no extra
-  import. TG7 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md) intentionally
-  changes the tile kernel's pre-lowering UOp shape (the fdot2/exp2f CUSTOMI args are now target-agnostic
-  tuples, resolved per renderer, instead of literal AMD strings baked into the AST at construction time) --
-  `extra/llm_research/decode/flash_decode_attention_spec.py` -> `extra/llm_research/flash_kernels.py` is
-  untouched research-surface code (Boundary Rule) and still builds the old literal-string CUSTOMI, so raw
-  `.key` equality on the unlowered AST no longer holds for the tile kernel, and is not the right invariant to
-  assert any more. What must still hold -- and does -- is that both ASTs render to byte-identical AMD source
-  once a renderer is applied, which is the actual acceptance bar (scope section 4.2). The combine kernel
-  touches neither intrinsic, so its raw `.key` equality is untouched and still asserted directly."""
+  """P1 migration parity gate (nv-search-genericization-flash-shape-scope-20260818.md section 6):
+  the descriptor-driven production emitter must render byte-identical AMD gfx1100 source to the pre-change
+  baseline. The pre-change baseline is `extra/llm_research/flash_kernels.py` / `live_split_geometry.py`,
+  which were deliberately NOT edited by the reconciliation -- the extra spec module now re-exports the
+  canonical one, so the untouched legacy builders are the only surviving byte-for-byte baseline. TG7
+  intentionally changed the tile kernel's pre-lowering UOp shape (target-agnostic fdot2/exp2f CUSTOMI args
+  resolved per renderer instead of literal AMD strings baked in at construction time), so raw `.key`
+  equality on the unlowered tile AST no longer holds; what must hold is byte-identical rendered AMD source,
+  which includes the kernel name (the C function name). The combine kernel touches neither intrinsic, so
+  its raw `.key` equality is still asserted directly."""
   from tinygrad.helpers import Target
   from tinygrad.renderer.cstyle import HIPRenderer
   from tinygrad.codegen import to_program
   from tinygrad.uop.ops import Ops
-  from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention as legacy_describe
+  from tinygrad.llm.flash_decode_attention import LiveSplitGeometrySpec
+  from extra.llm_research.flash_kernels import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel as legacy_tile_builder
+  from extra.llm_research.live_split_geometry import flash_fused_gmax_combine_kernel as legacy_combine_builder
   tc = UOp.variable("Tc", 0, 8192)
   args = _tile_inputs(hq, split_count)
   production = describe_flash_decode_attention(hq, 128, 8, 8192, split_count,
     query_group_size=query_group_size, stage_width=stage_width)
-  legacy = legacy_describe(hq, 128, 8, 8192, split_count,
-    query_group_size=query_group_size, stage_width=stage_width)
-  production_tile, legacy_tile = production.emit_tile(tc)(*args), legacy.emit_tile(tc)(*args)
+  production_tile = production.emit_tile(tc)(*args)
+  split_length = LiveSplitGeometrySpec(split_count, 16).aligned_per_split_length(tc)
+  legacy_tile = legacy_tile_builder(128, hq, 8, 8192, split_length, split_count, tc,
+                                    query_group_size=query_group_size, stage_width=stage_width)(*args)
   out = UOp.placeholder((hq * 128,), dtypes.float32, 3)
-  production_combine, legacy_combine = production.emit_combine()(out, args[0]), legacy.emit_combine()(out, args[0])
-  assert production.emitted_kernel_names == legacy.emitted_kernel_names
+  production_combine = production.emit_combine()(out, args[0])
+  legacy_combine = legacy_combine_builder(128, hq, split_count)(out, args[0])
   assert production_combine.key == legacy_combine.key
 
   def _amd_source(ast):
@@ -120,6 +123,26 @@ def test_production_emitters_are_structurally_identical_to_promoted_emitters(hq,
     return next(u.arg for u in prog.src if u.op is Ops.SOURCE)
 
   assert _amd_source(production_tile) == _amd_source(legacy_tile)
+
+
+def test_research_alias_module_reexports_the_canonical_spec():
+  """P1 reconciliation (scope section 6): `extra/llm_research/decode/flash_decode_attention_spec.py` is now
+  a thin alias over `tinygrad.llm.flash_decode_attention` -- the canonical owner -- so existing research
+  imports keep working and the two routes cannot drift. Identity is checked at the object level."""
+  from extra.llm_research.decode import flash_decode_attention_spec as alias
+  from tinygrad.llm import flash_decode_attention as canonical
+  for name in ("BufferRole", "FlashCombineSpec", "FlashDecodeAttentionSpec", "FlashDecodeTileSpec",
+               "LiveSplitGeometrySpec", "describe_flash_decode_attention", "emit_flash_decode_combine",
+               "emit_flash_decode_tile"):
+    assert getattr(alias, name) is getattr(canonical, name), name
+  # The alias path renders the same AMD source as the canonical path (same objects, but prove the intent:
+  # research harnesses that import the old module still get the production emitter byte-for-byte).
+  from extra.llm_research.decode.flash_decode_attention_spec import describe_flash_decode_attention as alias_describe
+  tc = UOp.variable("Tc", 0, 8192)
+  args = _tile_inputs(32, 48)
+  alias_tile = alias_describe(32, 128, 8, 8192, 48).emit_tile(tc)(*args)
+  canonical_tile = describe_flash_decode_attention(32, 128, 8, 8192, 48).emit_tile(tc)(*args)
+  assert alias_tile.key == canonical_tile.key
 
 
 def test_quant_and_rope_binding_order_and_fail_loud_contract():
@@ -137,6 +160,12 @@ def test_quant_and_rope_binding_order_and_fail_loud_contract():
   ({"Hq": 30}, "divisible"),
   ({"staging": "K_ONLY"}, "KV_BOTH"),
   ({"stage_width": 3}, "stage_width"),
+  ({"token_block": 0}, "token_block"),
+  ({"lane_width": 12}, "lane_width"),
+  ({"score_group_width": 64}, "score_group_width"),
+  ({"warps": 0}, "warps"),
+  ({"dot_pair_width": 3}, "divisible"),
+  ({"reduce_structure": "weird"}, "reduce_structure"),
 ])
 def test_invalid_specs_fail_closed(kwargs, match):
   values = {"Hq": 32, "Hd": 128, "Hkv": 8, "MAXC": 8192, "split_count": 48, "staging": "KV_BOTH"}
@@ -148,3 +177,121 @@ def test_invalid_specs_fail_closed(kwargs, match):
 def test_production_module_has_no_research_import():
   source = (Path(__file__).parents[2] / "tinygrad/llm/flash_decode_attention.py").read_text()
   assert "extra.llm_research" not in source
+
+
+def test_coarse_split_env_override_contract(monkeypatch):
+  """nv-flash-coarse-split A/B gate: FLASH_DECODE_COARSE_SPLIT is read once (getenv is cached per
+  process), returns 0 when unset, and the env value when set. Unset env must leave the promoted
+  route's kernel names byte-identical; a set env must render distinct, deterministic names for the
+  G4 d512 shape so the candidate JIT cache cannot collide with the S=48 control."""
+  from tinygrad.helpers import getenv as _getenv
+  _getenv.cache_clear()
+  monkeypatch.delenv("FLASH_DECODE_COARSE_SPLIT", raising=False)
+  assert flash_decode_coarse_split_override() == 0
+  promoted = describe_flash_decode_attention(32, 128, 8, 4608, 48)
+  assert promoted.tile.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128"
+  assert promoted.combine.kernel_name == "flash_fused_gmax_combine_32_128"
+
+  _getenv.cache_clear()
+  monkeypatch.setenv("FLASH_DECODE_COARSE_SPLIT", "4")
+  assert flash_decode_coarse_split_override() == 4
+  s4 = describe_flash_decode_attention(32, 128, 8, 4608, 4)
+  assert s4.tile.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_s4"
+  assert s4.combine.kernel_name == "flash_fused_gmax_combine_32_128_s4"
+
+  _getenv.cache_clear()
+  monkeypatch.setenv("FLASH_DECODE_COARSE_SPLIT", "2")
+  assert flash_decode_coarse_split_override() == 2
+  s2 = describe_flash_decode_attention(32, 128, 8, 4608, 2)
+  assert s2.tile.kernel_name == "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_s2"
+
+
+def test_adaptive_s64_context_band_is_bounded():
+  from tinygrad.llm.model import _adaptive_flash_split_count
+  assert _adaptive_flash_split_count(True, 767, 1024) is None
+  assert _adaptive_flash_split_count(True, 768, 1024) == 64
+  assert _adaptive_flash_split_count(True, 1023, 1024) == 64
+  assert _adaptive_flash_split_count(False, 800, 1024) is None
+  assert _adaptive_flash_split_count(True, 800, 2048) is None
+
+def test_active_horizon_wide_selector_and_geometry_are_bounded():
+  from tinygrad.llm.model import _active_horizon_flash_split_count, _flash_decode_geometry_for_split
+  assert _active_horizon_flash_split_count(True, 511, 1024) is None
+  assert _active_horizon_flash_split_count(True, 512, 1024) == 6    # Tc=513
+  assert _active_horizon_flash_split_count(True, 512, 640) is None  # physical cache cannot hold the S6 band
+  assert _active_horizon_flash_split_count(True, 767, 1024) == 6    # Tc=768
+  assert _active_horizon_flash_split_count(True, 768, 4352) == 8
+  assert _active_horizon_flash_split_count(True, 1024, 4352) == 10
+  assert _active_horizon_flash_split_count(True, 1280, 4352) == 18
+  assert _active_horizon_flash_split_count(True, 2304, 4352) == 34
+  assert _active_horizon_flash_split_count(True, 4352, 4352) is None
+  assert _active_horizon_flash_split_count(False, 700, 1024) is None
+  assert _flash_decode_geometry_for_split({}, 6) == {
+    "split_count":6, "llama_vec_wide":True, "token_bound":768, "policy_selected":True}
+  assert _flash_decode_geometry_for_split({}, 18) == {
+    "split_count":18, "llama_vec_wide":True, "token_bound":2304, "policy_selected":True}
+  assert _flash_decode_geometry_for_split({"sentinel":1}, None) == {"sentinel":1}
+  assert _flash_decode_geometry_for_split({}, 64) == {"split_count":64}
+
+
+def test_active_horizon_prewarm_skips_bands_larger_than_physical_context():
+  from tinygrad.llm.model import Transformer
+
+  class Realized:
+    def realize(self): return self
+
+  class Model:
+    _prewarm_active_horizon_flash_pairs = Transformer._prewarm_active_horizon_flash_pairs
+    _flash_decode_active_horizon_lease = True
+    _decode_direct_greedy_promoted = False
+    max_context = 1024
+    calls = []
+    def __call__(self, *args, **kwargs):
+      self.calls.append(kwargs["flash_split_count"])
+      return Realized()
+    def reset_generation_state(self): pass
+
+  model = Model()
+  model._prewarm_active_horizon_flash_pairs(prompt_len=512)
+  assert model.calls == [6, 6, 6, 8, 8, 8]
+
+def test_flash_block_geometry_override_is_merged_last():
+  from tinygrad.llm.model import _flash_block_geometry
+  class M: pass
+  model=M(); model._flash_decode_block_geometry_overrides={1:{"o_q8_owned":True,"split_count":7}}
+  assert _flash_block_geometry(model,0,{"split_count":6}) == {"split_count":6}
+  assert _flash_block_geometry(model,1,{"split_count":6}) == {"split_count":7,"o_q8_owned":True}
+
+def test_flash_fine_q8_block_geometry_is_closed_and_mutually_exclusive():
+  from tinygrad.llm.model import _flash_block_geometry
+  from tinygrad.llm.flash_decode_attention import flash_fused_gmax_combine_kernel
+  class M: pass
+  model=M(); model._flash_decode_block_geometry_overrides={2:{"o_q8_fine_owned":True}}
+  assert _flash_block_geometry(model,1,{"split_count":6}) == {"split_count":6}
+  assert _flash_block_geometry(model,2,{"split_count":6}) == {"split_count":6,"o_q8_fine_owned":True}
+  with pytest.raises(ValueError,match="only one combine-owned Q8"):
+    flash_fused_gmax_combine_kernel(128,32,6,output_fp16=True,lane_width=128,output_q8=True,output_q8_fine=True)
+
+def test_flash_q8_multi_output_adapter_reorders_only_emitter_arguments():
+  from tinygrad.llm.decode_routes import _flash_combine_q8_outputs_emitter
+  seen=[]
+  def base(out,partial,q8): seen.append((out,partial,q8)); return "sink"
+  assert _flash_combine_q8_outputs_emitter(base)("out","q8","partial") == "sink"
+  assert seen == [("out","partial","q8")]
+
+def test_adaptive_s64_kernel_lease_is_narrow():
+  assert _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 1024)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 32, None, "KV_BOTH", 1024)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G4, 64, None, "KV_BOTH", 2048)
+  assert not _adaptive_split_lease_admitted(FLASH_DECODE_G5, 64, 2, "KV_BOTH", 1024)
+
+def test_request_static_s64_horizon_policy_is_bounded():
+  from tinygrad.llm.model import _request_static_flash_split_count
+  assert _request_static_flash_split_count(704, 75, 1024) == 64
+  assert _request_static_flash_split_count(704, 74, 1024) is None
+  assert _request_static_flash_split_count(768, 11, 1024) == 64
+  assert _request_static_flash_split_count(703, 200, 1024) is None
+  assert _request_static_flash_split_count(704, None, 1024) is None
+  assert _request_static_flash_split_count(704, 200, 2048) is None
+  with pytest.raises(ValueError, match="non-negative"):
+    _request_static_flash_split_count(704, -1, 1024)

@@ -1,0 +1,189 @@
+{
+  "arms": {
+    "control": {
+      "arm": "control",
+      "first_tokens": [
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817
+      ],
+      "n_measured_tokens": 144,
+      "n_windows": 6,
+      "split": 48,
+      "tile_names": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128"
+      ],
+      "tok_s_median": 210.7977250527175,
+      "tok_s_samples": [
+        207.52753877283865,
+        210.09246369359354,
+        212.18123836842278,
+        210.5350518132485,
+        211.95450503786262,
+        209.3227964130231,
+        211.23753751592784,
+        208.7531593324023,
+        211.0603982921865,
+        212.27554049433888,
+        210.43374054634074,
+        211.85134793172875,
+        209.96626629147602,
+        211.42729654004347,
+        210.53489184995766,
+        212.49586086328054,
+        208.42843934778435,
+        211.36769181105868
+      ],
+      "token_sha": "234926f61805c8053cc34c382a5881fa47665437ba0da7fea0dfd5bff2f10614",
+      "token_sha_windows": [
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb"
+      ],
+      "wall_us_per_token_median": 4743.891578982584,
+      "wall_us_per_token_samples": [
+        4818.637593416497,
+        4759.809002280235,
+        4712.952038971707,
+        4749.802901642397,
+        4717.993608210236,
+        4777.310532517731,
+        4734.007088700309,
+        4790.34666204825,
+        4737.980256322771,
+        4710.85833851248,
+        4752.0896478090435,
+        4720.290948171169,
+        4762.669821502641,
+        4729.758249595761,
+        4749.806510517374,
+        4705.974017269909,
+        4797.809757292271,
+        4731.0920199379325
+      ]
+    },
+    "s2": {
+      "arm": "s2",
+      "first_tokens": [
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817
+      ],
+      "n_measured_tokens": 48,
+      "n_windows": 2,
+      "split": 2,
+      "tile_names": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_s2"
+      ],
+      "tok_s_median": 155.87077806863107,
+      "tok_s_samples": [
+        155.86835873310594,
+        155.8731974041562,
+        157.13828249458064,
+        157.09044252092835,
+        155.5659835019298,
+        155.5352819535728
+      ],
+      "token_sha": "394ea26eff6dcf6087428ae59f418d86c0f3850f181b83b64faa023096bfde37",
+      "token_sha_windows": [
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb"
+      ],
+      "wall_us_per_token_median": 6415.570722310804,
+      "wall_us_per_token_samples": [
+        6415.6703010667115,
+        6415.471143554896,
+        6363.821623381227,
+        6365.759647451341,
+        6428.140506614,
+        6429.409375414252
+      ]
+    },
+    "s4": {
+      "arm": "s4",
+      "first_tokens": [
+        3817,
+        3817,
+        3817,
+        3817,
+        3817,
+        3817
+      ],
+      "n_measured_tokens": 48,
+      "n_windows": 2,
+      "split": 4,
+      "tile_names": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128_s4"
+      ],
+      "tok_s_median": 181.59157873023582,
+      "tok_s_samples": [
+        181.08399267609806,
+        180.9352669296023,
+        182.6780813194162,
+        180.93276303552156,
+        182.40848501931836,
+        182.09916478437358
+      ],
+      "token_sha": "394ea26eff6dcf6087428ae59f418d86c0f3850f181b83b64faa023096bfde37",
+      "token_sha_windows": [
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb",
+        "5ec2fa9e60712d48fd9f28f6a0261ced20037111a408b04a45f7803ef07449fb"
+      ],
+      "wall_us_per_token_median": 5506.906323716976,
+      "wall_us_per_token_samples": [
+        5522.299266885966,
+        5526.838504010811,
+        5474.110483191907,
+        5526.914988877252,
+        5482.201115228236,
+        5491.513380547985
+      ]
+    }
+  },
+  "backend": "DEV=NV (production native route)",
+  "conclusion": "bitwise-correct but slower (performance NO-GO)",
+  "correction": "The per-window token sha is IDENTICAL across all arms (5ec2fa9e for control, s4, and s2), so S=4 and S=2 produce the same tokens as S=48. The aggregate token_sha differs only because control measures 144 tokens vs 48 for s4/s2. The real result is performance NO-GO: S=4 is +763 us/token slower and S=2 is +1672 us/token slower than the S=48 control, so the coarse split is not promotable.",
+  "date": "2026-08-19",
+  "delta_median": {
+    "s2": {
+      "sha_identical_to_control": false,
+      "tok_s_delta_vs_control": -54.92694698408644,
+      "wall_delta_us_vs_control": -1671.6791433282197
+    },
+    "s4": {
+      "sha_identical_to_control": false,
+      "tok_s_delta_vs_control": -29.206146322481686,
+      "wall_delta_us_vs_control": -763.0147447343916
+    }
+  },
+  "git_commit": "d14e6964ee211f286b867616abe1daa9a137db5b",
+  "gpu": "RTX 5090 sm_120",
+  "gpu_state": "41 MiB, 32607 MiB, 16 %",
+  "method": "fresh process per arm window under flock -w 600 /tmp/gpu-bench.lock; depth 512; 3 settle tokens; 8 measured tokens x 3 reps; interleaved window plan ['control', 's4', 'control', 's2', 'control', 'control', 's4', 'control', 's2', 'control']; candidate runs with FLASH_DECODE_COARSE_SPLIT set at process start; token stream sha256 is the correctness gate; wall bar +50 us/token vs S=48 control",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "promotion_bar_us": 50.0,
+  "schema": "tinygrad.nv_flash_coarse_split_ab.v1",
+  "token_sha_identical_across_arms": false,
+  "verdict": "NO-GO"
+}

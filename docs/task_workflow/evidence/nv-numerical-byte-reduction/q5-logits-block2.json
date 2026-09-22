@@ -1,0 +1,24 @@
+{
+  "blocks": [
+    2
+  ],
+  "commit": "58853eed0476bb672fb5a47e5f7844d855634a88",
+  "count": 4,
+  "depth": 128,
+  "finite": true,
+  "installed": [
+    {
+      "block": 2,
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680
+    }
+  ],
+  "logits_sha256": "35b591d0864e3f2dc68f874d2dbb2f548a565908ef7678ddac2f993f176bcaa4",
+  "schema": "tinygrad.nv_q5k_full_logits.v1",
+  "tokens": [
+    4710,
+    279,
+    4710,
+    1837
+  ]
+}

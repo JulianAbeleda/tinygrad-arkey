@@ -1,0 +1,35 @@
+{
+  "comparisons": {
+    "exposed_native_minus_llama_us": 247.989,
+    "raw_interval_minus_exposed_ownership_us": 306.124,
+    "raw_native_minus_llama_us": -58.135
+  },
+  "conclusion": {
+    "causal": "The +247.989 us flash ownership gap is scheduling/critical-path exposure: native serializes 305.581 us while only 57.592 us of llama flash owns exposed time.",
+    "not_proven": "This does not show native flash kernels are optimal, nor predict wall recovery from a kernel rewrite. A native flash rewrite can only be credited by an exact real-token A/B; absent native overlap, its theoretical ceiling is the 305.581 us native serialized population.",
+    "sufficient": "A raw-kernel-speed advantage for llama is not required to explain this ownership gap: llama's own raw flash interval union is 58.135 us larger than native's calibrated raw flash time."
+  },
+  "definitions": {
+    "exposed": "disjoint Shapley ownership of llama's non-MMQ interval union; additive by construction",
+    "native": "calibrated profile composition within the marker-light DEV=NV device window; stream-ordered",
+    "raw": "sum of the class's own interval unions; not an additive token-wall cost when it overlaps MMQ"
+  },
+  "llama_disjoint_ownership_us": {
+    "exposed_total": 57.592,
+    "flash_combine_exposed": 21.162,
+    "flash_score_exposed": 36.43,
+    "hidden_total": 84.959
+  },
+  "llama_raw_interval_union_us": {
+    "flash_combine": 190.242,
+    "flash_score": 173.474,
+    "total": 363.716
+  },
+  "native_serialized_us": {
+    "flash_combine": 100.884,
+    "flash_score": 204.697,
+    "total": 305.581
+  },
+  "schema": "tinygrad.nv_decode.native_flash_causal_ledger.v1",
+  "status": "PASS_OVERLAP_SUFFICIENT_BODY_PARITY_UNPROVEN"
+}

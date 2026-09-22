@@ -4,7 +4,7 @@ The model routes meet here after Q/K/V projection. The operation deliberately
 does not encode model, weight-format, or target-specific policy.
 """
 from tinygrad import Tensor
-from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
+from tinygrad.uop.ops import AttentionGridSpec, SharedAttentionCandidateContext
 from tinygrad.llm.fused_attention import ADMITTED_GRIDS
 
 def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=None,
@@ -19,7 +19,7 @@ def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=N
       raise ValueError(f"attention requires matching heads or integral GQA groups, got Hq={q.shape[-3]}, Hkv={k.shape[-3]}")
     groups = q.shape[-3] // k.shape[-3]
     if all(isinstance(x, int) for x in (q.shape[0], q.shape[-2], q.shape[-1], k.shape[-2], q.shape[-3], k.shape[-3])) and q.shape[0] == 1:
-      candidate = AMDAttentionGridSpec(q_tokens=q.shape[-2], q_heads=q.shape[-3], kv_heads=k.shape[-3],
+      candidate = AttentionGridSpec(q_tokens=q.shape[-2], q_heads=q.shape[-3], kv_heads=k.shape[-3],
         group_ratio=groups, kv_tokens=k.shape[-2], head_dim=q.shape[-1])
       try:
         candidate.validate()

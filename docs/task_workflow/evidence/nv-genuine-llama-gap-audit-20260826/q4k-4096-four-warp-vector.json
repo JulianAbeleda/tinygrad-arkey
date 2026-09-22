@@ -1,0 +1,46 @@
+{
+  "candidate_median_us": 4.80192,
+  "candidate_us": [
+    4.830507,
+    4.797334,
+    4.804586,
+    4.80192,
+    4.813227,
+    4.800853,
+    4.801814,
+    4.802666,
+    4.796693
+  ],
+  "control_median_us": 4.869333,
+  "control_us": [
+    4.872853,
+    4.864533,
+    4.864533,
+    4.871467,
+    4.869333,
+    4.86848,
+    4.87104,
+    4.870934,
+    4.861227
+  ],
+  "max_abs_zero_input": 0.0,
+  "ptxas": [
+    "ptxas info    : 0 bytes gmem",
+    "ptxas info    : Compiling entry function 'q4k_four_warp_vec_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_four_warp_vec_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 40 registers, used 1 barriers, 16 bytes smem",
+    "ptxas info    : Compile time = 9.436 ms",
+    "ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'",
+    "ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 43 registers, used 0 barriers",
+    "ptxas info    : Compile time = 8.760 ms"
+  ],
+  "ratio": 0.9861555987236855,
+  "schema": "tinygrad.nv_q4k_4096_four_warp_vector_microgate.v1",
+  "shape": [
+    4096,
+    4096
+  ]
+}

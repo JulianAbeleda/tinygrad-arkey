@@ -1,0 +1,2330 @@
+{
+  "artifacts": {
+    "candidate": {
+      "disassembly": "docs/task_workflow/evidence/nv-q6-q8-panel1-binary-liveness-audit-20260831/candidate.nvdisasm",
+      "path": "docs/task_workflow/evidence/nv-q6-true-late-q8-panel1-gate7-20260831/artifacts/early_combined_all_partials/early_combined_all_partials.cubin",
+      "sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137"
+    },
+    "llama": {
+      "disassembly": "docs/task_workflow/evidence/nv-q6-q8-panel1-binary-liveness-audit-20260831/llama.nvdisasm",
+      "path": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+      "sha256": "04eb9bcb2edef62c672b5496d743a98c57e3236558b88f2ff117964b7fbb91ca"
+    }
+  },
+  "bodies": {
+    "candidate": {
+      "barrier_pcs": [
+        "0x3060",
+        "0xa930",
+        "0xaab0",
+        "0x109b0"
+      ],
+      "normalized_body_pc_bounds": [
+        "0x9a0",
+        "0x13ad0"
+      ],
+      "panel0": {
+        "first_load_ordinal": 456,
+        "first_load_to_first_store_span_instructions": 298,
+        "first_load_to_last_store_span_instructions": 317,
+        "first_store_ordinal": 754,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDS": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDSM": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "exclusive_pc_bounds": [
+            "0x1c80",
+            "0x2f20"
+          ],
+          "instruction_count": 297
+        },
+        "load_pc_bounds": [
+          "0x1c80",
+          "0x1d90"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x32d0",
+            "global_byte_offset": "0x0",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f20",
+            "ldg_ordinal": 456,
+            "ldg_pc": "0x1c80",
+            "ldg_to_sts_span_instructions": 298,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R20",
+            "shared_byte_offset": "0x9800",
+            "sts_ordinal": 754,
+            "sts_pc": "0x2f20"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3690",
+            "global_byte_offset": "0x400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f30",
+            "ldg_ordinal": 457,
+            "ldg_pc": "0x1c90",
+            "ldg_to_sts_span_instructions": 298,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R19",
+            "shared_byte_offset": "0x9c00",
+            "sts_ordinal": 755,
+            "sts_pc": "0x2f30"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3690",
+            "global_byte_offset": "0x800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f60",
+            "ldg_ordinal": 458,
+            "ldg_pc": "0x1ca0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R16",
+            "shared_byte_offset": "0xa000",
+            "sts_ordinal": 758,
+            "sts_pc": "0x2f60"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x33e0",
+            "global_byte_offset": "0xc00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f70",
+            "ldg_ordinal": 459,
+            "ldg_pc": "0x1cb0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R22",
+            "shared_byte_offset": "0xa400",
+            "sts_ordinal": 759,
+            "sts_pc": "0x2f70"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x33e0",
+            "global_byte_offset": "0x1000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f80",
+            "ldg_ordinal": 460,
+            "ldg_pc": "0x1cc0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R23",
+            "shared_byte_offset": "0xa800",
+            "sts_ordinal": 760,
+            "sts_pc": "0x2f80"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0x3580",
+            "global_byte_offset": "0x1400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2f90",
+            "ldg_ordinal": 461,
+            "ldg_pc": "0x1cd0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R55",
+            "shared_byte_offset": "0xac00",
+            "sts_ordinal": 761,
+            "sts_pc": "0x2f90"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0x3530",
+            "global_byte_offset": "0x1800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2fa0",
+            "ldg_ordinal": 462,
+            "ldg_pc": "0x1ce0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R53",
+            "shared_byte_offset": "0xb000",
+            "sts_ordinal": 762,
+            "sts_pc": "0x2fa0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3950",
+            "global_byte_offset": "0x1c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2fb0",
+            "ldg_ordinal": 463,
+            "ldg_pc": "0x1cf0",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R57",
+            "shared_byte_offset": "0xb400",
+            "sts_ordinal": 763,
+            "sts_pc": "0x2fb0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3550",
+            "global_byte_offset": "0x2000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2fc0",
+            "ldg_ordinal": 464,
+            "ldg_pc": "0x1d00",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R51",
+            "shared_byte_offset": "0xb800",
+            "sts_ordinal": 764,
+            "sts_pc": "0x2fc0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3460",
+            "global_byte_offset": "0x2400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2fd0",
+            "ldg_ordinal": 465,
+            "ldg_pc": "0x1d10",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R25",
+            "shared_byte_offset": "0xbc00",
+            "sts_ordinal": 765,
+            "sts_pc": "0x2fd0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3460",
+            "global_byte_offset": "0x2800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2fe0",
+            "ldg_ordinal": 466,
+            "ldg_pc": "0x1d20",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R24",
+            "shared_byte_offset": "0xc000",
+            "sts_ordinal": 766,
+            "sts_pc": "0x2fe0"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0x3230",
+            "global_byte_offset": "0x2c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x2ff0",
+            "ldg_ordinal": 467,
+            "ldg_pc": "0x1d30",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R52",
+            "shared_byte_offset": "0xc400",
+            "sts_ordinal": 767,
+            "sts_pc": "0x2ff0"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0x3560",
+            "global_byte_offset": "0x3000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3000",
+            "ldg_ordinal": 468,
+            "ldg_pc": "0x1d40",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R54",
+            "shared_byte_offset": "0xc800",
+            "sts_ordinal": 768,
+            "sts_pc": "0x3000"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3950",
+            "global_byte_offset": "0x3400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3010",
+            "ldg_ordinal": 469,
+            "ldg_pc": "0x1d50",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R56",
+            "shared_byte_offset": "0xcc00",
+            "sts_ordinal": 769,
+            "sts_pc": "0x3010"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3950",
+            "global_byte_offset": "0x3800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3020",
+            "ldg_ordinal": 470,
+            "ldg_pc": "0x1d60",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R58",
+            "shared_byte_offset": "0xd000",
+            "sts_ordinal": 770,
+            "sts_pc": "0x3020"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3460",
+            "global_byte_offset": "0x3c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3030",
+            "ldg_ordinal": 471,
+            "ldg_pc": "0x1d70",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R27",
+            "shared_byte_offset": "0xd400",
+            "sts_ordinal": 771,
+            "sts_pc": "0x3030"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3950",
+            "global_byte_offset": "0x4000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3040",
+            "ldg_ordinal": 472,
+            "ldg_pc": "0x1d80",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R59",
+            "shared_byte_offset": "0xd800",
+            "sts_ordinal": 772,
+            "sts_pc": "0x3040"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0x3680",
+            "global_byte_offset": "0x4400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3050",
+            "ldg_ordinal": 473,
+            "ldg_pc": "0x1d90",
+            "ldg_to_sts_span_instructions": 300,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R60",
+            "shared_byte_offset": "0xdc00",
+            "sts_ordinal": 773,
+            "sts_pc": "0x3050"
+          }
+        ],
+        "store_pc_bounds": [
+          "0x2f20",
+          "0x3050"
+        ]
+      },
+      "panel0_consume_window": {
+        "IMMA": {
+          "count": 123,
+          "first_pc": "0x3460",
+          "last_pc": "0xa810"
+        },
+        "LDS": {
+          "count": 96,
+          "first_pc": "0x3110",
+          "last_pc": "0xa8f0"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x3120",
+          "last_pc": "0x43b0"
+        },
+        "exclusive_pc_bounds": [
+          "0x3060",
+          "0xa930"
+        ],
+        "instruction_count": 1932
+      },
+      "panel1": {
+        "first_load_ordinal": 488,
+        "first_load_to_first_store_span_instructions": 2225,
+        "first_load_to_last_store_span_instructions": 2242,
+        "first_store_ordinal": 2713,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 123,
+            "first_pc": "0x3460",
+            "last_pc": "0xa810"
+          },
+          "LDS": {
+            "count": 96,
+            "first_pc": "0x3110",
+            "last_pc": "0xa8f0"
+          },
+          "LDSM": {
+            "count": 16,
+            "first_pc": "0x3120",
+            "last_pc": "0x43b0"
+          },
+          "exclusive_pc_bounds": [
+            "0x1e80",
+            "0xa990"
+          ],
+          "instruction_count": 2224
+        },
+        "load_pc_bounds": [
+          "0x1e80",
+          "0x2280"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0xb470",
+            "global_byte_offset": "0x4800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa990",
+            "ldg_ordinal": 488,
+            "ldg_pc": "0x1e80",
+            "ldg_to_sts_span_instructions": 2225,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R192",
+            "shared_byte_offset": "0x9800",
+            "sts_ordinal": 2713,
+            "sts_pc": "0xa990"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0xb360",
+            "global_byte_offset": "0x4c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9a0",
+            "ldg_ordinal": 491,
+            "ldg_pc": "0x1eb0",
+            "ldg_to_sts_span_instructions": 2223,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R191",
+            "shared_byte_offset": "0x9c00",
+            "sts_ordinal": 2714,
+            "sts_pc": "0xa9a0"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0xb700",
+            "global_byte_offset": "0x5000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9b0",
+            "ldg_ordinal": 494,
+            "ldg_pc": "0x1ee0",
+            "ldg_to_sts_span_instructions": 2221,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R190",
+            "shared_byte_offset": "0xa000",
+            "sts_ordinal": 2715,
+            "sts_pc": "0xa9b0"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0xb380",
+            "global_byte_offset": "0x5400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9c0",
+            "ldg_ordinal": 497,
+            "ldg_pc": "0x1f10",
+            "ldg_to_sts_span_instructions": 2219,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R189",
+            "shared_byte_offset": "0xa400",
+            "sts_ordinal": 2716,
+            "sts_pc": "0xa9c0"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xb860",
+            "global_byte_offset": "0x5800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9d0",
+            "ldg_ordinal": 500,
+            "ldg_pc": "0x1f40",
+            "ldg_to_sts_span_instructions": 2217,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R188",
+            "shared_byte_offset": "0xa800",
+            "sts_ordinal": 2717,
+            "sts_pc": "0xa9d0"
+          },
+          {
+            "first_static_redefinition_opcode": "HADD2.F32",
+            "first_static_redefinition_pc": "0xb300",
+            "global_byte_offset": "0x5c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9e0",
+            "ldg_ordinal": 503,
+            "ldg_pc": "0x1f70",
+            "ldg_to_sts_span_instructions": 2215,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R187",
+            "shared_byte_offset": "0xac00",
+            "sts_ordinal": 2718,
+            "sts_pc": "0xa9e0"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xb7d0",
+            "global_byte_offset": "0x6000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xa9f0",
+            "ldg_ordinal": 506,
+            "ldg_pc": "0x1fa0",
+            "ldg_to_sts_span_instructions": 2213,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R186",
+            "shared_byte_offset": "0xb000",
+            "sts_ordinal": 2719,
+            "sts_pc": "0xa9f0"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xbdd0",
+            "global_byte_offset": "0x6400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa00",
+            "ldg_ordinal": 509,
+            "ldg_pc": "0x1fd0",
+            "ldg_to_sts_span_instructions": 2211,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R185",
+            "shared_byte_offset": "0xb400",
+            "sts_ordinal": 2720,
+            "sts_pc": "0xaa00"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xb7b0",
+            "global_byte_offset": "0x6800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa10",
+            "ldg_ordinal": 514,
+            "ldg_pc": "0x2020",
+            "ldg_to_sts_span_instructions": 2207,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R184",
+            "shared_byte_offset": "0xb800",
+            "sts_ordinal": 2721,
+            "sts_pc": "0xaa10"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xbde0",
+            "global_byte_offset": "0x6c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa20",
+            "ldg_ordinal": 517,
+            "ldg_pc": "0x2050",
+            "ldg_to_sts_span_instructions": 2205,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R183",
+            "shared_byte_offset": "0xbc00",
+            "sts_ordinal": 2722,
+            "sts_pc": "0xaa20"
+          },
+          {
+            "first_static_redefinition_opcode": "LDSM.16.M88.2",
+            "first_static_redefinition_pc": "0xad10",
+            "global_byte_offset": "0x7000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa30",
+            "ldg_ordinal": 523,
+            "ldg_pc": "0x20b0",
+            "ldg_to_sts_span_instructions": 2200,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R119",
+            "shared_byte_offset": "0xc000",
+            "sts_ordinal": 2723,
+            "sts_pc": "0xaa30"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xb6f0",
+            "global_byte_offset": "0x7400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa40",
+            "ldg_ordinal": 526,
+            "ldg_pc": "0x20e0",
+            "ldg_to_sts_span_instructions": 2198,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R182",
+            "shared_byte_offset": "0xc400",
+            "sts_ordinal": 2724,
+            "sts_pc": "0xaa40"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xb6c0",
+            "global_byte_offset": "0x7800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa50",
+            "ldg_ordinal": 529,
+            "ldg_pc": "0x2110",
+            "ldg_to_sts_span_instructions": 2196,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R178",
+            "shared_byte_offset": "0xc800",
+            "sts_ordinal": 2725,
+            "sts_pc": "0xaa50"
+          },
+          {
+            "first_static_redefinition_opcode": "FMUL",
+            "first_static_redefinition_pc": "0xafc0",
+            "global_byte_offset": "0x7c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa60",
+            "ldg_ordinal": 535,
+            "ldg_pc": "0x2170",
+            "ldg_to_sts_span_instructions": 2191,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R177",
+            "shared_byte_offset": "0xcc00",
+            "sts_ordinal": 2726,
+            "sts_pc": "0xaa60"
+          },
+          {
+            "first_static_redefinition_opcode": "FADD",
+            "first_static_redefinition_pc": "0xb010",
+            "global_byte_offset": "0x8000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa70",
+            "ldg_ordinal": 539,
+            "ldg_pc": "0x21b0",
+            "ldg_to_sts_span_instructions": 2188,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R176",
+            "shared_byte_offset": "0xd000",
+            "sts_ordinal": 2727,
+            "sts_pc": "0xaa70"
+          },
+          {
+            "first_static_redefinition_opcode": "FMUL",
+            "first_static_redefinition_pc": "0xafd0",
+            "global_byte_offset": "0x8400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa80",
+            "ldg_ordinal": 543,
+            "ldg_pc": "0x21f0",
+            "ldg_to_sts_span_instructions": 2185,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R175",
+            "shared_byte_offset": "0xd400",
+            "sts_ordinal": 2728,
+            "sts_pc": "0xaa80"
+          },
+          {
+            "first_static_redefinition_opcode": "FADD",
+            "first_static_redefinition_pc": "0xaf40",
+            "global_byte_offset": "0x8800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaa90",
+            "ldg_ordinal": 546,
+            "ldg_pc": "0x2220",
+            "ldg_to_sts_span_instructions": 2183,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R174",
+            "shared_byte_offset": "0xd800",
+            "sts_ordinal": 2729,
+            "sts_pc": "0xaa90"
+          },
+          {
+            "first_static_redefinition_opcode": "I2FP.F32.S32",
+            "first_static_redefinition_pc": "0xada0",
+            "global_byte_offset": "0x8c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0xaaa0",
+            "ldg_ordinal": 552,
+            "ldg_pc": "0x2280",
+            "ldg_to_sts_span_instructions": 2178,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R173",
+            "shared_byte_offset": "0xdc00",
+            "sts_ordinal": 2730,
+            "sts_pc": "0xaaa0"
+          }
+        ],
+        "store_pc_bounds": [
+          "0xa990",
+          "0xaaa0"
+        ]
+      },
+      "panel1_consume_window": {
+        "IMMA": {
+          "count": 86,
+          "first_pc": "0xacc0",
+          "last_pc": "0x10990"
+        },
+        "LDS": {
+          "count": 80,
+          "first_pc": "0xac30",
+          "last_pc": "0x10770"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0xac60",
+          "last_pc": "0xd6e0"
+        },
+        "exclusive_pc_bounds": [
+          "0xaab0",
+          "0x109b0"
+        ],
+        "instruction_count": 1519
+      },
+      "panel1_ldg_register_direct_ldsm_imma_uses": [],
+      "panel1_prefetch_tail_before_overwrite_barrier": {
+        "IMMA": {
+          "count": 123,
+          "first_pc": "0x3460",
+          "last_pc": "0xa810"
+        },
+        "LDS": {
+          "count": 96,
+          "first_pc": "0x3110",
+          "last_pc": "0xa8f0"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x3120",
+          "last_pc": "0x43b0"
+        },
+        "exclusive_pc_bounds": [
+          "0x1e80",
+          "0xa930"
+        ],
+        "instruction_count": 2218
+      },
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+      "symbol_pc_bounds": [
+        "0x0",
+        "0x14100"
+      ]
+    },
+    "llama_direct": {
+      "barrier_pcs": [
+        "0x3840",
+        "0x8620",
+        "0x8890",
+        "0xeb40"
+      ],
+      "normalized_body_pc_bounds": [
+        "0xd80",
+        "0xeb50"
+      ],
+      "panel0": {
+        "first_load_ordinal": 315,
+        "first_load_to_first_store_span_instructions": 567,
+        "first_load_to_last_store_span_instructions": 584,
+        "first_store_ordinal": 882,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDS": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDSM": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "exclusive_pc_bounds": [
+            "0x13b0",
+            "0x3720"
+          ],
+          "instruction_count": 566
+        },
+        "load_pc_bounds": [
+          "0x13b0",
+          "0x15d0"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3f60",
+            "global_byte_offset": "0x0",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3720",
+            "ldg_ordinal": 315,
+            "ldg_pc": "0x13b0",
+            "ldg_to_sts_span_instructions": 567,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R24",
+            "shared_byte_offset": "0x200",
+            "sts_ordinal": 882,
+            "sts_pc": "0x3720"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d00",
+            "global_byte_offset": "0x400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3730",
+            "ldg_ordinal": 324,
+            "ldg_pc": "0x1440",
+            "ldg_to_sts_span_instructions": 559,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R23",
+            "shared_byte_offset": "0x600",
+            "sts_ordinal": 883,
+            "sts_pc": "0x3730"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d00",
+            "global_byte_offset": "0x800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3740",
+            "ldg_ordinal": 329,
+            "ldg_pc": "0x1490",
+            "ldg_to_sts_span_instructions": 555,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R22",
+            "shared_byte_offset": "0xa00",
+            "sts_ordinal": 884,
+            "sts_pc": "0x3740"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d00",
+            "global_byte_offset": "0xc00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3750",
+            "ldg_ordinal": 330,
+            "ldg_pc": "0x14a0",
+            "ldg_to_sts_span_instructions": 555,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R21",
+            "shared_byte_offset": "0xe00",
+            "sts_ordinal": 885,
+            "sts_pc": "0x3750"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d00",
+            "global_byte_offset": "0x1000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3760",
+            "ldg_ordinal": 334,
+            "ldg_pc": "0x14e0",
+            "ldg_to_sts_span_instructions": 552,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R20",
+            "shared_byte_offset": "0x1200",
+            "sts_ordinal": 886,
+            "sts_pc": "0x3760"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x3850",
+            "global_byte_offset": "0x1400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3770",
+            "ldg_ordinal": 336,
+            "ldg_pc": "0x1500",
+            "ldg_to_sts_span_instructions": 551,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R17",
+            "shared_byte_offset": "0x1600",
+            "sts_ordinal": 887,
+            "sts_pc": "0x3770"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS.128",
+            "first_static_redefinition_pc": "0x3bc0",
+            "global_byte_offset": "0x1800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3780",
+            "ldg_ordinal": 338,
+            "ldg_pc": "0x1520",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R19",
+            "shared_byte_offset": "0x1a00",
+            "sts_ordinal": 888,
+            "sts_pc": "0x3780"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS.128",
+            "first_static_redefinition_pc": "0x3bc0",
+            "global_byte_offset": "0x1c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3790",
+            "ldg_ordinal": 339,
+            "ldg_pc": "0x1530",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R18",
+            "shared_byte_offset": "0x1e00",
+            "sts_ordinal": 889,
+            "sts_pc": "0x3790"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d40",
+            "global_byte_offset": "0x2000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37a0",
+            "ldg_ordinal": 340,
+            "ldg_pc": "0x1540",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R7",
+            "shared_byte_offset": "0x2200",
+            "sts_ordinal": 890,
+            "sts_pc": "0x37a0"
+          },
+          {
+            "first_static_redefinition_opcode": "SHF.L.U32",
+            "first_static_redefinition_pc": "0x38c0",
+            "global_byte_offset": "0x2400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37b0",
+            "ldg_ordinal": 341,
+            "ldg_pc": "0x1550",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R13",
+            "shared_byte_offset": "0x2600",
+            "sts_ordinal": 891,
+            "sts_pc": "0x37b0"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x3850",
+            "global_byte_offset": "0x2800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37c0",
+            "ldg_ordinal": 342,
+            "ldg_pc": "0x1560",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R16",
+            "shared_byte_offset": "0x2a00",
+            "sts_ordinal": 892,
+            "sts_pc": "0x37c0"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x38d0",
+            "global_byte_offset": "0x2c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37d0",
+            "ldg_ordinal": 343,
+            "ldg_pc": "0x1570",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R8",
+            "shared_byte_offset": "0x2e00",
+            "sts_ordinal": 893,
+            "sts_pc": "0x37d0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3c90",
+            "global_byte_offset": "0x3000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37e0",
+            "ldg_ordinal": 344,
+            "ldg_pc": "0x1580",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R11",
+            "shared_byte_offset": "0x3200",
+            "sts_ordinal": 894,
+            "sts_pc": "0x37e0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3c90",
+            "global_byte_offset": "0x3400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x37f0",
+            "ldg_ordinal": 345,
+            "ldg_pc": "0x1590",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R10",
+            "shared_byte_offset": "0x3600",
+            "sts_ordinal": 895,
+            "sts_pc": "0x37f0"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x38d0",
+            "global_byte_offset": "0x3800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3800",
+            "ldg_ordinal": 346,
+            "ldg_pc": "0x15a0",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R9",
+            "shared_byte_offset": "0x3a00",
+            "sts_ordinal": 896,
+            "sts_pc": "0x3800"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x3880",
+            "global_byte_offset": "0x3c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3810",
+            "ldg_ordinal": 347,
+            "ldg_pc": "0x15b0",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R4",
+            "shared_byte_offset": "0x3e00",
+            "sts_ordinal": 897,
+            "sts_pc": "0x3810"
+          },
+          {
+            "first_static_redefinition_opcode": "IADD.64",
+            "first_static_redefinition_pc": "0x3880",
+            "global_byte_offset": "0x4000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3820",
+            "ldg_ordinal": 348,
+            "ldg_pc": "0x15c0",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R5",
+            "shared_byte_offset": "0x4200",
+            "sts_ordinal": 898,
+            "sts_pc": "0x3820"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x3d40",
+            "global_byte_offset": "0x4400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x3830",
+            "ldg_ordinal": 349,
+            "ldg_pc": "0x15d0",
+            "ldg_to_sts_span_instructions": 550,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R6",
+            "shared_byte_offset": "0x4600",
+            "sts_ordinal": 899,
+            "sts_pc": "0x3830"
+          }
+        ],
+        "store_pc_bounds": [
+          "0x3720",
+          "0x3830"
+        ]
+      },
+      "panel0_consume_window": {
+        "IMMA": {
+          "count": 118,
+          "first_pc": "0x3bf0",
+          "last_pc": "0x84f0"
+        },
+        "LDS": {
+          "count": 84,
+          "first_pc": "0x3a50",
+          "last_pc": "0x8610"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x3890",
+          "last_pc": "0x3ce0"
+        },
+        "exclusive_pc_bounds": [
+          "0x3840",
+          "0x8620"
+        ],
+        "instruction_count": 1245
+      },
+      "panel1": {
+        "first_load_ordinal": 2062,
+        "first_load_to_first_store_span_instructions": 96,
+        "first_load_to_last_store_span_instructions": 121,
+        "first_store_ordinal": 2158,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 6,
+            "first_pc": "0x8410",
+            "last_pc": "0x84f0"
+          },
+          "LDS": {
+            "count": 9,
+            "first_pc": "0x82a0",
+            "last_pc": "0x8610"
+          },
+          "LDSM": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "exclusive_pc_bounds": [
+            "0x80e0",
+            "0x86e0"
+          ],
+          "instruction_count": 95
+        },
+        "load_pc_bounds": [
+          "0x80e0",
+          "0x8290"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x86f0",
+            "global_byte_offset": "0x0",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x86e0",
+            "ldg_ordinal": 2062,
+            "ldg_pc": "0x80e0",
+            "ldg_to_sts_span_instructions": 96,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R49",
+            "shared_byte_offset": "0x200",
+            "sts_ordinal": 2158,
+            "sts_pc": "0x86e0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x92d0",
+            "global_byte_offset": "0x400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8770",
+            "ldg_ordinal": 2064,
+            "ldg_pc": "0x8100",
+            "ldg_to_sts_span_instructions": 103,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R51",
+            "shared_byte_offset": "0x600",
+            "sts_ordinal": 2167,
+            "sts_pc": "0x8770"
+          },
+          {
+            "first_static_redefinition_opcode": "LDS",
+            "first_static_redefinition_pc": "0x89b0",
+            "global_byte_offset": "0x800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8780",
+            "ldg_ordinal": 2066,
+            "ldg_pc": "0x8120",
+            "ldg_to_sts_span_instructions": 102,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R52",
+            "shared_byte_offset": "0xa00",
+            "sts_ordinal": 2168,
+            "sts_pc": "0x8780"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x9940",
+            "global_byte_offset": "0xc00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8790",
+            "ldg_ordinal": 2069,
+            "ldg_pc": "0x8150",
+            "ldg_to_sts_span_instructions": 100,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R53",
+            "shared_byte_offset": "0xe00",
+            "sts_ordinal": 2169,
+            "sts_pc": "0x8790"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x9940",
+            "global_byte_offset": "0x1000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87a0",
+            "ldg_ordinal": 2070,
+            "ldg_pc": "0x8160",
+            "ldg_to_sts_span_instructions": 100,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R54",
+            "shared_byte_offset": "0x1200",
+            "sts_ordinal": 2170,
+            "sts_pc": "0x87a0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x9940",
+            "global_byte_offset": "0x1400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87b0",
+            "ldg_ordinal": 2071,
+            "ldg_pc": "0x8170",
+            "ldg_to_sts_span_instructions": 100,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R55",
+            "shared_byte_offset": "0x1600",
+            "sts_ordinal": 2171,
+            "sts_pc": "0x87b0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8f80",
+            "global_byte_offset": "0x1800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87c0",
+            "ldg_ordinal": 2072,
+            "ldg_pc": "0x8180",
+            "ldg_to_sts_span_instructions": 100,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R64",
+            "shared_byte_offset": "0x1a00",
+            "sts_ordinal": 2172,
+            "sts_pc": "0x87c0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8f80",
+            "global_byte_offset": "0x1c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87d0",
+            "ldg_ordinal": 2075,
+            "ldg_pc": "0x81b0",
+            "ldg_to_sts_span_instructions": 98,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R65",
+            "shared_byte_offset": "0x1e00",
+            "sts_ordinal": 2173,
+            "sts_pc": "0x87d0"
+          },
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x8a80",
+            "global_byte_offset": "0x2000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87e0",
+            "ldg_ordinal": 2078,
+            "ldg_pc": "0x81e0",
+            "ldg_to_sts_span_instructions": 96,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R177",
+            "shared_byte_offset": "0x2200",
+            "sts_ordinal": 2174,
+            "sts_pc": "0x87e0"
+          },
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x8a60",
+            "global_byte_offset": "0x2400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x87f0",
+            "ldg_ordinal": 2081,
+            "ldg_pc": "0x8210",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R178",
+            "shared_byte_offset": "0x2600",
+            "sts_ordinal": 2175,
+            "sts_pc": "0x87f0"
+          },
+          {
+            "first_static_redefinition_opcode": "FFMA",
+            "first_static_redefinition_pc": "0x97c0",
+            "global_byte_offset": "0x2800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8800",
+            "ldg_ordinal": 2082,
+            "ldg_pc": "0x8220",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R179",
+            "shared_byte_offset": "0x2a00",
+            "sts_ordinal": 2176,
+            "sts_pc": "0x8800"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8910",
+            "global_byte_offset": "0x2c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8810",
+            "ldg_ordinal": 2083,
+            "ldg_pc": "0x8230",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R47",
+            "shared_byte_offset": "0x2e00",
+            "sts_ordinal": 2177,
+            "sts_pc": "0x8810"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x92d0",
+            "global_byte_offset": "0x3000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8820",
+            "ldg_ordinal": 2084,
+            "ldg_pc": "0x8240",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R50",
+            "shared_byte_offset": "0x3200",
+            "sts_ordinal": 2178,
+            "sts_pc": "0x8820"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8910",
+            "global_byte_offset": "0x3400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8830",
+            "ldg_ordinal": 2085,
+            "ldg_pc": "0x8250",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R45",
+            "shared_byte_offset": "0x3600",
+            "sts_ordinal": 2179,
+            "sts_pc": "0x8830"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8910",
+            "global_byte_offset": "0x3800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8840",
+            "ldg_ordinal": 2086,
+            "ldg_pc": "0x8260",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R46",
+            "shared_byte_offset": "0x3a00",
+            "sts_ordinal": 2180,
+            "sts_pc": "0x8840"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x8910",
+            "global_byte_offset": "0x3c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8850",
+            "ldg_ordinal": 2087,
+            "ldg_pc": "0x8270",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R44",
+            "shared_byte_offset": "0x3e00",
+            "sts_ordinal": 2181,
+            "sts_pc": "0x8850"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x89c0",
+            "global_byte_offset": "0x4000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8860",
+            "ldg_ordinal": 2088,
+            "ldg_pc": "0x8280",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R40",
+            "shared_byte_offset": "0x4200",
+            "sts_ordinal": 2182,
+            "sts_pc": "0x8860"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x89c0",
+            "global_byte_offset": "0x4400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x8870",
+            "ldg_ordinal": 2089,
+            "ldg_pc": "0x8290",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R42",
+            "shared_byte_offset": "0x4600",
+            "sts_ordinal": 2183,
+            "sts_pc": "0x8870"
+          }
+        ],
+        "store_pc_bounds": [
+          "0x86e0",
+          "0x8870"
+        ]
+      },
+      "panel1_consume_window": {
+        "IMMA": {
+          "count": 137,
+          "first_pc": "0x88e0",
+          "last_pc": "0xe4e0"
+        },
+        "LDS": {
+          "count": 92,
+          "first_pc": "0x89b0",
+          "last_pc": "0xe100"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x8af0",
+          "last_pc": "0x9770"
+        },
+        "exclusive_pc_bounds": [
+          "0x8890",
+          "0xeb40"
+        ],
+        "instruction_count": 1578
+      },
+      "panel1_ldg_register_direct_ldsm_imma_uses": [],
+      "panel1_prefetch_tail_before_overwrite_barrier": {
+        "IMMA": {
+          "count": 6,
+          "first_pc": "0x8410",
+          "last_pc": "0x84f0"
+        },
+        "LDS": {
+          "count": 9,
+          "first_pc": "0x82a0",
+          "last_pc": "0x8610"
+        },
+        "LDSM": {
+          "count": 0,
+          "first_pc": null,
+          "last_pc": null
+        },
+        "exclusive_pc_bounds": [
+          "0x80e0",
+          "0x8620"
+        ],
+        "instruction_count": 83
+      },
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "symbol_pc_bounds": [
+        "0x0",
+        "0x21c80"
+      ]
+    },
+    "llama_partial": {
+      "barrier_pcs": [
+        "0x15480",
+        "0x1a230",
+        "0x1a4d0",
+        "0x20770"
+      ],
+      "normalized_body_pc_bounds": [
+        "0x12880",
+        "0x20780"
+      ],
+      "panel0": {
+        "first_load_ordinal": 4881,
+        "first_load_to_first_store_span_instructions": 548,
+        "first_load_to_last_store_span_instructions": 566,
+        "first_store_ordinal": 5429,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDS": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "LDSM": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "exclusive_pc_bounds": [
+            "0x13110",
+            "0x15350"
+          ],
+          "instruction_count": 547
+        },
+        "load_pc_bounds": [
+          "0x13110",
+          "0x13720"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "IADD",
+            "first_static_redefinition_pc": "0x15500",
+            "global_byte_offset": "0x0",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15350",
+            "ldg_ordinal": 4881,
+            "ldg_pc": "0x13110",
+            "ldg_to_sts_span_instructions": 548,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R121",
+            "shared_byte_offset": "0x200",
+            "sts_ordinal": 5429,
+            "sts_pc": "0x15350"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15ce0",
+            "global_byte_offset": "0x400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15370",
+            "ldg_ordinal": 4889,
+            "ldg_pc": "0x13190",
+            "ldg_to_sts_span_instructions": 542,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R119",
+            "shared_byte_offset": "0x600",
+            "sts_ordinal": 5431,
+            "sts_pc": "0x15370"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15ce0",
+            "global_byte_offset": "0x800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15380",
+            "ldg_ordinal": 4890,
+            "ldg_pc": "0x131a0",
+            "ldg_to_sts_span_instructions": 542,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R117",
+            "shared_byte_offset": "0xa00",
+            "sts_ordinal": 5432,
+            "sts_pc": "0x15380"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15c00",
+            "global_byte_offset": "0xc00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15390",
+            "ldg_ordinal": 4894,
+            "ldg_pc": "0x131e0",
+            "ldg_to_sts_span_instructions": 539,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R115",
+            "shared_byte_offset": "0xe00",
+            "sts_ordinal": 5433,
+            "sts_pc": "0x15390"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15c00",
+            "global_byte_offset": "0x1000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153a0",
+            "ldg_ordinal": 4914,
+            "ldg_pc": "0x13320",
+            "ldg_to_sts_span_instructions": 520,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R113",
+            "shared_byte_offset": "0x1200",
+            "sts_ordinal": 5434,
+            "sts_pc": "0x153a0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15d10",
+            "global_byte_offset": "0x1400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153b0",
+            "ldg_ordinal": 4918,
+            "ldg_pc": "0x13360",
+            "ldg_to_sts_span_instructions": 517,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R107",
+            "shared_byte_offset": "0x1600",
+            "sts_ordinal": 5435,
+            "sts_pc": "0x153b0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15d50",
+            "global_byte_offset": "0x1800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153c0",
+            "ldg_ordinal": 4920,
+            "ldg_pc": "0x13380",
+            "ldg_to_sts_span_instructions": 516,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R111",
+            "shared_byte_offset": "0x1a00",
+            "sts_ordinal": 5436,
+            "sts_pc": "0x153c0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15d50",
+            "global_byte_offset": "0x1c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153d0",
+            "ldg_ordinal": 4934,
+            "ldg_pc": "0x13460",
+            "ldg_to_sts_span_instructions": 503,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R109",
+            "shared_byte_offset": "0x1e00",
+            "sts_ordinal": 5437,
+            "sts_pc": "0x153d0"
+          },
+          {
+            "first_static_redefinition_opcode": "LDSM.16.M88.2",
+            "first_static_redefinition_pc": "0x157f0",
+            "global_byte_offset": "0x2000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153e0",
+            "ldg_ordinal": 4959,
+            "ldg_pc": "0x135f0",
+            "ldg_to_sts_span_instructions": 479,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R89",
+            "shared_byte_offset": "0x2200",
+            "sts_ordinal": 5438,
+            "sts_pc": "0x153e0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15e40",
+            "global_byte_offset": "0x2400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x153f0",
+            "ldg_ordinal": 4945,
+            "ldg_pc": "0x13510",
+            "ldg_to_sts_span_instructions": 494,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R99",
+            "shared_byte_offset": "0x2600",
+            "sts_ordinal": 5439,
+            "sts_pc": "0x153f0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x16390",
+            "global_byte_offset": "0x2800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15400",
+            "ldg_ordinal": 4950,
+            "ldg_pc": "0x13560",
+            "ldg_to_sts_span_instructions": 490,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R101",
+            "shared_byte_offset": "0x2a00",
+            "sts_ordinal": 5440,
+            "sts_pc": "0x15400"
+          },
+          {
+            "first_static_redefinition_opcode": "LDSM.16.M88.2",
+            "first_static_redefinition_pc": "0x15710",
+            "global_byte_offset": "0x2c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15410",
+            "ldg_ordinal": 4967,
+            "ldg_pc": "0x13670",
+            "ldg_to_sts_span_instructions": 474,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R91",
+            "shared_byte_offset": "0x2e00",
+            "sts_ordinal": 5441,
+            "sts_pc": "0x15410"
+          },
+          {
+            "first_static_redefinition_opcode": "IMAD",
+            "first_static_redefinition_pc": "0x15a90",
+            "global_byte_offset": "0x3000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15420",
+            "ldg_ordinal": 4963,
+            "ldg_pc": "0x13630",
+            "ldg_to_sts_span_instructions": 479,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R97",
+            "shared_byte_offset": "0x3200",
+            "sts_ordinal": 5442,
+            "sts_pc": "0x15420"
+          },
+          {
+            "first_static_redefinition_opcode": "LDSM.16.M88.2",
+            "first_static_redefinition_pc": "0x15850",
+            "global_byte_offset": "0x3400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15430",
+            "ldg_ordinal": 4964,
+            "ldg_pc": "0x13640",
+            "ldg_to_sts_span_instructions": 479,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R95",
+            "shared_byte_offset": "0x3600",
+            "sts_ordinal": 5443,
+            "sts_pc": "0x15430"
+          },
+          {
+            "first_static_redefinition_opcode": "LDSM.16.M88.2",
+            "first_static_redefinition_pc": "0x15700",
+            "global_byte_offset": "0x3800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15440",
+            "ldg_ordinal": 4969,
+            "ldg_pc": "0x13690",
+            "ldg_to_sts_span_instructions": 475,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R93",
+            "shared_byte_offset": "0x3a00",
+            "sts_ordinal": 5444,
+            "sts_pc": "0x15440"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15810",
+            "global_byte_offset": "0x3c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15450",
+            "ldg_ordinal": 4976,
+            "ldg_pc": "0x13700",
+            "ldg_to_sts_span_instructions": 469,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R23",
+            "shared_byte_offset": "0x3e00",
+            "sts_ordinal": 5445,
+            "sts_pc": "0x15450"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15b00",
+            "global_byte_offset": "0x4000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15460",
+            "ldg_ordinal": 4977,
+            "ldg_pc": "0x13710",
+            "ldg_to_sts_span_instructions": 469,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R25",
+            "shared_byte_offset": "0x4200",
+            "sts_ordinal": 5446,
+            "sts_pc": "0x15460"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x15d10",
+            "global_byte_offset": "0x4400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x15470",
+            "ldg_ordinal": 4978,
+            "ldg_pc": "0x13720",
+            "ldg_to_sts_span_instructions": 469,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R105",
+            "shared_byte_offset": "0x4600",
+            "sts_ordinal": 5447,
+            "sts_pc": "0x15470"
+          }
+        ],
+        "store_pc_bounds": [
+          "0x15350",
+          "0x15470"
+        ]
+      },
+      "panel0_consume_window": {
+        "IMMA": {
+          "count": 118,
+          "first_pc": "0x156d0",
+          "last_pc": "0x1a100"
+        },
+        "LDS": {
+          "count": 84,
+          "first_pc": "0x15590",
+          "last_pc": "0x1a220"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x155c0",
+          "last_pc": "0x158f0"
+        },
+        "exclusive_pc_bounds": [
+          "0x15480",
+          "0x1a230"
+        ],
+        "instruction_count": 1242
+      },
+      "panel1": {
+        "first_load_ordinal": 6608,
+        "first_load_to_first_store_span_instructions": 95,
+        "first_load_to_last_store_span_instructions": 119,
+        "first_store_ordinal": 6703,
+        "intervening_work_first_load_to_first_store": {
+          "IMMA": {
+            "count": 8,
+            "first_pc": "0x19e30",
+            "last_pc": "0x1a2c0"
+          },
+          "LDS": {
+            "count": 8,
+            "first_pc": "0x19e50",
+            "last_pc": "0x1a220"
+          },
+          "LDSM": {
+            "count": 0,
+            "first_pc": null,
+            "last_pc": null
+          },
+          "exclusive_pc_bounds": [
+            "0x19d00",
+            "0x1a2f0"
+          ],
+          "instruction_count": 94
+        },
+        "load_pc_bounds": [
+          "0x19d00",
+          "0x19e20"
+        ],
+        "rows_by_logical_word": [
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a620",
+            "global_byte_offset": "0x0",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a3a0",
+            "ldg_ordinal": 6615,
+            "ldg_pc": "0x19d70",
+            "ldg_to_sts_span_instructions": 99,
+            "logical_word": 0,
+            "post_store_uses_before_redefinition": [],
+            "register": "R51",
+            "shared_byte_offset": "0x200",
+            "sts_ordinal": 6714,
+            "sts_pc": "0x1a3a0"
+          },
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x1a310",
+            "global_byte_offset": "0x400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a2f0",
+            "ldg_ordinal": 6608,
+            "ldg_pc": "0x19d00",
+            "ldg_to_sts_span_instructions": 95,
+            "logical_word": 1,
+            "post_store_uses_before_redefinition": [],
+            "register": "R55",
+            "shared_byte_offset": "0x600",
+            "sts_ordinal": 6703,
+            "sts_pc": "0x1a2f0"
+          },
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x1a3b0",
+            "global_byte_offset": "0x800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a380",
+            "ldg_ordinal": 6614,
+            "ldg_pc": "0x19d60",
+            "ldg_to_sts_span_instructions": 98,
+            "logical_word": 2,
+            "post_store_uses_before_redefinition": [],
+            "register": "R59",
+            "shared_byte_offset": "0xa00",
+            "sts_ordinal": 6712,
+            "sts_pc": "0x1a380"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ac60",
+            "global_byte_offset": "0xc00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a3c0",
+            "ldg_ordinal": 6616,
+            "ldg_pc": "0x19d80",
+            "ldg_to_sts_span_instructions": 100,
+            "logical_word": 3,
+            "post_store_uses_before_redefinition": [],
+            "register": "R96",
+            "shared_byte_offset": "0xe00",
+            "sts_ordinal": 6716,
+            "sts_pc": "0x1a3c0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ac60",
+            "global_byte_offset": "0x1000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a3e0",
+            "ldg_ordinal": 6617,
+            "ldg_pc": "0x19d90",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 4,
+            "post_store_uses_before_redefinition": [],
+            "register": "R97",
+            "shared_byte_offset": "0x1200",
+            "sts_ordinal": 6718,
+            "sts_pc": "0x1a3e0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ac60",
+            "global_byte_offset": "0x1400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a3f0",
+            "ldg_ordinal": 6618,
+            "ldg_pc": "0x19da0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 5,
+            "post_store_uses_before_redefinition": [],
+            "register": "R98",
+            "shared_byte_offset": "0x1600",
+            "sts_ordinal": 6719,
+            "sts_pc": "0x1a3f0"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ac60",
+            "global_byte_offset": "0x1800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a400",
+            "ldg_ordinal": 6619,
+            "ldg_pc": "0x19db0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 6,
+            "post_store_uses_before_redefinition": [],
+            "register": "R99",
+            "shared_byte_offset": "0x1a00",
+            "sts_ordinal": 6720,
+            "sts_pc": "0x1a400"
+          },
+          {
+            "first_static_redefinition_opcode": "MOV",
+            "first_static_redefinition_pc": "0x1a600",
+            "global_byte_offset": "0x1c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a410",
+            "ldg_ordinal": 6620,
+            "ldg_pc": "0x19dc0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 7,
+            "post_store_uses_before_redefinition": [],
+            "register": "R100",
+            "shared_byte_offset": "0x1e00",
+            "sts_ordinal": 6721,
+            "sts_pc": "0x1a410"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ae20",
+            "global_byte_offset": "0x2000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a420",
+            "ldg_ordinal": 6621,
+            "ldg_pc": "0x19dd0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 8,
+            "post_store_uses_before_redefinition": [],
+            "register": "R101",
+            "shared_byte_offset": "0x2200",
+            "sts_ordinal": 6722,
+            "sts_pc": "0x1a420"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ae20",
+            "global_byte_offset": "0x2400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a430",
+            "ldg_ordinal": 6622,
+            "ldg_pc": "0x19de0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 9,
+            "post_store_uses_before_redefinition": [],
+            "register": "R102",
+            "shared_byte_offset": "0x2600",
+            "sts_ordinal": 6723,
+            "sts_pc": "0x1a430"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1ae20",
+            "global_byte_offset": "0x2800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a440",
+            "ldg_ordinal": 6623,
+            "ldg_pc": "0x19df0",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 10,
+            "post_store_uses_before_redefinition": [],
+            "register": "R103",
+            "shared_byte_offset": "0x2a00",
+            "sts_ordinal": 6724,
+            "sts_pc": "0x1a440"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a390",
+            "global_byte_offset": "0x2c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a300",
+            "ldg_ordinal": 6610,
+            "ldg_pc": "0x19d20",
+            "ldg_to_sts_span_instructions": 94,
+            "logical_word": 11,
+            "post_store_uses_before_redefinition": [],
+            "register": "R46",
+            "shared_byte_offset": "0x2e00",
+            "sts_ordinal": 6704,
+            "sts_pc": "0x1a300"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a390",
+            "global_byte_offset": "0x3000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a330",
+            "ldg_ordinal": 6611,
+            "ldg_pc": "0x19d30",
+            "ldg_to_sts_span_instructions": 96,
+            "logical_word": 12,
+            "post_store_uses_before_redefinition": [],
+            "register": "R47",
+            "shared_byte_offset": "0x3200",
+            "sts_ordinal": 6707,
+            "sts_pc": "0x1a330"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a390",
+            "global_byte_offset": "0x3400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a340",
+            "ldg_ordinal": 6612,
+            "ldg_pc": "0x19d40",
+            "ldg_to_sts_span_instructions": 96,
+            "logical_word": 13,
+            "post_store_uses_before_redefinition": [],
+            "register": "R44",
+            "shared_byte_offset": "0x3600",
+            "sts_ordinal": 6708,
+            "sts_pc": "0x1a340"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a390",
+            "global_byte_offset": "0x3800",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a360",
+            "ldg_ordinal": 6613,
+            "ldg_pc": "0x19d50",
+            "ldg_to_sts_span_instructions": 97,
+            "logical_word": 14,
+            "post_store_uses_before_redefinition": [],
+            "register": "R45",
+            "shared_byte_offset": "0x3a00",
+            "sts_ordinal": 6710,
+            "sts_pc": "0x1a360"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a620",
+            "global_byte_offset": "0x3c00",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a450",
+            "ldg_ordinal": 6624,
+            "ldg_pc": "0x19e00",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 15,
+            "post_store_uses_before_redefinition": [],
+            "register": "R50",
+            "shared_byte_offset": "0x3e00",
+            "sts_ordinal": 6725,
+            "sts_pc": "0x1a450"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a620",
+            "global_byte_offset": "0x4000",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a460",
+            "ldg_ordinal": 6625,
+            "ldg_pc": "0x19e10",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 16,
+            "post_store_uses_before_redefinition": [],
+            "register": "R48",
+            "shared_byte_offset": "0x4200",
+            "sts_ordinal": 6726,
+            "sts_pc": "0x1a460"
+          },
+          {
+            "first_static_redefinition_opcode": "IMMA.16816.S8.S8",
+            "first_static_redefinition_pc": "0x1a620",
+            "global_byte_offset": "0x4400",
+            "intervening_register_occurrences": [],
+            "last_value_use_pc": "0x1a470",
+            "ldg_ordinal": 6626,
+            "ldg_pc": "0x19e20",
+            "ldg_to_sts_span_instructions": 101,
+            "logical_word": 17,
+            "post_store_uses_before_redefinition": [],
+            "register": "R49",
+            "shared_byte_offset": "0x4600",
+            "sts_ordinal": 6727,
+            "sts_pc": "0x1a470"
+          }
+        ],
+        "store_pc_bounds": [
+          "0x1a2f0",
+          "0x1a470"
+        ]
+      },
+      "panel1_consume_window": {
+        "IMMA": {
+          "count": 135,
+          "first_pc": "0x1a510",
+          "last_pc": "0x20140"
+        },
+        "LDS": {
+          "count": 92,
+          "first_pc": "0x1a960",
+          "last_pc": "0x1fd70"
+        },
+        "LDSM": {
+          "count": 16,
+          "first_pc": "0x1a9a0",
+          "last_pc": "0x1ae60"
+        },
+        "exclusive_pc_bounds": [
+          "0x1a4d0",
+          "0x20770"
+        ],
+        "instruction_count": 1577
+      },
+      "panel1_ldg_register_direct_ldsm_imma_uses": [],
+      "panel1_prefetch_tail_before_overwrite_barrier": {
+        "IMMA": {
+          "count": 7,
+          "first_pc": "0x19e30",
+          "last_pc": "0x1a100"
+        },
+        "LDS": {
+          "count": 8,
+          "first_pc": "0x19e50",
+          "last_pc": "0x1a220"
+        },
+        "LDSM": {
+          "count": 0,
+          "first_pc": null,
+          "last_pc": null
+        },
+        "exclusive_pc_bounds": [
+          "0x19d00",
+          "0x1a230"
+        ],
+        "instruction_count": 82
+      },
+      "symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+      "symbol_pc_bounds": [
+        "0x0",
+        "0x21c80"
+      ]
+    }
+  },
+  "method": "SASS-only fixed-window load/store register pairing; no CUDA-source ordering used",
+  "parser_limits": [
+    "Register occurrence and load-to-store pairing are exact textual SASS facts.",
+    "First redefinition expands IMMA destinations to four registers, LDSM.16.M88.2 to two, and .64/.128 destinations to two/four.",
+    "The parser does not claim a dynamic latency or scoreboard-wait duration from static control fields.",
+    "Downstream shared-memory values are not assigned the identity of their prior global-load register after STS; that value identity ends at publication."
+  ],
+  "schema": "tinygrad.nv_q6_q8_panel1_binary_liveness_audit.v1",
+  "findings": {
+    "all_panel1_pairs_exact": true,
+    "all_panel1_values_have_zero_intervening_register_occurrences": true,
+    "all_panel1_values_die_at_matching_sts": true,
+    "panel1_ldg_register_direct_ldsm_imma_uses": 0,
+    "normalized_liveness": {
+      "candidate": {
+        "first_load_ordinal": 488,
+        "first_store_ordinal": 2713,
+        "first_load_to_first_store_span_instructions": 2225,
+        "first_load_to_last_store_span_instructions": 2242,
+        "per_value_span_min": 2178,
+        "per_value_span_max": 2225,
+        "pre_overwrite_intervening_instructions": 2218,
+        "pre_overwrite_IMMA": 123,
+        "pre_overwrite_LDSM": 16,
+        "pre_overwrite_LDS": 96
+      },
+      "llama_direct": {
+        "first_load_ordinal": 2062,
+        "first_store_ordinal": 2158,
+        "first_load_to_first_store_span_instructions": 96,
+        "first_load_to_last_store_span_instructions": 121,
+        "per_value_span_min": 94,
+        "per_value_span_max": 103,
+        "pre_overwrite_intervening_instructions": 83,
+        "pre_overwrite_IMMA": 6,
+        "pre_overwrite_LDSM": 0,
+        "pre_overwrite_LDS": 9
+      },
+      "llama_partial": {
+        "first_load_ordinal": 6608,
+        "first_store_ordinal": 6703,
+        "first_load_to_first_store_span_instructions": 95,
+        "first_load_to_last_store_span_instructions": 119,
+        "per_value_span_min": 94,
+        "per_value_span_max": 101,
+        "pre_overwrite_intervening_instructions": 82,
+        "pre_overwrite_IMMA": 7,
+        "pre_overwrite_LDSM": 0,
+        "pre_overwrite_LDS": 8
+      }
+    },
+    "binary_conclusion": "llama places panel1 LDG near the phase0 tail and recycles its scattered destination registers after STS; the candidate loads panel1 before its initial combined barrier into a mostly contiguous high register bank and retains it across nearly the complete phase0 body"
+  },
+  "controllable_ir_boundary": {
+    "expressible_now": [
+      "AFTER carries graph dependencies while present",
+      "GROUP bundles effects",
+      "BARRIER emits an actual backend barrier and enforces shared publication",
+      "REG placeholders preserve values until their consumers"
+    ],
+    "not_proven_expressible_now": [
+      "a hard, zero-runtime-instruction final-machine-order constraint that prevents an independent LDG from being hoisted before a selected arithmetic token",
+      "a two-sided LDG placement window that survives symbolic lowering, C/PTX rendering, and downstream ptxas scheduling"
+    ],
+    "evidence": [
+      "C-style and PTX renderers alias AFTER to its first source and emit no instruction",
+      "GROUP is skipped by those renderers",
+      "the optional list scheduler treats AFTER and GROUP as structural only if they survive into its input list",
+      "two Gate7 UOp dependency spellings changed source SHA but produced the identical fc11face14a8df4ff5f193110679d7cbd834567bcb0a0d0aa7fb2411ffe52df8 cubin and identical 1827-instruction rejected span"
+    ]
+  },
+  "next_gate": {
+    "primitive": "strict_after(value, dependency), represented as a non-droppable backend-neutral scheduling edge distinct from ordinary AFTER",
+    "semantics": "return value unchanged; require final emitted load/use order after dependency; carry no CTA synchronization or memory-value semantics; a backend must lower the constraint or reject compilation rather than silently erase it",
+    "microtest_hard_gates": [
+      "the constrained LDG ordinal is strictly after the lower sentinel and before its STS consumer",
+      "constrained and unconstrained controls produce different machine ordering",
+      "exactly one intended LDG and one intended STS; no added global/shared traffic",
+      "no hardware BAR, stack, local load, or local store is introduced",
+      "bit-exact output"
+    ],
+    "full_q6_hard_gates": [
+      "18 panel1 LDG and 18 matching STS",
+      "first panel1 LDG after the initial combined barrier and before the overwrite barrier",
+      "first-load to first-store span <=160 instructions",
+      "IMMA/LDSM/LDS/LDG/STS/STG/BAR exactly 256/32/176/109/73/64/4",
+      "I2FP/FMUL/FADD/FFMA exactly 1024/1544/1024/0",
+      "instruction total <=5144, registers <=255, stack/local/LDL/STL all zero",
+      "trusted exactness and partial/final uint32 identity",
+      "locked same-process alternating R31: main and total paired median <=-3 us with >=24/31 wins"
+    ]
+  },
+  "limitations": [
+    "Static SASS proves program order and register liveness, not dynamic LDG completion latency, scoreboard stall duration, or achieved overlap.",
+    "The global-load register identity ends at STS; downstream shared LDS and IMMA dependencies cannot be assigned that same physical-register identity.",
+    "No claim is made about the exact pass that neutralized Gate7 ordering; only the identical final cubin is proven.",
+    "LDSM/IMMA direct-use classification is textual SASS operand identity; implicit hardware operand-group semantics are not used to invent a dependency."
+  ],
+  "commands": [
+    "sha256sum <llama.cubin> <candidate.cubin>",
+    "/usr/local/cuda-13.2/bin/cuobjdump --dump-elf-symbols <cubin>",
+    "/usr/local/cuda-13.2/bin/cuobjdump --dump-resource-usage <cubin>",
+    "readelf -sW <cubin>",
+    ".venv/lib/python3.12/site-packages/triton/backends/nvidia/bin/nvdisasm -c <cubin>",
+    "PYTHONPATH=. .venv/bin/python docs/task_workflow/evidence/nv-q6-q8-panel1-binary-liveness-audit-20260831/parse_panel_liveness.py"
+  ]
+}

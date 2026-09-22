@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """M1e Part 2: sweep configurations through the committed lane
-(`extra/llm_research/prefill/metal_precontract_lane.py`) to find the correct/incorrect boundary
+(`extra/llm_research/prefill/precontract_probe_lane.py`) to find the correct/incorrect boundary
 around the M1b/M1c/M1d Metal numeric failure.
 
 This is NOT a new compile/admit/execute driver -- every config below is dispatched through
@@ -21,7 +21,7 @@ from __future__ import annotations
 import sys, json, time
 sys.path.insert(0, "/Users/julianabeleda/env/tinygrad-arkey-exp")
 
-from extra.llm_research.prefill.metal_precontract_lane import ProbeConfig, run_precontract_probe
+from extra.llm_research.prefill.precontract_probe_lane import ProbeConfig, run_precontract_probe
 
 QUANT, ROLE = "Q4_K", "ffn_gate_up"
 M1C_SHAPE = (512, 12288, 4096)

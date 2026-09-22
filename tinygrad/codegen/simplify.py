@@ -9,7 +9,14 @@ def flatten_range(r:UOp) -> UOp|None:
   off = range_start[r.op]
   rngs = r.src[off:]
   if not len(rngs): return None
-  new_rngs = [x for x in UOp.sink(*rngs).toposort() if x.op is Ops.RANGE]
+  # RANGE is a lexical control-flow boundary.  A runtime range extent may depend on an
+  # enclosing range; descending through that bare RANGE would incorrectly add the
+  # enclosing range to this END/REDUCE's own closed ranges.  We still descend through
+  # range-valued arithmetic produced by pm_split_ranges and collect its RANGE leaves.
+  def range_leaves(x:UOp) -> tuple[UOp, ...]:
+    if x.op is Ops.RANGE: return (x,)
+    return tuple(dict.fromkeys(itertools.chain.from_iterable(range_leaves(s) for s in x.src)))
+  new_rngs = tuple(dict.fromkeys(itertools.chain.from_iterable(range_leaves(x) for x in rngs)))
   auxiliary = tuple(x for x in rngs if x.op is not Ops.RANGE)
   new_src = r.src[:off]+tuple(new_rngs)+auxiliary
   return r.replace(src=new_src) if new_src != r.src else None
@@ -25,12 +32,21 @@ def simplify_merge_adjacent(u:UOp) -> UOp|None:
   reduce_ranges = [x.ranges for x in u.backward_slice_with_self if x.op is Ops.REDUCE]
   # on END we only want to merge adjacent ranges, on REDUCE we want to try all combinations
   ended_ranges = tuple(x for x in u.ended_ranges if x.op is Ops.RANGE)
+  # A range already closed inside the END body is lifecycle-nested, not a sibling
+  # dimension of this END.  Never flatten it with an outer range.
+  nested_ended_ranges = {r for x in u.src[0].backward_slice_with_self if u.op is Ops.END and x.op is Ops.END
+                         for r in x.ended_ranges if r.op is Ops.RANGE}
   for r0, r1 in (zip(ended_ranges, ended_ranges[1:]) if u.op is Ops.END else itertools.permutations(ended_ranges, 2)):
     # check same type
     if r0.arg[-1] == r1.arg[-1]:
+      s0, s1 = r0.src[0], r1.src[0]
+      # Product/divmod flattening is valid only for independent rectangular
+      # dimensions.  Dynamic nested loops have an extent that references an
+      # enclosing RANGE and must retain their lexical loop structure.
+      if r0 in s0.ranges or r1 in s0.ranges or r0 in s1.ranges or r1 in s1.ranges: continue
+      if r0 in nested_ended_ranges or r1 in nested_ended_ranges: continue
       # check if the ranges to merge are in the same reduces
       if all((r0 in rngs) == (r1 in rngs) for rngs in reduce_ranges):
-        s0, s1 = r0.src[0], r1.src[0]
         # do the merge
         new_range = r0.replace(src=(s0*s1,))
         nidx = graph_rewrite(u, _substitute+symbolic+pm_flatten_range, ctx={r0:new_range//s1, r1:new_range%s1},

@@ -1,0 +1,29 @@
+{
+  "candidate_median_ms": 52.734764,
+  "candidate_replay_exact_cycles": 20,
+  "closing_control_median_ms": 52.960819,
+  "enable": "NV_COMPILER_Q4_STREAMK_INTERLEAVE_WMMA_UPDATES=1",
+  "frozen_investment_threshold_ms": 0.5,
+  "full_logits_bit_exact_closing_control": true,
+  "latency_win_ms": 0.1620709999999974,
+  "latency_win_percent": 0.30639073207309186,
+  "mean_control_median_ms": 52.896834999999996,
+  "prior_control_median_ms": 52.832851,
+  "promotion": "retained_default_off",
+  "resources": {
+    "candidate": {
+      "registers": 225,
+      "shared_bytes": 21504,
+      "stack_bytes": 0
+    },
+    "control": {
+      "registers": 255,
+      "shared_bytes": 21504,
+      "stack_bytes": 88
+    }
+  },
+  "same_token": true,
+  "schema": "tinygrad.nv_prefill_current252_gate_interleave_compare.v1",
+  "status": "STOP_BELOW_FROZEN_0P5_MS_THRESHOLD",
+  "threshold_authority": "docs/task_workflow/output/nv-prefill-substrate-test-ledger-20260829.md"
+}

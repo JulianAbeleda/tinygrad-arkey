@@ -1,0 +1,77 @@
+{
+  "blocks": 18,
+  "comparison": {
+    "argmax_equal": true,
+    "finite": true,
+    "historical_max_abs_gate": {
+      "atol": 0.01,
+      "pass": false,
+      "status": "reported_non_authoritative"
+    },
+    "max_abs": 0.04221343994140625,
+    "min_baseline_top1_margin": 7.245023727416992,
+    "perturbation_vs_min_margin": 0.011653085353374337,
+    "perturbation_vs_min_margin_max": 1.0,
+    "relative_l2": 0.0016144926065303237,
+    "relative_l2_max": 0.001,
+    "semantic_pass": false,
+    "tokens_equal": true,
+    "top_k": 10,
+    "top_k_order_equal": true,
+    "top_k_sets_equal": true
+  },
+  "note": "quality gate only; timing deliberately forbidden",
+  "representation": {
+    "activation_values": 4096,
+    "current_q8_1_packet_bytes": 4608,
+    "fp16_rounding_point_preserved": true,
+    "metadata_bytes": 1024,
+    "metadata_groups": 256,
+    "metadata_growth_bytes": 512,
+    "packet_bytes": 5120,
+    "packet_vs_fp16_bytes_saved": 3072,
+    "quantized_bytes": 4096,
+    "scale_group": 16
+  },
+  "rows": {
+    "candidate": {
+      "arm": "candidate",
+      "blocks": 18,
+      "count": 3,
+      "depth": 512,
+      "finite": true,
+      "schema": "tinygrad.nv_flash_combine_q8_fine_o_qualification.v1",
+      "shape": [
+        3,
+        151936
+      ],
+      "start_block": 0,
+      "tokens": [
+        38835,
+        34208,
+        13
+      ]
+    },
+    "control": {
+      "arm": "control",
+      "blocks": 0,
+      "count": 3,
+      "depth": 512,
+      "finite": true,
+      "schema": "tinygrad.nv_flash_combine_q8_fine_o_qualification.v1",
+      "shape": [
+        3,
+        151936
+      ],
+      "start_block": 0,
+      "tokens": [
+        38835,
+        34208,
+        13
+      ]
+    }
+  },
+  "schema": "tinygrad.nv_flash_combine_q8_fine_o_qualification.v1",
+  "start_block": 0,
+  "verdict": "FAIL"
+}

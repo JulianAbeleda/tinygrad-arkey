@@ -1,0 +1,43 @@
+{
+  "schema": "nv.q6.region_b_prepared_imma.v1",
+  "passed": true,
+  "replicas": 4096,
+  "rounds": 15,
+  "exact_int32": true,
+  "timing_us": {
+    "min": 22.944,
+    "median": 23.136,
+    "samples": [
+      24.992,
+      23.104,
+      23.104,
+      23.136,
+      23.136,
+      23.264,
+      23.104,
+      22.976,
+      23.2,
+      22.944,
+      23.168,
+      22.976,
+      23.232,
+      23.104,
+      23.2
+    ]
+  },
+  "sass": {
+    "lds": 0,
+    "ldsm": 16,
+    "prmt": 0,
+    "imma": 16,
+    "bar": 16,
+    "ldl": 0,
+    "stl": 0
+  },
+  "resources": {
+    "registers": 95,
+    "shared_bytes": 6144,
+    "local_bytes": 576
+  },
+  "artifacts": "/tmp/nv-q6-region-b-art2"
+}

@@ -1,0 +1,30 @@
+score_bitwise=1
+combine_bitwise=1
+final_bitwise=1
+timeline flash1_start=5.280000 flash1_end=12.384000 o0_start=13.376000 o0_end=19.392000 overlap=0.000000
+timeline flash1_start=5.056000 flash1_end=12.320000 o0_start=13.504001 o0_end=19.520000 overlap=0.000000
+timeline flash1_start=5.344000 flash1_end=12.224000 o0_start=13.184000 o0_end=19.007999 overlap=0.000000
+timeline flash1_start=5.024000 flash1_end=14.016000 o0_start=12.256001 o0_end=20.096001 overlap=1.759999
+timeline flash1_start=5.152000 flash1_end=12.352000 o0_start=13.184000 o0_end=19.200001 overlap=0.000000
+timeline flash1_start=5.216000 flash1_end=13.952000 o0_start=12.768001 o0_end=20.096001 overlap=1.183999
+timeline flash1_start=5.632000 flash1_end=12.064000 o0_start=13.408000 o0_end=19.231998 overlap=0.000000
+timeline flash1_start=5.024000 flash1_end=12.000000 o0_start=13.056000 o0_end=19.168001 overlap=0.000000
+timeline flash1_start=5.024000 flash1_end=12.256001 o0_start=13.184000 o0_end=23.264000 overlap=0.000000
+rep=0 arm=0 hot=11.404000 cold=24.967999
+rep=0 arm=1 hot=26.348000 cold=32.936000
+rep=1 arm=1 hot=26.908000 cold=32.504000
+rep=1 arm=0 hot=12.262000 cold=24.200000
+rep=2 arm=0 hot=11.782000 cold=25.352000
+rep=2 arm=1 hot=26.160000 cold=30.776000
+rep=3 arm=1 hot=26.462000 cold=31.327999
+rep=3 arm=0 hot=11.772000 cold=24.920000
+rep=4 arm=0 hot=11.680000 cold=24.568001
+rep=4 arm=1 hot=26.614000 cold=32.127999
+rep=5 arm=1 hot=26.216000 cold=31.735999
+rep=5 arm=0 hot=12.546000 cold=24.688001
+rep=6 arm=0 hot=11.804000 cold=25.680000
+rep=6 arm=1 hot=26.448000 cold=30.792000
+rep=7 arm=1 hot=26.154000 cold=32.520000
+rep=7 arm=0 hot=11.794000 cold=25.408000
+rep=8 arm=0 hot=11.852000 cold=24.944000
+rep=8 arm=1 hot=26.254000 cold=32.159999

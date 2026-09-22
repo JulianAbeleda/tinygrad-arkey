@@ -1,0 +1,91 @@
+{
+  "buffer_bytes": [
+    25165824,
+    22282240,
+    1360,
+    28311552,
+    2621440,
+    4608,
+    592
+  ],
+  "finite": true,
+  "fixup": {
+    "block": [
+      128,
+      1,
+      1
+    ],
+    "cubin": "docs/task_workflow/evidence/nv-prefill-current252-gate-counters-20260906/fixup.cubin",
+    "cubin_sha256": "01a7543ef75fc9ec70dd145eed7304f796d93de3a4b7f386f0754404318d07a5",
+    "grid": [
+      148,
+      4,
+      1
+    ],
+    "symbol": "q4k_imma_fixup_active"
+  },
+  "main": {
+    "block": [
+      32,
+      2,
+      4
+    ],
+    "cubin": "docs/task_workflow/evidence/nv-prefill-current252-gate-counters-20260906/control.cubin",
+    "cubin_sha256": "c4e19e27dd31d7332ade651a343ede7d6bcea0c0bb36725e25a6196b087f71e7",
+    "grid": [
+      170,
+      1,
+      1
+    ],
+    "symbol": "q4_qo_streamk"
+  },
+  "median_us": 271.61601185798645,
+  "min_us": 267.13600754737854,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "nonzero": 6291456,
+  "output_sha256": "aea4eb4471b50b0699e7f2568e6a0f0701e3438dc31b19a82b196d259cdcaa55",
+  "partial_id_written": 340,
+  "passed": true,
+  "readonly": {
+    "record": true,
+    "words": true
+  },
+  "reps": 31,
+  "role": "blk.0.ffn_gate.weight",
+  "samples_us": [
+    290.8160090446472,
+    286.49601340293884,
+    269.8880136013031,
+    270.687997341156,
+    279.9679934978485,
+    270.7520127296448,
+    269.79199051856995,
+    269.3119943141937,
+    269.98400688171387,
+    279.7119915485382,
+    280.0639867782593,
+    269.3760097026825,
+    268.22400093078613,
+    269.3440020084381,
+    269.47200298309326,
+    275.61599016189575,
+    282.1759879589081,
+    270.1759934425354,
+    267.3279941082001,
+    267.13600754737854,
+    276.2880027294159,
+    275.35998821258545,
+    275.35998821258545,
+    277.3120105266571,
+    275.7759988307953,
+    271.7120051383972,
+    271.32800221443176,
+    273.18400144577026,
+    271.61601185798645,
+    271.93599939346313,
+    271.32800221443176
+  ],
+  "schema": "tinygrad.nv_prefill_gateup_streamk_ncu_bridge.v1",
+  "unwritten": 0,
+  "warmup": 10
+}

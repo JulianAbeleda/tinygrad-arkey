@@ -1,0 +1,42 @@
+{
+  "H1": {
+    "edge_count": 10404,
+    "edge_wait_us": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "p95": 0.0
+    },
+    "verdict": "H1_CLOSED_ZERO_MEASURABLE_EDGE_WAIT"
+  },
+  "H2": {
+    "candidate_q6_us_per_token": 491.232,
+    "control_q6_us_per_token": 533.792,
+    "q6_row_recovery_us": 42.56,
+    "verdict": "PROMOTE_Q6_PACKED_LANEMAP_U4"
+  },
+  "commit": "1d1690f15309df73ce4e966319f0bae8a4562b0d",
+  "device": {
+    "candidate_node_sum_us": 4113.728,
+    "candidate_union_us": 4110.0,
+    "control_node_sum_us": 4150.624,
+    "control_union_us": 4147.75,
+    "node_sum_recovery_us": 36.89599999999973,
+    "union_recovery_us": 37.75
+  },
+  "next": "attention lifecycle; FFN composition H1 is closed and the admitted H2 construction is booked",
+  "schema": "tinygrad.nv_dense_ffn_composition_final_ledger.v1",
+  "verdict": "PROMOTE_FFN_COLD_RATE_CONSTRUCTION",
+  "wall": {
+    "candidate_us": 4253.3603125,
+    "conservative_booked_recovery_us": 34.55371874999946,
+    "control_a_us": 4287.914031249999,
+    "control_c_us": 4296.13140625,
+    "installed_tok_s": 235.25851576828654,
+    "installed_us": 4250.64315625,
+    "midpoint_recovery_us": 38.66240624999939,
+    "remaining_to_240_us": 83.9764895833332,
+    "remaining_to_llama_us": 202.31855625000026
+  }
+}

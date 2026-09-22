@@ -1,0 +1,21 @@
+{
+  "schema": "tinygrad.nv_flash_debt_exhaustive_matrix.v1",
+  "date": "2026-08-30",
+  "workload": {"model": "Qwen3-8B", "calls": 36, "B": 1, "Hq": 32, "Hkv": 8, "T": 512, "Hd": 128, "causal": true, "dtype": "FP16"},
+  "baseline": {"tinygrad_ms_per_token": 3.374432, "llama_ms_per_token": 1.657447, "debt_ms": 1.716985},
+  "protocol": {"gpu_serialization": "prior evidence captured under serialized/reverse R9 protocols; no new concurrent run", "correctness": "full output/token hash where stated; finite/unwritten/population fields retained from source evidence", "promotion_gate": "exact + >=0.5 ms/token whole-model recovery + full-model A/B"},
+  "variants": [
+    {"name":"installed_q16_loop", "result":"baseline", "exact":true, "whole_model_ms_per_token":3.374432, "recovery_ms":0.0, "source":"docs/task_workflow/evidence/nv-flash-ceiling-exhaustion-20260827/horizon-selector-canonical-d512-r9.json"},
+    {"name":"F1.2", "result":"stop_missing_adapter", "exact_population_calls":36, "exact":null, "source":"docs/task_workflow/evidence/nv-prefill-f1.2-20260829-r1/verdict.json"},
+    {"name":"F1.4", "result":"stop_slow", "exact":true, "full_output":true, "finite":true, "candidate_service_us_per_call":"6703-6720", "installed_service_us_per_call":"99-107", "source":"docs/task_workflow/evidence/nv-prefill-f1.4-20260829-r1/verdict.json"},
+    {"name":"S6_wide_vector", "result":"exact_but_no_go_for_debt_gate", "exact":true, "whole_model_us_per_token":4207.258833, "control_midpoint_us_per_token":4248.253458, "recovery_us":40.994625, "source":"docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-wall-r2.json"},
+    {"name":"S8_wide_vector_installed", "result":"exact_but_no_go_for_debt_gate", "exact":true, "whole_model_us_per_token":4077.968125, "control_midpoint_us_per_token":4159.436031, "recovery_us":81.467906, "source":"docs/task_workflow/evidence/nv-flash-causal-reopen/s8-wide-wall-installed-r1.json"},
+    {"name":"V_tail_schedule", "result":"exact_wall_pass_below_gate", "exact":true, "whole_model_us_per_token":4064.018958, "control_us_per_token":4069.897021, "recovery_us":5.878063, "source":"docs/task_workflow/evidence/nv-flash-score-parity-reconcile-20260827/vtail1-wall-canonical-r9.json"},
+    {"name":"wide_Q_conditioning", "result":"exact_but_regresses", "exact":true, "candidate_ms_per_token":4.151268, "control_ms_per_token":4.078217, "recovery_us":-73.051, "source":"docs/task_workflow/evidence/nv-flash-ceiling-exhaustion-20260827/wide-q-matched-aca-r9.json"},
+    {"name":"register_combine_installed", "result":"exact_below_gate", "exact":true, "candidate_ms_per_token":4.066072, "control_ms_per_token":4.083137, "recovery_us":17.065, "source":"docs/task_workflow/evidence/nv-flash-ceiling-exhaustion-20260827/combine-register-installed-aca-r9.json"},
+    {"name":"active_horizon_selector", "result":"exact_below_gate", "exact":true, "candidate_ms_per_token":4.055847, "control_ms_per_token":4.087297, "recovery_us":31.450, "source":"docs/task_workflow/evidence/nv-flash-ceiling-exhaustion-20260827/horizon-selector-canonical-d512-r9.json"},
+    {"name":"fast_math_S6", "result":"exact_below_gate", "exact":true, "candidate_ms_per_token":4.075924, "control_ms_per_token":4.097240, "recovery_us":21.315, "source":"docs/task_workflow/evidence/nv-flash-fast-math/wall-r9.json"}
+  ],
+  "decision": "NO_ARM_ELIGIBLE",
+  "decision_basis": "No exact candidate recovers >=0.5 ms/token whole-model. No production integration or default change is authorized."
+}

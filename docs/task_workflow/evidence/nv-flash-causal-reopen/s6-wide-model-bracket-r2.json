@@ -1,0 +1,257 @@
+{
+  "all_token_hashes_equal": true,
+  "arms": [
+    {
+      "arm": "control_a",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2947",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "259.60",
+        "temperature.gpu": "50"
+      },
+      "ledger": {
+        "node_sum_us": 4012.928,
+        "overlap_us": 5.241,
+        "span_us": 4404.375,
+        "union_us": 4007.75
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket-r2/control_a.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.10836025,
+          5.0836265,
+          5.086455875,
+          5.08646871875,
+          5.18988678125,
+          5.16434334375,
+          5.119371875
+        ],
+        "external_contention_high_limit_ms": 5.35836025,
+        "median_ms_per_token": 5.10836025,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.10836025,
+          5.0836265,
+          5.086455875,
+          5.08646871875,
+          5.18988678125,
+          5.16434334375,
+          5.119371875
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    },
+    {
+      "arm": "candidate",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2910",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "370.87",
+        "temperature.gpu": "52"
+      },
+      "ledger": {
+        "node_sum_us": 3953.28,
+        "overlap_us": 4.941,
+        "span_us": 4577.75,
+        "union_us": 3947.75
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket-r2/candidate.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.285897625,
+          5.341143125,
+          5.26822784375,
+          5.27232084375,
+          5.3339693125,
+          5.39707896875,
+          5.22940821875
+        ],
+        "external_contention_high_limit_ms": 5.574327750000001,
+        "median_ms_per_token": 5.285897625,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.285897625,
+          5.341143125,
+          5.26822784375,
+          5.27232084375,
+          5.3339693125,
+          5.39707896875,
+          5.22940821875
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    },
+    {
+      "arm": "control_c",
+      "complete_replay_count": 229,
+      "count": 32,
+      "depth": 512,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2947",
+        "name": "NVIDIA GeForce RTX 5090",
+        "persistence_mode": "Disabled",
+        "power.draw": "227.66",
+        "temperature.gpu": "50"
+      },
+      "ledger": {
+        "node_sum_us": 4016.192,
+        "overlap_us": 6.813,
+        "span_us": 4726.125,
+        "union_us": 4010.0
+      },
+      "max_context": 768,
+      "profile_jsonl": "docs/task_workflow/evidence/nv-flash-causal-reopen/s6-wide-model-bracket-r2/control_c.profile.jsonl",
+      "reps": 7,
+      "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+      "settled": {
+        "accepted_samples_ms_per_token": [
+          5.4007086875,
+          5.511241875,
+          5.51453278125,
+          5.49991309375,
+          5.60430478125,
+          5.4416240625,
+          5.46265925
+        ],
+        "external_contention_high_limit_ms": 5.74991309375,
+        "median_ms_per_token": 5.49991309375,
+        "prelude_token": 13876,
+        "rejected_high_samples_ms_per_token": [],
+        "samples_ms_per_token": [
+          5.4007086875,
+          5.511241875,
+          5.51453278125,
+          5.49991309375,
+          5.60430478125,
+          5.4416240625,
+          5.46265925
+        ],
+        "timed_token_count": 224,
+        "token_hashes": [
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46",
+          "d0ad1dca52843f2bb334de0715adda930c002a798cc894ec14eb1a652ee1a2e4",
+          "8e6222ba1e1b0d29f5917fa27539791c88e9d029a46f08d6c0a40bda55971f9b",
+          "5ede6924aaaa9acc69f9cb48a3f3cdeb7a0386be7689be2b69f0ff368110af46"
+        ],
+        "token_stream_hash": "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a",
+        "warmup_tokens": [
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876
+        ]
+      },
+      "steady_replay_count": 226
+    }
+  ],
+  "candidate_flash_rows": {
+    "flash_fused_gmax_combine_f16_32_128_s6_lw128": {
+      "mean_us": 48.581,
+      "median_us": 48.544,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    },
+    "flash_vec_llama_score_pv_32_128_6_widekv16": {
+      "mean_us": 215.055,
+      "median_us": 215.072,
+      "per_replay_count": 36.0,
+      "replay_samples": 226
+    }
+  },
+  "count": 32,
+  "depth": 512,
+  "ledger_candidate": {
+    "node_sum_us": 3953.28,
+    "overlap_us": 4.941,
+    "span_us": 4577.75,
+    "union_us": 3947.75
+  },
+  "ledger_control": {
+    "node_sum_us": 4014.56,
+    "overlap_us": 6.026999999999999,
+    "span_us": 4565.25,
+    "union_us": 4008.875
+  },
+  "ledger_delta": {
+    "node_sum_us": -61.279999999999745,
+    "overlap_us": -1.0859999999999994,
+    "span_us": 12.5,
+    "union_us": -61.125
+  },
+  "max_context": 768,
+  "mode": "reverse-bracket-profile",
+  "reps": 7,
+  "schema": "tinygrad.nv_flash_llama_vec_wide_qualification.v1",
+  "token_stream_hashes": [
+    "975fd9af23443fd04f2ce79230399334ccdd3fa6cb77e3903cd25dca58a4348a"
+  ],
+  "walls_us_per_token": {
+    "candidate": 5285.897625,
+    "candidate_delta": -18.239046874999985,
+    "control_a": 5108.36025,
+    "control_c": 5499.91309375,
+    "control_midpoint": 5304.136671875
+  }
+}

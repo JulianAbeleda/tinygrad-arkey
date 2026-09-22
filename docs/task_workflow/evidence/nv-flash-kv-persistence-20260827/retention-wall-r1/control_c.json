@@ -1,0 +1,36 @@
+{
+  "arm": "control_c",
+  "schema": "tinygrad.nv_flash_kv_retention_wall.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      4.0911158125,
+      4.0715389375,
+      4.0727424375,
+      4.075910875,
+      4.0634536875,
+      4.0687686875,
+      4.0751645
+    ],
+    "median_ms_per_token": 4.0727424375,
+    "prelude_token": 13876,
+    "prime": null,
+    "samples_ms_per_token": [
+      4.0911158125,
+      4.0715389375,
+      4.0727424375,
+      4.075910875,
+      4.0634536875,
+      4.0687686875,
+      4.0751645
+    ],
+    "token_stream_hash": "9abe039627443641c7caaaa50137137765f7bf2640439c614c3364d3d1fa103e",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  }
+}

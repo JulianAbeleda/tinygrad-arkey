@@ -1,0 +1,47 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.host_gap.v1",
+  "phase": 4,
+  "status": "RECONCILED_AT_WALL_MINUS_UNION_LEVEL",
+  "identity": "wall = resident_union + host_gap",
+  "matched_route_signature": "flash decode route, d512, DEV=NV for tinygrad and CUDA PDL-on oracle",
+  "fresh_wall_us": {
+    "tinygrad": 4747.530,
+    "llama": 4034.0045,
+    "delta": 713.5255
+  },
+  "resident_union_us": {
+    "tinygrad": 4671.500,
+    "llama": 3885.9585,
+    "delta": 785.5415,
+    "source": "nv-third-party-theory-audit-20260822 fresh PDL-on A/B median union and fresh tinygrad union reference"
+  },
+  "host_gap_us": {
+    "tinygrad": 76.030,
+    "llama": 148.046,
+    "delta": -72.016,
+    "label": "INFERRED",
+    "note": "wall minus resident union; the two wall arms and the two union arms were not captured in one profiler/wall-paired run, so this is the matched-route inferred host term, not a direct CPU/API trace"
+  },
+  "reconciliation_us": {
+    "device_union_delta": 785.5415,
+    "host_gap_delta": -72.016,
+    "sum": 713.5255,
+    "wall_delta": 713.5255,
+    "residual": 0.0
+  },
+  "causal_decomposition": {
+    "python_generator_pre_submission": {"status": "UNMEASURED", "reason": "no CPU/API timeline retained for this session"},
+    "jit_dispatch_and_variable_binding": {"status": "UNMEASURED", "reason": "decode_runtime_overhead D arm was slower than W, so W-D subtraction is refused"},
+    "graph_group_selection_and_replay_submission": {"status": "UNMEASURED", "reason": "group boundaries known from full_token_dag_capture, but not timestamped against wall"},
+    "cross_group_synchronization": {"status": "UNMEASURED", "reason": "same as above"},
+    "driver_enqueue_latency": {"status": "UNMEASURED", "reason": "no driver-side trace"},
+    "final_sync_and_token_materialization": {"status": "UNMEASURED", "reason": "no CPU/API trace"},
+    "idle_gaps_between_graph_groups": {"status": "UNMEASURED", "reason": "HCQ_GRAPH_PROFILE_JSON last window had inter-group timestamp gaps"},
+    "profiler_or_logging_effect": {"status": "UNMEASURED", "reason": "wall runs were unprofiled"}
+  },
+  "host_gate": {
+    "fresh_minimum_host_recovery_if_device_reaches_oracle_union_us": 0.0,
+    "explanation": "fresh tinygrad host gap is already 72.0us smaller than llama; there is no host amount left to recover for parity, the entire fresh gap is device union plus launch/timeline serialization"
+  },
+  "conclusion": "the old locked +100.648us tinygrad host-gap excess does not reproduce on the fresh session; it is now a -69.7us tinygrad advantage, and the host package cannot be the source of the remaining gap"
+}

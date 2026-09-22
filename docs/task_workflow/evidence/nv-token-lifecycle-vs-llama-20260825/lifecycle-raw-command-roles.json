@@ -1,0 +1,146 @@
+{
+  "closure": {
+    "llama_node_sum_us": 5013.179,
+    "node_sum_delta_us": -900.315,
+    "tinygrad_node_sum_us": 4112.864
+  },
+  "fused_body_caveat": "reduce_output_rmsnorm_rope_{32,8}_128 fold RMSNorm AND RoPE into one kernel; llama reports q_norm/k_norm and q_rope/k_rope separately, so the q_norm/k_norm deltas are not like-for-like.",
+  "llama_source": "docs/task_workflow/evidence/nv-token-lifecycle-vs-llama-20260825/llama-dag.json",
+  "representative_replay": {
+    "node_count": 452,
+    "node_sum_us": 4112.864,
+    "overlap_us": 5.114,
+    "span_us": 4877.75,
+    "union_us": 4107.75
+  },
+  "rows": [
+    {
+      "delta_us": 94.717,
+      "label": "attn/ffn/final 4096 norm",
+      "llama_count": 73,
+      "llama_us": 213.795,
+      "role": "norm_4096",
+      "tinygrad_count": 94,
+      "tinygrad_us": 308.512
+    },
+    {
+      "delta_us": 61.915,
+      "label": "flash score",
+      "llama_count": 36,
+      "llama_us": 173.765,
+      "role": "flash_score",
+      "tinygrad_count": 36,
+      "tinygrad_us": 235.68
+    },
+    {
+      "delta_us": 22.047,
+      "label": "Q head norm",
+      "llama_count": 36,
+      "llama_us": 47.201,
+      "role": "q_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 69.248
+    },
+    {
+      "delta_us": 21.248,
+      "label": "K head norm",
+      "llama_count": 36,
+      "llama_us": 46.176,
+      "role": "k_norm",
+      "tinygrad_count": 36,
+      "tinygrad_us": 67.424
+    },
+    {
+      "delta_us": 17.689,
+      "label": "vocab main + tail",
+      "llama_count": 2,
+      "llama_us": 306.855,
+      "role": "vocab",
+      "tinygrad_count": 3,
+      "tinygrad_us": 324.544
+    },
+    {
+      "delta_us": 2.496,
+      "label": "misc / embedding",
+      "llama_count": 3,
+      "llama_us": 4.768,
+      "role": "other",
+      "tinygrad_count": 3,
+      "tinygrad_us": 7.264
+    },
+    {
+      "delta_us": -18.383,
+      "label": "down GEMV",
+      "llama_count": 36,
+      "llama_us": 871.631,
+      "role": "down",
+      "tinygrad_count": 36,
+      "tinygrad_us": 853.248
+    },
+    {
+      "delta_us": -43.523,
+      "label": "Q projection + completion",
+      "llama_count": 36,
+      "llama_us": 342.115,
+      "role": "q_proj",
+      "tinygrad_count": 36,
+      "tinygrad_us": 298.592
+    },
+    {
+      "delta_us": -51.328,
+      "label": "K/V projections + completion",
+      "llama_count": 72,
+      "llama_us": 287.68,
+      "role": "kv_proj",
+      "tinygrad_count": 46,
+      "tinygrad_us": 236.352
+    },
+    {
+      "delta_us": -88.765,
+      "label": "gate/up GEMV",
+      "llama_count": 36,
+      "llama_us": 1362.685,
+      "role": "gate_up",
+      "tinygrad_count": 36,
+      "tinygrad_us": 1273.92
+    },
+    {
+      "delta_us": -88.933,
+      "label": "flash combine",
+      "llama_count": 36,
+      "llama_us": 188.869,
+      "role": "flash_combine",
+      "tinygrad_count": 36,
+      "tinygrad_us": 99.936
+    },
+    {
+      "delta_us": -112.774,
+      "label": "O projection",
+      "llama_count": 36,
+      "llama_us": 418.214,
+      "role": "o_proj",
+      "tinygrad_count": 36,
+      "tinygrad_us": 305.44
+    },
+    {
+      "delta_us": -200.739,
+      "label": "rope + K/V store",
+      "llama_count": 108,
+      "llama_us": 203.363,
+      "role": "rope_store",
+      "tinygrad_count": 1,
+      "tinygrad_us": 2.624
+    },
+    {
+      "delta_us": -515.982,
+      "label": "activation quant",
+      "llama_count": 216,
+      "llama_us": 546.062,
+      "role": "quant",
+      "tinygrad_count": 17,
+      "tinygrad_us": 30.08
+    }
+  ],
+  "schema": "tinygrad.nv_phase0_llama_reconcile.v1",
+  "source_profile_jsonl": "docs/task_workflow/evidence/nv-post-horizon-d512-ledger-20260825/profile-ledger/production.profile.jsonl"
+}

@@ -1,0 +1,16 @@
+{
+  "aggregate_relative_l2": 0.0022318192445055186,
+  "candidate_argmax": [4710, 279, 4710, 1837],
+  "contract_relative_l2_max": 0.001,
+  "control_argmax": [4710, 279, 4710, 1837],
+  "finite": true,
+  "max_abs": 0.07688522338867188,
+  "per_step_relative_l2": [
+    0.0006956111948618935,
+    0.0019647704565354043,
+    0.002884215533967745,
+    0.003454183126455625
+  ],
+  "schema": "tinygrad.nv_q5k_full_logits_comparison.v1",
+  "verdict": "QUALITY_NO_GO"
+}

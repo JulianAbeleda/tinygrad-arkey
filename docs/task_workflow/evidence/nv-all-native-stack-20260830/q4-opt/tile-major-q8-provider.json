@@ -1,0 +1,35 @@
+{
+  "spec": {
+    "M": 512,
+    "K": 4096,
+    "blocks": 65536,
+    "block_bytes": 36,
+    "payload_bytes": 2359296,
+    "tail_bytes": 18432,
+    "record_bytes": 2377728
+  },
+  "fields": {
+    "d": [
+      0,
+      2,
+      "float16"
+    ],
+    "s": [
+      2,
+      4,
+      "float16"
+    ],
+    "qs": [
+      4,
+      36,
+      "int8"
+    ]
+  },
+  "zero_copy": true,
+  "tail": "opaque llama allocation tail; excluded from logical views",
+  "status": "PASS",
+  "provider": {
+    "abi_identity": "q8_1.logical_mk_to_s8.v1",
+    "fixtures": "boundary/random logical address checks passed"
+  }
+}

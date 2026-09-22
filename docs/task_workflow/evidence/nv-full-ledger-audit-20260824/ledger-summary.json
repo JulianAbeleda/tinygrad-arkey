@@ -1,0 +1,43 @@
+{
+  "schema": "tinygrad.nv_full_ledger_audit.v1",
+  "date": "2026-08-24",
+  "tinygrad_commit": "dc03370a7",
+  "fresh_same_session_wall": {
+    "tinygrad_us_per_token": 4503.39140625,
+    "tinygrad_tok_per_s": 222.055,
+    "llama_us_per_token": 4048.3246,
+    "llama_tok_per_s": 247.060607,
+    "tinygrad_minus_llama_us": 455.06680625
+  },
+  "device_ledgers": {
+    "tinygrad": {
+      "nodes": 462,
+      "node_sum_us": 4272.176,
+      "union_us": 4260.75,
+      "overlap_us": 11.426
+    },
+    "llama_retained_same_binary": {
+      "nodes": 762,
+      "node_sum_us": 5011.035,
+      "union_us": 3888.24,
+      "overlap_us": 1122.329
+    }
+  },
+  "wall_reconciliation": {
+    "tinygrad_host_gap_us": 242.64140625,
+    "llama_host_gap_us": 160.0846,
+    "device_union_delta_us": 372.51,
+    "host_gap_delta_us": 82.55680625,
+    "reconciled_wall_delta_us": 455.06680625,
+    "residual_us": 0.0
+  },
+  "targets": {
+    "to_227_us_from_fresh_wall": 98.105062638,
+    "to_227_tok_per_s": 4.945,
+    "to_240_us_from_fresh_wall": 336.724739583,
+    "to_240_tok_per_s": 17.945,
+    "to_fresh_llama_us": 455.06680625,
+    "to_fresh_llama_tok_per_s": 25.005607
+  },
+  "verdict": "227_CLOSE_BUT_UNBOOKED_LLAMA_PARITY_REQUIRES_NEW_UNION_AND_HOST_LEVERS"
+}

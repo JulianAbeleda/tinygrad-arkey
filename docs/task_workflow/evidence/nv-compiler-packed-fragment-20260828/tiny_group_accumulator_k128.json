@@ -1,0 +1,24 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_group_accumulator_gate.v1",
+  "shape": {
+    "M": 32,
+    "N": 16,
+    "K": 256
+  },
+  "identity": "f170190ed66ad4affb5a3225446aed82b20030823b0966695047717c5daab058",
+  "ordinary_matmul": true,
+  "expanded_global_weight_allocation": false,
+  "correctness": {
+    "finite": true,
+    "max_abs": 0.0,
+    "max_rel": 0.0,
+    "nonzero": 512,
+    "sentinel_distinct": true
+  },
+  "source": {
+    "programs": 1,
+    "signed_imma": true,
+    "candidate_identity_exact": true
+  },
+  "passed": true
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "tinygrad.nv_q4down_c0_aggregate.v1",
+  "packet": "C0.2",
+  "status": "PASS",
+  "deterministic": true,
+  "source_localization": "docs/task_workflow/evidence/nv-prefill-q4down-localize-20260829/result.json",
+  "source_staged_oracle": "docs/task_workflow/evidence/nv-prefill-q4down-staged-oracle-20260829/result.json",
+  "authority": {
+    "source_result": "docs/task_workflow/evidence/nv-prefill-post-substrate-authority-20260829-r4/result.json",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "tokens": 512,
+    "fixture_sha256": "c1a31d73c201d2682bce8b0798054c9bf2a3bfcabd4efc1f71fd6f48772c61d1"
+  },
+  "comparison": {
+    "roles": 18,
+    "ordinals": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    "chunking": "existing completed <=3-role diagnostic mirror chunks",
+    "allclose": true,
+    "rtol": 0.02,
+    "atol": 3.0,
+    "max_observed_error": 2.7985,
+    "rerun": false
+  },
+  "stage_localization": {
+    "status": "STOP",
+    "producer": "UNOBSERVABLE",
+    "weight": "UNOBSERVABLE",
+    "dot": "UNOBSERVABLE",
+    "correction": "UNOBSERVABLE",
+    "epilogue": "UNOBSERVABLE",
+    "unique_actionable_boundary": false,
+    "c0_3_authorized": false,
+    "reason": "Production main retains only final output; no diagnostic intermediate ABI is available."
+  },
+  "decision": "PASS aggregate artifact; STOP C0.3 and do not modify the primitive"
+}

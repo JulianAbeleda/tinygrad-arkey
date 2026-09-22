@@ -1,0 +1,14 @@
+{
+  "schema": "tinygrad.nv_decode_q4_attention_q_llama_family_graph_ab.v1",
+  "date": "2026-08-04",
+  "route": "DEV=CUDA",
+  "depth": 512,
+  "population": {"q_o_calls": 72, "attention_q_replaced": 36},
+  "correctness": {"token_count": 32, "tokens_identical": true},
+  "median_ms_per_token": {"control_a": 5.596255, "ab": 5.638823, "control_b": 5.602644, "control_midpoint": 5.5994495},
+  "delta": {"ms_per_token": 0.0393735, "percent": 0.7031673381, "direction": "slower"},
+  "verdict": "NO_GO_ZERO_LEDGER_CREDIT",
+  "timing_basis_reconciliation": {"unprofiled_batched_event_us": 6.2976003, "profiled_batched_event_us": 8.5312001, "profiled_single_replay_event_us": 11.6480002, "cause": "profiler perturbation invalidates direct trace-node comparison"},
+  "raw_sha256": {"control_a": "92abbe1abdb68771fce9e808365e667bfd4bdc900861770f6d4da41de0a282b2", "ab": "381e70d3b134fb5829f283dbf807f99c809a9d80e77b1401f5a8def0078efa64", "control_b": "7f015d130a861cd10d97eed8c25e9bbd21d50b1a5f766c2afa9003cce49dfbd1"},
+  "non_claims": ["no native-NV residual debit", "no production/default change", "attention-O not tested"]
+}

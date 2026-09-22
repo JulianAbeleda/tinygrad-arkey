@@ -1,0 +1,1249 @@
+{
+  "channels": [
+    {
+      "cid": 81657,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 65536,
+      "gp_fifo_offset": 68719476736,
+      "h_object": 3404726283,
+      "h_object_buffer": 3404726280,
+      "h_parent": 3404726277,
+      "h_root": 3251881074,
+      "h_userd_memory": [
+        3404726280,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        524288,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81658,
+      "class": "0xc96f",
+      "flags": 16,
+      "gp_fifo_entries": 65536,
+      "gp_fifo_offset": 68720525312,
+      "h_object": 3404726287,
+      "h_object_buffer": 3404726280,
+      "h_parent": 3404726277,
+      "h_root": 3251881074,
+      "h_userd_memory": [
+        3404726280,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        1572864,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cid": 81659,
+      "class": "0xc96f",
+      "flags": 0,
+      "gp_fifo_entries": 65536,
+      "gp_fifo_offset": 68721573888,
+      "h_object": 3404726290,
+      "h_object_buffer": 3404726280,
+      "h_parent": 3404726277,
+      "h_root": 3251881074,
+      "h_userd_memory": [
+        3404726280,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "userd_offset": [
+        2621440,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "class_counts": {
+    "0x003e": 3,
+    "0x0040": 67,
+    "0x0041": 1,
+    "0x0070": 1,
+    "0x0080": 1,
+    "0x2080": 1,
+    "0x83de": 1,
+    "0x9067": 1,
+    "0x90f1": 1,
+    "0xa06c": 1,
+    "0xc661": 1,
+    "0xc96f": 3,
+    "0xcab5": 1,
+    "0xcec0": 2
+  },
+  "ioctl_counts": {
+    "0x01": 1,
+    "0x13": 10,
+    "0x19": 1,
+    "0x1b": 3,
+    "0x21": 103,
+    "0x22": 17,
+    "0x25": 1,
+    "0x27": 33,
+    "0x29": 17,
+    "0x2a": 11,
+    "0x2b": 85,
+    "0x49": 103,
+    "0x4b": 1,
+    "0x4e": 9,
+    "0x51": 1,
+    "0x57": 103,
+    "0xc8": 1,
+    "0xc9": 10
+  },
+  "line_count": 510,
+  "map_memory": [
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726275,
+      "length": 65536,
+      "linear": 4173004800,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726280,
+      "length": 3145728,
+      "linear": 68723671040,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726292,
+      "length": 2097152,
+      "linear": 68727865344,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726293,
+      "length": 16777216,
+      "linear": 68729962496,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726353,
+      "length": 4096,
+      "linear": 68723146752,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726354,
+      "length": 4096,
+      "linear": 68723146752,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726355,
+      "length": 4096,
+      "linear": 68723146752,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726356,
+      "length": 4096,
+      "linear": 68723146752,
+      "offset": 0
+    },
+    {
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_memory": 3404726357,
+      "length": 4096,
+      "linear": 68723146752,
+      "offset": 0
+    }
+  ],
+  "map_memory_dma": [
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726280,
+      "length": 3145728,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726282,
+      "length": 50331648,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726286,
+      "length": 50331648,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726289,
+      "length": 50331648,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726292,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4097,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4098,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4099,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4100,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4101,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4102,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4103,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4104,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4105,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4106,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4107,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4108,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4109,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4110,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4111,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4112,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4113,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4114,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4115,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4116,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4117,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4118,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4119,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4120,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4121,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4122,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4123,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4124,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4125,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4126,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4127,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4128,
+      "length": 2097152,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 4129,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726293,
+      "length": 16777216,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726294,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726295,
+      "length": 169869312,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726296,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726297,
+      "length": 10485760,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726298,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726299,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726300,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726301,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726302,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726303,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726304,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726305,
+      "length": 3440640,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726306,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726307,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726308,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726309,
+      "length": 10485760,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726310,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726311,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726312,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726313,
+      "length": 24576,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726314,
+      "length": 29360128,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726315,
+      "length": 29360128,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726316,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726317,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726318,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726319,
+      "length": 41943040,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726320,
+      "length": 24576,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726321,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726322,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726323,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726324,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726325,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726326,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726327,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726328,
+      "length": 10485760,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726329,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726330,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726331,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726332,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726333,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726334,
+      "length": 3440640,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726335,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726336,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726337,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726338,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726339,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726340,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726341,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726342,
+      "length": 12288,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726343,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726344,
+      "length": 29360128,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726345,
+      "length": 24576,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726346,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726347,
+      "length": 16384,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726348,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726349,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726350,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726351,
+      "length": 2359296,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726352,
+      "length": 8192,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726353,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726354,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726355,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726356,
+      "length": 4096,
+      "offset": 0
+    },
+    {
+      "dma_offset": 0,
+      "flags": 33040,
+      "h_client": 3251881074,
+      "h_device": 3404726272,
+      "h_dma": 3404726274,
+      "h_memory": 3404726357,
+      "length": 4096,
+      "offset": 0
+    }
+  ],
+  "trace": "/tmp/nv-native-20260827.trace",
+  "usermodes": [
+    {
+      "class": "0xc661",
+      "h_object": 3404726275,
+      "h_parent": 3404726273,
+      "h_root": 3251881074
+    }
+  ]
+}

@@ -37,6 +37,7 @@ longer raises TypeError on either backend. This FAILS (TypeError) on the pre-fix
 """
 from __future__ import annotations
 from dataclasses import replace
+import sys
 
 import pytest
 
@@ -194,6 +195,8 @@ def _to_program_no_native_compile(ast:UOp, renderer, device:str):
 def test_owner_path_unmodified_dense_gemm_still_gets_wmma(device):
   """The all-RANGE (unsplit) path is the existing owner and must be untouched: a plain fp16 GEMM (no
   split ranges involved) must still lower to a real WMMA, exactly as before this fix."""
+  if device == "METAL" and sys.platform != "darwin":
+    pytest.skip("Metal objc bridge requires macOS libSystem.dylib")
   target_str, renderer_cls = TARGETS[device]
   ast = _force_generic_tc(_dense_gemm_ast(device, 512, 512, 512))
   prog = _to_program_no_native_compile(ast, renderer_cls(Target.parse(target_str)), device)
@@ -206,6 +209,8 @@ def test_q4k_dequant_generic_tc_no_longer_raises_typeerror(device):
   """The regression: this construction crashed with TypeError('NoneType' object is not subscriptable)
   on both backends before the fix. It must not crash anymore -- it may either apply the TC opt (and
   emit a WMMA) or decline cleanly with KernelOptError, but never TypeError."""
+  if device == "METAL" and sys.platform != "darwin":
+    pytest.skip("Metal objc bridge requires macOS libSystem.dylib")
   target_str, renderer_cls = TARGETS[device]
   ast = _force_generic_tc(_packed_dequant_ast(device, 512, 12288, 4096))
   renderer = renderer_cls(Target.parse(target_str))

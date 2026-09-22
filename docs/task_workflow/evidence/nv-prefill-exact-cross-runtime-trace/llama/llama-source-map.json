@@ -1,0 +1,41 @@
+{
+  "schema": "tinygrad.llama_prefill_source_map.v1",
+  "source_commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+  "logical_graph": [
+    {
+      "file": "src/models/qwen3.cpp",
+      "lines": "67-153",
+      "meaning": "36-layer order: attention norm, Q/K/V, head norms and RoPE, attention/O, residual, FFN norm, gate/up/down, residual; layer 35 gathers output rows before FFN; final norm and vocabulary follow."
+    },
+    {
+      "file": "src/llama-graph.cpp",
+      "lines": "1251-1407",
+      "meaning": "parallel gate/up construction, gated activation, and down projection order"
+    }
+  ],
+  "cuda_lowering": [
+    {
+      "file": "ggml/src/ggml-cuda/quantize.cu",
+      "lines": "277-421",
+      "meaning": "quantize_mmq_q8_1 producer templates and layouts"
+    },
+    {
+      "file": "ggml/src/ggml-cuda/mmq.cuh",
+      "lines": "3787-4051",
+      "meaning": "mul_mat_q stream-K main and fixup launch pair"
+    },
+    {
+      "file": "ggml/src/ggml-cuda/fattn-common.cuh",
+      "lines": "804-1261",
+      "meaning": "Flash main and stream-K reduction/fixup pair"
+    }
+  ],
+  "benchmark_boundary": [
+    {
+      "file": "tools/llama-bench/llama-bench.cpp",
+      "lines": "2087-2113",
+      "meaning": "test_prompt brackets llama_decode plus llama_synchronize. It does not read logits or run sampling/argmax after the synchronized prefill."
+    }
+  ],
+  "role_assignment": "The parser expands the source-defined Qwen3 order, then requires exact kernel template, grid, block, graph-node sequence, and 36-layer census. Shared mul_mat_q names are not assigned by substring. Any mismatch aborts."
+}

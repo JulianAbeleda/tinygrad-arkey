@@ -1,0 +1,14 @@
+{
+  "schema": "tinygrad.nv_qkv_role_ledger.v1",
+  "generated_mean_ms": 47.8180565,
+  "q_native_advantage_ms": 0.6340615,
+  "k_native_advantage_ms": -0.0846445,
+  "q4_v_native_advantage_ms": 0.43048749999999814,
+  "q6_v_native_advantage_ms": 0.39594349999999423,
+  "isolated_sum_ms": 1.3758479999999924,
+  "combined_qkv_advantage_ms": 3.1334655,
+  "combined_interaction_residual_ms": 1.7576175000000074,
+  "generated_qkv_producers": 108,
+  "combined_native_qkv_producers": 54,
+  "producer_calls_removed": 54
+}

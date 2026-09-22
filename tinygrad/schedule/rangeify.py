@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
-from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec, composite_reduce_provenance
+from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ProgramInfo, ScheduleHints, NativeAttentionRequest
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, memory_semantic_owner, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, ReduceOutputSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -15,6 +15,141 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 # creation can recurse a lot
 import sys
 sys.setrecursionlimit(10000)
+
+def _has_after_for_buf(x:UOp, buf:UOp) -> bool:
+  """Whether an AFTER with buf_uop `buf` appears in x's backward slice, without caching.
+
+  backward_slice is a cached_property holding a full toposort dict on the node; the WAR
+  check runs per AFTER on composite kernel graphs whose embedded precompile bodies grow
+  per composite, and the retained dicts would be O(body) per node at flash-decode scale.
+  """
+  stack, seen = [x], set()
+  while stack:
+    n = stack.pop()
+    if n.op is Ops.AFTER and n.buf_uop is buf: return True
+    if n in seen: continue
+    seen.add(n)
+    stack.extend(n.src)
+  return False
+
+def _depends_on(x:UOp, dependency:UOp) -> bool:
+  """Identity reachability used by repeated-write epoch validation.
+
+  This intentionally does not use ``backward_slice``: like ``_has_after_for_buf``
+  above, the graphs reaching this pass can contain large precompiled bodies and
+  retaining one cached slice per epoch turns a bounded scratch chain into an
+  accidental quadratic memory cost.
+  """
+  stack, seen = [x], set()
+  while stack:
+    n = stack.pop()
+    if n is dependency: return True
+    if n in seen: continue
+    seen.add(n)
+    stack.extend(n.src)
+  return False
+
+def _call_arg_uops(call:UOp) -> tuple[UOp, ...]:
+  return tuple(s for s in call.src[1:] if s.op is not Ops.BIND)
+
+def _call_output_slots(call:UOp) -> tuple[int, ...]:
+  """Return the declared writable slots of an opaque call.
+
+  Finalized native PROGRAMs already carry this ABI.  An unfinalized custom
+  SINK carries the same information in its PARAM-backed STOREs, so derive the
+  ProgramInfo without changing the program or its call identity.
+  """
+  body = call.src[0]
+  if body.op is Ops.PROGRAM: return tuple(body.arg.outs)
+  if body.op is Ops.SINK: return tuple(ProgramInfo.from_sink(body).outs)
+  if body.op in (Ops.COPY, Ops.SLICE): return (0,)
+  return ()
+
+def _after_writes_buffer(after:UOp, output_slot_cache:dict[UOp, tuple[int, ...]]|None=None) -> bool:
+  """Distinguish a writable AFTER epoch from a read-completion epoch.
+
+  ``UOp.custom_kernel`` deliberately returns an AFTER for every argument: a
+  read-only AFTER lets a later reuse wait until that read is complete.  Treating
+  every such carrier as a write was harmless while each buffer had one writer,
+  but makes a correctly threaded scratch chain look cyclic.  The opaque call's
+  output ABI is the authority for CALL-backed epochs; STORE-backed AFTERs retain
+  the ordinary assignment meaning.
+  """
+  saw_declared_call = False
+  for dependency in after.src[1:]:
+    if dependency.op is not Ops.CALL: continue
+    # Unknown opaque calls have no trustworthy access ABI, so retain the
+    # conservative legacy classification.  A finalized PROGRAM without
+    # ProgramInfo is likewise not evidence that the buffer is read-only.
+    body = dependency.src[0]
+    if body.op not in {Ops.PROGRAM, Ops.SINK, Ops.COPY, Ops.SLICE} or \
+       (body.op is Ops.PROGRAM and not isinstance(body.arg, ProgramInfo)):
+      return True
+    saw_declared_call = True
+    args = _call_arg_uops(dependency)
+    if output_slot_cache is None: outs = _call_output_slots(dependency)
+    else:
+      if dependency.src[0] not in output_slot_cache: output_slot_cache[dependency.src[0]] = _call_output_slots(dependency)
+      outs = output_slot_cache[dependency.src[0]]
+    if any(slot < len(args) and args[slot].buf_uop is after.buf_uop for slot in outs): return True
+  # All declared CALL accesses were read-only.  AFTERs without a declared CALL
+  # retain the ordinary STORE/assignment meaning and are classified writable.
+  return not saw_declared_call
+
+def _after_has_precise_call_access(after:UOp) -> bool:
+  """Whether this AFTER is an opaque-call argument with a declared access ABI."""
+  return any(dependency.op is Ops.CALL and dependency.src[0].op in {Ops.PROGRAM, Ops.SINK, Ops.COPY, Ops.SLICE}
+             for dependency in after.src[1:])
+
+def _after_has_runtime_input_write(after:UOp) -> bool:
+  """Whether this write initializes an invocation-owned runtime input."""
+  from tinygrad.uop import RUNTIME_INPUT
+  for dependency in after.src[1:]:
+    if dependency.op is not Ops.CALL: continue
+    args, slots = _call_arg_uops(dependency), {}
+    for carrier in (dependency.src[0].arg, dependency.arg):
+      slots.update(getattr(carrier, "memory_semantic_slots", ()))
+    for slot in _call_output_slots(dependency):
+      if slot < len(args) and args[slot].buf_uop is after.buf_uop and slots.get(slot) == RUNTIME_INPUT: return True
+  return False
+
+def _validate_repeated_write_epochs(afters:list[UOp], write_afters:set[UOp]) -> set[UOp]:
+  """Prove buffers with repeated writers have one explicit ordered epoch chain.
+
+  A repeated physical scratch buffer is safe only when every write and every
+  read-completion epoch is comparable in the dependency graph.  This admits
+  ``main(write) -> fixup(read) -> next main(write)`` and fails closed for raw
+  aliasing.  The returned buffers need no inferred WAR repair: their ordering
+  is already explicit and adding a legacy single-writer edge would create the
+  assignment cycle this contract is designed to avoid.
+  """
+  # This contract is deliberately scoped to opaque calls whose ABI declares
+  # reads and writes. Ordinary STORE/assignment AFTERs keep the legacy WAR
+  # path; classifying those as epochs would change unrelated scheduling.
+  precise_afters = [after for after in afters if _after_has_precise_call_access(after)]
+  accesses:dict[UOp, list[UOp]] = {}
+  writers:dict[UOp, list[UOp]] = {}
+  for after in precise_afters:
+    accesses.setdefault(after.buf_uop, []).append(after)
+    if after in write_afters: writers.setdefault(after.buf_uop, []).append(after)
+
+  repeated:set[UOp] = set()
+  for buf, writes in writers.items():
+    if len(writes) < 2: continue
+    # A replay return can become the next invocation's runtime input, producing
+    # an input assignment followed by an output write to the same physical
+    # buffer. This is ordinary WAR reuse, not graph-owned reusable scratch.
+    if any(_after_has_runtime_input_write(write) for write in writes): continue
+    repeated.add(buf)
+    epochs = accesses[buf]
+    # ``afters`` is already in topological order.  Requiring every adjacent
+    # access to depend on its predecessor proves the entire chain transitively
+    # without an O(epoch^2) reachability walk on large captured graphs.
+    for previous, epoch in zip(epochs, epochs[1:]):
+      if not _depends_on(epoch, previous):
+        raise RuntimeError(f"unordered repeated write epochs for buffer {buf}")
+
+  return repeated
 
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
@@ -182,6 +317,550 @@ pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
 ])
 
+def lower_rmsnorm_semantic(att:UOp) -> UOp:
+  """Fail-closed semantic RMSNorm lowering (path3-semantic-rmsnorm-task-20260802.md).
+
+  Mirrors ``lower_attention_semantic``: the marker is the sole eligibility
+  boundary and ``src[0]`` is the ordinary fallback. For admitted decode
+  shapes the lowering builds ONE fused kernel (``rmsnorm_native_*``) whose
+  reduction feeds its epilogue in-kernel, bound through the proven
+  custom-kernel transport; every other shape/device/dtype keeps the ordinary
+  source unchanged. Buffer-backed inputs bind with no copy; lazy producer
+  values (the decode activation chains) materialize one contiguous input copy
+  per call -- the measured M3-class boundary tax that keeps this route
+  non-landing (see the Path 3 measurement record).
+  """
+  assert isinstance(att.arg, RMSNormSpec)
+  spec = att.arg
+  x, w = att.src[1], att.src[2]
+  # Admission is re-checked here (fail-closed), independently of the marker
+  # creation gate: only decode-shaped contiguous rows, fp16/fp32, affine.
+  if x.shape is None or not all_int(x.shape) or len(x.shape) == 0: return att.src[0]
+  dim = spec.dim
+  if dim < 32 or dim % 32: return att.src[0]
+  if len(x.shape) not in (1, 2, 3): return att.src[0]
+  rows = prod(x.shape[:-1])
+  if not isinstance(rows, int) or rows < 1 or rows > 32: return att.src[0]
+  # The fused kernel reads the producer's buffer through one flat (numel,) view.
+  # That read is only correct for a contiguous, buffer-backed activation; a
+  # PERMUTE (q/k head slices) or any movement chain would make the flat base
+  # index the wrong lanes, so those stay on the ordinary graph (fail-closed).
+  if not (x.op is Ops.MEMORY_SEMANTIC or x.has_buffer_identity()): return att.src[0]
+  if x.dtype not in (dtypes.float32, dtypes.float16): return att.src[0]
+  if att.dtype not in (dtypes.float32, dtypes.float16): return att.src[0]
+  device = x.device
+  if not isinstance(device, str): return att.src[0]
+  numel = rows * dim
+  from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+  # 256 elements per warp is the measured occupancy sweet spot for the
+  # single-row 4096 shape (512 threads, 8 elems/lane); smaller norms stay at
+  # one warp per row (same policy as the M3 opaque emitter).
+  warps = max(1, min(16, dim // 256))
+  kspec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=spec.eps, warps_per_row=warps,
+                            x_dtype=x.dtype, weight_dtype=w.dtype, out_dtype=att.dtype,
+                            x_rank=1, target=device, native=True)
+  out_buf = UOp.new_buffer(device, numel, att.dtype)
+  # Bind through the custom-kernel transport exactly like the M3 opaque path.
+  # The real decode activation is a MEMORY_SEMANTIC/RESHAPE view of the prior
+  # invocation's AFTER output. `custom_kernel` preserves an exact AFTER arg,
+  # so unwrapping that equal-span view chain binds the existing buffer with no
+  # per-call copy. Anything less specific keeps the conservative CONTIGUOUS
+  # boundary; a RESHAPE-over-lazy-producer arg would otherwise crash symbolic
+  # (`bad reshape: () -> (4096,)` when the producer collapses).
+  x_arg = _flat_after_view(x)
+  if x_arg is None: x_arg = x.reshape(numel).contiguous()
+  outs = UOp.custom_kernel(out_buf, x_arg, w, fxn=emit_decode_rmsnorm_kernel(kspec))
+  return outs[0].reshape(att.shape)
+
+def _flat_after_view(x:UOp) -> UOp|None:
+  """Return the rank-1 AFTER below an equal-span MEMORY_SEMANTIC/RESHAPE chain.
+
+  This is the one admitted decode producer shape that can bind a native norm
+  copy-free: the view chain is purely descriptive and its base is already the
+  previous invocation's contiguous output buffer. Every other chain returns
+  None so the caller keeps its materializing fallback.
+  """
+  original, expected = x, x.numel()
+  # RESHAPE carries its shape descriptor in a second source; the value leg is
+  # always src[0], matching the walk used by has_buffer_identity.
+  while x.op in (Ops.MEMORY_SEMANTIC, Ops.RESHAPE) and len(x.src) >= 1:
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x is not original and x.op is Ops.AFTER and len(x.src) == 2 and \
+      x.dtype == original.dtype and x.device == original.device and \
+      x.shape is not None and len(x.shape) == 1:
+    return x
+  return None
+
+pm_rmsnorm_semantic = PatternMatcher([
+  (UPat(Ops.RMSNORM, name="att"), lower_rmsnorm_semantic),
+])
+
+def _plain_identity_buffer_view(x:UOp) -> UOp|None:
+  """Return the exact PARAM/BUFFER below equal-span reshapes, if any."""
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return x if x.op in (Ops.PARAM, Ops.BUFFER) and x.numel() == expected else None
+
+def _precompiled_output_after_view(x:UOp) -> UOp|None:
+  """Validate and retain one invocation-owned precompiled function output.
+
+  Callify turns an exact GETTUPLE(precompiled FUNCTION) into
+  AFTER(output_buffer, CALL).  The dependency is load-bearing: validation may
+  inspect its physical buffer, but a downstream ordinary CALL must consume the
+  original AFTER/view.  This bounded first contract accepts only the final call
+  argument and proves the body stores through the PARAM for that same slot.
+  """
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) != 2: return None
+  base, call = x.src
+  base_buf = _plain_identity_buffer_view(base)
+  if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL or not bool(getattr(call.arg, "precompile", False)): return None
+  # Alias rejection is load-bearing: the same physical argument appearing as
+  # both an input and output is not an invocation-owned output identity.
+  matches = [slot for slot,arg in enumerate(call.src[1:]) if _plain_identity_buffer_view(arg) is base_buf]
+  if len(matches) != 1: return None
+  output_slot = matches[0]
+  def store_targets_slot(store:UOp) -> bool:
+    if store.op is not Ops.STORE: return False
+    target = _plain_identity_buffer_view(store.src[0])
+    return target is not None and target.op is Ops.PARAM and isinstance(target.arg, ParamArg) and target.arg.slot == output_slot
+  # Retain the original body proof while it is visible. Once recursive
+  # scheduling makes the body LINEAR, the immutable callify slot contract is
+  # the authority; inner scheduled PARAM numbering is a different scope.
+  if call.src[0].op is Ops.SINK:
+    if not any(store_targets_slot(u) for u in call.src[0].toposort()): return None
+  elif call.src[0].op is Ops.LINEAR:
+    if output_slot not in getattr(call.arg, "precompiled_output_slots", ()): return None
+  else: return None
+  return original
+
+def _permuted_identity_buffer_view(x:UOp) -> UOp|None:
+  """Validate a pure-PERMUTE identity view (offset-0, permutation-only, single producer).
+
+  The fp32 q/k marker input is ``PERMUTE(RESHAPE(...))`` of the q4k GEMV
+  precompiled output; callify turns that into ``PERMUTE(RESHAPE(AFTER))``.
+  Equal-span RESHAPE, single-producer PERMUTE, and dtype-preserving
+  MEMORY_SEMANTIC legs are walked down to either an invocation-owned AFTER
+  (the production spelling, precompiled or bounded opaque custom-kernel) or a
+  concrete BUFFER.  The AFTER is re-proven here in bounded form: the base
+  appears exactly once among the call's output arguments, regardless of the
+  precompile flag.  The marker's durable pre-callify identity
+  (``has_precompiled_output_identity`` or the bounded AFTER body proof at
+  marker creation) already proved the same invocation, and this walk only
+  re-confirms the post-callify spelling.  The strict invocation-slot contract
+  stays on the bare-AFTER path.  A bare PARAM terminal stays rejected (the
+  exact slot-based proofs own that case), and SHRINK/EXPAND/CAST or a
+  multi-producer PERMUTE never enter the walk, so every unexpected view fails
+  closed.
+  """
+  original, expected = x, x.numel()
+  permutes = 0
+  while True:
+    if x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected:
+      x = x.src[0]; continue
+    if x.op is Ops.PERMUTE and len(x.src) == 1 and x.src[0].numel() == expected:
+      permutes += 1; x = x.src[0]; continue
+    if x.op is Ops.MEMORY_SEMANTIC and len(x.src) == 1 and x.src[0].numel() == expected and x.dtype == original.dtype:
+      x = x.src[0]; continue
+    break
+  if permutes == 0: return None
+  if _precompiled_output_after_view(x) is not None: return original
+  if x.op is Ops.AFTER and len(x.src) == 2:
+    base, call = x.src
+    base_buf = _plain_identity_buffer_view(base)
+    if base_buf is None or base_buf.dtype != original.dtype or call.op is not Ops.CALL: return None
+    if len([slot for slot, arg in enumerate(call.src[1:]) if _plain_identity_buffer_view(arg) is base_buf]) != 1: return None
+    return original
+  return original if x.op is Ops.BUFFER and x.numel() == expected else None
+
+def _identity_buffer_view(x:UOp) -> UOp|None:
+  """Accept a plain identity buffer, a pure-PERMUTE identity view, or an exact
+  dependency-bearing call output.
+
+  SHRINK/EXPAND and MEMORY_SEMANTIC remain rejected; their physical
+  offset/span cannot be inferred here.  Arbitrary AFTER is also rejected.
+  """
+  plain = _plain_identity_buffer_view(x)
+  if plain is not None: return plain
+  permuted = _permuted_identity_buffer_view(x)
+  if permuted is not None: return permuted
+  return _precompiled_output_after_view(x)
+
+def _owned_precompiled_output_after_view(x:UOp) -> UOp|None:
+  """Validate an early owned-contiguous candidate without upgrading it to identity."""
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.MEMORY_SEMANTIC or len(x.src) != 1 or memory_semantic_owner(x) is None: return None
+  return original if _precompiled_output_after_view(x.src[0]) is not None else None
+
+def _proven_invocation_input_view(x:UOp, slot:int) -> UOp|None:
+  """Match only the PARAM whose concrete call argument callify proved."""
+  original, expected = x, x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return original if x.op is Ops.PARAM and isinstance(x.arg, ParamArg) and x.arg.slot == slot else None
+
+def _reduce_output_m4_input_view(x:UOp) -> UOp|None:
+  """M4-style typed-view ownership proof for one marker input (C6 admission).
+
+  Strip the production's transparent legs (CONTIGUOUS, MEMORY_SEMANTIC, and
+  equal-span RESHAPE) down to the producer base and require the M4 residual
+  contract's producer identity: buffer/precompiled-output identity, or an
+  AFTER with a declared typed output, or a bounded opaque custom-kernel AFTER.
+  The bounded-opaque case covers the GPU ffn-norm residual when o-proj epi
+  residual-add absorption is live: ``h`` is the q4k o-proj AFTER itself rather
+  than an ``ADD(x, attn_out)``, so the shared residual binding reads that same
+  producer buffer.  This reuses the M4 validator's structure instead of
+  reimplementing ownership from scratch.  A bare input (zero stripped legs) is
+  intentionally rejected here: after callify every input is a PARAM, so the
+  durable proofs (identity at marker creation, exact invocation slot, owned
+  precompiled output) own that case and run first.
+  """
+  original, expected = x, x.numel()
+  legs = 0
+  while x.op in {Ops.CONTIGUOUS, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
+    # RESHAPE keeps its shape descriptor in a second src; the data leg is
+    # src[0].  CONTIGUOUS and MEMORY_SEMANTIC stay strict single-source legs.
+    if (x.op is not Ops.RESHAPE and len(x.src) != 1) or x.numel() != expected: return None
+    x = x.src[0]; legs += 1
+  if legs == 0: return None
+  from tinygrad.llm.kernel_program import _residual_producer_identity
+  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
+  return original if (_residual_producer_identity(x) or _bounded_after_output_identity(x)
+                      or _bounded_opaque_after_output_identity(x)) else None
+
+def _reduce_derived_materialized_view(x:UOp) -> UOp|None:
+  """Materialize the warp-coop REDUCE carrier into a fresh output buffer.
+
+  The marker input spelling is
+  ``PERMUTE(RESHAPE(MS(RESHAPE(CONTIGUOUS(RESHAPE(REDUCE(RESHAPE(AFTER(...)))))))))``.
+  Strip the transparent PERMUTE/RESHAPE/MS legs, walk the CONTIGUOUS to the
+  REDUCE, and re-prove the REDUCE's input AFTER with the same bounded
+  invocation proof the marker used.  The returned binding is the REDUCE's own
+  output AFTER (fresh buffer plus its store kernel): the exact reduce kernel
+  the ordinary spelling runs, so the fused body sees bitwise-identical
+  reduced values while the contiguous materialization and the ordinary norm
+  chain vanish.
+  """
+  original, expected = x, x.numel()
+  while x.op in {Ops.PERMUTE, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
+    if not len(x.src) or x.numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1 or x.numel() != expected: return None
+  expected = x.numel()
+  u = x.src[0]
+  while u.op is Ops.RESHAPE and len(u.src) and u.src[0].numel() == expected: u = u.src[0]
+  if u.op is not Ops.REDUCE or len(u.src) != 1: return None
+  expected = u.src[0].numel()
+  red_in = u.src[0]
+  while red_in.op is Ops.RESHAPE and len(red_in.src) and red_in.src[0].numel() == expected: red_in = red_in.src[0]
+  from tinygrad.tensor import _bounded_after_output_identity, _bounded_opaque_after_output_identity
+  if not (_bounded_after_output_identity(red_in) or _bounded_opaque_after_output_identity(red_in)): return None
+  red_buf = UOp.new_buffer(u.device, u.numel(), u.dtype)
+  # Store through a RESHAPE leg so rangeify splits the store's single range
+  # into two input ranges on the REDUCE; a direct 1-D store leaves the reduce
+  # axis without a REDUCE range and pm_reduce_simplify erases it into a copy.
+  return red_buf.after(red_buf.store(u.reshape(red_buf.shape)))
+
+def _reduce_residual_sum_view(x:UOp) -> UOp|None:
+  """Bind the residual ADD without re-materializing the shared ``h``.
+
+  The marker input spelling is ``ADD(after, after)`` (the decode block
+  residual ``h = x + attn_out``).  Re-prove both operands with the same
+  bounded invocation identity used at marker creation, then return the exact
+  residual value.  ``h`` already has a second consumer (the ffn_down
+  residual-add slot), so the scheduler materializes it once and this fused
+  body reads that same buffer.  Materializing a fresh ADD here would emit a
+  duplicate residual kernel and turn the 2->1 norm win into a net-zero swap.
+  """
+  original, expected = x, x.numel()
+  # The marker input arrives as MEMORY_SEMANTIC(ADD(...)) (the role wrapper the
+  # model's prefill_semantic adds), and may carry equal-span RESHAPE legs. Strip
+  # the same transparent legs the identity walk uses before requiring the ADD.
+  while x.op in {Ops.PERMUTE, Ops.MEMORY_SEMANTIC} or (x.op is Ops.RESHAPE and len(x.src) and x.src[0].numel() == expected):
+    if not len(x.src) or x.numel() != expected: return None
+    x = x.src[0]
+  if x.op is not Ops.ADD or len(x.src) != 2: return None
+  from tinygrad.tensor import _bounded_residual_sum_identity
+  if not _bounded_residual_sum_identity(x): return None
+  return original
+
+def _c6_marker(carrier:UOp) -> UOp|None:
+  """Validate the C6 chain ``CONTIGUOUS(RESHAPE(MS(...)))`` and return its marker.
+
+  RESHAPE carries a shape descriptor source in this IR, so the chain is walked
+  structurally rather than matched with a fixed-arity UPat.  Every unexpected
+  leg fails closed (returns None) and leaves the ordinary fallback intact.
+  """
+  expected = carrier.numel()
+  if carrier.dtype is None or len(carrier.src) != 1: return None
+  r = carrier.src[0]
+  if r.op is not Ops.RESHAPE or not r.src or r.src[0].numel() != expected or r.dtype != carrier.dtype: return None
+  m = r.src[0]
+  if m.op is not Ops.MEMORY_SEMANTIC or len(m.src) != 1 or m.numel() != expected or m.dtype != carrier.dtype: return None
+  marker = m.src[0]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  return marker
+
+def _lower_c6_reduce_output_store(store:UOp, carrier:UOp) -> UOp|None:
+  """Match the production CALL-input spelling under an explicit STORE (the
+  hermetic gate's spelling)."""
+  marker = _c6_marker(carrier)
+  if marker is None: return None
+  return lower_reduce_output_store(store, carrier, marker)
+
+def _lower_c6_call_input(call:UOp) -> UOp|None:
+  """Admit the production C6 chain where it actually lives: a consumer CALL input.
+
+  In the decode DAG the fp16 attention/FFN norm values are materialized as
+  ``CONTIGUOUS(RESHAPE(MS(REDUCE_OUTPUT)))`` call arguments; there is no
+  producer STORE to match.  Fusing replaces that argument with the fused
+  program's output buffer, so the consumer reads exactly the buffer the
+  cooperative body wrote.  Every unexpected argument fails closed.
+  """
+  if call.op is not Ops.CALL or len(call.src) < 2: return None
+  replacements: dict[UOp, UOp] = {}
+  for arg in call.src[1:]:
+    marker = _c6_marker(arg)
+    if marker is None: continue
+    # `arg.buf_uop` walks the carrier down to the marker's input base (the C6
+    # carrier is a lazy materialization, not a concrete buffer), so reusing it
+    # as the fused body's output would write the norm IN PLACE over the input
+    # and corrupt every other consumer of that buffer.  Bind the body to a
+    # fresh output buffer; the consumer reads it through the AFTER dependency.
+    out_buf = UOp.new_buffer(arg.device, arg.numel(), arg.dtype)
+    fused = lower_reduce_output_store(None, arg, marker, target=out_buf)
+    if fused is None: continue
+    replacements[arg] = out_buf.after(fused)
+  return call.replace(src=(call.src[0], *(replacements.get(a, a) for a in call.src[1:]))) if replacements else None
+
+
+def coalesce_c6_call_inputs(tsink:UOp) -> UOp|None:
+  """Emit ONE fused reduce-output body per unique norm marker across all consumers.
+
+  The production decode DAG feeds the same marked norm value to several
+  consumer CALL arguments (q/k/v projections and FFN gate/up/down).  The
+  per-argument ``_lower_c6_call_input`` rule emitted one fused body plus one
+  weight materialization per consuming call argument, so one norm became 3
+  bodies (the 54-vs-18 census multiplicity) with 3x the launch overhead.  This
+  graph-level pass groups matching C6-chain arguments by marker identity and
+  lowers ONE body into ONE fresh output buffer; every consumer in the group
+  reads the same dependency-bearing AFTER.  Any group whose representative
+  fails the exact proof keeps the ordinary fallback for all of its members.
+  """
+  matches: list[tuple[UOp, UOp]] = []  # (call, c6-arg)
+  for node in tsink.toposort():
+    if node.op is not Ops.CALL or len(node.src) < 2: continue
+    for arg in node.src[1:]:
+      if _c6_marker(arg) is not None: matches.append((node, arg))
+  if not matches: return None
+  groups: dict[UOp, list[tuple[UOp, UOp]]] = {}
+  for call, arg in matches: groups.setdefault(_c6_marker(arg), []).append((call, arg))
+  replacements: dict[UOp, UOp] = {}
+  for marker, group in groups.items():
+    rep_call, rep_arg = group[0]
+    out_buf = UOp.new_buffer(rep_arg.device, rep_arg.numel(), rep_arg.dtype)
+    fused = lower_reduce_output_store(None, rep_arg, marker, target=out_buf)
+    if fused is None: continue
+    shared = out_buf.after(fused)
+    for _, arg in group: replacements[arg] = shared
+  if not replacements: return None
+  return tsink.substitute(replacements)
+
+def _ms_reduce_output_carrier(carrier:UOp) -> UOp|None:
+  """Validate the fp32 q/k elementwise carrier ``MEMORY_SEMANTIC(REDUCE_OUTPUT)``."""
+  if carrier.op is not Ops.MEMORY_SEMANTIC or len(carrier.src) != 1: return None
+  marker = carrier.src[0]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if carrier.numel() != marker.numel() or carrier.dtype != marker.dtype: return None
+  return marker
+
+def coalesce_permute_carrier_reduce_outputs(tsink:UOp) -> UOp|None:
+  """Emit ONE fused reduce-output body per marker consumed by ordinary elementwise.
+
+  The production decode graph feeds the marked fp32 q/k norm value to
+  apply_rope (an ordinary elementwise) through the PERMUTE-view spelling:
+  the marker value is ``MEMORY_SEMANTIC(REDUCE_OUTPUT)`` consumed by ordinary
+  movement/elementwise ops, with no C6 ``CONTIGUOUS(RESHAPE(MS(...)))`` CALL
+  argument and no direct STORE of the carrier.  This pass groups every carrier
+  of one marker, lowers ONE body into ONE fresh output buffer through the
+  existing selector, and rebinds every carrier to the same dependency-bearing
+  AFTER view so every consumer reads the fused buffer.  Any marker with a C6
+  chain CALL argument or a direct STORE consumer is left to those existing
+  rules (fail-closed).
+  """
+  nodes = tsink.toposort()
+  users: dict[UOp, list[UOp]] = {}
+  for n in nodes:
+    for s in n.src: users.setdefault(s, []).append(n)
+  c6_markers = {m for n in nodes if n.op is Ops.CALL and len(n.src) >= 2
+                for a in n.src[1:] if (m := _c6_marker(a)) is not None}
+  carriers: dict[UOp, list[UOp]] = {}
+  store_consumed: set[UOp] = set()
+  for n in nodes:
+    marker = _ms_reduce_output_carrier(n)
+    if marker is None or marker in c6_markers: continue
+    carriers.setdefault(marker, []).append(n)
+    for u in users.get(n, ()):
+      if u.op is Ops.STORE and len(u.src) >= 2 and u.src[1] is n: store_consumed.add(marker)
+    for u in users.get(marker, ()):
+      if u.op is Ops.STORE and len(u.src) >= 2 and u.src[1] is marker: store_consumed.add(marker)
+  for marker in tuple(carriers):
+    if marker in store_consumed: carriers.pop(marker)
+  if not carriers: return None
+  replacements: dict[UOp, UOp] = {}
+  for marker, group in carriers.items():
+    rep = group[0]
+    if not isinstance(rep.device, str) or rep._shape is None: continue
+    out_buf = UOp.new_buffer(rep.device, rep.numel(), rep.dtype)
+    fused = lower_reduce_output_store(None, rep, marker, target=out_buf)
+    if fused is None: continue
+    shared = out_buf.after(fused).reshape(rep.shape)
+    for carrier in group: replacements[carrier] = shared
+  if not replacements: return None
+  return tsink.substitute(replacements)
+
+def lower_reduce_output_store(store:UOp, carrier:UOp|None=None, marker:UOp|None=None, target:UOp|None=None) -> UOp|None:
+  """Lower the exact direct marker, or one owner-preserving production carrier.
+
+  ``MEMORY_SEMANTIC`` is not generally transparent here.  The second form is
+  deliberately only the spelling observed in the decode trace: one direct
+  semantic carrier around one REDUCE_OUTPUT value.  It neither walks through
+  another carrier nor accepts a movement view.  The carrier's owner is moved
+  to the emitted call's output argument so the normal split-store ownership
+  handoff records it on the same concrete output slot.
+
+  The third form is the production CALL-input spelling
+  ``CONTIGUOUS(RESHAPE(MEMORY_SEMANTIC(REDUCE_OUTPUT)))`` (the C6 chain): the
+  marker is passed explicitly by the matcher after structural validation, and
+  ``target`` names the concrete output buffer the consuming CALL reads (or the
+  STORE destination when no target is supplied).  Input-view admission is the
+  M4-style typed contract (pure offset-0 view over a producer with
+  buffer/precompiled-output identity or a declared typed output), reused from
+  the residual-view validator.  The marker's own durable proofs still run
+  first; a bare post-callify PARAM remains rejected.
+  """
+  marker = marker if marker is not None else (carrier.src[0] if carrier is not None else store.src[1])
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if carrier is not None:
+    # This is a typed semantic wrapper, not an identity/movement proof.  Keep
+    # exact logical geometry and reject any unexpected wrapper shape/dtype.
+    from tinygrad.uop import MemorySemanticOwner
+    if carrier.dtype != marker.dtype or carrier.numel() != marker.numel(): return None
+    wrapper = carrier
+    if wrapper.op is Ops.CONTIGUOUS:
+      if len(wrapper.src) != 1: return None
+      wrapper = wrapper.src[0]
+      if wrapper.op is not Ops.RESHAPE or not wrapper.src or wrapper.numel() != marker.numel(): return None
+      wrapper = wrapper.src[0]
+    if wrapper.op is not Ops.MEMORY_SEMANTIC or len(wrapper.src) != 1 or not isinstance(wrapper.arg, MemorySemanticOwner): return None
+    if wrapper.src[0] is not marker: return None
+  if target is None:
+    if store is None or store.op is not Ops.STORE or len(store.src) < 2: return None
+    target = store.src[0]
+  from tinygrad.llm.reduce_output_trace import trace_reduce_output, trace_reduce_output_detail, trace_reduce_output_association
+  trace_reduce_output("selector", "entry")
+  assoc = f"{marker.arg.warps}x{marker.arg.lanes}x{marker.arg.per_lane}"
+  trace_reduce_output_association(assoc, "entry")
+  def reject(reason:str) -> None:
+    trace_reduce_output("selector", reason)
+    trace_reduce_output_association(assoc, reason)
+  spec = marker.arg
+  if not (spec.input_identity_at_marker or spec.owned_contiguous_candidate or spec.reduce_input_at_marker or spec.residual_sum_at_marker): reject("marker_not_eligible"); return None
+  x, weight = marker.src[1], marker.src[2]
+  if spec.epilogue == "identity":
+    if len(marker.src) != 3: reject("epilogue_arity"); return None
+    freqs_buf = None
+  elif spec.epilogue == "rope":
+    if len(marker.src) != 4: reject("epilogue_arity"); return None
+    freqs = marker.src[3]
+    freqs_buf = _identity_buffer_view(freqs)
+    if freqs_buf is None and freqs.op is Ops.MEMORY_SEMANTIC and len(freqs.src) == 1:
+      from tinygrad.uop import RUNTIME_PERSISTENT
+      if freqs.arg == RUNTIME_PERSISTENT: freqs_buf = _identity_buffer_view(freqs.src[0])
+    if freqs_buf is None or freqs.dtype != dtypes.float32 or freqs.shape is None or len(freqs.shape) != 2 or freqs.shape[1] != spec.dim:
+      reject("rope_freqs_not_identity"); return None
+  else:
+    reject("epilogue_unsupported"); return None
+  out_buf, w_buf = _identity_buffer_view(target), _identity_buffer_view(weight)
+  # The early owned-contiguous bit is deliberately weaker than identity. It
+  # may only advance through the durable invocation-output proof; an ordinary
+  # buffer produced by a movement or non-call materialization is insufficient.
+  x_buf = None
+  if spec.input_identity_at_marker: x_buf = _identity_buffer_view(x)
+  if x_buf is None and spec.invocation_input_slot is not None: x_buf = _proven_invocation_input_view(x, spec.invocation_input_slot)
+  if x_buf is None and spec.owned_contiguous_candidate: x_buf = _owned_precompiled_output_after_view(x)
+  if x_buf is None and (spec.input_identity_at_marker or spec.owned_contiguous_candidate): x_buf = _reduce_output_m4_input_view(x)
+  if x_buf is None and spec.reduce_input_at_marker: x_buf = _reduce_derived_materialized_view(x)
+  if x_buf is None and spec.residual_sum_at_marker: x_buf = _reduce_residual_sum_view(x)
+  # Fail closed for lazy/movement inputs. Returning None lets the marker
+  # fallback rewrite below preserve the exact ordinary graph.
+  if out_buf is None: reject("output_not_identity"); return None
+  if x_buf is None: reject("input_proof_missing"); return None
+  device = x_buf.device
+  if not isinstance(device, str) or not device.startswith(("NV", "CUDA", "CPU")): reject("unsupported_device"); return None
+  # Production weights are fp16 casts over quantized MODEL_PARAMETER storage:
+  # a pure value with no buffer identity at rangeify.  Materialize the exact
+  # value into a fresh buffer so the fused body reads the same fp16 weight the
+  # ordinary elementwise would consume; the unpack producer stays in the
+  # schedule exactly like the ordinary path's own weight materialization.
+  if w_buf is None:
+    if weight.dtype not in (dtypes.float16, dtypes.float32) or weight.device is None: reject("weight_not_identity"); return None
+    w_buffer = UOp.new_buffer(device, weight.numel(), weight.dtype)
+    w_buf = w_buffer.after(w_buffer.store(weight))
+  if w_buf is None: reject("weight_not_identity"); return None
+  try:
+    from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
+    authority=("decode_qk_norm_rope","qk_reduce_norm_rope") if spec.epilogue == "rope" else \
+      ("decode_reduce_output_rmsnorm","reduce_output_rmsnorm")
+    emitter,_=lower_authorized_candidate({"family":"reduce_output.v1","spec_repr":repr(spec),
+      "x_dtype":str(x.dtype),"weight_dtype":str(weight.dtype),"spec_binding":"reduce_output_spec"},
+      (authority,),lowering_bindings={"reduce_output_spec":spec})
+    out_ph = UOp.placeholder((spec.rows*spec.dim,), spec.out_dtype, 0)
+    x_ph = UOp.placeholder((spec.rows*spec.dim,), x.dtype, 1)
+    w_ph = UOp.placeholder((spec.dim,), weight.dtype, 2)
+    if spec.epilogue == "rope":
+      f_ph = UOp.placeholder(freqs.shape, freqs.dtype, 3)
+      body = emitter(out_ph, x_ph, w_ph, f_ph)
+    else:
+      body = emitter(out_ph, x_ph, w_ph)
+  except ValueError:
+    reject("emitter_rejected"); return None
+  trace_reduce_output("selector", "accepted")
+  trace_reduce_output_association(assoc, "accepted")
+  # A semantic carrier around a CALL argument is consumed while that CALL is
+  # formed, before split_store can see it.  Carry the exact same vocabulary
+  # owner on this emitted body's known output slot instead.  Slot zero is
+  # fixed by this emitter's (out, x, w) ABI; no inference from a later graph
+  # is involved.
+  if carrier is not None:
+    if not isinstance(body.arg, KernelInfo): return None
+    # The owner lives on the validated MEMORY_SEMANTIC wrapper (the outer
+    # CONTIGUOUS of the C6 chain carries no arg).
+    body = body.replace(arg=replace(body.arg, memory_semantic_slots=((0, wrapper.arg),)))
+  return body.call(out_buf, x_buf, w_buf, *((freqs_buf,) if freqs_buf is not None else ()))
+
+pm_reduce_output_store = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(), UPat(Ops.REDUCE_OUTPUT)), name="store"), lower_reduce_output_store),
+  (UPat(Ops.STORE, src=(UPat(), UPat(Ops.MEMORY_SEMANTIC, src=(UPat(Ops.REDUCE_OUTPUT),), name="carrier")), name="store"),
+   lambda store,carrier: lower_reduce_output_store(store, carrier)),
+  (UPat(Ops.STORE, src=(UPat(), UPat(Ops.CONTIGUOUS, name="carrier")), name="store"),
+   lambda store,carrier: _lower_c6_reduce_output_store(store, carrier)),
+  (UPat(Ops.CALL, name="call", allow_any_len=True), _lower_c6_call_input),
+])
+pm_reduce_output_fallback = PatternMatcher([
+  (UPat(Ops.REDUCE_OUTPUT, name="marker"), lambda marker: marker.src[0]),
+])
+
 def lower_scoped_value_semantic(value:UOp) -> UOp:
   """Fail closed until a backend owns the scoped loop and its registers."""
   return value.src[0].src[0]
@@ -310,7 +989,7 @@ def lower_row_softmax_repack(x: UOp) -> UOp:
   """
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
   x.arg.validate()
-  native = AMDRowSoftmaxRepackSpec()
+  native = NativeRowSoftmaxRepackSpec()
   return amd_gfx1100_row_softmax_repack(*x.src, spec=native)
 
 def lower_row_softmax_repack_with_qk(ctx, x:UOp, qk:UOp) -> UOp:
@@ -318,7 +997,7 @@ def lower_row_softmax_repack_with_qk(ctx, x:UOp, qk:UOp) -> UOp:
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
   x.arg.validate()
   raw_c = _lower_shaped_wmma(ctx, qk, True)
-  return amd_gfx1100_row_softmax_repack(raw_c, x.src[1], x.src[2], spec=AMDRowSoftmaxRepackSpec())
+  return amd_gfx1100_row_softmax_repack(raw_c, x.src[1], x.src[2], spec=NativeRowSoftmaxRepackSpec())
 
 pm_native_row_softmax_repack = PatternMatcher([
   (UPat(Ops.ROW_SOFTMAX_REPACK, src=(UPat(Ops.SHAPED_WMMA, name="qk"), UPat(), UPat()), name="x"),
@@ -1008,10 +1687,49 @@ def _get_kernel_graph(sink:UOp) -> UOp:
                        bottom_up=False, name="native row softmax repack")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
 
+  # This is the last point at which REDUCE_OUTPUT is still visible before the
+  # STORE selector/fallback pair. Count only; do not retain a graph reference.
+  from tinygrad.llm.reduce_output_trace import trace_reduce_output, trace_reduce_output_detail
+  _trace_nodes = tsink.toposort()
+  _trace_users:dict[UOp, list[UOp]] = {}
+  for _parent in _trace_nodes:
+    for _child in _parent.src: _trace_users.setdefault(_child, []).append(_parent)
+  for _u in _trace_nodes:
+    if _u.op is Ops.REDUCE_OUTPUT and isinstance(_u.arg, ReduceOutputSpec):
+      trace_reduce_output("before_rangeify_store", "candidate" if _u.arg.owned_contiguous_candidate else "ordinary")
+      for _parent in _trace_users.get(_u, ()): trace_reduce_output("before_rangeify_parent", _parent.op.name)
+      # The selector may only follow an exact production spelling.  Record up
+      # to four consumer edges as inert strings so a census can distinguish a
+      # direct STORE value from a carrier later consumed by another op.
+      def _node_label(node:UOp) -> str:
+        owner = memory_semantic_owner(node)
+        return f"{node.op.name}(shape={node._shape},dtype={node.dtype},owner={owner!r})"
+      def _trace_parent_chains(node:UOp, chain:tuple[str,...], depth:int) -> None:
+        parents = _trace_users.get(node, ())
+        if depth == 12 or not parents:
+          trace_reduce_output_detail("before_rangeify_parent_chain", " -> ".join(chain))
+          return
+        for parent in parents:
+          _trace_parent_chains(parent, chain+(_node_label(parent),), depth+1)
+      _trace_parent_chains(_u, (_node_label(_u),), 0)
+
+  # REDUCE_OUTPUT is selected only at the concrete STORE, after callify has
+  # exposed exact buffer/view ownership. Top-down is load-bearing: selecting
+  # the STORE must happen before the child fallback rule erases the marker.
+  # The PERMUTE-carrier route runs first and skips any marker with a C6 chain
+  # CALL argument or a direct STORE consumer, so the C6/STORE selectors below
+  # keep owning exactly their established spellings.
+  permuted = coalesce_permute_carrier_reduce_outputs(tsink)
+  if permuted is not None: tsink = permuted
+  coalesced = coalesce_c6_call_inputs(tsink)
+  if coalesced is not None: tsink = coalesced
+  tsink = graph_rewrite(tsink, pm_reduce_output_store, bottom_up=False, name="reduce output store")
+  tsink = graph_rewrite(tsink, pm_reduce_output_fallback, name="reduce output fallback")
+
   # Attention may only be lowered from its explicit semantic marker. The
   # previous broad ADD-REDUCE matcher was unsound: ordinary reductions must
   # always retain their original semantics.
-  tsink = graph_rewrite(tsink, pm_attention_semantic+pm_scoped_reduce_semantic, name="attention_semantic")
+  tsink = graph_rewrite(tsink, pm_attention_semantic+pm_rmsnorm_semantic+pm_scoped_reduce_semantic, name="attention_semantic")
 
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))
@@ -1039,14 +1757,21 @@ def _get_kernel_graph(sink:UOp) -> UOp:
 
   # WAR deps: if kernel U reads buffer S, and S is also written by another kernel, S's write must wait for U to finish
   afters = [u for u in tsink.toposort() if u.op is Ops.AFTER]
-  kernel_assign: dict[UOp, UOp] = {u.buf_uop:u for u in afters}
+  output_slot_cache:dict[UOp, tuple[int, ...]] = {}
+  write_afters = {u for u in afters if _after_writes_buffer(u, output_slot_cache)}
+  repeated_write_bufs = _validate_repeated_write_epochs(afters, write_afters)
+  kernel_assign: dict[UOp, UOp] = {u.buf_uop:u for u in write_afters if u.buf_uop not in repeated_write_bufs}
   assign_rep: dict[UOp, UOp] = {}
   for u in afters:
+    if u not in write_afters: continue
     for s in u.src[1].src:
       # TODO: this is probably broken for MSELECT/MSTACK
-      if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or (a:=kernel_assign.get(s)) is None: continue
+      if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or s in repeated_write_bufs or (a:=kernel_assign.get(s)) is None: continue
       if a.src[1] is u.src[1]: continue  # same kernel (multi-output custom kernels)
-      if any(x.op is Ops.AFTER and x.buf_uop is s for x in kernel_assign[u.buf_uop].backward_slice):
+      # The reader already depends on the writer's AFTER (precompiled-output identity): the read
+      # is ordered after the write, so the WAR edge is redundant and would be a false cycle.
+      if _has_after_for_buf(u, s): continue
+      if _has_after_for_buf(kernel_assign[u.buf_uop], s):
         raise RuntimeError(f"cycle detected in assign graph, buffers {s} and {u.buf_uop} have circular dependency")
       assign_rep[a] = kernel_assign[s] = a.replace(src=a.src+(u,))
   if assign_rep: tsink = graph_rewrite(tsink, _substitute, ctx=assign_rep, bottom_up=True, name="fix_assign")

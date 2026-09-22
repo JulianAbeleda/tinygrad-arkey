@@ -1,0 +1,99 @@
+{
+  "capture_edge_count": 1230,
+  "capture_node_count": 596,
+  "claims": {
+    "C1_chain": {
+      "down_count": 36,
+      "every_gate_up_has_exactly_one_raw_consumer": true,
+      "every_raw_consumer_is_down": true,
+      "expected_down_count": 36,
+      "expected_gate_up_count": 36,
+      "gate_up_count": 36,
+      "intermediate_edge_span_histogram": {
+        "24576": 36
+      },
+      "intermediate_span_bytes": 24576,
+      "intermediate_span_is_uniformly_24576": true
+    },
+    "C2_cast": {
+      "E_128_32_3_count_in_control": 0,
+      "candidate_E_128_32_3_us": 39.52,
+      "candidate_four_warp_body_us": 1352.384,
+      "cast_activation_pack_like_names_in_control": [],
+      "control_fused_body_us": 1359.424,
+      "control_has_no_separable_fp16_cast": true,
+      "four_warp_body_minus_control_us": -7.04,
+      "net_gate_up_swap_us": 32.48
+    },
+    "C3_bytes": {
+      "down_q4_weight_bytes": 28311552,
+      "down_q6_weight_bytes": 41287680,
+      "fp16_to_q8_pack_saving_bytes": 12288,
+      "gate_up_weight_bytes_each": 28311552,
+      "gate_up_weight_stream_bytes_per_layer": 56623104,
+      "intermediate_activation_bytes": 24576,
+      "intermediate_activation_dtype": "fp16 (12288 x 2)",
+      "pack_saving_as_fraction_of_weights": 3.73e-06,
+      "pack_saving_percent": 0.00037,
+      "total_ffn_weight_bytes_per_token": 3291217920
+    },
+    "C4_provider": {
+      "any_provider_feeds_down": false,
+      "consumer_set_histogram": {
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096, q4k_warp_coop_q8_dp4a_partial_1024_4096, q4k_warp_coop_q8_dp4a_partial_4096_4096": 9,
+        "q4k_warp_coop_q8_dp4a_partial_1024_4096, q4k_warp_coop_q8_dp4a_partial_4096_4096, q6k_q8_warp_direct_1024_4096": 8
+      },
+      "every_provider_feeds_attention_projections": true,
+      "expected_provider_count": 17,
+      "provider_count": 17,
+      "q8_output_is_4608_bytes": true,
+      "q8_output_span_sizes": [
+        4608
+      ]
+    },
+    "C5_dram": {
+      "premise_same_weight_bytes": "single shared GGUF Q4_K_M; weight byte streams are model-defined and identical",
+      "rows": {
+        "down_q4": {
+          "dram_mb": 28.36,
+          "llama_TBps": 1.501,
+          "llama_body_us": 18.896,
+          "tinygrad_TBps": 1.357,
+          "tinygrad_over_llama": 0.904,
+          "tinygrad_production_us": 20.896
+        },
+        "down_q6": {
+          "dram_mb": 41.34,
+          "llama_TBps": 1.449,
+          "llama_body_us": 28.529,
+          "tinygrad_TBps": 1.353,
+          "tinygrad_over_llama": 0.934,
+          "tinygrad_production_us": 30.56
+        },
+        "gate_up": {
+          "dram_mb": 56.64,
+          "llama_TBps": 1.609,
+          "llama_body_us": 35.201,
+          "tinygrad_TBps": 1.501,
+          "tinygrad_over_llama": 0.933,
+          "tinygrad_production_us": 37.728
+        }
+      }
+    }
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "distinct_canonical_names": 31,
+  "inputs": {
+    "capture_sha256": "c34b5752ef3bf3a0a092f410636d1feedda8b9db843c6b6f2fc44855e0a9e224",
+    "closure_result_sha256": "950f69859a008f347d377d9e6d4300cf2bceeeae685896413ce3d77527ce93f6",
+    "decomposition_sha256": "cdec4339dc709e9b77e8bc90414fdbb55121097ef7e3862c48f748fb2ee7db9f"
+  },
+  "schema": "tinygrad.nv_ffn_chain_structure_audit.v1",
+  "verdicts": {
+    "C1_no_intermediate_chain": true,
+    "C2_cast_is_candidate_only_regression": true,
+    "C3_intermediate_is_24KB_against_100MB_weights": true,
+    "C4_provider_is_attention_only": true,
+    "C5_dram_gap_is_wall_time": true
+  }
+}

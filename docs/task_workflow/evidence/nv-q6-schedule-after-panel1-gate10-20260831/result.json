@@ -1,0 +1,104 @@
+{
+  "schema": "tinygrad.nv_q6_schedule_after_panel1_gate10.v1",
+  "date": "2026-08-31",
+  "verdict": "REJECT_SASS_SPAN_AND_LDS",
+  "admission": false,
+  "frozen": {
+    "anchor_cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "fixup_cubin_sha256": "483d997cb16bacf35db3184825833e6f921a4b23efbb6d3c6836723d18285514",
+    "timing_reference_us": 256.256,
+    "anchor_token": {"pc": "0x9f80", "ordinal": 2552, "instruction": "FADD R167, R53, R36"},
+    "source_tuple": {"kphase": 0, "cg": 7, "n": 1, "p": 1, "r": 3}
+  },
+  "integration_source": "panel1=tuple(q8_record[q8_epoch+Q8_WORDS+lid+i*256].load().schedule_after(weighted) for i in range(18))",
+  "focused_tests": {
+    "command": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env PYTHONPATH=. .venv/bin/python -m pytest -q test/unit/test_opaque_load_schedule.py test/unit/test_nv_q6_strict_after_panel1.py",
+    "initial_result": "6 passed in 2.05s",
+    "post_repair_result": "6 passed in 2.04s"
+  },
+  "anchor_rebuild": {
+    "command": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock timeout --signal=INT --kill-after=10s 240s env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python - <<'PY' ... gate._compile_ast(gate._ast('early'),'anchor_default_gate10',root) ... PY",
+    "elapsed_s": 9.027559,
+    "exit_code": 0,
+    "cubin": "docs/task_workflow/evidence/nv-q6-schedule-after-panel1-gate10-20260831/artifacts/anchor_default_gate10/anchor_default_gate10.cubin",
+    "cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "byte_identical_to_frozen_anchor": true
+  },
+  "attempts": [
+    {
+      "name": "scheduled_loads_via_reg_stage",
+      "repair_ordinal": 0,
+      "cubin": "docs/task_workflow/evidence/nv-q6-schedule-after-panel1-gate10-20260831/artifacts/schedule_after/schedule_after.cubin",
+      "cubin_sha256": "cb36ea8b6a2cce09506ebc37d821e97750bee8d6007ff54131731596152b5be6",
+      "source_sha256": "8f4f09388b730f12763b7781734c0b59ca22c35493db1aacb80d4db09f8a3165",
+      "compile_wall_s_lt": 9.474923,
+      "compile_bound_s": 240,
+      "compile_succeeded": true,
+      "report_wrapper_exit_code": 1,
+      "report_wrapper_error": "post-compile TypeError sorting mixed bytes/string artifact keys",
+      "panel1_first_ldg_pc": "0x99c0",
+      "panel1_first_sts_pc": "0xad10",
+      "panel1_span": 309,
+      "families": {"IMMA":256,"LDSM":32,"LDS":184,"LDG":109,"STS":73,"STG":64,"BAR":4,"I2FP":1024,"FMUL":1544,"FADD":1024,"FFMA":0},
+      "instruction_total": 5200,
+      "registers": 255,
+      "stack_bytes": 0,
+      "local_static_bytes": 0,
+      "LDL": 0,
+      "STL": 0,
+      "verdict": "REJECT"
+    },
+    {
+      "name": "scheduled_loads_direct_to_sts",
+      "repair_ordinal": 1,
+      "repair": "remove candidate-only REG staging and barrier join; make scheduled load values the direct STS inputs",
+      "compile_command": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock timeout --signal=INT --kill-after=10s 240s env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python - <<'PY' ... gate._compile_ast(gate._ast('true_late_tail'),'schedule_after_direct',root) ... PY",
+      "compile_elapsed_s": 8.616186,
+      "compile_bound_s": 240,
+      "compile_exit_code": 0,
+      "cubin": "docs/task_workflow/evidence/nv-q6-schedule-after-panel1-gate10-20260831/artifacts/schedule_after_direct/schedule_after_direct.cubin",
+      "cubin_sha256": "4ffb11c5ef413fd7d828a375ad53919a203dc518ab46ff0ba337f80db743b3c7",
+      "source": "docs/task_workflow/evidence/nv-q6-schedule-after-panel1-gate10-20260831/artifacts/schedule_after_direct/schedule_after_direct.cu",
+      "source_sha256": "97bb6cde4148e00d9a4ddabe600bca7f14680466fd633f1e39ca1b587169e16d",
+      "disassembly": "docs/task_workflow/evidence/nv-q6-schedule-after-panel1-gate10-20260831/artifacts/schedule_after_direct/sass/schedule_after_direct-4ffb11c5ef413fd7.nvdisasm",
+      "symbol": "nv_q6_oracle_broad_cta_prefetch_schedule_after_q8_panel1_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0",
+      "instruction_total": 5200,
+      "resources": {"registers":255,"stack_bytes":0,"shared_static_bytes":1024,"local_static_bytes":0,"LDL":0,"STL":0},
+      "families": {"IMMA":256,"LDSM":32,"LDS":184,"LDG":109,"STS":73,"STG":64,"BAR":4,"MEMBAR":0,"ATOM":0,"I2FP":1024,"FMUL":1544,"FADD":1024,"FFMA":0},
+      "chain": {
+        "emitted_producer": {"pc":"0x9630","ordinal":2403,"instruction":"FADD R126, R126, R41"},
+        "token_edge_count": 18,
+        "token_edge_pcs": ["0x97c0","0x97e0","0x97f0","0x9800","0x9810","0x9820","0x9830","0x9840","0x9850","0x9860","0x9870","0x9880","0x9890","0x98a0","0x98b0","0x98c0","0x98d0","0x98e0"],
+        "token_dependency_register": "R126",
+        "panel1_ldg_count": 18,
+        "panel1_ldg_range": "0x99b0..0x9bf0",
+        "overwrite_barrier_pc": "0xac20",
+        "panel1_sts_count": 18,
+        "panel1_sts_range": "0xac90..0xada0",
+        "panel1_publish_barrier_pc": "0xadb0",
+        "producer_lt_all_edges_lt_all_ldg_lt_all_sts": true,
+        "first_ldg_to_first_sts_span": 302
+      },
+      "gates": {
+        "compile_within_240s": true,
+        "producer_before_18_edges_before_ldg_before_sts": true,
+        "panel1_exact_18_ldg_18_sts": true,
+        "panel1_span_le_160": false,
+        "LDG_STS_109_73": true,
+        "IMMA_LDSM_LDS_STG_BAR_256_32_176_64_4": false,
+        "arithmetic_1024_1544_1024_0": true,
+        "no_added_bar_membar_atom": true,
+        "stack_ldl_stl_zero": true
+      },
+      "verdict": "REJECT"
+    }
+  ],
+  "failed_hard_gates": [
+    {"gate":"first LDG to first STS span <= 160","actual":302},
+    {"gate":"scalar LDS == 176","actual":184}
+  ],
+  "correctness": {"status":"NOT_RUN_SASS_GATE_FAILED"},
+  "timing": {"status":"NOT_RUN_SASS_GATE_FAILED","reference_us":256.256,"rounds":31,"required_delta_us":-3.0,"required_wins":24},
+  "lock": {"path":"/tmp/nv-q6-oracle-gpu.lock","wait_s":1200,"acquired_for_all_commands":true,"released":true,"gpu_kernel_launches":0},
+  "next_action": "Do not repair this integration again. Audit why the opaque load schedule expands scalar LDS by eight and why ptxas places the load transport 302 instructions before STS despite the direct value use."
+}

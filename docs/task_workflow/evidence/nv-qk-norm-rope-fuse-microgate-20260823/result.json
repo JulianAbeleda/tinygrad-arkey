@@ -1,0 +1,35 @@
+{
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "eps": 1e-06,
+  "iters": 2000,
+  "method": "render production reduce_output + fused rope variant -> nvcc sm_120a -> bit-exact + cudaEvent",
+  "ptxas": [
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 18 registers, used 0 barriers",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 24 registers, used 1 barriers, 64 bytes smem",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 32 bytes smem",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 24 registers, used 1 barriers, 64 bytes smem",
+    "    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads",
+    "ptxas info    : Used 38 registers, used 1 barriers, 32 bytes smem"
+  ],
+  "results": {
+    "32": {
+      "candidate_us": 1.8117,
+      "control_us": 3.7404,
+      "max_abs_diff": 1.1920929e-07
+    },
+    "8": {
+      "candidate_us": 1.7946,
+      "control_us": 3.7708,
+      "max_abs_diff": 1.1920929e-07
+    }
+  },
+  "schema": "tinygrad.nv_qk_norm_rope_fuse_microgate.v1",
+  "verdicts": {
+    "K_rows_8_bit_exact": false,
+    "Q_rows_32_bit_exact": false
+  }
+}

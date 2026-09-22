@@ -13,11 +13,28 @@ from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.llm.prefill_candidate_runtime import canonical_candidate_set_identity
 from tinygrad.uop.ops import Ops
 
 
 _CANDIDATE_ROUTE_CENSUS: ContextVar[dict[str, Any] | None] = ContextVar("candidate_route_census", default=None)
+
+# Measured per-target warmstart schedule for admitted fp16 overlay GEMMs, keyed by the same declared
+# (backend, arch, wave_size) triple the compact artifacts use.  The candidate
+# context owns its complete output tile.  Applying generic output UPCASTs on
+# top of that tile makes several logical rows alias the same LDS slots; the
+# old apparent 46 ms result was therefore not correctness-qualified.  The
+# exact sm_120 gate is TC-only, which matches the generic reference bitwise.
+_CANDIDATE_WARMSTART_OPTS: tuple[tuple[tuple[str, str, int], tuple[Opt, ...]], ...] = (
+  (("NV", "sm_120", 32), (Opt(OptOps.TC, 0, (-1, 2, 1)),)),
+)
+
+
+def _candidate_warmstart_opts(backend: str, arch: str, wave_size: int) -> tuple[Opt, ...]:
+  for target, opts in _CANDIDATE_WARMSTART_OPTS:
+    if target == (backend, arch, wave_size): return opts
+  return (Opt(OptOps.TC, 0, (-1, 2, 1)),)
 
 
 @contextmanager
@@ -69,6 +86,14 @@ def finalize_candidate_route_census(collector: dict[str, Any], registry) -> dict
               for _,admission in zip(registry.candidate_set.entries, registry.admissions)
               if admission.normalized_payload["workload"]["role"] in enabled_roles}
   selected = dict(collector["selected"])
+  # Exact model-owned captures may replace the dense body after admission.
+  # Reconcile them only when role, shape, and registry canonical identity all
+  # match; target remains inherited from the already validated admission.
+  for key,row in expected.items():
+    if key in selected: continue
+    matches=[x for x in collector["model_forward"].values() if x["role"]==row["role"] and x["shape"]==row["shape"] and
+             x["canonical_identity"]==row["canonical_identity"] and x["one_buffer"] is True]
+    if len(matches)==1: selected[key]={**row,"bindings":matches[0]["bindings"],"model_owned":True}
   missing = [expected[key] for key in sorted(expected.keys() - selected.keys())]
   unexpected = [selected[key] for key in sorted(selected.keys() - expected.keys())]
   mismatched = [selected[key] for key in sorted(expected.keys() & selected.keys())
@@ -95,7 +120,6 @@ def _install_candidate_matmul(x, w, out_f, in_f, admission, compile_artifact: Ma
   # Register-resident candidates remain experimental until their compile/resource authority is promoted too.
   # Fail closed instead of importing that research-only evidence stack into production.
   if _candidate_storage_kind(admission.normalized_payload) == "global_register_resident": return None
-  from tinygrad.codegen.opt import Opt, OptOps
   import tinygrad.codegen.opt.postrange as pr
   m = int(x.shape[-2])
   packed_dtype = admission.context.packed_weight.storage_dtype if admission.context.packed_weight is not None else None
@@ -103,7 +127,9 @@ def _install_candidate_matmul(x, w, out_f, in_f, admission, compile_artifact: Ma
   existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
   if existing is not None and existing.canonical_identity != admission.canonical_identity:
     raise ValueError(f"candidate warmstart key collision for {key!r}")
-  pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key:(Opt(OptOps.TC, 0, (-1, 2, 1)),)}
+  target = admission.normalized_payload["workload"]["target"]
+  opts = _candidate_warmstart_opts(target["backend"], target["arch"], target["wave_size"])
+  pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key:opts}
   pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key:admission.context}
   a = x.reshape(m, in_f).cast(dtypes.float16).contiguous()
   bt = _contiguous_candidate_operand(w.cast(dtypes.float16))

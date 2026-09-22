@@ -1,5 +1,5 @@
 from __future__ import annotations
-import contextlib, math, itertools
+import contextlib, math, itertools, os
 from dataclasses import replace
 from typing import cast, Callable
 from tinygrad.uop.ops import Ops, UOp, KernelInfo, NativeAttentionRequest, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
@@ -12,6 +12,15 @@ from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
+
+def _build_q4_q6_tc_uops(*, tc, wmma_srcs:tuple[UOp, UOp], tc_upcast_axes, wmma_arg,
+                          bounded_k_carriers:tuple[UOp, UOp]|None) -> tuple[tuple[UOp, UOp]|None, UOp]:
+  """Build the Q4 full-range IMMA or paired Q6 K16 tensor-core carrier."""
+  if bounded_k_carriers is not None:
+    return bounded_k_carriers, bounded_k_carriers[0]
+  wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+    wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
+  return None, UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
 
 def _split_range_axis(u:UOp) -> UOp|None:
   """Recover the RANGE that `pm_split_ranges` (tinygrad/codegen/simplify.py:72-75) leaves behind in place
@@ -141,7 +150,12 @@ class Scheduler:
 
     globalizible_rngs = self._globalizable_rngs()
     rng = [x.replace(arg=x.arg[0:-1]+(AxisType.GLOBAL,)) if x in globalizible_rngs else x for x in self.rngs]
-
+    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+      try:
+        from extra.llm_research.prefill.nv_compiler_streamk_codegen import STREAMK_RANGE_PROVENANCE
+        STREAMK_RANGE_PROVENANCE.setdefault("lineage", {}).update({old.key:(new.key,) for old,new in zip(self.rngs,rng) if old is not new})
+      except ImportError:
+        pass
     self.ast = self.ast.substitute(dict(zip(self.rngs, rng)))
 
   def colors(self) -> list[str]:
@@ -163,6 +177,13 @@ class Scheduler:
     replaced_rng = rng.replace(src=(old_sz,))
     sub_axis = (new_rng * old_sz + replaced_rng) if top else (replaced_rng * amount + new_rng)
     self.ast = self.ast.substitute({rng:sub_axis}, name=f"shift {rng.arg[:-1]} {amount} {str(new_type).split('.')[1].lower()}")
+    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+      try:
+        from extra.llm_research.prefill.nv_compiler_streamk_codegen import STREAMK_RANGE_PROVENANCE
+        lineage = STREAMK_RANGE_PROVENANCE.setdefault("lineage", {})
+        lineage[rng.key] = tuple(x.key for x in (replaced_rng, new_rng, sub_axis))
+      except ImportError:
+        pass
     return replaced_rng, new_rng
 
   def ranges_of(self, *axis_type:AxisType) -> list[UOp]: return [r for r in self.rngs if r.arg[-1] in axis_type]
@@ -388,6 +409,18 @@ class Scheduler:
                                       reduceops:list[UOp]) -> None|list[UOp]:
     """Generic tensor-core optimization: pick a TC-compatible dot-product reduce and lower it to WMMA.
     No composite/backend-substitution knowledge lives here -- callers have already ruled that out."""
+    # Research-only Stream-K admission seam.  This is intentionally a no-op in phase one:
+    # the exact packed Q4/Q6 body below remains the implementation, while a flag-on compile
+    # proves the candidate context can reach this point without changing the ordinary AST.
+    # Keep this branch before any candidate-local state is consumed and fail closed for malformed
+    # contexts; the flag is never consulted on the production/default path.
+    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+      streamk = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
+      if streamk is not None:
+        validate = getattr(streamk, "validate", None)
+        if not callable(validate): raise KernelOptError("malformed Stream-K research context")
+        try: validate()
+        except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
@@ -454,6 +487,8 @@ class Scheduler:
           axes = list(axis_choices[axis])
           original_axes = tuple(axes)
           candidate_geometry = getattr(getattr(self.ast.arg, "candidate_context", None), "geometry", None)
+          if _Q6_TC_AXIS_HOOK is not None and candidate_geometry is not None:
+            _Q6_TC_AXIS_HOOK(self, tuple(axes), candidate_geometry)
 
           # tag the reduceop
           self.ast = self.ast.substitute({reduceop: reduceop.replace(tag="TC")})
@@ -467,7 +502,10 @@ class Scheduler:
                 # apply_opt should return the updated range?
                 self.apply_opt(Opt(OptOps.PADTO, idx, tc.dims[i]), append_opt=False) # PADTO might fail
                 axes[i] = self.rngs[idx]
-          except KernelOptError: continue
+          except KernelOptError as exc:
+            if os.environ.get("TINYGRAD_Q6_CANDIDATE_DIAGNOSTICS"):
+              print(f"Q6 candidate rejected before warp lowering: {type(exc).__name__}: {exc}", flush=True)
+            continue
 
           # we create the warp as a whole thing, in case some of these ranges are moved/removed later
           warp = UOp.range(tc.threads, -1, AxisType.WARP)
@@ -525,11 +563,32 @@ class Scheduler:
             if candidate_axes is not None:
               from tinygrad.codegen.opt.kernel_lds import PrecontractKAxis, build_precontract_lds_stage
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
+              physical_outer_n = outer_n
+              streamk_ctx = None
+              if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+                streamk_ctx = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
+                if streamk_ctx is not None:
+                  object.__setattr__(streamk_ctx, "selected_n_key", outer_n.key)
+                  if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and outer_n.vmax + 1 in (32, 128):
+                    from extra.llm_research.prefill.nv_compiler_streamk_codegen import StreamKRangeState
+                    owners = 8 if outer_n.vmax + 1 == 32 else 32
+                    owner = UOp.range(owners, next(self.opt_range), AxisType.GLOBAL)
+                    serial = UOp.range(4, next(self.opt_range), AxisType.LOOP)
+                    mapped_outer_n = owner * 4 + serial
+                    object.__setattr__(streamk_ctx, "range_state", StreamKRangeState(owner, serial, mapped_outer_n, True, True, False, False))
+                    object.__setattr__(streamk_ctx, "selected_n_key", mapped_outer_n.key)
               range_by_id = {r.arg[0]:r for r in self.rngs}
               try: operands, thread_axes, contracts, allocation = candidate_contract.assemble(
-                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, wave_m=wave_m, wave_n=wave_n, lane=lane,
+                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, logical_outer_n=(streamk_ctx.range_state.mapped_outer_n if streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None else None), wave_m=wave_m, wave_n=wave_n, lane=lane,
                 tc_upcast_axes=tc_upcast_axes, range_by_id=range_by_id, allocation_id=None if candidate_contract.register_mode else lambda: _candidate_lds_buffer_id(self))
               except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
+              if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None:
+                state = streamk_ctx.range_state
+                object.__setattr__(state, "precontract_built", True)
+              if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
+                semantic_outer_n = (streamk_ctx.range_state.mapped_outer_n if getattr(streamk_ctx, "range_state", None) is not None and streamk_ctx.range_state.mapped_outer_n is not None else outer_n)
+                from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
+                record_range_provenance(tuple(operands), output_ranges=tuple(self._output_rngs()))
               factors, candidate_pipeline, register_mode = candidate_contract.factors, candidate_contract.pipeline, candidate_contract.register_mode
               pipeline_tc_uop = None
               if register_mode:
@@ -593,30 +652,115 @@ class Scheduler:
                   accumulator_elements=accumulator_total,
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
                   accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
-                  accumulator_dtype=tc.dtype_out)
-                if errors := validate_stage1_uop_graph(graph):
+                  accumulator_dtype=tc.dtype_out, accumulator_lane_width=accumulator_lane_width)
+                if errors := validate_stage1_uop_graph(graph, tc=tc):
                   raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
               elif not register_mode:
                 # Thread the renderer's own declared bank and ordering facts (Renderer.lds_bank_dwords/
                 # lds_bank_cycle_lanes, PG1; Renderer.lds_read_before_next_write_ordered, MB2) into the
                 # cooperative store -- never a per-target snapshot living here or in kernel_lds.py.
+                if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
+                  packed_b = next((o for o in operands if getattr(o, "role", None) == "B"), None)
+                  if packed_b is None or (semantic_outer_n*candidate_geometry.tile[1]).key != packed_b.row_tile_base.key:
+                    raise KernelOptError("Stream-K packed-B identity row base mismatch")
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
                   threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
                   subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None,
                   lds_bank_dwords=self.ren.lds_bank_dwords,lds_bank_cycle_lanes=self.ren.lds_bank_cycle_lanes,
-                  lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered)
+                  lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered,
+                    logical_row_tile_bases=({"A":next(o.row_tile_base for o in operands if o.role == "A"), "B":semantic_outer_n*candidate_geometry.tile[1]} if
+                    os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and
+                    getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None else None))
                 wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:
               wmma_srcs = [
                 UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
                 UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
               ]
+            group_accumulator = getattr(getattr(self.ast.arg, "candidate_context", None), "group_accumulator", None)
+            q6_half_tc_uops = None
             if candidate_axes is not None and pipeline_tc_uop is not None: tc_uop = pipeline_tc_uop
             else:
-              wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
-                wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
-              tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+              from tinygrad.codegen.opt.packed_weight import Q6KQ8SubgroupAccumulatorContract
+              bounded_k_carriers = None
+              if isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract):
+                # Mask before CONTRACT, while logical K is still explicit.
+                # Masking carrier GEPs here is invalid: later output-axis
+                # UNROLL substitution can permute those vector lanes.
+                if candidate_axes is None or candidate_pipeline is not None or register_mode or stage.fragment_b_k16 is None:
+                  raise KernelOptError("Q6_K paired K16 IMMA requires logical-K-masked LDS B fragments")
+                low_b,high_b=stage.fragment_b_k16
+                def _half_imma(b:UOp, tag:str) -> UOp:
+                  wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(wmma_srcs[0], b,
+                    UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=("q6_k16",tag))
+                  return UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=("q6_k16",tag))
+                bounded_k_carriers = (_half_imma(low_b, "low"), _half_imma(high_b, "high"))
+              q6_half_tc_uops, tc_uop = _build_q4_q6_tc_uops(tc=tc, wmma_srcs=wmma_srcs,
+                tc_upcast_axes=tc_upcast_axes, wmma_arg=wmma_arg, bounded_k_carriers=bounded_k_carriers)
+
+            # The direct Q4_K/Q8_1 path deliberately makes one candidate K tile
+            # exactly one IMMA K32 group. Apply its affine metadata correction
+            # here, while every accumulator scalar still owns its precise
+            # logical (M,N,K32) coordinate, and only then reduce outer K. This
+            # avoids both a global [groups,M,N] materialization and the invalid
+            # alternative of first combining differently-scaled int32 groups.
+            if candidate_axes is not None and group_accumulator is not None:
+              from tinygrad.codegen.opt.kernel_lds import PackedPrecontractOperandTemplate, binary_axis_count, fold_binary_axes
+              from tinygrad.codegen.opt.packed_weight import Q4KQ8GroupAccumulatorContract, Q6KQ8SubgroupAccumulatorContract
+              if not isinstance(group_accumulator, (Q4KQ8GroupAccumulatorContract, Q6KQ8SubgroupAccumulatorContract)):
+                raise KernelOptError("candidate group accumulator must use a typed K-quant/Q8_1 ABI")
+              is_q6 = isinstance(group_accumulator, Q6KQ8SubgroupAccumulatorContract)
+              swapped_operands=getattr(getattr(self.ast.arg,"candidate_context",None),"operand_order","activation_a_weight_b")=="weight_a_activation_b"
+              if swapped_operands and is_q6:raise KernelOptError("swapped packed operands are qualified only for Q4_K")
+              if (self.ren.target.device not in ("NV", "CUDA") or tc.dims != (8, 16, 32) or tc.dtype_in != dtypes.char or
+                  tc.dtype_out != dtypes.int or tc.elements_per_thread != (16, 8, 4) or tc.threads != 32):
+                raise KernelOptError("K-quant/Q8_1 group accumulator requires NVIDIA m16n8k32 s8 IMMA")
+              if (candidate_geometry.tile[2] % 32 or factors.k_substeps != candidate_geometry.tile[2]//32 or
+                  candidate_pipeline is not None or register_mode):
+                raise KernelOptError("K-quant/Q8_1 correction requires a non-pipelined LDS tile made of exact K32 substeps")
+              if not (isinstance(operands[0], PackedPrecontractOperandTemplate) and
+                      isinstance(operands[1], PackedPrecontractOperandTemplate)):
+                raise KernelOptError("K-quant/Q8_1 correction requires typed packed A and B operands")
+              expected_providers=(group_accumulator.weight,group_accumulator.activation) if swapped_operands else \
+                                 (group_accumulator.activation,group_accumulator.weight)
+              if tuple(x.fragment_provider for x in operands)!=expected_providers:
+                raise KernelOptError("K-quant/Q8_1 correction providers do not match staged operands")
+              if is_q6 and q6_half_tc_uops is None:
+                raise KernelOptError("Q6_K/Q8_1 correction requires paired masked K16 IMMA subtotals")
+              c_axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[2] if size == 2)
+              if len(c_axes) != binary_axis_count(tc, 2):
+                raise KernelOptError("K-quant/Q8_1 accumulator does not retain the descriptor output axes")
+              c_elem = fold_binary_axes(c_axes)
+              local_m = wave_m*(factors.subtiles_m*tc.dims[1]) + subtile_m*tc.dims[1] + lane//4 + 8*(c_elem//2)
+              local_n = wave_n*(factors.subtiles_n*tc.dims[0]) + subtile_n*tc.dims[0] + 2*(lane%4) + c_elem%2
+              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, (semantic_outer_n if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else outer_n)*candidate_geometry.tile[1]+local_n
+              metadata_bytes_per_row = factors.vectors_per_row*4
+              windows = {window.role:window for window in candidate_geometry.lds_windows}
+              if all(windows[role].stride_bytes >= candidate_geometry.tile[2]+metadata_bytes_per_row for role in ("A", "B")):
+                ordered_metadata = stage.allocation.after(stage.barrier)
+                def _metadata(role, local_row):
+                  window = windows[role]
+                  byte_index = window.base + local_row*window.stride_bytes + candidate_geometry.tile[2] + k_substep*8
+                  byte_values = tuple(ordered_metadata.index(byte_index+i).load().bitcast(dtypes.uint8).cast(dtypes.uint16) for i in range(4))
+                  halves = tuple(byte_values[2*part].bitwise_or(byte_values[2*part+1].lshift(8)).bitcast(dtypes.half) for part in range(2))
+                  return UOp(Ops.STACK, dtypes.half.vec(2), halves)
+                integer_result = q6_half_tc_uops if is_q6 else tc_uop
+                tc_uop = group_accumulator.combine_staged(integer_result,
+                  _metadata("A",local_m) if swapped_operands else _metadata("B",local_n),
+                  _metadata("B",local_n) if swapped_operands else _metadata("A",local_m))
+              else:
+                k_base = outer_k*candidate_geometry.tile[2]+k_substep*32
+                if is_q6:
+                  weight_operand,activation_operand=(operands[0],operands[1]) if swapped_operands else (operands[1],operands[0])
+                  activation_row,weight_column=(logical_n,logical_m) if swapped_operands else (logical_m,logical_n)
+                  tc_uop = group_accumulator.correct(weight_operand.source,activation_operand.source,row=activation_row,column=weight_column,
+                                                     k_base=k_base, integer_dots=q6_half_tc_uops)
+                else:
+                  weight_operand,activation_operand=(operands[0],operands[1]) if swapped_operands else (operands[1],operands[0])
+                  activation_row,weight_column=(logical_n,logical_m) if swapped_operands else (logical_m,logical_n)
+                  tc_uop = group_accumulator.correct(weight_operand.source,activation_operand.source,row=activation_row,column=weight_column,
+                                                     k_base=k_base, integer_dot=tc_uop)
 
             # preserve extra reduces
             reduce_ranges = [x for x in UOp.sink(*reduceop.src[1:]).toposort() if x.op is Ops.RANGE and x.arg[0] not in tc_reduce_axes]
@@ -814,12 +958,31 @@ def _candidate_lds_buffer_id(k:Scheduler) -> int:
 # apply_opts time, before any candidate_context is attached, so it's what the key uses to tell them apart.
 _PACKED_STORAGE_DTYPES = (dtypes.uint16, dtypes.uint32)
 
+# Research-only seam: callers may inspect the packed-fragment scheduler AST before
+# final lowering.  No callback is installed by default and the AST is never mutated.
+_Q6_PRE_SCHEDULER_HOOK = None
+_Q6_PRE_GLOBAL_HOOK = None
+_Q6_TC_AXIS_HOOK = None
+def set_q6_pre_scheduler_hook(callback):
+  global _Q6_PRE_SCHEDULER_HOOK
+  _Q6_PRE_SCHEDULER_HOOK = callback
+def set_q6_pre_global_hook(callback):
+  global _Q6_PRE_GLOBAL_HOOK
+  _Q6_PRE_GLOBAL_HOOK = callback
+def set_q6_tc_axis_hook(callback):
+  global _Q6_TC_AXIS_HOOK
+  _Q6_TC_AXIS_HOOK = callback
+
 def warmstart_key(out_dims, reduce, packed_dtype=None):
   """Public key builder mirroring `_warmstart_key`, for callers (e.g. model-init warmstart-table
   precomputation) that don't have a live Scheduler/AST to derive the discriminator from directly.
   `packed_dtype` is the packed-weight PARAM's storage dtype (e.g. dtypes.uint16/uint32) for a
   packed-weight candidate, or None for the plain dense (non-packed) path."""
-  return (frozenset(out_dims), reduce, frozenset((packed_dtype,)) if packed_dtype is not None else frozenset())
+  packed_dtypes = frozenset(packed_dtype) if isinstance(packed_dtype, (tuple, list, set, frozenset)) else \
+    frozenset((packed_dtype,)) if packed_dtype is not None else frozenset()
+  if not packed_dtypes.issubset(_PACKED_STORAGE_DTYPES):
+    raise ValueError(f"packed warmstart dtype discriminator must use canonical packed storage dtypes, got {packed_dtypes}")
+  return (frozenset(out_dims), reduce, packed_dtypes)
 
 def _warmstart_key(k):
   # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce,
@@ -840,6 +1003,8 @@ def _warmstart_match(k):
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
+  if _Q6_PRE_GLOBAL_HOOK is not None:
+    _Q6_PRE_GLOBAL_HOOK(ast, k)
   k.convert_loop_to_global()
   required_native = ast.arg.required_native_attention if isinstance(ast.arg,KernelInfo) else None
   if required_native is not None:
@@ -874,4 +1039,27 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
   k.bound_expanded_reduction_pressure()
-  return k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
+  # Research-only logical global-range mapping seam.  A context may provide a
+  # pure mapper(range)->UOp; the RANGE node itself remains the physical launch
+  # axis, while semantic consumers see the mapped logical coordinate.  No
+  # mapper is installed by default, so ordinary ASTs are untouched.
+  if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
+    mapper = getattr(getattr(k.ast.arg, "candidate_context", None), "logical_global_range_map", None)
+    if callable(mapper):
+      selected = mapper(k.ast, k)
+      if selected is None: selected = {}
+      if not isinstance(selected, dict): raise KernelOptError("Stream-K range selector must return a dict")
+      ranges = {rng.key:rng for rng in k._output_rngs()}
+      substitutions = {}
+      for key, mapped in selected.items():
+        if key not in ranges: raise KernelOptError("Stream-K range selector returned an unknown output RANGE")
+        if not isinstance(mapped, UOp): raise KernelOptError("Stream-K logical range mapper must return UOp")
+        substitutions[ranges[key]] = mapped
+      if substitutions:
+        from extra.llm_research.prefill.nv_compiler_streamk_codegen import one_pass_substitute
+        k.ast = one_pass_substitute(k.ast, substitutions)
+  optimized = k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
+  if _Q6_PRE_SCHEDULER_HOOK is not None and getattr(k.ast.arg, "candidate_context", None) is not None:
+    replacement = _Q6_PRE_SCHEDULER_HOOK(optimized)
+    if replacement is not None: optimized = replacement
+  return optimized

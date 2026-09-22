@@ -1,0 +1,11 @@
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_qdata_t_epi_resadd_4096_4096' for 'sm_120a'
+ptxas info    : Function properties for q4k_g3_lanemap_gemv_qdata_t_epi_resadd_4096_4096
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 44 registers, used 0 barriers
+ptxas info    : Compile time = 9.754 ms
+ptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'
+ptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 43 registers, used 0 barriers
+ptxas info    : Compile time = 8.619 ms

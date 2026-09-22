@@ -1,0 +1,6 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q6_direct_shared_q8_attention",
+  "description": "Q6 attention-V direct-output consumer promotion record (nv-q6-direct-shared-q8-promotion-scope-20260814.md, artifact docs/task_workflow/output/nv-q6-direct-shared-q8-promotion-20260814.json). This is a sub-variant of the already-promoted decode_shared_q8_attention max17 lease: when both records opt in NV sm_120, the loader installs SharedQ8AttentionAdmission(..., cooperative_q4=True, q6_direct_output=True). The q6_direct_output flag only changes the Q6_K V consumer (llama vec_dot_q6_K_q8_1_impl_mmvq geometry, one row/CTA, 128 threads, two per-term __dp4a with correct per-term scale); Q4_K V blocks keep the cooperative Q4 consumer and the shared Q8_1 provider is untouched. PROMOTED to NV sm_120: all-depth robust reverse bracket negative at d512/d2048/d4096 (-78.1/-81.1/-53.4 us/token), census 16 direct Q6 / 86 coop / 34 fused / 0 legacy, semantic gate_pass true, post-flip record==forced-open (q6_direct=16), pg3 legacy sha 27857cb8ca03 unmoved. AMD/Metal need their own measured record plus pg3 render parity before admission.",
+  "promoted_targets": [{"backend": "NV", "architecture": "sm_120"}]
+}

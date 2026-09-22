@@ -1,0 +1,60 @@
+{
+  "schema": "tinygrad.q4k_ffn_down_mmvq_producer_owned_construct_diagnosis.v1",
+  "date": "2026-08-13",
+  "branch": "nvidia-bringup-20260731",
+  "head": "4337ff29e",
+  "gpu": "RTX 5090 sm_120 DEV=NV",
+  "block": 16,
+  "candidate_commit": "d63f0a7c9 2026-08-12 17:48 (owned-input-boundary MMVQ)",
+  "m2a_promotion_commit": "b46905281 2026-08-12 18:53 (decode-q4k-w1w3-fp16-store, NV sm_120)",
+  "m2b_promotion_commit": "8440c51b5 2026-08-12 19:45 (decode-ffn-down-resadd, NV sm_120)",
+  "promotion_resolution": {
+    "decode_q4k_w1w3_fusion_promoted": true,
+    "decode_q4k_w1w3_fp16_store_promoted": true,
+    "decode_ffn_down_resadd_promoted": true
+  },
+  "control_census_on_branch": {
+    "q4k_g3_lanemap_gemv_4096_12288": 0,
+    "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288": 18,
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": 36,
+    "note": "installed control Q4 FFN-down is now the M2b-promoted epi_ffnresadd name; the harness still expects the pre-M2b q4k_g3_lanemap_gemv_4096_12288"
+  },
+  "call_site_probe": {
+    "admission_reached": true,
+    "observed": {
+      "x_dtype": "dtypes.half",
+      "x_shape": [1, 1, 12288],
+      "epilogue_input_keys": ["normed_h"],
+      "capability": ["NV", "sm_120"],
+      "owned_input_boundary": true
+    },
+    "q4k_ffn_down_mmvq_call_return": "None",
+    "failing_guards": [
+      "epilogue_inputs non-empty (normed_h threaded by the promoted M2b residual-add route) -> line 143 return None",
+      "x.dtype != float32 (w1w3 producer stores fp16 in-kernel under promoted M2a fused16) -> owned-boundary line 146 return None"
+    ]
+  },
+  "gate1_qualify": {
+    "command": "DEV=NV timeout 1800 python3 extra/llm_research/decode/q4k_ffn_down_mmvq_qualification.py --mode qualify --owned-input-boundary --indices 16 --count 8 --out extra/llm_research/decode/nv-q4-down-owned-q8-gate-20260813.json",
+    "outcome": "control arm failed its own topology check before any comparison",
+    "control_error": "production topology failed: {'provider_count': 0, 'consumer_count': 0, 'installed_q4_ffn_down_count': 0, 'expected_provider_count': 0, 'expected_consumer_count': 0, 'expected_installed_count': 18, 'adapter_kernel_count': 0, 'pass': False}",
+    "json_written": false
+  },
+  "gate2_timing": {
+    "command": "DEV=NV timeout 1800 python3 extra/llm_research/decode/q4k_ffn_down_mmvq_qualification.py --mode timing --owned-input-boundary --indices 16 --count 20 --reps 3 --out extra/llm_research/decode/nv-q4-down-owned-q8-bracket-20260813.json",
+    "outcome": "ran to completion but is VACUOUS: candidate arm fell back to the installed route (admission is a no-op because the call returns None)",
+    "arms_identical": true,
+    "token_stream_hash": "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6",
+    "control_bracket_median_ms": 5.153105375,
+    "candidate_arm_median_ms": 5.16172825,
+    "candidate_minus_control_ms": 0.008622875,
+    "note": "+8.62 us is control-vs-control inter-arm drift, NOT a candidate measurement; harness verdict NO_GO_WALL is vacuous"
+  },
+  "conclusion": "NO-GO: the producer-owned successor cannot be measured as pre-wired on this branch. The M2a/M2b promotions landed after the candidate commit and moved the control topology beneath it (fp16 store folded into the w1w3 producer, residual add folded into the ffn_down GEMV, installed kernel renamed). No minimal candidate-only fix restores the pre-wired gate because the harness control-arm topology check (expected q4k_g3_lanemap_gemv_4096_12288) lives outside tinygrad/llm/q4k_ffn_down_mmvq.py, and the owned-boundary contract itself (remove one fp16 materialize, net-zero) no longer matches the promoted control. Production untouched; no code changes made.",
+  "evidence_files": [
+    "extra/llm_research/decode/nv-q4-down-owned-q8-bracket-20260813.json",
+    "extra/llm_research/decode/nv-q4-down-owned-q8-bracket-20260813/control-0.json",
+    "extra/llm_research/decode/nv-q4-down-owned-q8-bracket-20260813/candidate-1.json",
+    "extra/llm_research/decode/nv-q4-down-owned-q8-bracket-20260813/control-2.json"
+  ]
+}

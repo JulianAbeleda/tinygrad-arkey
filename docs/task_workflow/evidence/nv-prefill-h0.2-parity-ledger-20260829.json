@@ -1,0 +1,41 @@
+{
+  "schema": "tinygrad.nv_prefill_h0_2_parity_ledger.v1",
+  "date": "2026-08-29",
+  "packet": "H0.2",
+  "status": "STOP",
+  "authority": {
+    "h0": "docs/task_workflow/evidence/nv-prefill-h0-integration-decision-20260829.json",
+    "p0": "docs/task_workflow/evidence/nv-prefill-h0.1-census-20260829/result.json",
+    "s0": "docs/task_workflow/output/nv-prefill-post-substrate-authority-20260829-r4.md",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "profile": false,
+    "environment": {"QK_PRIMITIVE":"1", "NV_COMPILER_Q4_IMMA_PP512":"1", "NV_COMPILER_Q4_IMMA_K_PP512":"1", "NV_COMPILER_Q4_IMMA_QO_PP512":"1", "NV_COMPILER_Q4_IMMA_UNROLL":"4", "HCQ_NUM_COMPUTE":"2", "HCQ_NV_READY_PLACEMENT":"0", "NV_Q4_IMMA_PP512":null, "NV_UNROLL":null, "queue_cut":"docs/task_workflow/evidence/nv-compiler-q4k-gkqo-20260828/combined-flash-direct-deps-cut-v2.json"}
+  },
+  "parity": {
+    "workload": "Qwen3-8B Q4_K_M pp512 greedy",
+    "token": 198,
+    "llama_ms": {"median":35.019399, "minimum":34.680367},
+    "tinygrad_ms": {"median":67.338268, "minimum":67.129717},
+    "gap_ms": {"median":32.318869, "minimum":32.449350},
+    "tinygrad_samples_ms":[67.129717,67.187765,67.340473,67.371291,67.331756,67.338268,67.343529,67.348608,67.318912],
+    "correctness":"PASS: finite route, token 198, deep-20 exact"
+  },
+  "census": {"q8_producer":198, "compiler_main":198, "canonical_weights":198, "unknown":0, "remaining_v_down_fp16_overlays":54, "weight_copy_kernels":0, "old_fixups":0},
+  "ranked_families": [
+    {"rank":1,"family":"B gate/up scheduling counters","status":"UNPROMOTABLE_STOP","evidence":"docs/task_workflow/evidence/nv-prefill-bf-parity-ledger-20260829.json","measured":"control 352.864 us; best double-buffer 351.328 us; no required counter movement above 10 us noise","gap_role":"candidate mechanism not established"},
+    {"rank":2,"family":"C Q4-down stage localization","status":"MISSING_SUBSTRATE_STOP","evidence":"docs/task_workflow/evidence/nv-prefill-q4down-staged-oracle-20260829/c0-aggregate-18.json","measured":"18/18 allclose, max error 2.7985; producer/weight/dot/correction/epilogue unobservable","gap_role":"cannot assign a removable stage"},
+    {"rank":3,"family":"D Q6-down lifecycle/boundary","status":"MISSING_SUBSTRATE_STOP","evidence":"docs/task_workflow/evidence/nv-prefill-q6down-boundary-r9-real-20260829/verdict.json","measured":"G0/G1 PASS, 100% event coverage; allocation/copy/graph-copy/materialization unavailable; no exposure clears noise","gap_role":"54 FP16 overlays remain"},
+    {"rank":4,"family":"F Flash vector","status":"UNPROMOTABLE_STOP","evidence":"docs/task_workflow/evidence/nv-prefill-bf-parity-ledger-20260829.json","measured":"36/36 calls and exact logits, but candidate 6703-6720 us/call vs installed 99-107 us/call","gap_role":"correctness without matched-R9 performance"}
+  ],
+  "next_bounded_luna_low_nodes": [
+    {"node":"C-substrate ABI","prerequisite":"new lane-specific authorization and production intermediate-buffer ABI","acceptance":"18/18 role mapping; complete stage allclose; no host sync; exact census; matched R9"},
+    {"node":"D-lifecycle observers","prerequisite":"observer capabilities for allocations, copyin/out, graph-copy, materialization","acceptance":"independent boundary exposure above noise, zero duplicate charges, G0/G1 and matched R9"},
+    {"node":"B-counter movement","prerequisite":"fresh B PASS gate or explicit reopen authorization","acceptance":"tensor-duty/long-scoreboard/fragment movement each above declared noise with correctness and matched R9"},
+    {"node":"F-installed comparator","prerequisite":"installed comparator and exact 36-call matched-R9 harness","acceptance":"candidate minimum and median below both controls, exact logits/token and census"}
+  ],
+  "unauthorized": ["B0.4/B1", "C0.3/C1", "D0.5/D1", "F2", "P2", "source edits", "composition", "promotion"],
+  "decision":"STOP: no implementation is accepted for composition; P2 remains unauthorized",
+  "next_packet":null
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "tinygrad.nv_q6k_post_barrier_region_gate.v1",
+  "date": "2026-08-05",
+  "git_commit": "a1a51c349d1b8c55a6373631913ea7845e99cc8d",
+  "capability": {
+    "name": "PostBarrierRegion",
+    "kind": "typed graph-authored predicated region anchored after an unconditional workgroup barrier",
+    "safety": [
+      "renderer must opt in",
+      "IF sources must be bool gate plus anchor barrier",
+      "ENDIF must own at least one body root",
+      "every body root must depend on the IF",
+      "no workgroup barrier may occur inside the predicated region"
+    ],
+    "supported_renderers": ["CUDA C-style", "PTX"],
+    "unsupported_renderers_fail_closed": true,
+    "unused_default_path_changed": false,
+    "bank_recommendation": "BANK_CLOSED_DEFAULT_AS_GENERIC_SUBSTRATE_NO_ROUTE_PROMOTION"
+  },
+  "nv_sass_proof": {
+    "pass": true,
+    "barrier": {"address": "2c80", "instruction": "BAR.SYNC.DEFER_BLOCKING"},
+    "producer_exit": {"address": "2c90", "instruction": "@P1 EXIT", "predicate_meaning": "threadIdx.x >= 32"},
+    "consumer_lds_addresses": ["2d00", "2d10", "2d20"],
+    "consumer_shuffle_addresses": ["2d60", "2d80", "2da0", "2dc0", "2de0"],
+    "ordered_contract": "barrier < predicated producer EXIT < three LDS < five SHFL",
+    "resources": {"registers": 38, "explicit_shared_bytes": 384, "reported_shared_bytes": 2432, "sass_census_instructions": 729}
+  },
+  "correctness": {
+    "pass": true,
+    "q8_oracle_max_abs": 0.010935783386230469,
+    "q8_oracle_atol": 0.02,
+    "candidate_vs_flat_control_max_abs": 0.000003814697265625,
+    "difference_reason": "floating-point reduction association"
+  },
+  "timing": {
+    "raw_artifact": "/tmp/q6k_q8_warp_lane_stage_region_interleaved.json",
+    "raw_sha256": "30bb1ce43f55ef4f0dc13424c735e2fcf3aa354fc9ee95fb1feed84cf6513664",
+    "method": "interleaved A/B/A",
+    "reps": 15,
+    "replays_per_arm": 100,
+    "flat_control_median_us": 64.66083,
+    "lane_stage_median_us": 65.06629,
+    "median_paired_delta_us": 0.18535,
+    "candidate_minus_installed_us": -1.357105,
+    "pair_signs": {"candidate_slower": 8, "candidate_faster": 7},
+    "trimmed_abs_delta_lt_2us": {"pairs": 14, "median_delta_us": 0.3315475},
+    "gate": "FAIL"
+  },
+  "verdict": {
+    "emitter_blocker": "RESOLVED",
+    "llama_reduction_topology": "NO_GO_AS_NEXT_WALL_LEVER",
+    "performance_recovery_claim": false,
+    "substrate_bank": "YES_CLOSED_DEFAULT_NV_ONLY",
+    "flat_q8_dp4a_route": "REMAINS_REOPEN_MEASURED_WIN_VS_INSTALLED",
+    "next": "integrate the flat Q6 consumer into the mixed Q4/Q4/Q6 shared-Q8 model group and run full-logit qualification"
+  }
+}

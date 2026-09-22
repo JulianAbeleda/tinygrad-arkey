@@ -1,0 +1,31 @@
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    9437184,
+    8192,
+    16384
+  ],
+  "cubin": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/q4k_g3_lanemap_gemv_epi_resadd_4096_4096.cubin",
+  "cubin_sha256": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda",
+  "grid": [
+    4096,
+    1,
+    1
+  ],
+  "n_bufs": 4,
+  "reps": 2000,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+  "verdict": "CUDA_LAUNCH_OK"
+}
+Collecting data...
+Generating '/tmp/nsys-report-17d9.qdstrm'
+[1/1] [0%                          ] o-exact.nsys-rep[1/1] [0%                          ] o-exact.nsys-rep[1/1] [=======36%                  ] o-exact.nsys-rep[1/1] [==========49%               ] o-exact.nsys-rep[1/1] [==============63%           ] o-exact.nsys-rep[1/1] [========================100%] o-exact.nsys-rep[1/1] [========================100%] o-exact.nsys-rep
+Generated:
+	/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase4/o-exact.nsys-rep

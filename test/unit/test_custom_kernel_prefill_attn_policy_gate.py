@@ -5,14 +5,12 @@ three pure policy gates this package addresses is `model.py:72`'s
 The shape half (ADMITTED_GRIDS) is a shape gate and stays. The target-equality half is split out into its own,
 separately named and separately testable policy predicate, `_custom_kernel_prefill_attn_promoted`.
 
-Unlike TG3's quant-gate split, this is NOT decomposed into an independent capability question: the route
-injects an already-captured, hand-authored AMD gfx1100 machine-code program (extra/llm_research/
-generate_shared_attention_captures) via Tensor.uop_program, not a generically renderer-lowered operation, so
-there is no separate "can this target express it" fact apart from "was a captured program promoted for it".
-Promotion must therefore default CLOSED (not open like ModelRoutePlan.target_promoted's "no record" default):
-an 8B/14B Qwen3 model on Metal satisfies the identical ADMITTED_GRIDS shape as on AMD, so a fail-open default
-would attempt to inject raw AMD ISA on a non-AMD renderer. See the module-level comment above
-`_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS` in tinygrad/llm/model.py for the full reasoning.
+Unlike TG3's quant-gate split, this is NOT decomposed into an independent capability question: the fused
+kernel is built as UOps by FlashPrefillAttentionSpec.emit() and injected via Tensor.uop_program, and the
+per-target fragment decomposition is the unproven-until-measured part. Promotion therefore defaults CLOSED
+(not open like ModelRoutePlan.target_promoted's "no record" default) and is sourced from the BoltBeam
+route-policy record in tinygrad/llm/generated/ (see the module-level comment above
+`_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS` in tinygrad/llm/model.py for the full reasoning).
 """
 from tinygrad.llm.fused_attention import ADMITTED_GRIDS
 from tinygrad.llm.model import (
@@ -44,11 +42,26 @@ def test_promoted_targets_default_is_closed_not_open():
   """Unlike ModelRoutePlan.target_promoted (TG3's "no record -> admitted" default, correct for the quant
   primitives because a real capability check ALSO fails closed on Metal), this route has no independent
   capability check, so an unpromoted target must read as denied, never as undecided-and-therefore-admitted."""
-  assert _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS == frozenset({("AMD", "gfx1100")})
+  assert _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS == frozenset({("AMD", "gfx1100"), ("NV", "sm_120")})
   # A shape that is proven identical on AMD (8B: n_heads=32, n_kv_heads=8) must NOT silently light up on a
   # same-shaped Metal model just because the shape gate alone matched.
   assert (32, 8, 512) in ADMITTED_GRIDS
   assert not _custom_kernel_prefill_attn_promoted("METAL", "Apple9")
+
+
+def test_promoted_set_is_sourced_from_the_boltbeam_record():
+  """The enforced set must be exactly the checked-in promotion record, not a second copy."""
+  import json
+  from pathlib import Path
+  from tinygrad.llm import model as llm_model
+  record_path = Path(llm_model.__file__).with_name("generated") / "custom-kernel-prefill-attention-route-policy.json"
+  record = json.loads(record_path.read_text())
+  assert record["schema"] == "boltbeam.route_policy.v1"
+  assert frozenset((t.get("backend"), t.get("architecture")) for t in record["promoted_targets"]) == \
+    _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
+  # NV sm_120 entered the record only after 5090 e2e token parity (P5 of the NV fused-attention port
+  # scope): first-token digits identical to the SDPA baseline, max_abs_error ~1e-4, full write coverage.
+  assert ("NV", "sm_120") in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
 
 
 def test_amd_admission_is_unchanged_by_the_tg8_split():

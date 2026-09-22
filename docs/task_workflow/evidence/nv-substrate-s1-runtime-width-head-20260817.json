@@ -1,0 +1,29 @@
+{
+  "schema": "tinygrad.nv_substrate_s1_runtime_width.v1",
+  "session": "2026-08-17, RTX 5090, Qwen3-8B-Q4_K_M, d512, native DEV=NV",
+  "source": "HCQGraph profiler replay JSONL (/tmp/nv_decode_wall_ledger/replays.jsonl), runtime-recorded per-node dependency lists; steady-token signature (32,64,128,256,114), 34 steady tokens, last steady token analyzed",
+  "finding": "At HEAD the native NV decode DAG already has runtime width (q/k/v siblings; max-ready 10), so the 08-15 'memory planner serializes q/k/v into a chain' finding does NOT reproduce on the current NV production route (it was measured on the stale CUDA route at 08-15 HEAD). S1 (DAG width) is present at HEAD; the missing substrate is S2 execution (multi-GPFIFO placement).",
+  "per_token": {
+    "nodes": 594,
+    "replays_per_token": 5,
+    "runtime_deps_max_ready_width": 10,
+    "runtime_deps_critical_path_levels": 189,
+    "qkv_siblings": "q4k_g3_lanemap_gemv_4096_4096 and q4k_g3_lanemap_gemv_1024_4096 share the same 3 predecessors (E_16_4_2_8_16_2_4_4, r_32_32_4_32_4, E_32_32_4); neither is a predecessor of the other",
+    "ready_set_histogram": {
+      "1": 69, "2": 21, "3": 25, "4": 20, "5": 23, "6": 13, "7": 12, "8": 4, "9": 1, "10": 1
+    },
+    "widest_ready_set_level_5": [
+      "q4k_g3_lanemap_gemv_4096_4096",
+      "q4k_g3_lanemap_gemv_1024_4096",
+      "q6k_v_four_warp_fp16_direct_1024_4096",
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "q4k_warp_coop_q8_dp4a_partial_1024_4096",
+      "q6k_q8_warp_direct_1024_4096",
+      "r_16_256_*",
+      "reduce_output_rmsnorm_1_4096",
+      "E_16_32_4_2_*",
+      "E_8_8_16_2_*"
+    ]
+  },
+  "implication_for_scope": "S1 as scoped (targeted memory-planner change to restore q/k/v siblings) is already satisfied by measurement at HEAD. The first real construction becomes S2: native multi-GPFIFO placement of the width-10 DAG via the existing HCQ name-pinned admission policy, then a same-session wall A/B on the production route."
+}

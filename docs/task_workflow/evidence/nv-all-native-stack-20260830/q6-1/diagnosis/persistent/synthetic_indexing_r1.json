@@ -1,0 +1,19 @@
+{
+  "schema": "tinygrad.nv_q6_persistent.synthetic_indexing.v1",
+  "status": "PASS",
+  "weight_pattern": "uint16 0x3c00",
+  "results": {
+    "attn_v": {
+      "finite": true,
+      "nonzero": true,
+      "activation_change": true,
+      "max_default_diff": 0.0
+    },
+    "ffn_down": {
+      "finite": true,
+      "nonzero": true,
+      "activation_change": true,
+      "max_default_diff": 0.0
+    }
+  }
+}

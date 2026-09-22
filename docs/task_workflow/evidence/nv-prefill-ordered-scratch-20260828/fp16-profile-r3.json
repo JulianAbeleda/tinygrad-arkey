@@ -1,0 +1,236 @@
+{
+  "schema": "prefill-whole-synced-authority.v1",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_profile": {
+    "id": "qwen3_8b_q4k_m_gfx1100",
+    "note": "8B automatic prefill authority path",
+    "env_defaults": {}
+  },
+  "mode": "smoke",
+  "chunk_n": 512,
+  "chunk_ms": {
+    "0": 96.5562
+  },
+  "chunk_samples_ms": {
+    "0": [
+      96.5562,
+      96.5903,
+      96.7
+    ]
+  },
+  "device_profile": {
+    "0": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    }
+  },
+  "whole_tok_s": {
+    "512": 5302.61
+  },
+  "graph_gemm": true,
+  "prefill_v2": true,
+  "prefill_route": "FULL_RESIDENT_OVERLAY",
+  "shared_attention": {
+    "schema": "shared-prefill-attention-route.v3",
+    "requested": true,
+    "route_id": "prefill_flash_attention_generated",
+    "boundary": "custom_kernel_fused_attention",
+    "semantic_candidate": null,
+    "selected_lowering": "amd_gfx1100_q16_grid_hd128_loop_attention",
+    "fallback_contract": "ordinary_sdpa",
+    "fusion_proven": true,
+    "dual_wmma_proven": false,
+    "performance_proven": false,
+    "promotion_eligible": true,
+    "blocker": null,
+    "model_forward_attn_qo_identity": null,
+    "model_forward_attn_qo_one_buffer": false
+  },
+  "custom_kernel_attention_trace": {
+    "dispatches": 72,
+    "last_identity": "nv_sm120_q16_grid_hd128_loop_attention:role=attention_tile,Hq=32,Hkv=8,q_tokens=512,kv_tokens=512,Hd=128"
+  },
+  "K": 1,
+  "warmups": 3,
+  "rounds": 3,
+  "pin_clock": false,
+  "logits_only": false,
+  "clock_pin": null,
+  "git_short": "0f534ece8",
+  "git_dirty": true,
+  "route_attribution": {
+    "prefill_route_family": "prefill_wmma_lds_dbuf_generated",
+    "prefill_route_pure": true,
+    "prefill_route_rolled_back": false,
+    "prefill_route_provenance": "tinygrad_scheduler_generated",
+    "prefill_q4k_route_family": "prefill_q4k_direct_tile4x4_default",
+    "prefill_q4k_route_pure": true,
+    "prefill_q4k_route_rolled_back": false,
+    "prefill_q4k_route_provenance": "machine_authored_generated"
+  },
+  "candidate_set_route_census": {
+    "schema": "prefill-candidate-set-route-census.v1",
+    "passed": true,
+    "policy_roles": [
+      "attn_kv",
+      "attn_qo",
+      "ffn_down",
+      "ffn_gate_up"
+    ],
+    "expected_entry_count": 4,
+    "selected_entry_count": 4,
+    "model_forward": [],
+    "selected": [
+      {
+        "profile": "qwen3_8b_q4k_m_sm120",
+        "role": "attn_kv",
+        "shape": {
+          "m": 512,
+          "n": 1024,
+          "k": 4096
+        },
+        "target": {
+          "backend": "NV",
+          "arch": "sm_120",
+          "wave_size": 32
+        },
+        "canonical_identity": "81b2583b95e4fcddb614036cfd9ab0abcbd8a245774be7c36dcc143e3bbdb945",
+        "bindings": 144
+      },
+      {
+        "profile": "qwen3_8b_q4k_m_sm120",
+        "role": "attn_qo",
+        "shape": {
+          "m": 512,
+          "n": 4096,
+          "k": 4096
+        },
+        "target": {
+          "backend": "NV",
+          "arch": "sm_120",
+          "wave_size": 32
+        },
+        "canonical_identity": "c45a763ae5c9670c8487face4b4e20a015b239ee60a2ad1520cde4ede6ef36c2",
+        "bindings": 144
+      },
+      {
+        "profile": "qwen3_8b_q4k_m_sm120",
+        "role": "ffn_down",
+        "shape": {
+          "m": 512,
+          "n": 4096,
+          "k": 12288
+        },
+        "target": {
+          "backend": "NV",
+          "arch": "sm_120",
+          "wave_size": 32
+        },
+        "canonical_identity": "03896c56299ec804cdeeb477becc2a574b33e76d5e2cabc7c4dc86678b7b1e62",
+        "bindings": 72
+      },
+      {
+        "profile": "qwen3_8b_q4k_m_sm120",
+        "role": "ffn_gate_up",
+        "shape": {
+          "m": 512,
+          "n": 12288,
+          "k": 4096
+        },
+        "target": {
+          "backend": "NV",
+          "arch": "sm_120",
+          "wave_size": 32
+        },
+        "canonical_identity": "fcc738029cd7357fe9574e421f2d0f8874aad12a8fdaa5f798e255c14013d558",
+        "bindings": 144
+      }
+    ],
+    "missing": [],
+    "unexpected": [],
+    "identity_mismatches": []
+  },
+  "prefill_role_routes": {
+    "ffn_gate_up": "generated_lds_buffer2",
+    "attn_kv": "generated_lds_buffer2",
+    "ffn_down": "generated_lds_buffer2",
+    "attn_qo": "generated_lds_buffer2"
+  },
+  "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
+  "comparator_id": null,
+  "candidate_id": null,
+  "primitive_class": null,
+  "threshold": null,
+  "ledger": null,
+  "quality_gate": {
+    "status": "MISSING",
+    "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)"
+  },
+  "reproducibility_band": {
+    "per_chunk": {
+      "0": {
+        "n": 3,
+        "min_ms": 96.5562,
+        "max_ms": 96.7,
+        "mean_ms": 96.6155,
+        "std_ms": 0.0614,
+        "cv": 0.00064,
+        "spread": 0.00149
+      }
+    },
+    "worst_cv": 0.00064,
+    "worst_spread": 0.00149,
+    "single_sample": false
+  },
+  "measurement_regime": {
+    "regime_id": "generated_pure",
+    "provenance": "tinygrad_scheduler_generated",
+    "route_pure": true,
+    "route_rolled_back": false,
+    "mode": "smoke",
+    "logits_only": false,
+    "authoritative_for_generated_promotion": true
+  },
+  "authority_completeness": {
+    "schema": "prefill-whole-synced-authority-completeness.v1",
+    "fields": {
+      "comparator_id": false,
+      "reproducibility_band": true,
+      "candidate_id": false,
+      "primitive_class": false,
+      "threshold": false,
+      "ledger": false,
+      "quality_gate_pass": false
+    },
+    "missing": [
+      "comparator_id",
+      "candidate_id",
+      "primitive_class",
+      "threshold",
+      "ledger",
+      "quality_gate_pass"
+    ],
+    "ok": false
+  },
+  "prefill_route_binding_gate": {
+    "schema": "prefill-route-binding-gate.v1",
+    "verdict": "PREFILL_ROUTE_BINDING_PASS",
+    "required_route": null,
+    "selected_family": "prefill_gemm",
+    "selected_route": "prefill_wmma_lds_dbuf_generated",
+    "effective_routes": [
+      "decode_flash_live_split_g4_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "packed_wmma_prefill_generated",
+      "prefill_flash_attention_generated",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_wmma_lds_dbuf_generated"
+    ],
+    "binding_regime": "generated_pure",
+    "candidate_set_requested": true,
+    "failures": []
+  }
+}

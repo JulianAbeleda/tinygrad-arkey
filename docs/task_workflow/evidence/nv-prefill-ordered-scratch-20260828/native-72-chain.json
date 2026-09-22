@@ -1,0 +1,47 @@
+{
+  "call_census": {
+    "fixup": 72,
+    "main": 72,
+    "producer": 72
+  },
+  "chains": 72,
+  "correctness": {
+    "finite": true,
+    "reference_minmax": {
+      "0": [
+        -5.763288497924805,
+        4.5539870262146
+      ],
+      "1": [
+        -8.33227252960205,
+        11.43675422668457
+      ],
+      "71": [
+        -8.33227252960205,
+        11.43675422668457
+      ]
+    },
+    "swap_rebind_exact": {
+      "0": true,
+      "1": true,
+      "71": true
+    }
+  },
+  "ordered_workspace": {
+    "bounded_bytes": 22283600,
+    "distinct_bytes": 1604419200,
+    "id_physical_bases": 1,
+    "partial_physical_bases": 1,
+    "saved_bytes": 1582135600
+  },
+  "schema": "tinygrad.nv_q4_imma_ordered_scratch_gate.v1",
+  "status": "PASS",
+  "timing": {
+    "capture_sequence_ms": [
+      294.3571580108255,
+      204.99510900117457,
+      33.84857508353889
+    ],
+    "hot_swapped_ms": 33.86911400593817
+  }
+}

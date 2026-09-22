@@ -1,0 +1,66 @@
+{
+  "condition_mib": 0,
+  "llama_cubin_sha256": "cc76cd433d9b56dc83fc80813631c450dd703972cdd994f9c193124d3af263e9",
+  "llama_output_finite": true,
+  "llama_output_zero": true,
+  "logical_tc": 768,
+  "rows": [
+    {
+      "arm": "tiny",
+      "event_us": 4.1915202140808105
+    },
+    {
+      "arm": "llama",
+      "event_us": 4.264480113983154
+    },
+    {
+      "arm": "llama",
+      "event_us": 4.262368202209473
+    },
+    {
+      "arm": "tiny",
+      "event_us": 4.19155216217041
+    },
+    {
+      "arm": "tiny",
+      "event_us": 4.190271854400635
+    },
+    {
+      "arm": "llama",
+      "event_us": 4.264448165893555
+    },
+    {
+      "arm": "llama",
+      "event_us": 4.266016006469727
+    },
+    {
+      "arm": "tiny",
+      "event_us": 4.188223838806152
+    }
+  ],
+  "schema": "tinygrad.nv_flash_score_exact_common_cuda.v1",
+  "summary": {
+    "llama": {
+      "median_event_us": 4.2644641399383545,
+      "samples": [
+        4.264480113983154,
+        4.262368202209473,
+        4.264448165893555,
+        4.266016006469727
+      ]
+    },
+    "tiny": {
+      "median_event_us": 4.190896034240723,
+      "samples": [
+        4.1915202140808105,
+        4.19155216217041,
+        4.190271854400635,
+        4.188223838806152
+      ]
+    }
+  },
+  "tiny_cubin_sha256": "b18b18d244ae9f8b65e7bdb4627f2f1915b6b8eeb3a9b9cd1dc56b340eb14fbe",
+  "tiny_minus_llama_us": -0.07356810569763184,
+  "tiny_partial_finite": true,
+  "zero_inputs": true
+}

@@ -5,13 +5,16 @@ native equivalent (and, since this machine has real Metal hardware, that it actu
 stronger check than TG1 could offer for its own AMD/Metal pair), and that an unprovided renderer fails loudly
 at lowering rather than silently emitting the wrong target's text.
 """
+import shutil
+import sys
+
 import pytest
 
 from tinygrad import dtypes
 from tinygrad.helpers import Target
 from tinygrad.codegen import to_program
 from tinygrad.renderer.cstyle import ClangRenderer, HIPRenderer, MetalRenderer
-from tinygrad.renderer.cuda import CUDARenderer
+from tinygrad.renderer.cuda import CUDARenderer, NVCCRenderer
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
 from tinygrad.codegen.late.flash_decode_intrinsics import fdot2, exp2f, pm_lower_flash_decode_intrinsics
 from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
@@ -85,6 +88,7 @@ def test_amd_kernel_source_has_fast_exp2_when_opted_in(monkeypatch):
     getenv.cache_clear()
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_kernel_source_has_no_amd_builtin_and_compiles_on_real_metal_hardware():
   """This machine's Metal backend is real hardware (scope section 8 note: unlike AMD, this is not a
   structural proxy) -- compiling is a strictly stronger check than rendered-source equality alone."""
@@ -97,6 +101,7 @@ def test_metal_kernel_source_has_no_amd_builtin_and_compiles_on_real_metal_hardw
   assert len(lib) > 0
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_fdot2_semantics_are_fp32_accumulate_not_half2_dot():
   """Pin the exact substitute expression so a future edit can't silently swap in `dot(half2,half2)` (which is
   not guaranteed to accumulate in fp32 the way AMD's fdot2 does)."""
@@ -110,21 +115,40 @@ def test_metal_fdot2_semantics_are_fp32_accumulate_not_half2_dot():
 
 # ---- Fail loud, never a silent fallback --------------------------------------------------------------------
 
-def test_cuda_has_exp2f_but_no_fdot2_one_liner():
-  """TG1's rule for CUDA providers: a one-liner is fine, otherwise leave unprovided. exp2f is native; fdot2
-  has no native packed-fp16x2 dot-accumulate CUDA builtin, so it stays unprovided and must raise."""
+def test_cuda_fdot2_reuses_the_metal_two_fma_substitute():
+  """CUDA has no packed-fp16x2 dot-accumulate builtin either, so the provider reuses Metal's two-fp32-FMA
+  substitute verbatim (half2 .x/.y and float() conversions behave identically in CUDA and MSL). Declaring the
+  provider is the whole capability story -- the derived supports_flash_decode_fdot2 flips with it."""
   assert CUDARenderer.exp2f is not None
-  assert CUDARenderer.fdot2 is None
+  assert CUDARenderer.fdot2 is not None
   x = UOp.const(dtypes.float32, 1.5)
   lowered = CUDARenderer.exp2f(x)
   assert lowered.op is Ops.CUSTOMI and lowered.arg == "exp2f({0})"
   acc = UOp.const(dtypes.float32, 0.0)
   a = UOp(Ops.STACK, dtypes.half.vec(2), (UOp.const(dtypes.half, 1.0), UOp.const(dtypes.half, 2.0)))
   b = UOp(Ops.STACK, dtypes.half.vec(2), (UOp.const(dtypes.half, 3.0), UOp.const(dtypes.half, 4.0)))
-  ren = CUDARenderer.__new__(CUDARenderer)  # no NVRTC on this machine (scope section 8); provider needs no hardware
-  ren.target = Target.parse("NV:CUDA:sm_80")  # __new__ skips __init__, so set the field the error message reads
-  with pytest.raises(NotImplementedError, match="fdot2"):
-    graph_rewrite(fdot2(acc, a, b), pm_lower_flash_decode_intrinsics, ctx=ren)
+  ren = CUDARenderer.__new__(CUDARenderer)  # no NVRTC library init needed for the provider-level check
+  ren.target = Target.parse("NV:CUDA:sm_120")
+  lowered = graph_rewrite(fdot2(acc, a, b), pm_lower_flash_decode_intrinsics, ctx=ren)
+  assert lowered.op is Ops.CUSTOMI
+  assert lowered.arg == "({0}) + float({1}.x) * float({2}.x) + float({1}.y) * float({2}.y)"
+  assert lowered.src == (acc, a, b)
+  assert ren.supports_flash_decode_fdot2 is True
+
+
+@pytest.mark.skipif(shutil.which("nvcc") is None, reason="nvcc is unavailable")
+def test_nv_kernel_source_has_no_amd_builtin_and_compiles_with_nvcc():
+  """The full tile kernel renders through the CUDA renderer once the provider exists (no amdgcn text, shfl via
+  __shfl_xor_sync, two-FMA fdot2, exp2 native) and nvcc accepts it -- the same compile-stronger-than-source
+  shape as the Metal test above, on this machine's real NV hardware toolchain."""
+  ren = NVCCRenderer(Target.parse("NV:NVCC:sm_120"))
+  src = _rendered_source(_tile_ast(), ren)
+  assert "amdgcn" not in src and "fdot2" not in src
+  assert "__shfl_xor_sync(0xffffffffu" in src
+  assert src.count("float(") >= 4  # the fp32-accumulate fdot2 substitute: 2 casts on a, 2 on b
+  assert "exp2(" in src
+  lib = ren.compiler.compile(src)
+  assert len(lib) > 0
 
 
 def test_unprovided_renderer_raises_naming_the_op_and_the_target():
@@ -159,7 +183,8 @@ def test_unprovided_renderer_raises_does_not_dispatch_on_device_default():
 def test_capability_properties_are_derived_from_the_provider_not_restated():
   assert HIPRenderer(Target.parse("AMD:HIP:gfx1100")).supports_flash_decode_fdot2 is True
   assert HIPRenderer(Target.parse("AMD:HIP:gfx1100")).supports_flash_decode_exp2f is True
-  assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_fdot2 is True
-  assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_exp2f is True
+  if sys.platform == "darwin":
+    assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_fdot2 is True
+    assert MetalRenderer(Target.parse("METAL:METAL:Apple9")).supports_flash_decode_exp2f is True
   assert ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2")).supports_flash_decode_fdot2 is False
   assert ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2")).supports_flash_decode_exp2f is False

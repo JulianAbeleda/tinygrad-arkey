@@ -1,0 +1,22 @@
+{
+  "census": {
+    "generated_controls_native_flash_mains": 0,
+    "generated_flash_mains_per_control": 36,
+    "native_arm_generated_flash_mains": 0,
+    "native_flash_mains": 36
+  },
+  "correctness": {
+    "finite": true,
+    "replay_exact_cycles_each_arm": 5,
+    "same_token": true
+  },
+  "generated_mean_median_ms": 47.91154,
+  "generated_medians_ms": [
+    47.913109,
+    47.909971
+  ],
+  "generated_minus_native_flash_ms": 0.646607,
+  "native_flash_median_ms": 47.264933,
+  "schema": "tinygrad.nv_prefill_current252_native_flash_delta.v1",
+  "status": "PASS"
+}

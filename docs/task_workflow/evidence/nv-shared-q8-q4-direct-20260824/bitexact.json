@@ -1,0 +1,30 @@
+{
+  "all_bitwise_equal": true,
+  "device": "NV",
+  "git_commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "schema": "tinygrad.q4k_shared_q8_direct_output_exact.v1",
+  "shapes": [
+    {
+      "bitwise_equal": true,
+      "control_sha256": "712a43343c26a822e4b40b88fb3ee1f6569e943a2991192feae933ab2f4550e9",
+      "direct_sha256": "712a43343c26a822e4b40b88fb3ee1f6569e943a2991192feae933ab2f4550e9",
+      "elements": 4096,
+      "max_abs_delta": 0.0,
+      "mismatched_float32_words": 0,
+      "q4_payload_sha256": "67ca5998737cdaa8a3cfbbe771f522f4c5b383c0b8474ba599a0c65c2c5dd036",
+      "rows": 4096,
+      "x_payload_sha256": "9428cb9b60b88bc1198dab86f82e8e7d74929a8f5b9bc2d17e6fd364b30a0944"
+    },
+    {
+      "bitwise_equal": true,
+      "control_sha256": "e8fc986c22f2c6e410fb6688908598d01465eefbb9a525bf7ccb1cdecb675838",
+      "direct_sha256": "e8fc986c22f2c6e410fb6688908598d01465eefbb9a525bf7ccb1cdecb675838",
+      "elements": 1024,
+      "max_abs_delta": 0.0,
+      "mismatched_float32_words": 0,
+      "q4_payload_sha256": "cc4999c7e2ee00920d23437803cfb150af9c58dc5244922901e965804855cc0e",
+      "rows": 1024,
+      "x_payload_sha256": "b8d4affa2bd7eff747236b249dbf75570bfe82eba7997e74395a1e21030899f1"
+    }
+  ]
+}

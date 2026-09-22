@@ -32,17 +32,23 @@ class TestCompositeReduce(unittest.TestCase):
     slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
     return slot_sum, slot_max
 
-  def test_bounded_attention_producer_emits_all_three_slots(self):
+  def test_default_attention_lowering_keeps_ordinary_sdpa_fallback(self):
+    """The legacy online_softmax combine no longer emits a CompositeReduce by default.
+
+    d51bd3e92 and ecbe5b407 moved the heterogeneous slot metadata behind the opt-in
+    online_softmax_state combine, so the default scalar prefill attention admits no
+    composite producer and lower_attention_semantic must return the ordinary SDPA
+    source unchanged instead of fabricating a truncated composite tuple.
+    """
     from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
     q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
     k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
     v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
-    lowered = lower_attention_semantic(shared_prefill_attention(q, k, v).uop)
+    att = shared_prefill_attention(q, k, v).uop
+    lowered = lower_attention_semantic(att)
+    self.assertIs(lowered, att.src[0])
     reds = [u for u in lowered.toposort() if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce)]
-    self.assertEqual(len(reds), 1)
-    self.assertEqual(tuple(s.name for s in reds[0].arg[0].slots), ("m", "l", "acc"))
-    self.assertEqual(reds[0].arg[0].combine_fn, "online_softmax")
-
+    self.assertEqual(len(reds), 0)
   def test_composite_reduce_is_real_composite_reduce_uop(self):
     t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
     slot_sum, slot_max = self._make_slots()
@@ -77,14 +83,16 @@ class TestCompositeReduce(unittest.TestCase):
     self.assertEqual(slots[0].shape, ())
     self.assertEqual(slots[1].shape, ())
 
-  def test_direct_attention_malformed_slot_fails_closed_without_len_uop(self):
-    """A truncated composite tuple must reject slot projection, never alias state."""
+  def test_direct_attention_marker_fails_closed_to_sdpa_fallback(self):
+    """A default SDPA marker must lower to its ordinary source, never a malformed tuple."""
     q = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
     k = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
     v = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
-    out = q.scaled_dot_product_attention(k, v)
-    with self.assertRaisesRegex(RuntimeError, "invalid composite reduction slot"):
-      out.realize()
+    att = q.scaled_dot_product_attention(k, v).uop
+    lowered = lower_attention_semantic(att)
+    self.assertIs(lowered, att.src[0])
+    reds = [u for u in lowered.toposort() if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce)]
+    self.assertEqual(len(reds), 0)
 
   def test_auxiliary_v_is_a_source_and_uses_kv_axis(self):
     v = Tensor.empty(2, 3, 5, 4, dtype=dtypes.float32)

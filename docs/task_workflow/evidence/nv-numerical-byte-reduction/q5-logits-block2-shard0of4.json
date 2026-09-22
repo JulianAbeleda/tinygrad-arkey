@@ -1,0 +1,31 @@
+{
+  "blocks": [
+    2
+  ],
+  "commit": "e70991ae9d6195ef95a425d64f195d4016993d12",
+  "count": 4,
+  "depth": 128,
+  "finite": true,
+  "installed": [
+    {
+      "block": 2,
+      "effective_bytes_saved": 1671168,
+      "q5_bytes": 34603008,
+      "q6_bytes": 41287680,
+      "q6_rows_retained": 3072
+    }
+  ],
+  "logits_sha256": "d1455b3fb771848ca3fa8f98b4b721b3f9777e0549b833343ab2a44ef475e2b6",
+  "q5_row_shards": [
+    0
+  ],
+  "retain_q6_fraction": 0.0,
+  "schema": "tinygrad.nv_q5k_full_logits.v1",
+  "shard_count": 4,
+  "tokens": [
+    4710,
+    279,
+    4710,
+    1837
+  ]
+}

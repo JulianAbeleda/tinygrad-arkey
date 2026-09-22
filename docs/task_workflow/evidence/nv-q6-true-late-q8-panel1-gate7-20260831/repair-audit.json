@@ -1,0 +1,69 @@
+{
+  "schema": "tinygrad.nv_q6_true_late_panel1_repair_audit.v1",
+  "date": "2026-08-31",
+  "experiment": "true_late_q8_panel1_on_combined_anchor",
+  "bounded_schedule_repairs_used": 1,
+  "lock": {
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "timeout_seconds": 1200,
+    "acquired_on_both_runs": true
+  },
+  "frozen": {
+    "anchor_cubin_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "all_partials_fixup_cubin_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514"
+  },
+  "attempts": [
+    {
+      "name": "penultimate_accumulator_update_edge",
+      "candidate_source_sha256": "197cd46a8660965e111076b5bfa749f3af9d5b3ff214486857b9de76361e3a3f",
+      "candidate_cubin_sha256": "fc11face14a8df4ff5f193110679d7cbd834567bcb0a0d0aa7fb2411ffe52df8",
+      "panel1_first_load_ordinal": 885,
+      "panel1_first_store_ordinal": 2712,
+      "panel1_load_to_store_span_instructions": 1827,
+      "panel1_span_gate": false
+    },
+    {
+      "name": "phase0_to_preload_to_overwrite_barrier_window",
+      "candidate_source_sha256": "af91b72908333709c365a079fc13d64ac8c0ca283804967de6c6680c80630f02",
+      "candidate_cubin_sha256": "fc11face14a8df4ff5f193110679d7cbd834567bcb0a0d0aa7fb2411ffe52df8",
+      "panel1_first_load_ordinal": 885,
+      "panel1_first_store_ordinal": 2712,
+      "panel1_load_to_store_span_instructions": 1827,
+      "panel1_span_gate": false
+    }
+  ],
+  "final_candidate": {
+    "barrier_ordinals": [753, 2705, 2731, 4250],
+    "panel1_loads": 18,
+    "panel1_stores": 18,
+    "families": {
+      "IMMA": 256,
+      "LDSM": 32,
+      "LDS": 176,
+      "LDG": 109,
+      "STS": 73,
+      "STG": 64,
+      "BAR": 4,
+      "I2FP": 1024,
+      "FMUL": 1544,
+      "FADD": 1024,
+      "FFMA": 0,
+      "LDL": 0,
+      "STL": 0
+    },
+    "instruction_total": 5144,
+    "registers": 255,
+    "stack_bytes": 0,
+    "local_static_bytes": 0,
+    "shared_static_bytes": 1024
+  },
+  "verdict": "BLOCKED_BEFORE_GPU",
+  "gpu_work_started": false,
+  "correctness_run": false,
+  "timing_run": false,
+  "exact_blocker": "Two distinct hard-dependency UOp spellings changed source SHA but canonicalized to the identical cubin and identical 1827-instruction panel-1 live range. The required span <=160 therefore was not emitted within the frozen zero-spill resource envelope. The single permitted compiler/schedule repair is exhausted, so the gate fails closed before GPU work.",
+  "commands": {
+    "syntax": "PYTHONPATH=. .venv/bin/python -m py_compile extra/llm_research/prefill/nv_q6_oracle_broad_cta.py extra/llm_research/prefill/bench_nv_q6_oracle_true_late_panel1.py",
+    "gate": "flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python extra/llm_research/prefill/bench_nv_q6_oracle_true_late_panel1.py --rounds 31 --warmups 3 --out docs/task_workflow/evidence/nv-q6-true-late-q8-panel1-gate7-20260831/result.json --artifacts docs/task_workflow/evidence/nv-q6-true-late-q8-panel1-gate7-20260831/artifacts --ledger docs/task_workflow/input/nv-q6-true-late-q8-panel1-gate7-decision-20260831.md"
+  }
+}

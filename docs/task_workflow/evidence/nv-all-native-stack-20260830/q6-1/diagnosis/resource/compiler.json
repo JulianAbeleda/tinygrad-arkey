@@ -1,0 +1,34 @@
+{
+  "schema": "tinygrad.nv_q6_resource_audit.v1",
+  "status": "PASS",
+  "role": "ffn_down",
+  "compiler": {
+    "program": "r_8_128_32_2_2_2_2_2_2_192_2_2_2_e7b50137881894b03e7c8a05e6d8f1cd1d1f2effd185e444406c3532cf771c74",
+    "global_size": [
+      128,
+      8,
+      1
+    ],
+    "local_size": [
+      32,
+      2,
+      2
+    ],
+    "resources": {
+      "regs_usage": null,
+      "shmem_usage": null,
+      "lcmem_usage": null,
+      "bytes": null
+    }
+  },
+  "producer": {
+    "resources": {
+      "regs_usage": null,
+      "shmem_usage": null,
+      "lcmem_usage": null,
+      "bytes": null
+    }
+  },
+  "packed_contract": "_Context(schema_version='boltbeam.full_kernel_candidate.v1', canonical_identity='0ca89460bc4855b868e9fcbdf190403c090515153ec6e33a2a6faece8003934b', geometry=KernelTileGeometry(tile=(64, 32, 64), waves=(2, 2), threads=128, wave_size=32, lds_windows=(KernelLDSWindow(role='A', base=0, end=5120, stride_bytes=80), KernelLDSWindow(role='B', base=5120, end=7680, stride_bytes=80)), lds_components=(), lds_regions=()), packed_weight=PackedWeightTransform(quant_format=QuantFormat(name='Q6_K', block_elems=256, block_bytes=210, storage_roles=('halfs',)), rows=4096, k=12288, block_elems=256, block_bytes=210), packed_fragment_provider=Q6KInt8FragmentProvider(transform=PackedWeightTransform(quant_format=QuantFormat(name='Q6_K', block_elems=256, block_bytes=210, storage_roles=('halfs',)), rows=4096, k=12288, block_elems=256, block_bytes=210), abi='q6_k.logical_nk_to_s8_k16.v1'), packed_activation=Q8ActivationRecordTransform(rows=512, k=12288, group_elems=32), packed_activation_provider=Q8Int8FragmentProvider(transform=Q8ActivationRecordTransform(rows=512, k=12288, group_elems=32), abi='q8_1.logical_mk_to_s8.v1'), group_accumulator=Q6KQ8SubgroupAccumulatorContract(weight=Q6KInt8FragmentProvider(transform=PackedWeightTransform(quant_format=QuantFormat(name='Q6_K', block_elems=256, block_bytes=210, storage_roles=('halfs',)), rows=4096, k=12288, block_elems=256, block_bytes=210), abi='q6_k.logical_nk_to_s8_k16.v1'), activation=Q8Int8FragmentProvider(transform=Q8ActivationRecordTransform(rows=512, k=12288, group_elems=32), abi='q8_1.logical_mk_to_s8.v1'), abi='q6_k_q8_1.k16_pair_fp32_accumulator.v1'), pipeline=None, output_dtype=dtypes.float)",
+  "llama_oracle": "q6-1/oracle/down.json"
+}

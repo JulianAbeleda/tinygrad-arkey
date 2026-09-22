@@ -1,0 +1,66 @@
+{
+  "all_control": true,
+  "all_candidate": true,
+  "rows": [
+    {
+      "cycle": 0,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 1,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 2,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 3,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 4,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 5,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 6,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 7,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 8,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 9,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    }
+  ]
+}

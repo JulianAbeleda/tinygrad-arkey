@@ -1,0 +1,63 @@
+{
+  "arms": [
+    "installed",
+    "q_first_full",
+    "phased_one_task",
+    "interleaved_one_task"
+  ],
+  "bitwise_identical": true,
+  "commit": "ed9044079d43724ecf15a5ed07d33266b832a1b3",
+  "median": {
+    "installed": {
+      "cold_us": 10.912,
+      "hot_us": 14.624
+    },
+    "interleaved_one_task": {
+      "cold_us": 9.12,
+      "hot_us": 10.176
+    },
+    "phased_one_task": {
+      "cold_us": 9.216,
+      "hot_us": 8.736
+    },
+    "q_first_full": {
+      "cold_us": 8.256,
+      "hot_us": 10.08
+    }
+  },
+  "ptxas": "ptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'q4k_projection_group_one_task_interleaved_6144_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_projection_group_one_task_interleaved_6144_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 10.027 ms\nptxas info    : Compiling entry function 'q4k_projection_group_one_task_phased_6144_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_projection_group_one_task_phased_6144_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.638 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_qkv_full_4096_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 49 registers, used 1 barriers\nptxas info    : Compile time = 15.879 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_pair_vec_1024_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_pair_vec_1024_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 67 registers, used 0 barriers\nptxas info    : Compile time = 15.518 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 7.790 ms",
+  "samples": [
+    {
+      "arm": 0,
+      "cold_us": 10.912,
+      "hot_us": 14.624,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 8.256,
+      "hot_us": 10.08,
+      "rep": 0
+    },
+    {
+      "arm": 2,
+      "cold_us": 9.216,
+      "hot_us": 8.736,
+      "rep": 0
+    },
+    {
+      "arm": 3,
+      "cold_us": 9.12,
+      "hot_us": 10.176,
+      "rep": 0
+    }
+  ],
+  "schema": "tinygrad.q4k_striped_projection_group_microgate.v1",
+  "shape": {
+    "input_width": 4096,
+    "k_rows": 1024,
+    "q_rows": 4096,
+    "v_rows": 1024,
+    "weight_bytes": 14155776
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "tinygrad.nv_decode_q4_attention_o_llama_family_graph_ab.v1",
+  "date": "2026-08-04",
+  "route": "DEV=CUDA diagnostic",
+  "depth": 512,
+  "llama_policy": {
+    "population": 72,
+    "nonfused": 37,
+    "fused_x_bias": 35,
+    "fused_global_ordinals": "odd 1..69",
+    "final_o_global_ordinal": 71,
+    "final_o_fused": false
+  },
+  "oracle": {
+    "shape": [4096, 4096],
+    "formula": "Q4_K(weight) @ q8_1(activation) + residual",
+    "max_abs": 0.000004291534423828125,
+    "rmse": 0.0000010810975662322956,
+    "argmax_equal": true,
+    "verdict": "PASS"
+  },
+  "bracket": {
+    "steady_samples_per_arm": 31,
+    "tokens_equal": true,
+    "control_a": {"median_ms": 5.608072, "p5_ms": 5.5989005, "p95_ms": 5.623713, "mad_ms": 0.006714},
+    "ab": {"median_ms": 5.630468, "p5_ms": 5.620224, "p95_ms": 5.6506315, "mad_ms": 0.003106, "mapped_roles": 35},
+    "control_b": {"median_ms": 5.610438, "p5_ms": 5.6025085, "p95_ms": 5.6225265, "mad_ms": 0.004499},
+    "control_midpoint_ms": 5.609255,
+    "delta_ms": 0.021213,
+    "delta_percent": 0.3781785638199633,
+    "verdict": "NO-GO"
+  },
+  "native_nv_residual_credit_ms": 0.0
+}

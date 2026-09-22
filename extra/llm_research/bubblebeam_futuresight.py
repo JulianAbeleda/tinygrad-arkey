@@ -21,6 +21,9 @@ from tinygrad.uop.ops import UOp
 from tinygrad.codegen.late.warp_reduce import WARP
 from extra.llm_research.lane_partition_reduce import LanePartition, q4k_packed_word_index
 from tinygrad.codegen.late.coalesced_load import axis_stride, vector_width
+from extra.llm_research.flash_candidate_schema import (
+  SchemaError, canonicalize, derived_threads, from_dict, ladder_spans_lanes, local_memory_bytes, reduce_stages,
+)
 
 
 JSONValue = str | int | float | bool | None | tuple["JSONValue", ...] | Mapping[str, "JSONValue"]
@@ -186,14 +189,90 @@ def build_static_priority(preferences: Mapping[str, Sequence[JSONValue]]) -> Pri
   return priority
 
 
+def build_flash_legality(workload_facts: Mapping[str, Any], target_facts: Mapping[str, Any]) -> Legality:
+  """Build flash_decode_candidate.v1 legality from supplied target facts only.
+
+  There is no vendor table: the same facts keys (``subgroup_size``,
+  ``max_threads_per_threadgroup``, ``max_threadgroup_memory_bytes``) drive the
+  checks for any backend.  The schema module owns target-agnostic arithmetic
+  (pow2 lanes, Hd divisibility, reduce/staging vocabularies); this check adds
+  the resource and physical-subgroup constraints on top.
+  """
+  subgroup_size = target_facts.get("subgroup_size")
+  if not _positive_int(subgroup_size): raise ValueError("flash legality requires positive target subgroup_size")
+  max_threads = target_facts.get("max_threads_per_threadgroup")
+  max_local = target_facts.get("max_threadgroup_memory_bytes")
+  if max_threads is not None and not _positive_int(max_threads):
+    raise ValueError("max_threads_per_threadgroup must be positive")
+  if max_local is not None and not _positive_int(max_local):
+    raise ValueError("max_threadgroup_memory_bytes must be positive")
+
+  def check(candidate: CanonicalCandidate) -> str | None:
+    if candidate.get("schema_version") != "flash_decode_candidate.v1": return "unsupported_schema_version"
+    try:
+      descriptor = from_dict(candidate)
+    except SchemaError:
+      return "invalid_flash_geometry"
+    tile = descriptor["tile"]
+    if ladder_spans_lanes(tile) and subgroup_size % tile["lane_width"]:
+      return "lane_width_not_in_subgroup"
+    if max_threads is not None and derived_threads(tile) > max_threads: return "over_threads"
+    if max_local is not None and local_memory_bytes(descriptor) > max_local: return "over_local_memory"
+    return None
+  return check
+
+
+def build_flash_static_priority(target_facts: Mapping[str, Any]) -> Priority:
+  """Cold-L2-aware static ordering for flash candidates, derived from facts and geometry.
+
+  The estimate prefers wider column parallelism capped at the physical subgroup
+  size, shorter shuffle ladders, and KV staging that keeps the score resident in
+  local memory, while penalizing small ``stage_width`` values that force more
+  cooperative staging passes (each pass is a cold-L2 relaunch).  None of the
+  weights encode a vendor win table; rank_static_candidates breaks score ties
+  deterministically by candidate_hash.
+  """
+  subgroup_size = target_facts.get("subgroup_size")
+  if not _positive_int(subgroup_size): raise ValueError("flash priority requires positive target subgroup_size")
+  max_local = target_facts.get("max_threadgroup_memory_bytes")
+  if max_local is not None and not _positive_int(max_local):
+    raise ValueError("max_threadgroup_memory_bytes must be positive")
+
+  def priority(candidate: CanonicalCandidate) -> tuple[int, str]:
+    if candidate.get("schema_version") != "flash_decode_candidate.v1": return 0, "flash_candidate_required"
+    try:
+      descriptor = canonicalize(candidate)
+    except SchemaError:
+      return 0, "invalid_flash_geometry"
+    tile = descriptor["tile"]
+    group_width = int(tile["score_group_width"] or tile["lane_width"])
+    column = min(group_width, subgroup_size)
+    ladder = reduce_stages(tile)
+    local = local_memory_bytes(descriptor)
+    resident = 2 if max_local is not None and local * 2 <= max_local else 1
+    hot = 1 if tile["staging"] == "KV_BOTH" else 0
+    threads = derived_threads(tile)
+    stage_width = int(tile["stage_width"])
+    relaunch = max(0, (threads // stage_width - 1).bit_length())
+    score = column - ladder + resident + hot - relaunch
+    reason = f"flash:column={column},ladder={ladder},resident={resident},hot={hot},relaunch={relaunch}"
+    return score, reason
+  return priority
+
+
 def _candidate_hash(candidate: CanonicalCandidate) -> str:
-  """Read BoltBeam's identity without deriving or normalizing it locally."""
+  """Read BoltBeam's identity without deriving or normalizing it locally.
+
+  Full-kernel candidates carry a schedule mapping; flash_decode_candidate.v1
+  envelopes carry only the descriptor plus the outer hash.  The hash is the
+  identity either way, so schedule is required only when present.
+  """
   if not isinstance(candidate.get("schema_version"), str) or not candidate["schema_version"]:
     raise ValueError("canonical candidate requires schema_version")
   if not isinstance(candidate.get("candidate_hash"), str) or not candidate["candidate_hash"]:
     raise ValueError("canonical candidate requires candidate_hash")
-  if not isinstance(candidate.get("schedule"), Mapping):
-    raise ValueError("canonical candidate requires a schedule mapping")
+  if candidate.get("schedule") is not None and not isinstance(candidate.get("schedule"), Mapping):
+    raise ValueError("canonical candidate schedule must be a mapping when present")
   return candidate["candidate_hash"]
 
 

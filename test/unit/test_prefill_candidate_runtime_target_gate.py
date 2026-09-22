@@ -1,17 +1,18 @@
 """TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the third of the
-three pure policy gates this package addresses is `prefill_candidate_runtime.py:162`.
+three pure policy gates this package addresses is `prefill_candidate_runtime.py`.
 
-After inspection this is NOT a live capability/policy admission gate in the TG3 sense: `promoted_candidate_set()`
-takes zero arguments (it never consults scanned_device_facts) and is an ARTIFACT-IDENTITY guard, the same kind
-as the canonical_identity/legacy_identity/candidate_set_identity hash checks beside it -- it asserts the one
-checked-in compact artifact still declares the exact target its searched tile/LDS/thread schedule was compiled
-for, never a live-hardware decision. That raise is preserved unchanged (`test_compact_target_mismatch_raises_loudly`).
+This is NOT a live capability/policy admission gate in the TG3 sense: `promoted_candidate_set(backend, arch,
+wave_size)` never consults scanned_device_facts and is an ARTIFACT-IDENTITY guard, the same kind as the
+canonical_identity/legacy_identity/candidate_set_identity hash checks beside it -- it asserts the checked-in
+compact artifact selected for the requested triple still declares the exact target its searched tile/LDS/thread
+schedule was compiled for, never a live-hardware decision. That raise is preserved unchanged
+(`test_compact_target_mismatch_raises_loudly`).
 
-The real live admission is `automatic_promoted_prefill_graph_policy`, which already derives BOTH the resolved
-target (from live scanned_device_facts) and the promoted-target set (from the artifact's own recorded entries,
-via `promoted_prefill_graph_targets`) with no hardcoded literal -- capability and policy are the same fused
-question for this exact-shape compiled kernel (a searched WMMA/LDS schedule is measured for one exact
-(backend, arch, wave_size) triple, not a generically-expressible capability), so it is not split further.
+The real live admission is `automatic_promoted_prefill_graph_policy`, which derives BOTH the resolved target
+(from live scanned_device_facts) and the promoted-target set (from the artifact's own recorded entries, via
+`promoted_prefill_graph_targets`) with no hardcoded literal -- capability and policy are the same fused question
+for this exact-shape compiled kernel (a searched WMMA/LDS schedule is measured for one exact (backend, arch,
+wave_size) triple, not a generically-expressible capability), so it is not split further.
 """
 import json
 
@@ -32,18 +33,41 @@ def test_compact_target_mismatch_raises_loudly(tmp_path, monkeypatch):
   path = tmp_path / "forged.json"
   path.write_text(json.dumps(forged))
   monkeypatch.setattr(prefill_candidate_runtime, "ARTIFACT", path)
+  monkeypatch.setattr(prefill_candidate_runtime, "_COMPACT_ARTIFACTS", (path,))
   promoted_candidate_set.cache_clear()
+  prefill_candidate_runtime._compact_artifact_for_target.cache_clear()
   try:
     with pytest.raises(ValueError, match="compact target is unsupported"):
-      promoted_candidate_set()
+      promoted_candidate_set("AMD", "gfx1100", 32)
   finally:
     promoted_candidate_set.cache_clear()
+    prefill_candidate_runtime._compact_artifact_for_target.cache_clear()
+
+
+def test_duplicate_declared_target_raises_loudly(tmp_path, monkeypatch):
+  """Two artifacts declaring the same target must fail loudly at selection, never pick silently."""
+  first = {"schema": prefill_candidate_runtime.COMPACT_SCHEMA, "route_id": prefill_candidate_runtime.ROUTE_ID,
+           "candidate_set_identity": "irrelevant", "profile": "p",
+           "target": {"backend": "NV", "arch": "sm_120", "wave_size": 32}, "template": {}, "entries": []}
+  second = json.loads(json.dumps(first))
+  a, b = tmp_path / "a.json", tmp_path / "b.json"
+  a.write_text(json.dumps(first)); b.write_text(json.dumps(second))
+  monkeypatch.setattr(prefill_candidate_runtime, "_COMPACT_ARTIFACTS", (a, b))
+  promoted_candidate_set.cache_clear()
+  prefill_candidate_runtime._compact_artifact_for_target.cache_clear()
+  try:
+    with pytest.raises(ValueError, match="duplicate compact artifact target"):
+      promoted_candidate_set("NV", "sm_120", 32)
+  finally:
+    promoted_candidate_set.cache_clear()
+    prefill_candidate_runtime._compact_artifact_for_target.cache_clear()
 
 
 def test_promoted_prefill_graph_targets_reads_the_checked_in_artifacts_own_target():
   """Today's real artifact was searched/compiled for exactly one target -- confirm the promoted-target set is
   read from the artifact's data, not a python literal, by checking it matches that one recorded target."""
-  assert promoted_prefill_graph_targets(promoted_candidate_registry()) == frozenset({("AMD", "gfx1100", 32)})
+  assert promoted_prefill_graph_targets(promoted_candidate_registry("AMD", "gfx1100", 32)) == frozenset({("AMD", "gfx1100", 32)})
+  assert promoted_prefill_graph_targets(promoted_candidate_registry("NV", "sm_120", 32)) == frozenset({("NV", "sm_120", 32)})
 
 
 def test_promoted_prefill_graph_targets_has_no_hardcoded_backend():
@@ -59,7 +83,7 @@ def test_amd_structural_admission_is_unchanged_by_the_promoted_prefill_graph_tar
   """Structural-only (no AMD hardware here, scope section 8): with real AMD gfx1100 wave32 facts, the exact
   same four-role candidate set is admitted through `automatic_promoted_prefill_graph_policy` after the TG8
   refactor as before it -- the refactor only names the existing target-set computation, it does not change it."""
-  candidate_set = promoted_candidate_set().to_json()
+  candidate_set = promoted_candidate_set("AMD", "gfx1100", 32).to_json()
   rows = []
   for index, entry in enumerate(candidate_set["entries"]):
     workload = entry["payload"]["workload"]

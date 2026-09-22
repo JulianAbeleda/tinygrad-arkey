@@ -1,0 +1,10 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_compare.v1",
+  "status": "PASS",
+  "candidate_token": 198,
+  "control_token": 198,
+  "finite": true,
+  "max_abs": 0.13265419006347656,
+  "mean_abs": 0.02984413504600525,
+  "mismatch_count": 0
+}

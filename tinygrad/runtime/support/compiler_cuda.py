@@ -50,7 +50,8 @@ class NVRTCCompiler(Compiler):
     super().__init__(f"compile_{cache_key}_{self.arch}")
   def compile(self, src:str) -> bytes:
     nvrtc_check(nvrtc.nvrtcCreateProgram(ctypes.byref(prog := nvrtc.nvrtcProgram()), src.encode(), "<null>".encode(), 0, None, None))
-    nvrtc_check(nvrtc.nvrtcCompileProgram(prog, len(self.compile_options), to_char_p_p([o.encode() for o in self.compile_options])), prog)
+    compile_options = self.compile_options + (["--use_fast_math"] if "TINYGRAD_NV_USE_FAST_MATH" in src else [])
+    nvrtc_check(nvrtc.nvrtcCompileProgram(prog, len(compile_options), to_char_p_p([o.encode() for o in compile_options])), prog)
     data = _get_bytes(prog, nvrtc.nvrtcGetPTX if self.ptx else nvrtc.nvrtcGetCUBIN,
                       nvrtc.nvrtcGetPTXSize if self.ptx else nvrtc.nvrtcGetCUBINSize, nvrtc_check)
     nvrtc_check(nvrtc.nvrtcDestroyProgram(ctypes.byref(prog)))

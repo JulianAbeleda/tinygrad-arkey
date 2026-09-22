@@ -1,0 +1,50 @@
+{
+  "arms": {
+    "candidate": {
+      "out": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv-q4-down-quad-re-census-20260813/candidate.json"
+    },
+    "control-a": {
+      "out": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv-q4-down-quad-re-census-20260813/control-a.json"
+    },
+    "control-b": {
+      "out": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv-q4-down-quad-re-census-20260813/control-b.json"
+    }
+  },
+  "candidate_median_ms_per_token": 5.19747705,
+  "candidate_minus_control_ms_per_token": 0.038290824999999806,
+  "control_median_ms_per_token": 5.159186225,
+  "control_per_kernel_median_us": 26.24,
+  "count": 20,
+  "depth": 512,
+  "first_tokens": [
+    5708
+  ],
+  "gates": {
+    "first_token_equal": true,
+    "pass": false,
+    "quad_beats_installed_26_75us": false,
+    "quad_beats_llama_floor_19_23us": false,
+    "quad_beats_measured_control": false,
+    "quad_in_loop_present": true,
+    "token_sha256_equal": true,
+    "wall_candidate_below_control": false
+  },
+  "indices": [
+    4,
+    8,
+    13,
+    19,
+    25,
+    29
+  ],
+  "installed_control_book_us_per_node": 26.75,
+  "llama_q4_down_floor_us_per_node": 19.23,
+  "mode": "bracket",
+  "quad_per_kernel_median_us": 34.48,
+  "reps": 3,
+  "schema": "tinygrad.nv_q4_down_quad_census.v1",
+  "token_stream_hashes": [
+    "37e9538d8403dd464ebe3823c115b094c93982c2308ea45892eae6f8eb6819a7"
+  ],
+  "verdict": "NO_GO"
+}

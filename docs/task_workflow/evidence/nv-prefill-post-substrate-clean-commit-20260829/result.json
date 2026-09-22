@@ -1,0 +1,23 @@
+{
+  "schema": "tinygrad.nv_prefill_post_substrate_clean_commit.v1",
+  "packet": "S0-clean-commit-131b22a8b",
+  "status": "BLOCKED",
+  "authority": {
+    "commit": "131b22a8bb6509f8567643e3ca925d354ca3e24d",
+    "archive": "/tmp/tinygrad-arkey-clean-s0-20260829-3229515/source",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "gpu": "Luna low / RTX 5090",
+    "cut_policy": "docs/task_workflow/evidence/nv-prefill-post-substrate-clean-commit-20260829/current-cut-policy.json"
+  },
+  "correctness": null,
+  "census": null,
+  "samples": null,
+  "wall": null,
+  "observer": {"profile": 0, "gpu_run": false},
+  "decision": {
+    "reason": "Required runner is absent from archived clean source; mixed-source execution is forbidden.",
+    "missing_path": "extra/llm_research/prefill/nv_compiler_q4k_gkqo_model_arm.py",
+    "missing_symbol_or_flag": "q4-v model-arm runner and its --q4-v route flag"
+  },
+  "next_packet": null
+}

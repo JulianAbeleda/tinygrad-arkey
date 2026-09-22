@@ -1,0 +1,29 @@
+{
+  "candidate-full-ffn-qkv": {
+    "token_control": 198,
+    "token_candidate": 198,
+    "finite": true,
+    "max_abs": 0.13949966430664062,
+    "mean_abs": 0.026953339022657327,
+    "mismatch_count": 0,
+    "status": "PASS"
+  },
+  "candidate-full-ffn-o": {
+    "token_control": 198,
+    "token_candidate": 198,
+    "finite": true,
+    "max_abs": 0.18023896217346191,
+    "mean_abs": 0.021377642924441616,
+    "mismatch_count": 0,
+    "status": "PASS"
+  },
+  "candidate-full-packed": {
+    "token_control": 198,
+    "token_candidate": 198,
+    "finite": true,
+    "max_abs": 0.1717519760131836,
+    "mean_abs": 0.020416612764697372,
+    "mismatch_count": 0,
+    "status": "PASS"
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "accounting": {
+    "candidate_kernels": 6,
+    "control_kernels": 3,
+    "o_weight_bytes": 9437184,
+    "scratch_bytes": 262144,
+    "scratch_store_plus_read_bytes": 524288
+  },
+  "cold_recovery_us_per_layer": -2.1999999999999993,
+  "commit": "7c2b6707b6ce02257cc69f2d748a32c7d440ed20",
+  "exact": {
+    "combine_bitwise": true,
+    "final_bitwise": true,
+    "score_bitwise": true
+  },
+  "finite": {
+    "combine": true,
+    "final": true,
+    "score": true
+  },
+  "kernel_names": {
+    "combine": "flash_fused_gmax_combine_f16_32_128_s6_lw128",
+    "combine0": "flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o0",
+    "combine1": "flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o16",
+    "finish": "q4k_o_segment16_low_finish_epi_resadd",
+    "first": "q4k_o_segment16_high_first",
+    "o": "q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096",
+    "score": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1",
+    "score0": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o0",
+    "score1": "flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o16"
+  },
+  "measurement_contract": {
+    "dependency_events": "one cudaEventDisableTiming low_ready",
+    "early_chain_stream": "high priority",
+    "remaining_flash_stream": "low priority",
+    "timed_candidate_internal_timing_events": 0,
+    "trace_separate_from_timed_candidate": true
+  },
+  "median": {
+    "control": {
+      "cold_us": 25.267999,
+      "hot_us": 11.3875
+    },
+    "segmented_two_wave": {
+      "cold_us": 27.467999,
+      "hot_us": 17.5885
+    }
+  },
+  "median_overlap_us": 3.903999,
+  "ptxas": "docs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \ndocs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \ndocs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \ndocs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \ndocs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:1: warning: \"INFINITY\" redefined\n    1 | #define INFINITY (__int_as_float(0x7f800000))\n      | \nIn file included from /usr/include/c++/13/cmath:47,\n                 from /usr/include/c++/13/math.h:36,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/math_functions.h:4627,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/crt/common_functions.h:303,\n                 from /usr/local/cuda-13.2/bin/../targets/x86_64-linux/include/cuda_runtime.h:117,\n                 from <command-line>:\n/usr/include/math.h:91: note: this is the location of the previous definition\n   91 | #  define INFINITY (__builtin_inff ())\n      | \ndocs/task_workflow/evidence/nv-segmented-flash-o-corrected-20260828/complete-span-corrected-16-16-artifacts/gate.cu:2: warning: \"NAN\" redefined\n    2 | #define NAN (__int_as_float(0x7fffffff))\n      | \n/usr/include/math.h:98: note: this is the location of the previous definition\n   98 | #  define NAN (__builtin_nanf (\"\"))\n      | \nptxas info    : 0 bytes gmem\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o16' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 29 registers, used 1 barriers, 24 bytes smem\nptxas info    : Compile time = 6.583 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o0' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128_h16o0\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 29 registers, used 1 barriers, 24 bytes smem\nptxas info    : Compile time = 5.264 ms\nptxas info    : Compiling entry function 'flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o16' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o16\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 56 registers, used 1 barriers, 2080 bytes smem\nptxas info    : Compile time = 42.939 ms\nptxas info    : Compiling entry function 'flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o0' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16_vtail1_h16o0\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 56 registers, used 1 barriers, 2080 bytes smem\nptxas info    : Compile time = 41.460 ms\nptxas info    : Compiling entry function 'q4k_o_segment16_low_finish_epi_resadd' for 'sm_120a'\nptxas info    : Function properties for q4k_o_segment16_low_finish_epi_resadd\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 46 registers, used 0 barriers\nptxas info    : Compile time = 8.757 ms\nptxas info    : Compiling entry function 'q4k_o_segment16_high_first' for 'sm_120a'\nptxas info    : Function properties for q4k_o_segment16_high_first\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 45 registers, used 0 barriers\nptxas info    : Compile time = 7.941 ms\nptxas info    : Compiling entry function 'q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096' for 'sm_120a'\nptxas info    : Function properties for q4k_g3_lanemap_gemv_vec_epi_resadd_4096_4096\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 43 registers, used 0 barriers\nptxas info    : Compile time = 8.052 ms\nptxas info    : Compiling entry function 'flash_fused_gmax_combine_f16_32_128_s6_lw128' for 'sm_120a'\nptxas info    : Function properties for flash_fused_gmax_combine_f16_32_128_s6_lw128\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 29 registers, used 1 barriers, 24 bytes smem\nptxas info    : Compile time = 4.804 ms\nptxas info    : Compiling entry function 'flash_vec_llama_score_pv_32_128_6_widekv16_vtail1' for 'sm_120a'\nptxas info    : Function properties for flash_vec_llama_score_pv_32_128_6_widekv16_vtail1\n    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\nptxas info    : Used 56 registers, used 1 barriers, 2080 bytes smem\nptxas info    : Compile time = 40.924 ms\n",
+  "samples": [
+    {
+      "arm": 0,
+      "cold_us": 25.616,
+      "hot_us": 11.379,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.467999,
+      "hot_us": 17.7085,
+      "rep": 0
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.564,
+      "hot_us": 17.386,
+      "rep": 1
+    },
+    {
+      "arm": 0,
+      "cold_us": 25.267999,
+      "hot_us": 11.438,
+      "rep": 1
+    },
+    {
+      "arm": 0,
+      "cold_us": 25.764,
+      "hot_us": 11.376,
+      "rep": 2
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.236,
+      "hot_us": 17.6395,
+      "rep": 2
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.364,
+      "hot_us": 17.5885,
+      "rep": 3
+    },
+    {
+      "arm": 0,
+      "cold_us": 24.732,
+      "hot_us": 11.496,
+      "rep": 3
+    },
+    {
+      "arm": 0,
+      "cold_us": 24.576,
+      "hot_us": 11.3555,
+      "rep": 4
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.62,
+      "hot_us": 17.5435,
+      "rep": 4
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.488,
+      "hot_us": 17.6845,
+      "rep": 5
+    },
+    {
+      "arm": 0,
+      "cold_us": 25.044,
+      "hot_us": 11.395,
+      "rep": 5
+    },
+    {
+      "arm": 0,
+      "cold_us": 25.396,
+      "hot_us": 11.28,
+      "rep": 6
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.52,
+      "hot_us": 17.3855,
+      "rep": 6
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.02,
+      "hot_us": 17.7725,
+      "rep": 7
+    },
+    {
+      "arm": 0,
+      "cold_us": 24.76,
+      "hot_us": 11.3875,
+      "rep": 7
+    },
+    {
+      "arm": 0,
+      "cold_us": 25.372,
+      "hot_us": 11.482,
+      "rep": 8
+    },
+    {
+      "arm": 1,
+      "cold_us": 27.256,
+      "hot_us": 17.351,
+      "rep": 8
+    }
+  ],
+  "schema": "tinygrad.nv_segmented_flash_o_complete_span.corrected.v2",
+  "shape": {
+    "head_dim": 128,
+    "heads": 32,
+    "kv_heads": 8,
+    "max_context": 1024,
+    "rows": 4096,
+    "splits": 6,
+    "tc": 513
+  },
+  "timeline_samples": [
+    {
+      "flash1_end_us": 15.808,
+      "flash1_start_us": 8.736,
+      "o_first_end_us": 12.64,
+      "o_first_start_us": 5.568,
+      "overlap_us": 3.904
+    },
+    {
+      "flash1_end_us": 16.576,
+      "flash1_start_us": 8.512,
+      "o_first_end_us": 12.384,
+      "o_first_start_us": 5.856,
+      "overlap_us": 3.872
+    },
+    {
+      "flash1_end_us": 16.063999,
+      "flash1_start_us": 9.216001,
+      "o_first_end_us": 13.12,
+      "o_first_start_us": 5.824,
+      "overlap_us": 3.903999
+    },
+    {
+      "flash1_end_us": 17.279999,
+      "flash1_start_us": 8.48,
+      "o_first_end_us": 12.384,
+      "o_first_start_us": 5.888,
+      "overlap_us": 3.903999
+    },
+    {
+      "flash1_end_us": 16.672001,
+      "flash1_start_us": 9.856,
+      "o_first_end_us": 13.759999,
+      "o_first_start_us": 7.104,
+      "overlap_us": 3.903999
+    },
+    {
+      "flash1_end_us": 16.768,
+      "flash1_start_us": 8.639999,
+      "o_first_end_us": 12.832,
+      "o_first_start_us": 5.888,
+      "overlap_us": 4.192
+    },
+    {
+      "flash1_end_us": 18.751999,
+      "flash1_start_us": 10.688001,
+      "o_first_end_us": 14.656,
+      "o_first_start_us": 8.16,
+      "overlap_us": 3.967999
+    },
+    {
+      "flash1_end_us": 17.152,
+      "flash1_start_us": 8.544,
+      "o_first_end_us": 12.384,
+      "o_first_start_us": 5.92,
+      "overlap_us": 3.84
+    },
+    {
+      "flash1_end_us": 16.063999,
+      "flash1_start_us": 7.68,
+      "o_first_end_us": 11.712,
+      "o_first_start_us": 5.248,
+      "overlap_us": 4.032
+    }
+  ],
+  "verdict": "NO_GO_PRIMITIVE"
+}

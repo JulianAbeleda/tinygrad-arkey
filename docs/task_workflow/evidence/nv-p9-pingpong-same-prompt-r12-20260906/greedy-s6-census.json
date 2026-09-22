@@ -1,0 +1,28 @@
+{
+  "arm": "greedy",
+  "callify_redirect": 0,
+  "contract": null,
+  "graph_group_sizes": [
+    33,
+    66,
+    132,
+    185
+  ],
+  "kernel_us": 4001.2400000000002,
+  "mode": "census",
+  "program_count": 416,
+  "program_names": [],
+  "raw_debug": [
+    "*** NV      3091 copy        4 B,      NV <- NV                 arg  2 mem  19.17 GB tm     63.61us/     0.06ms (      0 GFLOPS    0|0      GB/s) ",
+    "*** NV      3092 batched 33                                     arg  0 mem  19.17 GB tm    270.10us/     0.33ms (  14294 GFLOPS 1029|5425   GB/s) ",
+    "*** NV      3093 batched 66                                     arg  0 mem  19.17 GB tm    610.21us/     0.94ms (  17491 GFLOPS 1181|6428   GB/s) ",
+    "*** NV      3094 batched 132                                    arg  0 mem  19.17 GB tm   1170.45us/     2.11ms (  18311 GFLOPS 1209|6485   GB/s) ",
+    "*** NV      3095 batched 185                                    arg  0 mem  19.17 GB tm   1950.48us/     4.06ms (  19661 GFLOPS 1247|6680   GB/s) "
+  ],
+  "route_still_promoted": false,
+  "schema": "tinygrad.nv.feedback_pingpong_qualification.v1",
+  "selected_jit": "rollout_greedy_jit_flash_s6",
+  "selected_jit_written_input_shadows": 1,
+  "selected_pair": null,
+  "token": 38835
+}

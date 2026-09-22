@@ -1,0 +1,153 @@
+{
+  "schema": "tinygrad.nv_edge_aware_pdl_stage0_qmd_latch_audit.v1",
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "date": "2026-08-21",
+  "stage": "Stage 0 read-only audit, no GPU execution",
+  "authoritative_sources": {
+    "local_qmd_header": "extra/nv_gpu_driver/clcec0qmd.h",
+    "autogen_nv_570": "tinygrad/runtime/autogen/nv_570.py",
+    "autogen_nv_580": "tinygrad/runtime/autogen/nv_580.py",
+    "device_evidence": "docs/task_workflow/evidence/nv-split-phase-pdl-causal-design-review-20260820/phase_c_native_qmd_latch_4.json",
+    "cuda_programming_guide": "https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/programmatic-dependent-launch.html",
+    "deepwiki_query": "NVIDIA/open-gpu-doc, latch-capability query, 2026-08-21"
+  },
+  "header_fields": [
+    {
+      "name": "ARRIVE_AT_LATCH_ID",
+      "bits": "671:640",
+      "width_bits": 32,
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:208",
+      "meaning": "ID of the latch this QMD arrives at when the program's pre-exit fires",
+      "verdict": "supported",
+      "evidence": "header field present in NVCEC0_QMDV05_00/05_01; written by tinygrad/runtime/ops_nv.py:49"
+    },
+    {
+      "name": "WAIT_ON_LATCH_ID",
+      "bits": "703:672",
+      "width_bits": 32,
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:209",
+      "meaning": "ID of the latch this QMD waits on before its grid launches",
+      "verdict": "supported",
+      "evidence": "header field present; written by tinygrad/runtime/ops_nv.py:51"
+    },
+    {
+      "name": "ARRIVE_AT_LATCH_VALID",
+      "bits": "730",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:212",
+      "meaning": "enable the arrive-at-latch operation",
+      "verdict": "supported",
+      "evidence": "header field present; device probe phase_c_native_qmd_latch_4.json:17"
+    },
+    {
+      "name": "WAIT_ON_LATCH_VALID",
+      "bits": "731",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:215",
+      "meaning": "enable the wait-on-latch operation",
+      "verdict": "supported",
+      "evidence": "header field present; device probe phase_c_native_qmd_latch_4.json consumer_latch_fields"
+    },
+    {
+      "name": "LATCH_RELEASE_INVALIDATE_ENABLE",
+      "bits": "732",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:218",
+      "meaning": "invalidate caches when the latch is released/acquired",
+      "verdict": "named-unavailable",
+      "evidence": "header field present; no semantic documentation and no device exercise in this repo"
+    },
+    {
+      "name": "ENABLE_PROGRAM_PRE_EXIT",
+      "bits": "639",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:205",
+      "meaning": "enable the program pre-exit path that releases the latch",
+      "verdict": "supported",
+      "evidence": "written by ops_nv.py:50; device probe qmd_latch_fields shows it set to 1"
+    },
+    {
+      "name": "PRE_EXIT_AT_LAST_CTA_LAUNCH",
+      "bits": "638",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:203",
+      "meaning": "fire pre-exit when the last CTA is launched rather than at grid end",
+      "verdict": "supported",
+      "evidence": "written by ops_nv.py:50; device probe showed +99.808 us overlap on one consecutive same-queue pair"
+    },
+    {
+      "name": "HOLD_CTA_LAUNCH_UNTIL_PARENT_LATCH_ACQUIRE_AND_CTA_COMPLETE",
+      "bits": "733",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:221",
+      "meaning": "hold CTA launch until parent latch acquire and CTA complete",
+      "verdict": "named-unavailable",
+      "evidence": "field present; no semantics documented and no device exercise"
+    },
+    {
+      "name": "HOLD_MEMBAR_UNTIL_LATCH_ACQUIRE",
+      "bits": "734",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:224",
+      "meaning": "hold a memory barrier until latch acquire",
+      "verdict": "named-unavailable",
+      "evidence": "field present; no semantics documented and no device exercise"
+    },
+    {
+      "name": "PRIORITY_DEMOTE_UNTIL_LATCH_ACQUIRE",
+      "bits": "735",
+      "source": "extra/nv_gpu_driver/clcec0qmd.h:227",
+      "meaning": "demote scheduler priority until latch acquire",
+      "verdict": "named-unavailable",
+      "evidence": "field present; no semantics documented and no device exercise"
+    }
+  ],
+  "capability_questions": [
+    {
+      "question": "How many latch IDs are usable on sm_120?",
+      "verdict": "named-unavailable",
+      "evidence": "ID fields are 32-bit, but no public header/doc gives a latch pool size; phase_c only proved ID 7 on one pair",
+      "required_probe": "Stage 2 synthetic sweep: same consecutive pair with distinct latch IDs, record checksum and overlap"
+    },
+    {
+      "question": "Can one consumer wait on more than one latch?",
+      "verdict": "named-unavailable",
+      "evidence": "QMD has a single WAIT_ON_LATCH_ID field and no multiple-wait field; public headers contain no multiple-wait description",
+      "required_probe": "Stage 2 synthetic two-producer/one-consumer probe"
+    },
+    {
+      "question": "Can multiple producers arrive at the same latch ID?",
+      "verdict": "named-unavailable",
+      "evidence": "not stated in the public header; do not infer aggregation semantics",
+      "required_probe": "Stage 2 synthetic multi-producer probe with checksums"
+    },
+    {
+      "question": "Can a latch arm a non-consecutive same-queue QMD pair?",
+      "verdict": "named-unavailable",
+      "evidence": "no documented arming rule; the only device evidence is a consecutive pair (phase_c_native_qmd_latch_4.json)",
+      "required_probe": "Stage 2 synthetic A-B-C chain with A->C arming"
+    },
+    {
+      "question": "Is latch state safe across graph replay, flush, and the five replay groups?",
+      "verdict": "named-unavailable",
+      "evidence": "no reuse/reset semantics in the public header; no device evidence across replay boundaries",
+      "required_probe": "Stage 2 synthetic replay/flush bracket before any production arm"
+    },
+    {
+      "question": "Does QMD pre-exit at last CTA launch guarantee producer data is visible to the consumer?",
+      "verdict": "named-unavailable",
+      "evidence": "pre-exit-at-last-CTA is the launch gate; CUDA PDL guide requires a consumer grid-dependency wait/fence before dependent access; native wait placement is currently at instruction zero and has not been proven data-safe",
+      "required_probe": "Stage 2 native candidate with wait after producer trigger and checksums; Stage 3 real-route wait-exit timestamps"
+    }
+  ],
+  "device_proven_facts": [
+    {
+      "fact": "latch ID 7 with arrive/wait/pre-exit fields produces overlap on a same-queue consecutive pair",
+      "evidence": "phase_c_native_qmd_latch_4.json: median overlap_us 99.808, wall_us 463.488, checksum_correct_all true",
+      "note": "this is a matched synthetic grid, not the real decode route"
+    },
+    {
+      "fact": "renderer-side native PDL (griddepcontrol.wait + launch_dependents) also overlaps",
+      "evidence": "phase_c_native_pdl_end_1.json: median overlap_us 99.776, wait_us 100.16",
+      "note": "the QMD-latch arm has no renderer wait instruction, so its consumer-grid gate is purely the QMD fields"
+    }
+  ],
+  "policy_consequences": {
+    "closed_default": "until the four named-unavailable capability rows are measured, unsafe cases fall back to the existing full-completion dependency",
+    "no_inference": "pool size, multi-wait, same-latch aggregation, non-consecutive arming, and replay safety must not be inferred from CUDA driver semantics",
+    "alias_authority": "typed edges still require span-level alias adjudication; this audit does not grant alias safety"
+  }
+}

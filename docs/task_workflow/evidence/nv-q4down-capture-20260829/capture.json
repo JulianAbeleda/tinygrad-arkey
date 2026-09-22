@@ -1,0 +1,16 @@
+{
+  "schema": "tinygrad.nv_q4down_capture_io.v1",
+  "status": "PASS",
+  "z_shape": [
+    1,
+    512,
+    12288
+  ],
+  "out_shape": [
+    1,
+    512,
+    4096
+  ],
+  "z_sha256": "bf590bbe88996a432edbbde358495f7620f856b71227ec70dddb1035878ba48e",
+  "out_sha256": "dbc206335e31235c943a0212793c298f359e68638be69e33c7ffcc5f6fbfe85d"
+}

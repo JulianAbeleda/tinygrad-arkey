@@ -1,0 +1,100 @@
+{
+  "brackets": {
+    "A": {
+      "all_token_hashes_equal": true,
+      "arms": [
+        {
+          "arm": "control",
+          "median_ms_per_token": 4.730040708333334,
+          "native_promoted_sample": {
+            "attn": false,
+            "ffn": false,
+            "k": false,
+            "output": false,
+            "q": false
+          },
+          "rejected_high_samples_ms_per_token": [],
+          "samples_ms_per_token": [
+            4.731480291666667,
+            4.737725375,
+            4.722728041666667,
+            4.728601125
+          ],
+          "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+          "sites": [
+            "ffn"
+          ],
+          "timed_token_count": 96,
+          "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+        },
+        {
+          "arm": "candidate",
+          "median_ms_per_token": 4.715456270833334,
+          "native_promoted_sample": {
+            "attn": false,
+            "ffn": true,
+            "k": false,
+            "output": false,
+            "q": false
+          },
+          "rejected_high_samples_ms_per_token": [],
+          "samples_ms_per_token": [
+            4.720947625,
+            4.706662041666667,
+            4.758745708333333,
+            4.709964916666667
+          ],
+          "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+          "sites": [
+            "ffn"
+          ],
+          "timed_token_count": 96,
+          "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+        },
+        {
+          "arm": "control",
+          "median_ms_per_token": 4.7338686875,
+          "native_promoted_sample": {
+            "attn": false,
+            "ffn": false,
+            "k": false,
+            "output": false,
+            "q": false
+          },
+          "rejected_high_samples_ms_per_token": [],
+          "samples_ms_per_token": [
+            4.737009375,
+            4.730728,
+            4.728278375,
+            4.739783375
+          ],
+          "schema": "tinygrad.nv_norm_native_wall_ab.v1",
+          "sites": [
+            "ffn"
+          ],
+          "timed_token_count": 96,
+          "token_stream_hash": "1e73e557e48b0c2f0792318e1a306f06a1412cd9800ba7a1e667b9c09c4a1254"
+        }
+      ],
+      "candidate_minus_control_a_us": 14.584437499999936,
+      "candidate_minus_control_b_us": 18.412416666666154,
+      "candidate_minus_control_bracket_us": 16.4984270833326,
+      "candidate_ms": 4.715456270833334,
+      "control_a_ms": 4.730040708333334,
+      "control_b_ms": 4.7338686875,
+      "control_bracket_median_ms": 4.731954697916667,
+      "mode": "wall-bracket",
+      "note": "wall evidence only; booking requires the exact-logits gate and norms-confined census",
+      "promoted": false,
+      "promotion_us": 50.0,
+      "schema": "tinygrad.nv_norms_fusion_ab.v1",
+      "settled_continuous": true
+    }
+  },
+  "depth": 512,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "schema": "tinygrad.nv_ledger_overlap_wall_bracket.v1",
+  "sites": [
+    "ffn"
+  ]
+}

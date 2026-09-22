@@ -1,0 +1,17 @@
+{
+  "correctness": {
+    "allclose_rtol_0p02_atol_0p5": true,
+    "finite": true,
+    "replay_exact_cycles_each_arm": 5,
+    "same_token": true
+  },
+  "generated_mean_median_ms": 47.922407,
+  "generated_medians_ms": [
+    47.931705,
+    47.913109
+  ],
+  "generated_minus_native_q4down_ms": 1.765168,
+  "native_q4down_median_ms": 46.157239,
+  "schema": "tinygrad.nv_prefill_current252_native_q4down_delta.v1",
+  "status": "PASS"
+}

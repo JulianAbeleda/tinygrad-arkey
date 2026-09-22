@@ -1,0 +1,32 @@
+{
+  "actual_compute_channels": 2,
+  "actual_ready_placement": 0,
+  "depth": 512,
+  "device": "NV",
+  "first_token_reps": [
+    3817,
+    3817,
+    3817,
+    3817
+  ],
+  "hq_num_compute": 2,
+  "nmeas": 24,
+  "no_memory_planner": 0,
+  "ready_placement": 0,
+  "reps": 4,
+  "schema": "tinygrad.nv_overlap_substrate_wall_probe.v1",
+  "settle": 3,
+  "tok_s_median": 185.65017715577466,
+  "tok_s_samples": [
+    186.0931304638464,
+    184.69639875241256,
+    185.4529849840554,
+    185.8473693274939
+  ],
+  "token_sha_reps": [
+    "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+    "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+    "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b",
+    "1d299b89d95fdd2667c855eea2531284007ed39435a58265ef933dad58a4771b"
+  ]
+}

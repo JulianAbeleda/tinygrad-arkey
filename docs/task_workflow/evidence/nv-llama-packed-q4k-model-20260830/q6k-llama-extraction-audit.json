@@ -1,0 +1,13 @@
+{
+  "schema": "tinygrad.nv_q6k_llama_extraction_audit.v1",
+  "artifacts": {
+    "main_cubin": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-mmq-dense.sm_120a.cubin",
+    "producer_cubin": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q8-ds4.sm_120a.cubin",
+    "fixup_cubin": "docs/task_workflow/evidence/nv-packed-q4k-q8-llama-extracted-20260830/q6k-fixup-dense.sm_120a.cubin"
+  },
+  "main_symbol": "_Z15dense_mul_mat_qIL9ggml_type14ELi128ELb0EEvPKcPKiPfS5_5uint3iiiiiS6_S6_iiiS6_S6_iiiS6_",
+  "producer_symbol": "_Z17quantize_mmq_q8_1IL18mmq_q8_1_ds_layout1EEvPKfPKiPvlllllii",
+  "finding": "The available Q6 extraction is the dense pp512 MMQ specialization (ELi128). It is not an M=1 vocabulary specialization; its companion binding is hard-coded for M=512 and 128-row MMQ tiles. Rebinding it to 151936 rows would not constitute an exact llama M=1 kernel and was not launched.",
+  "m1_full_logit_arm": "NOT_AVAILABLE",
+  "verdict": "STOP_EXACT_EXTRACTION"
+}

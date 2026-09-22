@@ -1,0 +1,90 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_s6_debug.v1",
+  "launch": {
+    "global_size": [
+      1,
+      1,
+      1
+    ],
+    "local_size": [
+      128,
+      1,
+      1
+    ]
+  },
+  "stages": [
+    {
+      "stage": "s0",
+      "status": "PASS",
+      "us": 1.664,
+      "finite": true,
+      "sample": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "stage": "s1",
+      "status": "PASS",
+      "us": 1.696,
+      "finite": true,
+      "sample": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "stage": "s2",
+      "status": "PASS",
+      "us": 1.696,
+      "finite": true,
+      "sample": [
+        3.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "stage": "s3",
+      "status": "PASS",
+      "us": 1.504,
+      "finite": true,
+      "sample": [
+        3.0,
+        3.0,
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "stage": "s4",
+      "status": "PASS",
+      "us": 3.232,
+      "finite": true,
+      "sample": [
+        129.0,
+        129.0,
+        129.0,
+        129.0
+      ]
+    },
+    {
+      "stage": "s5",
+      "status": "PASS",
+      "us": 343.712,
+      "finite": true,
+      "sample": [
+        128.0,
+        128.0,
+        128.0,
+        128.0
+      ]
+    }
+  ],
+  "status": "PASS"
+}

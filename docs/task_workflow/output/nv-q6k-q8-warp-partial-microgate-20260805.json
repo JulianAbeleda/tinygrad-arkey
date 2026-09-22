@@ -1,0 +1,32 @@
+{
+  "candidate": {
+    "id": "q6k_q8_warp_partial_128lane_v1",
+    "output": "float32[1024,4]",
+    "ownership": "4 warps/output, 32 lanes/warp, 4 Q6 blocks/warp, 2 int8x4 chunks/lane/block"
+  },
+  "correctness": {
+    "atol": 0.4677861213684082,
+    "baseline_max_abs_ref": 2.956390380859375e-05,
+    "candidate_max_abs_ref": 0.173095703125,
+    "candidate_vs_baseline_max_abs": 0.17309188842773438,
+    "pass": true
+  },
+  "device": "NV",
+  "git_commit": "5b70ac4cb4b4c3f9b114d1d62b2f720459355bed",
+  "payload": {
+    "q6_sha256": "653c9331685e40d02af27d1a2cc60747ca5b7c9a00b0135caed9f31573b03881",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "schema": "tinygrad.q6k_q8_warp_partial_microgate.v1",
+  "timing": {
+    "candidate_b": [66.9661, 67.32338, 66.92764, 66.73147, 66.81572],
+    "candidate_median": 66.92764,
+    "control_a": [66.74379, 66.47879, 66.56515, 66.61295, 67.02843],
+    "control_c": [66.87223, 67.02782, 66.71654000000001, 66.77805000000001, 66.92514],
+    "control_midpoint_median": 66.74259,
+    "delta": 0.18504999999998972,
+    "replays": 100,
+    "reps": 5,
+    "unit": "us_per_graph_replay"
+  }
+}

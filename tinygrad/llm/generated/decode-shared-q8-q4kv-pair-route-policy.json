@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_shared_q8_q4kv_pair",
+  "description": "Dual-output cooperative Q4/Q8 K/V producer for the nine Q4/Q4 blocks in the promoted shared-Q8 lease on RTX 5090 NV sm_120. The CUDA-event microgate is bit-exact, uses 40 registers with no spills, and recovers 1.255 us/pair (11.297 us/token projected). The composed graph is 471 to 462 nodes with node sum -14.304 us/token. A stabilized reps=9 control/candidate/control wall bracket measured 4.522569 / 4.498406 / 4.506073 ms/token, recovering 15.915 us/token with identical token streams. TINYGRAD_SHARED_Q8_Q4KV_PAIR_DISABLE=1 restores the two direct cooperative consumers at model load.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

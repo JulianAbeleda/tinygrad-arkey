@@ -190,11 +190,16 @@ def _kernel_launch_dims(
   return global_size, local_size
 
 
+def _validated_program_global_slots(info, buffer_count:int) -> tuple[int, ...]:
+  if any(not isinstance(i, int) or isinstance(i, bool) or i < 0 or i >= buffer_count for i in info.globals):
+    raise RuntimeError(f"PROGRAM {info.name!r} globals {info.globals} exceed resolved CALL buffer count {buffer_count}")
+  return info.globals
+
 def exec_kernel(ctx:ExecContext, call:UOp, ast:UOp) -> float|None:
   et = None
   for bufs, device_vars in unwrap_multi(call, resolve_params(call, ctx.input_uops)):
     var_vals = {**ctx.var_vals, **device_vars}
-    prg_bufs = [bufs[i].ensure_allocated() for i in ast.arg.globals]
+    prg_bufs = [bufs[i].ensure_allocated() for i in _validated_program_global_slots(ast.arg, len(bufs))]
     rt = get_runtime(device:=bufs[0].device, ast, cache=ctx.cache)
     global_size, local_size = _kernel_launch_dims(call, ast, var_vals)
     with track_stats(ctx, call, device, prg_bufs, var_vals) as tm:

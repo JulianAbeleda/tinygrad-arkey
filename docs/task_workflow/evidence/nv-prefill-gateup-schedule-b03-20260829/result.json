@@ -1,0 +1,33 @@
+{
+  "schema": "tinygrad.nv_prefill_gateup_schedule_b03.v1",
+  "packet": "B0.3",
+  "status": "STOP",
+  "authority": {
+    "source": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-b02-20260829/result.json",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "prompt_fixture": "inline:(i*7)%1000, tokens=512",
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "clocks_session": "graphics=435 MHz, sm=435 MHz, memory=7001 MHz, P3; GPU flock",
+    "environment": {"HCQ_NUM_COMPUTE":"2", "HCQ_NV_READY_PLACEMENT":"0", "PROFILE":"0"}
+  },
+  "correctness": {
+    "fixture_role": "blk.0.ffn_gate.weight",
+    "tolerance": "isolated finite/sentinel/read-only gate oracle",
+    "all_variants_passed": true,
+    "output_sha256": "26ae24b2b60fb98d0317b2f3969334169e9b3b1ca68019348d78f59d38e7c57e",
+    "sentinels": {"finite": true, "unwritten": 0, "nonzero": 6291456, "record_readonly": true, "weights_readonly": true}
+  },
+  "census": {"predicted": {"programs": 1, "producers": 1, "overlays": 0, "copies": 0, "workspaces": 3}, "observed": "single bridge kernel; no unexpected materialization/copy/allocation"},
+  "samples": {
+    "control": {"warmup": 1, "reps": 9, "raw_us": [352.864,351.136,352.256,352.864,352.192,353.28,353.024,351.136,352.864], "evidence": "control-g0.json"},
+    "fragment_distance": {"warmup": 1, "reps": 9, "raw_us": [347.008,346.72,346.72,346.72,346.72,346.72,347.008,346.72,346.72], "evidence": "fragment_distance-g0.json"},
+    "metadata_distance": {"warmup": 1, "reps": 9, "raw_us": [351.68,351.072,351.68,351.68,351.68,351.68,351.68,351.68,351.68], "evidence": "metadata_distance-g0.json"},
+    "double_buffer": {"warmup": 1, "reps": 9, "raw_us": [351.328,350.656,351.328,351.328,351.328,351.328,351.328,351.328,351.328], "evidence": "double_buffer-g0.json"}
+  },
+  "wall": {"control_median_us": 352.864, "control_min_us": 351.136, "fragment_distance_median_us": 346.72, "metadata_distance_median_us": 351.68, "double_buffer_median_us": 351.328, "control_drift_us": 0, "noise_us": 10},
+  "observer": {"enabled_capabilities": ["root NCU full set"], "overhead": "profiling reports only; not wall authority", "perturbation_status": "NCU-separated from G0 timing"},
+  "counters": {"reports": ["control.ncu-rep", "fragment_distance.ncu-rep", "metadata_distance.ncu-rep", "double_buffer.ncu-rep"], "tensor_duty_threshold_met": false, "long_scoreboard_fell": false, "occupancy_or_spill_rejection": "no eligible counter movement above required threshold established", "instruction_service_rule": "fragment service delta is below noise"},
+  "decision": "STOP: no variant establishes the required tensor-duty increase and long-scoreboard reduction above counter noise; fragment_distance service delta is below the 10 us eligibility noise, while metadata_distance and double_buffer provide no service win. B0.4 is not authorized.",
+  "next_packet": null
+}

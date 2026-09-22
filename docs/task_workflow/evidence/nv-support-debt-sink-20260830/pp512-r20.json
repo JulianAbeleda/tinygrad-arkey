@@ -1,0 +1,19 @@
+{
+  "schema": "tinygrad.nv_pp512_qk_norm_rope_timing.v1",
+  "results": [
+    {
+      "rows": 32,
+      "reps": 20,
+      "split_us": 146.58855,
+      "fused_us": 74.2065,
+      "delta_us": 72.38204999999999
+    },
+    {
+      "rows": 8,
+      "reps": 20,
+      "split_us": 142.75979999999998,
+      "fused_us": 71.62060000000001,
+      "delta_us": 71.13919999999997
+    }
+  ]
+}

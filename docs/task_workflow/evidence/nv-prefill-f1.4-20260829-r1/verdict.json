@@ -1,0 +1,35 @@
+{
+  "schema": "tinygrad.nv_prefill_flash_f1_4_verdict.v1",
+  "packet": "F1.4",
+  "status": "STOP",
+  "dependency": "F1.2 complete; F1.3 not required for decision",
+  "population": {
+    "installed_calls": 36,
+    "candidate_calls": 36,
+    "undeclared_support_launches": 0,
+    "source": "docs/task_workflow/evidence/nv-prefill-f1.2-20260829-r1/live-r9.json"
+  },
+  "correctness": {
+    "full_output": "PASS",
+    "finite": true,
+    "replay": "PASS",
+    "token": 198,
+    "same_token": true,
+    "same_logits_exact": true
+  },
+  "matched_arms": {
+    "order": ["control_0", "candidate_1", "control_2"],
+    "installed_service_us_per_call": "99-107",
+    "candidate_service_us_per_call": "6703-6720",
+    "candidate_loses_beyond_noise": true,
+    "candidate_minimum_below_both_controls": false,
+    "candidate_median_below_both_controls": false
+  },
+  "f1_3": {
+    "status": "UNNECESSARY",
+    "reason": "candidate is approximately two orders of magnitude slower than installed; counters cannot change the performance verdict"
+  },
+  "decision": "STOP: candidate fails the mandatory matched-R9 minimum and median rule by a large margin despite exact 36-call coverage and correctness",
+  "next_packet": null,
+  "f2_authorized": false
+}

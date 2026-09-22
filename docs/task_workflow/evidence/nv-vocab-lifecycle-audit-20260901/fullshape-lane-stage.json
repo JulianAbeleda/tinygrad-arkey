@@ -1,0 +1,57 @@
+{
+  "contract": {
+    "candidate": "Q8 provider + four-warp Q6_K/Q8_1 lane-stage output",
+    "control": "installed Q6_K FP16 in-kernel reduction",
+    "production_route_changed": false,
+    "quality_credit": false
+  },
+  "correctness": {
+    "nonzero_primitive_authority": "q6k_q8_warp_direct_microgate",
+    "zero_input_exact": true
+  },
+  "git_commit": "4597201c13c32684ef6e32fabb930b8634a96add",
+  "schema": "tinygrad.nv_q6k_vocab_q8_fullshape_gate.v1",
+  "shape": {
+    "k": 4096,
+    "rows": 151936,
+    "weight_bytes": 510504960
+  },
+  "timing": {
+    "candidate_b": [
+      3165.8468125,
+      3195.2333125,
+      3194.609,
+      3004.07625,
+      2989.0868125
+    ],
+    "candidate_median_us": 3165.8468125,
+    "control_a": [
+      684.8864375,
+      757.363375,
+      758.3301875,
+      757.6639375,
+      587.316625
+    ],
+    "control_c": [
+      667.9100625,
+      668.4736875,
+      668.24575,
+      609.590375,
+      608.5515625
+    ],
+    "control_midpoint_median_us": 683.62715625,
+    "delta_us": 2481.32103125,
+    "gate": "STOP",
+    "paired_candidate_minus_control": [
+      2489.4485624999998,
+      2482.31478125,
+      2481.32103125,
+      2320.44909375,
+      2391.15271875
+    ],
+    "replays": 16,
+    "reps": 5
+  },
+  "variant": "lane-stage",
+  "verdict": "NO_GO_FULLSHAPE"
+}

@@ -1,0 +1,21 @@
+{
+  "coop_q4_count": 43,
+  "count": 4,
+  "depth": 128,
+  "legacy_shared_q4_count": 0,
+  "load_style": "scalar",
+  "schema": "tinygrad.nv_single_vector_structural_census.v1",
+  "single_proj_scalar": {
+    "q4k_g3_lanemap_gemv_1024_4096": 28,
+    "q4k_g3_lanemap_gemv_4096_4096": 19,
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": 36
+  },
+  "single_proj_scalar_count": 83,
+  "single_proj_vector": {},
+  "single_proj_vector_count": 0,
+  "total_programs": 37,
+  "w1w3_scalar": {},
+  "w1w3_vector": {
+    "q4k_g3_lanemap_gemv_w1w3vec16_12288_4096": 36
+  }
+}

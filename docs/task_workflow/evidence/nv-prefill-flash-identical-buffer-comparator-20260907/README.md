@@ -1,0 +1,5 @@
+# Fused generated/native Flash semantic-buffer comparator
+
+The generated and native pp512 Flash bodies were executed from identical semantic Q/K/V data. Their ABIs differ materially: generated consumes fp16 Q/K/V and returns fp16; native consumes fp32 Q, fp16 K/V, an explicit fp16 causal mask, and returns a strided fp32 view. Full outputs agree (`max_abs=0.00192333`, `mean_abs=6.22247e-5`, `rtol=.02, atol=.5`). Each body is one PROGRAM.
+
+Under the first same-process settled loop, generated body median was `154.2615 us` and native body `165.432 us`; generated is already faster by `11.1705 us` on identical semantic inputs. This confirms the full-model native advantage of `0.646607 ms` is outside the fused generated body. The separately scheduled native fp16 handoff row measured `103.21355 us`, faster than its own body because the sequential arms changed clock/cache conditioning; it is therefore not booked. The next discriminator must measure the finalized graph's predecessor-to-output island in interleaved order and census Q cast, mask, output-layout/cast, and consumer placement.

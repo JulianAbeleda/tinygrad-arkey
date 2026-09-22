@@ -1,5 +1,5 @@
 from __future__ import annotations
-import collections, time, json, os, pathlib
+import collections, hashlib, time, json, os, pathlib, subprocess
 from typing import Any, cast
 from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, suppress_finalizing, TracingKey, unwrap
 
@@ -11,6 +11,87 @@ from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, su
 # occupancy/VALU/memory-busy metrics are not yet produced. Off by default until that is resolved.
 PMC_GRAPH = getenv("PMC_GRAPH", 0)
 GRAPH_PROFILE_JSON = os.environ.get("HCQ_GRAPH_PROFILE_JSON", "")
+MULTI_QUEUE_CENSUS_JSON = os.environ.get("HCQ_MULTI_QUEUE_CENSUS_JSON", "")
+# Empty is closed-default.  A bring-up owner supplies exact support-kernel
+# names (or explicit `prefix:` entries) from a captured DAG; quantized/MMQ
+# kernels are intentionally never inferred eligible here.
+NV_MULTI_QUEUE_PROGRAMS = frozenset(x for x in os.environ.get("HCQ_NV_MULTI_QUEUE_PROGRAMS", "").split(",") if x)
+# Generic dependency-readiness admission (replaces the name-pinned policy
+# below when enabled): a node goes to the least-loaded compute GPFIFO unless
+# it directly depends on the primary queue's current tail, in which case it
+# stays primary (no concurrency is lost and the cross-queue handoff is
+# avoided). On by default on NV after the overlap-substrate A/B; the
+# name-pinned path remains available for byte-identical bring-up runs.
+HCQ_NV_READY_PLACEMENT = getenv("HCQ_NV_READY_PLACEMENT", 1)
+
+def _nv_split_phase_enabled() -> bool:
+  # Read the environment directly: tinygrad.helpers.getenv is cached, and this
+  # gate must be observable in subprocesses that set the variable late.
+  return os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0")
+
+def _nv_split_phase_census_path() -> str:
+  return os.environ.get("NV_SPLIT_PHASE_CENSUS_JSON", "")
+
+def _nv_split_phase_census_only() -> bool:
+  return os.environ.get("NV_SPLIT_PHASE_CENSUS_ONLY", "") not in ("", "0")
+
+def _nv_split_phase_latch_pool() -> tuple[int, int]:
+  try: base = int(os.environ.get("NV_SPLIT_PHASE_LATCH_BASE", "0"))
+  except ValueError: base = 0
+  try: count = int(os.environ.get("NV_SPLIT_PHASE_LATCH_COUNT", "8"))
+  except ValueError: count = 8
+  if count <= 0: raise ValueError("NV_SPLIT_PHASE_LATCH_COUNT must be positive")
+  return base, count
+
+def _nv_split_phase_git_commit() -> str:
+  try:
+    return subprocess.run(["git", "-C", str(pathlib.Path(__file__).resolve().parents[3]), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True).stdout.strip()
+  except (OSError, subprocess.SubprocessError): return "unknown"
+
+def _parse_nv_multi_queue_indices(spec:str) -> frozenset[int]:
+  """Parse an opt-in exact graph-index selector (for example ``11-17,37``).
+
+  This is intentionally an experiment-only complement to the program-name
+  selector.  It permits dependency-coherent occurrences to move together
+  without admitting every occurrence of the same generated program.
+  """
+  out:set[int] = set()
+  for item in filter(None, (x.strip() for x in spec.split(","))):
+    lo, sep, hi = item.partition("-")
+    if not lo.isdecimal() or (sep and not hi.isdecimal()): raise ValueError(f"invalid HCQ_NV_MULTI_QUEUE_INDICES item: {item!r}")
+    a, b = int(lo), int(hi) if sep else int(lo)
+    if b < a: raise ValueError(f"descending HCQ_NV_MULTI_QUEUE_INDICES range: {item!r}")
+    out.update(range(a, b+1))
+  return frozenset(out)
+
+NV_MULTI_QUEUE_INDICES = _parse_nv_multi_queue_indices(os.environ.get("HCQ_NV_MULTI_QUEUE_INDICES", ""))
+NV_MULTI_QUEUE_CUT_POLICY = os.environ.get("HCQ_NV_MULTI_QUEUE_CUT_POLICY", "")
+
+def _load_nv_multi_queue_cut_policy(path:str) -> list[dict[str, Any]]:
+  if not path: return []
+  with open(path, encoding="utf-8") as f: payload = json.load(f)
+  if payload.get("schema") != "tinygrad.nv_multi_queue_cut_policy.v1": raise ValueError("invalid NV multi-queue cut policy schema")
+  return payload["graphs"]
+
+def _nv_program_identity(name:str) -> str:
+  stem, sep, suffix = name.rpartition("_")
+  return stem if sep and len(suffix) == 64 and all(c in "0123456789abcdef" for c in suffix) else name
+
+def _match_nv_multi_queue_cut_policy(names:list[str], rows:list[dict[str, Any]]) -> frozenset[int]:
+  matches = []
+  for row in rows:
+    count = int(row["prefix_count"])
+    if len(names) < count: continue
+    identities = [_nv_program_identity(x) for x in names[:count]]
+    digest = hashlib.sha256("\n".join(identities).encode()).hexdigest()
+    if digest != row["prefix_name_digest"]: continue
+    selected = row["selected"]
+    if any(int(x["index"]) >= count or _nv_program_identity(names[int(x["index"])]) != x["identity"] for x in selected):
+      raise ValueError("NV multi-queue cut policy selected-name mismatch")
+    matches.append(frozenset(int(x["index"]) for x in selected))
+  if len(matches) > 1: raise ValueError("ambiguous NV multi-queue cut policy")
+  return matches[0] if matches else frozenset()
 
 def graph_profile_payload(entries, deps, sigs):
   rows = [{"device": ent.device, "name": str(ent.name), "metadata": ent.metadata, "start": str(sigs[ent.st_id]),
@@ -26,6 +107,16 @@ from tinygrad.engine.jit import GraphRunner, MultiGraphRunner
 class HCQGraph(MultiGraphRunner):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
+    # Research-only observation seam: graph construction is the first point at
+    # which CALL arguments have been resolved to the actual allocated buffers.
+    # Keep this entirely out of scheduling; observers are opt-in and may retain
+    # the immutable construction records for attribution/capture.
+    try:
+      from tinygrad.engine.jit import _GRAPH_ADMISSION_OBSERVER
+      if (observer:=_GRAPH_ADMISSION_OBSERVER.get()) is not None and hasattr(observer, "bind_graph_calls"):
+        observer.bind_graph_calls(tuple(self.calls))
+    except Exception:
+      raise
     self.devices = list({cast(HCQCompiled, Device[b.device]) for (_,_,bufs,_) in self.calls for b in bufs})
 
     # CPU Device is always last
@@ -64,8 +155,24 @@ class HCQGraph(MultiGraphRunner):
     # global operations and sets a kickoff signal. Any queue accessing a buffer from another device waits for this signal from the device’s
     # compute queue to ensure exclusive access. The compute queue signals the completion of the graph, synchronizing with the device's copy queue.
     self.ji_schedule: dict[int, tuple[HCQCompiled, HWQueue, list, list, HCQSignal, int|None]] = {}
+    self.split_phase_enabled = _nv_split_phase_enabled()
+    self.split_phase_census_only = _nv_split_phase_census_only()
+    self.split_records: dict[int, list[dict[str, Any]]] = {}
+    self.split_queue_of: dict[int, HWQueue] = {}
+    self.split_encoded_wait_of: dict[int, bool] = {}
+    self.split_prev_exec_of: dict[int, int|None] = {}
+    self.split_phase_plans: dict[int, tuple[dict[str, int|str]|None, dict[str, int|str]|None]] = {}
 
-    self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: unwrap(dev.hw_compute_queue_t)() for dev in self.devices}
+    self.compute_queues: dict[HCQCompiled, list[HWQueue]] = {
+      dev: [factory() for _, factory in dev.hw_compute_queues()] for dev in self.devices}
+    self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: queues[0] for dev, queues in self.compute_queues.items() if queues}
+    self.compute_queue_load: dict[HWQueue, int] = collections.defaultdict(int)
+    self.nv_multi_queue_indices = _match_nv_multi_queue_cut_policy(
+      [rt.name if rt is not None else "<non-program>" for rt in self.runtimes], _load_nv_multi_queue_cut_policy(NV_MULTI_QUEUE_CUT_POLICY))
+    # Opt-in construction census.  This is deliberately produced before any
+    # submission and contains no timing information; it proves whether a
+    # name-pinned multi-queue experiment actually changed graph placement.
+    self.multi_queue_assignments: list[dict[str, Any]] = []
     self.copy_queues: dict[tuple[HCQCompiled, int], HWQueue] = {} # lazy allocation, keyed by (device, queue_idx)
     self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], Any] = {} # disabled in this fork; kept for explicit unsupported-path checks
     self.num_copy_queues: int = getenv("HCQ_NUM_SDMA", min(len(self.devices), 8) if ALL2ALL >= 1 else 1)
@@ -95,7 +202,8 @@ class HCQGraph(MultiGraphRunner):
     self.queue_access: dict[HWQueue, dict[HWQueue, int|None]] = collections.defaultdict(lambda: collections.defaultdict(lambda: None))
     self.dev_access: dict[HWQueue, set[HCQCompiled]] = collections.defaultdict(set)
 
-    for dev, queue in self.comp_queues.items(): self.dev_access[queue].add(dev)
+    for dev, queues in self.compute_queues.items():
+      for queue in queues: self.dev_access[queue].add(dev)
 
     # Per-graph PMC capture: one buffer slot per program dispatch on each pmc-enabled device.
     self.pmc_prog_js: dict[Any, list[int]] = {}
@@ -132,7 +240,10 @@ class HCQGraph(MultiGraphRunner):
       if runtime is not None: self.device_vars[enqueue_dev] = merge_dicts([self.device_vars[enqueue_dev], {k: 0 for k in ast.arg.runtimevars}])
 
       if runtime is not None:
-        enqueue_queue = self.comp_queues[enqueue_dev]
+        rdeps_peek = None
+        if HCQ_NV_READY_PLACEMENT and enqueue_dev.device.split(":", 1)[0] == "NV" and len(self.compute_queues[enqueue_dev]) > 1:
+          rdeps_peek = self.deps.peek_access_resources(bufs, ast.arg.outs)
+        enqueue_queue = self._pick_compute_queue(enqueue_dev, runtime, j, rdeps_peek)
       elif is_rdma:
         raise RuntimeError("RDMA peer-copy path was removed from this fork; use same-peer copies.")
       else:
@@ -157,8 +268,17 @@ class HCQGraph(MultiGraphRunner):
       else:
         sync_signals, opt_deps, rdeps = self._resolve_deps(bufs, ast.arg.outs if runtime is not None else [0], enqueue_queue,
           enqueue_dev, out_signal, j, is_copy=is_xfer)
+        if self.split_phase_enabled and runtime is not None:
+          self.split_queue_of[j] = enqueue_queue
+          self.split_encoded_wait_of[j] = bool(sync_signals) or bool(opt_deps)
+          self.split_prev_exec_of[j] = self.last_j[enqueue_queue]
 
       self.ji_schedule[j] = (enqueue_dev, enqueue_queue, sync_signals, opt_deps[::-1], out_signal, None if runtime is not None else (j + 1))
+      if runtime is not None:
+        self.compute_queue_load[enqueue_queue] += 1
+        if MULTI_QUEUE_CENSUS_JSON and enqueue_dev.device.split(":", 1)[0] == "NV":
+          self.multi_queue_assignments.append({"graph_idx": j, "name": runtime.name,
+                                                "queue": self.compute_queues[enqueue_dev].index(enqueue_queue)})
 
       # Collect profile information if profiling is enabled.
       if PROFILE:
@@ -175,10 +295,31 @@ class HCQGraph(MultiGraphRunner):
         else:
           op_meta = self.call_metadata[j] if j < len(self.call_metadata) else ()
           metadata = {"semantic_op": op_meta[0].name} if op_meta else None
+        metadata = {} if metadata is None else metadata
+        metadata.update({"graph_kind":"program" if runtime is not None else "graph_copy", "graph_index":j})
+        if runtime is None:
+          metadata.update({"copy_bytes":bufs[0].nbytes, "source_device":bufs[1].device, "destination_device":bufs[0].device})
         self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1, metadata))
         self.prof_graph_deps.append([d - 1 for _, d in rdeps])
 
       self.last_j[enqueue_queue] = j
+
+    if self.split_phase_enabled: self._build_split_phase_plans()
+
+    # An auxiliary queue may end in a result with no later consumer.  Give its
+    # final dispatch an explicit completion signal so the primary queue can
+    # join it before publishing the device timeline.  This must happen before
+    # hardware command encoding below.
+    for dev, queues in self.compute_queues.items():
+      for queue in queues[1:]:
+        if (last := self.last_j[queue]) is not None:
+          self.ji_schedule[last] = self.ji_schedule[last][:5] + (last + 1,)
+
+    if MULTI_QUEUE_CENSUS_JSON:
+      queue_counts = dict(collections.Counter(x["queue"] for x in self.multi_queue_assignments))
+      payload = {"schema": "tinygrad.hcq_multi_queue_census.v1", "calls": len(self.multi_queue_assignments),
+                 "queue_counts": queue_counts, "aux_calls": queue_counts.get(1, 0), "assignments": self.multi_queue_assignments}
+      with open(MULTI_QUEUE_CENSUS_JSON, "a") as f: f.write(json.dumps(payload, sort_keys=True) + "\n")
 
     # Check which signals are used in the profile graph.
     self.prof_signal_is_used: set[int] = {sid for ent in self.prof_graph_entries for sid in (ent.st_id, ent.en_id)}
@@ -192,8 +333,9 @@ class HCQGraph(MultiGraphRunner):
     self.virt_timeline_signals = {dev: unwrap(dev.signal_t)(HCQBuffer(timeline_sigaddrs[dev], 16),owner=dev,is_timeline=True) for dev in self.devices}
 
     for dev in self.devices:
-      self.comp_queues[dev].memory_barrier().wait(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev]) \
-                           .wait(self.kick_signals[dev.peer_group], self.kickoff_var).signal(self.signals[dev], self.kickoff_var)
+      for queue in self.compute_queues[dev]:
+        queue.memory_barrier().wait(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev]) \
+             .wait(self.kick_signals[dev.peer_group], self.kickoff_var).signal(self.signals[dev], self.kickoff_var)
 
     for j, ((dev_idx, ast, bufs, _), runtime) in enumerate(zip(self.calls, self.runtimes)):
       enqueue_dev, enqueue_queue, sync_signals, deps, signal, signal_val = self.ji_schedule[j]
@@ -208,7 +350,16 @@ class HCQGraph(MultiGraphRunner):
 
       # Encode main commands based on ji type.
       if runtime is not None:
-        enqueue_queue.exec(runtime, self.ji_args[j], ast.arg.global_size or (1,1,1), ast.arg.local_size or (1,1,1))  # type: ignore[arg-type]
+        if self.split_phase_enabled and not self.split_phase_census_only:
+          producer_plan, consumer_plan = self.split_phase_plans.get(j, (None, None))
+          enqueue_queue.nv_split_producer_plan = producer_plan
+          enqueue_queue.nv_split_consumer_plan = consumer_plan
+        try:
+          enqueue_queue.exec(runtime, self.ji_args[j], ast.arg.global_size or (1,1,1), ast.arg.local_size or (1,1,1))  # type: ignore[arg-type]
+        finally:
+          if self.split_phase_enabled:
+            enqueue_queue.nv_split_producer_plan = None
+            enqueue_queue.nv_split_consumer_plan = None
         if enqueue_dev in self.graph_pmc_buf:
           rec = enqueue_dev.pmc_buffer.size
           enqueue_queue.pmc_read(self.graph_pmc_buf[enqueue_dev].offset(self.pmc_slot[j] * rec), enqueue_dev.pmc_sched)
@@ -253,13 +404,45 @@ class HCQGraph(MultiGraphRunner):
         for copy_q in self._dev_copy_queues(dep_dev):
           if copy_q in self.signals: self.comp_queues[dev].wait(self.signals[copy_q], cast(int, self.last_j[copy_q]) + 1)
 
+      # The primary queue owns the device timeline.  It joins every used
+      # auxiliary compute queue first, preserving the old one monotonic
+      # timeline contract for copies, graph replay, and synchronize().
+      for queue in self.compute_queues[dev][1:]:
+        if queue in self.signals and self.last_j[queue] is not None:
+          self.comp_queues[dev].wait(self.signals[queue], cast(int, self.last_j[queue]) + 1)
       self.comp_queues[dev].signal(self.virt_timeline_signals[dev], self.virt_timeline_vals[dev] + 1).bind(dev)
+      for queue in self.compute_queues[dev][1:]: queue.bind(dev)
       for copy_q in self._dev_copy_queues(dev): copy_q.bind(dev)
 
     self.last_timeline: dict[HCQCompiled, tuple[HCQSignal, int]] = {dev: (dev.timeline_signal, 0) for dev in self.devices}
-    self.queue_signals_to_reset = [self.signals[q] for q in list(self.comp_queues.values()) + list(self.copy_queues.values()) if q in self.signals]
+    self.queue_signals_to_reset = [self.signals[q] for q in [q for qs in self.compute_queues.values() for q in qs] + list(self.copy_queues.values()) if q in self.signals]
+
+  def _pick_compute_queue(self, dev:HCQCompiled, runtime, graph_idx:int=-1, rdeps_peek:list[Any]|None=None) -> HWQueue:
+    queues = self.compute_queues[dev]
+    if dev.device.split(":", 1)[0] != "NV" or len(queues) == 1: return queues[0]
+    if HCQ_NV_READY_PLACEMENT and rdeps_peek is not None:
+      # Readiness placement: a node that must wait for the primary queue's
+      # current tail cannot overlap it, so keep it on the primary (no extra
+      # cross-queue handoff). Anything else is placed on the least-loaded
+      # GPFIFO; with equal load the tie goes to the primary, which seeds the
+      # anchor and prevents the whole DAG from collapsing onto one aux queue.
+      tail = self.last_j[queues[0]]
+      if tail is not None and any(dep == (queues[0], tail + 1) for dep in rdeps_peek): return queues[0]
+      return min(queues, key=lambda q: self.compute_queue_load[q])
+    # Native NV admission is deliberately name-pinned to the independently
+    # captured support tail.  All other backends and every unlisted program
+    # retain byte-identical primary-queue scheduling.
+    # An occurrence cut denotes queue 1 exactly; it must not depend on the
+    # incidental number of earlier calls on either queue.
+    if graph_idx in (getattr(self, "nv_multi_queue_indices", frozenset()) or NV_MULTI_QUEUE_INDICES): return queues[1]
+    admitted = runtime.name in NV_MULTI_QUEUE_PROGRAMS or any(
+      rule.startswith("prefix:") and runtime.name.startswith(rule.removeprefix("prefix:")) for rule in NV_MULTI_QUEUE_PROGRAMS)
+    if not admitted: return queues[0]
+    return min(queues, key=lambda q: self.compute_queue_load[q])
 
   def _resolve_deps(self, bufs, outs, enqueue_queue, enqueue_dev, out_signal, j, is_copy, rdma_qp=None):
+    if self.split_phase_enabled and not is_copy and rdma_qp is None:
+      self.split_records[j] = self.deps.access_records(bufs, outs, (enqueue_queue, j + 1))
     rdeps = self._access_resources(bufs, outs, (enqueue_queue, j + 1)) #type:ignore
 
     # Order shared QP doorbell record writes across different compute queues (head+1 must complete before head+2).
@@ -297,6 +480,101 @@ class HCQGraph(MultiGraphRunner):
 
     return sync_signals, opt_deps, rdeps
 
+  def _build_split_phase_plans(self) -> None:
+    """Derive the graph-local edge-aware latch plan from typed overlap records.
+
+    The closed rule arms only a same-queue consecutive QMD pair with no encoded
+    wait, a pure RAW edge, one RAW producer, one RAW consumer, and no span-level
+    hazard from another edge.  Every other edge gets a named reason and keeps
+    the existing full-completion dependency.
+    """
+    base, count = _nv_split_phase_latch_pool()
+    grouped: dict[tuple[int, int], dict[str, Any]] = collections.defaultdict(
+      lambda: {"kinds": set(), "spans": [], "producer_queue": None})
+    for j, records in self.split_records.items():
+      for record in records:
+        dep_queue, dep_val = record["dep"]
+        producer_j = dep_val - 1
+        key = (producer_j, j)
+        grouped[key]["kinds"].add(record["kind"])
+        grouped[key]["spans"].append(tuple(record["span"]))
+        grouped[key]["producer_queue"] = dep_queue
+
+    raw_producers_by_consumer: dict[int, set[int]] = collections.defaultdict(set)
+    raw_consumers_by_producer: dict[int, set[int]] = collections.defaultdict(set)
+    for (producer_j, consumer_j), edge in grouped.items():
+      if "RAW" in edge["kinds"]:
+        raw_producers_by_consumer[consumer_j].add(producer_j)
+        raw_consumers_by_producer[producer_j].add(consumer_j)
+
+    latch_next = base
+    rows: list[dict[str, Any]] = []
+    for (producer_j, consumer_j), edge in sorted(grouped.items()):
+      queue = self.split_queue_of.get(consumer_j)
+      producer_queue = edge["producer_queue"]
+      encoded_wait = self.split_encoded_wait_of.get(consumer_j, True)
+      previous = self.split_prev_exec_of.get(consumer_j)
+      kinds = edge["kinds"]
+
+      if "RAW" not in kinds:
+        reason = "non_raw"
+      elif len(kinds) != 1:
+        reason = "alias_rejected"
+      elif producer_queue is not queue:
+        reason = "queue_split"
+      elif producer_j != previous:
+        reason = "adjacency"
+      elif encoded_wait:
+        reason = "encoded_wait"
+      elif len(raw_producers_by_consumer[consumer_j]) > 1:
+        reason = "multi_producer_fallback"
+      elif len(raw_consumers_by_producer[producer_j]) > 1:
+        reason = "multi_consumer_fallback"
+      else:
+        reason = "candidate_armed"
+        for (other_producer_j, other_consumer_j), other in grouped.items():
+          if other_consumer_j != consumer_j or (other_producer_j, other_consumer_j) == (producer_j, consumer_j): continue
+          if any(max(s[0], o[0]) < min(s[1], o[1]) for s in edge["spans"] for o in other["spans"]):
+            reason = "alias_rejected"
+            break
+
+      latch_id: int|None = None
+      producer_plan: dict[str, int|str]|None = None
+      consumer_plan: dict[str, int|str]|None = None
+      if reason == "candidate_armed":
+        latch_id = base + (latch_next - base) % count
+        latch_next += 1
+        trigger_policy = os.environ.get("NV_SPLIT_PHASE_TRIGGER_POLICY", "end")
+        producer_plan = {"arrive_at_latch_valid": 1, "arrive_at_latch_id": latch_id,
+                         "enable_program_pre_exit": 1, "pre_exit_at_last_cta_launch": 1,
+                         "trigger_policy": trigger_policy}
+        consumer_plan = {"wait_on_latch_valid": 1, "wait_on_latch_id": latch_id}
+        self.split_phase_plans[consumer_j] = (producer_plan, consumer_plan)
+
+      producer_name = self.runtimes[producer_j].name if producer_j < len(self.runtimes) and self.runtimes[producer_j] is not None else "<copy>"
+      consumer_name = self.runtimes[consumer_j].name if consumer_j < len(self.runtimes) and self.runtimes[consumer_j] is not None else "<copy>"
+      rows.append({
+        "from": producer_j, "to": consumer_j, "access_kind": "RAW" if reason != "non_raw" else "|".join(sorted(kinds)),
+        "producer_name": producer_name, "consumer_name": consumer_name,
+        "queue": getattr(queue, "queue_idx", -1), "reason": reason, "latch_id": latch_id,
+        "spans": sorted(edge["spans"]), "wait_position": os.environ.get("NV_SPLIT_PHASE_WAIT_POSITION", "entry"),
+        "trigger_policy": os.environ.get("NV_SPLIT_PHASE_TRIGGER_POLICY", "end"),
+      })
+
+    census_path = _nv_split_phase_census_path()
+    if census_path:
+      payload = {
+        "schema": "tinygrad.nv_split_phase_construction_census.v1",
+        "commit": _nv_split_phase_git_commit(),
+        "device": self.device,
+        "graph_size": len(self.calls),
+        "latch_pool": {"base": base, "count": count},
+        "rows": rows,
+        "summary": dict(collections.Counter(row["reason"] for row in rows)),
+      }
+      path = pathlib.Path(census_path)
+      path.parent.mkdir(parents=True, exist_ok=True)
+      with path.open("a", encoding="utf-8") as f: f.write(json.dumps(payload, sort_keys=True) + "\n")
   def _dev_copy_queues(self, dev): return [q for (d, _), q in self.copy_queues.items() if d == dev]
 
   def __call__(self, input_uops:tuple[UOp, ...], var_vals:dict[str, int], wait=False) -> float|None:
@@ -328,7 +606,8 @@ class HCQGraph(MultiGraphRunner):
     for q in self.rdma_queues.values(): q.submit(q.dev, hcq_var_vals)
 
     for dev in self.devices:
-      self.comp_queues[dev].submit(dev, hcq_var_vals_local:=hcq_var_vals|self.device_vars.get(dev, {}))
+      hcq_var_vals_local = hcq_var_vals|self.device_vars.get(dev, {})
+      for compute_queue in self.compute_queues[dev]: compute_queue.submit(dev, hcq_var_vals_local)
       for copy_queue in self._dev_copy_queues(dev): copy_queue.submit(dev, hcq_var_vals_local)
       self.last_timeline[dev] = (dev.timeline_signal, dev.next_timeline())
 
@@ -349,11 +628,24 @@ class HCQGraph(MultiGraphRunner):
     self.devices[0].profile_events += [event]
     # Opt-in export for graph-backed authorities. This reads timestamps only after the
     # graph has completed and does not insert waits or alter the captured route.
+    submission_path = os.environ.get("HCQ_SUBMISSION_OBSERVER_JSON", "")
+    payload = graph_profile_payload(self.prof_graph_entries, self.prof_graph_deps, sigs) if GRAPH_PROFILE_JSON or submission_path else None
     if GRAPH_PROFILE_JSON:
-      payload = graph_profile_payload(self.prof_graph_entries, self.prof_graph_deps, sigs)
       path = pathlib.Path(GRAPH_PROFILE_JSON)
       path.parent.mkdir(parents=True, exist_ok=True)
       with path.open("a", encoding="utf-8") as f: f.write(json.dumps(payload, sort_keys=True) + "\n")
+    if submission_path:
+      assert payload is not None
+      for idx, row in enumerate(payload["entries"]):
+        deps = payload["deps"][idx]
+        row["index"], row["deps"], row["queue"] = idx, deps, row["device"]
+        row["dependency_ready"] = max((payload["entries"][dep]["end"] for dep in deps), default=row["start"])
+      observed = {"schema":"tinygrad.hcq_submission_observer.v1", "pid":os.getpid(),
+        "invocation":max(0, self.kickoff_value-1), "profile_perturbed":bool(PROFILE), "entries":payload["entries"],
+        "capabilities":{"device_timestamps":True, "dependencies":True, "queue_identity":True,
+          "buffer_events":"install_buffer_observer callback", "materializations":"graph entry classification"}}
+      path = pathlib.Path(submission_path); path.parent.mkdir(parents=True, exist_ok=True)
+      with path.open("a", encoding="utf-8") as f: f.write(json.dumps(observed, sort_keys=True) + "\n")
 
   def collect_pmc(self):
     if not self.graph_pmc_buf: return

@@ -1,0 +1,73 @@
+{
+  "schema": "tinygrad.nv_q4_cooperative_tail_subset_extension.v1",
+  "date": "2026-08-05",
+  "verdict": "NO_GO_NO_INCREMENTAL_CREDIT",
+  "default_on": false,
+  "promoted": false,
+  "base_indices": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18],
+  "tail_indices": [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
+  "semantic_contract": {
+    "relative_l2_max": 0.001,
+    "finite": true,
+    "tokens_equal": true,
+    "argmax_equal": true,
+    "top_k": 10,
+    "top_k_sets_equal": true,
+    "top_k_order_equal": true
+  },
+  "singleton_relative_l2": {
+    "19": 0.0009680884777888807,
+    "20": 0.0010276279491926777,
+    "21": 0.0008748742796619577,
+    "22": 0.0009128213857467631,
+    "23": 0.0009086610607194916,
+    "24": 0.0008762977808854449,
+    "25": 0.0008748038107996313,
+    "26": 0.0009864954927078105,
+    "27": 0.0008994767791035944,
+    "28": 0.000930604143116273,
+    "29": 0.0011985377223704646,
+    "30": 0.000969715298731222,
+    "31": 0.0008829463688259072,
+    "32": 0.0009413357108533275,
+    "33": 0.0008831469616158107,
+    "34": 0.0012059408054528541,
+    "35": 0.001171131508061801
+  },
+  "real_combination_validations": [
+    {
+      "tail_indices": [23, 24, 27, 33],
+      "predicted_relative_l2": 0.0010083578897071563,
+      "measured_relative_l2": 0.0010530476248882072,
+      "semantic_pass": false,
+      "tokens_argmax_top10_exact": true
+    },
+    {
+      "tail_indices": [23, 24, 33],
+      "predicted_relative_l2": 0.0009176848030683408,
+      "measured_relative_l2": 0.0010645453203488946,
+      "semantic_pass": false,
+      "tokens_argmax_top10_exact": true
+    }
+  ],
+  "settled_incremental_wall": {
+    "candidate_tail_indices": [25],
+    "reference_a_ms_per_token": 5.37458290625,
+    "candidate_ms_per_token": 5.39594965625,
+    "reference_c_ms_per_token": 5.39148234375,
+    "reference_bracket_median_ms_per_token": 5.383032625,
+    "candidate_minus_reference_ms_per_token": 0.012917031249999766,
+    "candidate_speedup_pct": -0.23938383552259968,
+    "all_token_stream_hashes_equal": true,
+    "rejected_high_sample_count": 0,
+    "settled_continuous": true,
+    "reps": 5,
+    "tokens_per_rep": 32
+  },
+  "booked_incremental_us_per_token": 0.0,
+  "limitations": [
+    "The exhaustive 2^17 subset rank used additive signed final-logit deltas and is direction-only.",
+    "Only the closest four-tail boundary and top-ranked three-tail subset received fresh real-model validation.",
+    "The NO-GO is for incremental wall credit, not proof that every tail combination fails semantics."
+  ]
+}

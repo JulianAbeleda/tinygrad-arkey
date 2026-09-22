@@ -1,0 +1,126 @@
+{
+  "schema": "tinygrad.nv_s1_blackbox_reaudit.v1",
+  "status": "RECONSTRUCTED_FROM_RETAINED_RAW_ARTIFACTS",
+  "sources": {
+    "original_s1_split": {
+      "path": "docs/task_workflow/output/nv-s1-body-gap-split-20260822.json",
+      "sha256": "c004b2344e4f18f61ba87e6c9d21137f5d9ae89caeb8ebeaf10be61eef1d3e96"
+    },
+    "weighted_inter_anchor_ledger": {
+      "path": "docs/task_workflow/output/nv-weighted-inter-anchor-ledger-20260820.json",
+      "sha256": "3247325f66bc1bd862675f6d70ff57c45cd78c2278bfc409b0adb912e1da04a2"
+    },
+    "llama_pdl_off_dag": {
+      "path": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-pdl0-dag.json",
+      "sha256": "1886109c5837ec546e0386bf20579cf2c53485a62b55548eda3b586f66a1407e"
+    },
+    "llama_pdl_on_a_dag": {
+      "path": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-dag.json",
+      "sha256": "07a1c7c8b0223ab5ed2612eb50dfa9b81d075ba88240f2429104290dc35f3ff2"
+    },
+    "llama_pdl_on_b_dag": {
+      "path": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-llama-pdlonB-dag.json",
+      "sha256": "d36e8c5822711b27a08dc25a06e292b235dcb5cb76452651ead2a6936e0fd0ff"
+    },
+    "row_authority": {
+      "path": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/04-row-authority.json",
+      "sha256": "8a27c3e3caa5145763725a9aacb871de3f8f8e0b50f53bc8b6801b59492125d6"
+    },
+    "tinygrad_profile": {
+      "path": "docs/task_workflow/evidence/nv-third-party-theory-audit-20260822/probe2-tinygrad-capture.json",
+      "sha256": "c34b5752ef3bf3a0a092f410636d1feedda8b9db843c6b6f2fc44855e0a9e224"
+    }
+  },
+  "finding_1_counter_cardinality": {
+    "prior_sum_us": 37.0,
+    "prior_unit_error": "the NCU values are one isolated kernel invocation, but were labeled us per token and summed without production invocation counts",
+    "covered_rows": [
+      {"row": "gate_up", "per_invocation_delta_us": 2.47, "production_count": 36, "aggregate_delta_us": 88.92},
+      {"row": "Q_g3_only", "per_invocation_delta_us": 2.27, "production_count": 19, "aggregate_delta_us": 43.13},
+      {"row": "O", "per_invocation_delta_us": 1.72, "production_count": 36, "aggregate_delta_us": 61.92},
+      {"row": "V_q4_g3_only", "per_invocation_delta_us": 1.12, "production_count": 9, "aggregate_delta_us": 10.08},
+      {"row": "V_q6_four_warp_only", "per_invocation_delta_us": 0.41, "production_count": 10, "aggregate_delta_us": 4.10},
+      {"row": "down_q6_only", "per_invocation_delta_us": 3.30, "production_count": 18, "aggregate_delta_us": 59.40},
+      {"row": "vocab_main", "per_invocation_delta_us": 22.63, "production_count": 1, "aggregate_delta_us": 22.63},
+      {"row": "flash_combine", "per_invocation_delta_us": 3.07, "production_count": 36, "aggregate_delta_us": 110.52}
+    ],
+    "cardinality_corrected_covered_sum_us": 400.70,
+    "still_missing_from_counter_sum": [
+      "17 Q warp-cooperative invocations",
+      "all 36 K invocations",
+      "9 V q4 warp-cooperative invocations",
+      "8 V q6 q8-warp invocations",
+      "18 down-q4 invocations",
+      "36 flash-score invocations",
+      "Q/K/V completion reductions",
+      "q/k norms, rope/store, providers, and vocab reduction tail"
+    ],
+    "qualification_note": "400.70 us is a counter-domain cardinality diagnostic, not wall recovery; numeric replay equality and production cache order remain unmeasured"
+  },
+  "finding_2_pdl_boundary_migration": {
+    "definition": "sum over 36 layers of O.grid_start - Q.grid_end",
+    "llama_pdl_on_a_exposure_us": 515.015,
+    "llama_pdl_on_b_exposure_us": 517.899,
+    "llama_pdl_on_ab_midpoint_us": 516.457,
+    "llama_pdl_off_exposure_us": 749.258,
+    "pdl_on_boundary_shortening_midpoint_us": 232.801,
+    "full_token_union_pdl_on_median_us": 3885.9585,
+    "full_token_union_pdl_off_us": 3878.254,
+    "full_token_union_on_minus_off_us": 7.7045,
+    "conclusion": "PDL moves O grid start before semantic readiness and migrates support residence outside the Q-end/O-grid-start window; the shortened window is not equivalent wall hiding"
+  },
+  "finding_3_s1_pdl_off_reconciliation_us": {
+    "tinygrad_original_trace": {
+      "exposure": 1152.250,
+      "kernel_mass": 1042.500,
+      "idle_gap": 109.750
+    },
+    "llama_pdl_off": {
+      "exposure": 749.258,
+      "kernel_mass": 662.537,
+      "idle_gap": 86.721
+    },
+    "tinygrad_minus_llama_pdl_off": {
+      "exposure": 402.992,
+      "kernel_mass": 379.963,
+      "idle_gap": 23.029,
+      "residual": 0.0
+    },
+    "kernel_mass_family_delta": {
+      "gemv_kv": 83.741,
+      "flash_score": 103.802,
+      "flash_combine": 68.693,
+      "norms": 104.637,
+      "generated_E_vs_rope_store": 36.884,
+      "generated_r_vs_quant": -17.794,
+      "sum": 379.963
+    },
+    "mapping_note": "generated E/r names are compared by position to rope-store/quant groups and require semantic-metadata confirmation before code attribution"
+  },
+  "finding_4_full_token_remainder_us": {
+    "tinygrad_minus_llama_pdl_on_union": 785.5415,
+    "nine_full_semantic_profile_row_deficits": 646.838,
+    "remaining_after_named_rows_pdl_on": 138.7035,
+    "tinygrad_minus_llama_pdl_off_union": 793.246,
+    "remaining_after_named_rows_pdl_off": 146.408,
+    "note": "the nine row deficits are valid profile-domain attributions when disjoint; their projected wall recoveries remain non-additive"
+  },
+  "finding_5_flash_consistency": {
+    "tinygrad_isolated_us_per_call": 4.160,
+    "llama_fresh_isolated_us_per_call": 3.744,
+    "tinygrad_is_slower_per_call_us": 0.416,
+    "body_delta_36_calls_us": 14.976,
+    "installed_row_delta_us": 64.540,
+    "consistent_residual_us": 49.564,
+    "incompatible_row_authority_llama_value_us": 4.480,
+    "residual_if_4_480_were_used_us": 76.060,
+    "conclusion": "4.160 versus 3.744 means tinygrad is slower, not faster; 49.564 is consistent only with the 3.744 comparator"
+  },
+  "finding_6_host_status": {
+    "reported_host_delta_us": -72.016,
+    "status": "INFERRED_CROSS_DOMAIN",
+    "reason": "the final wall arms and resident-union arms were not captured as a profiler-paired same-session measurement; the arithmetic residual is tautologically zero after defining host_gap as wall minus imported union",
+    "likely_direction": "tinygrad advantage is supported by nearby same-commit runs, but exact magnitude is unmeasured"
+  },
+  "corrected_open_question": "approximately 139-146 us of the device-union difference remains outside the nine named full-semantic rows; the prior approximately 748 us launch/timeline residual is refuted"
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_q4k_ffn_down_fp16_geometry",
+  "description": "Q4_K FFN-down four-warp fp16 geometry promotion record (nv-q4-down-fp16-geometry-four-warp-verdict-20260814.md; nv-q4-down-fp16-geometry-promotion-20260815.md). The candidate swaps the 1-warp/row installed q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288 for q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd (4 warps/row, 128 threads, fp16 FMA datapath, M2b residual add in-kernel), zero added transport/materialize nodes (program count unchanged). Exact-output contract: token stream bit-identical to control, argmax/top-k/top-k-order equal, full-logit relative L2 5.29e-4 inside the 1e-3 gate; the historical 1e-2 max-abs logit atol is exceeded (1.17e-2) and is reported non-authoritative while every authoritative gate passes. Wall bracket d512: candidate 4.9928 ms vs control bracket median 5.0931 ms = -100.3 us/token, +2.01% tok/s. The DP4A/Q8 successor (scalar_q8_packet) is measured NO_GO_WALL (-0.87%), so this geometry-only route is the booked lever. The route additionally requires the M2b ffn-down resadd promotion and is ANDed with it at resolve time.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

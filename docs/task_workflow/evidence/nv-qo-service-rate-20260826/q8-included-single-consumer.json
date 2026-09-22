@@ -1,0 +1,73 @@
+{
+  "schema": "tinygrad.q4k_warp_coop_dynamic_microgate.v3",
+  "git_commit": "44dd194e5e73295add0d79e528dd7be6267da93d",
+  "shape": {
+    "rows": 4096,
+    "k": 4096,
+    "local": 128,
+    "runtime_blocks": 4
+  },
+  "payload": {
+    "q4_sha256": "f00362af8d4fe9002d07ed96df0dc91f317cd3096e277ba897c58c3576327cc4",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "census": {
+    "control_programs_per_replay": 1,
+    "candidate_programs_per_replay": 3,
+    "candidate_programs": [
+      "q8_1_llama_provider_4096",
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096",
+      "partial_sum_4096x4"
+    ]
+  },
+  "prior_invalid_construction": {
+    "candidate_max_abs_cpu_q8": 0.9392952919006348,
+    "candidate_tol": 0.09806095123291016,
+    "disposition": "header nibble-stride bug fixed before this corrected retry; no timing was run"
+  },
+  "correctness": {
+    "pass": true,
+    "baseline_max_abs_cpu_fp16": 4.76837158203125e-06,
+    "baseline_tol": 0.09814807891845703,
+    "candidate_max_abs_cpu_q8": 0.00255584716796875,
+    "candidate_tol": 0.09806095123291016,
+    "q8_vs_fp16_relative_l2": 0.004799081112170493,
+    "representation": "llama Q8_1 approximate; no full-logit promotion contract"
+  },
+  "timing": {
+    "unit": "us_per_graph_replay",
+    "replays": 200,
+    "reps": 7,
+    "control_a": [
+      124.791,
+      123.85969499999999,
+      122.41833000000001,
+      122.72139999999999,
+      123.074415,
+      123.21898499999999,
+      122.959105
+    ],
+    "candidate_b": [
+      99.887185,
+      99.12674999999999,
+      99.38934499999999,
+      99.02751,
+      94.670605,
+      85.98694499999999,
+      92.521805
+    ],
+    "control_c": [
+      127.03718500000001,
+      125.149175,
+      124.96127,
+      124.644925,
+      125.282425,
+      124.638815,
+      124.49174000000001
+    ],
+    "control_midpoint_median": 124.0178425,
+    "candidate_median": 99.02751,
+    "delta": -24.990332499999994,
+    "gate": "PASS"
+  }
+}

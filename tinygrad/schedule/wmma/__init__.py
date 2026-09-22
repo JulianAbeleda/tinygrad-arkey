@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 from tinygrad.dtype import DType, dtypes, PtrDType, AddrSpace
 from tinygrad.uop.ops import (Ops, UOp, CompositeReduce, CompositeTileCarrier, TileGatherSpec,
-  RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDRowSoftmaxSlotSpec, AMDPVCLaneSpec)
+  RowSoftmaxRepackSpec, NativeRowSoftmaxRepackSpec, RowSoftmaxSlotSpec, AMDPVCLaneSpec)
 
 from tinygrad.schedule.wmma.fragments import (
   grouped_tile_load, tile_gather, build_owned_fragment_index_map,
@@ -29,7 +29,7 @@ from tinygrad.schedule.wmma.kernels import (
   amd_gfx1100_q16_attention, amd_gfx1100_q16_kv32_attention, amd_gfx1100_q16_kv32_hd128_attention,
   amd_gfx1100_q16_kv64_hd128_loop_attention, amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention,
   amd_gfx1100_q16_grid_hd128_loop_attention, amd_gfx1100_q16_grid_qk_stats_stage,
-  amd_gfx1100_q16_grid_pv_slice_stage)
+  amd_gfx1100_q16_grid_pv_slice_stage, nv_sm120_q16_grid_hd128_cooperative_attention)
 from tinygrad.schedule.wmma.composite import (
   construct_hd16_tile_carriers, composite_reduce_hd16_carriers, emit_hd16_dual_tile_wmma,
   adapt_composite_tile_fragments, composite_reduce_tile_report, amd_tile_wmma_boundary_report,
@@ -38,7 +38,7 @@ from tinygrad.schedule.wmma.composite import (
 __all__ = [
   "math", "dataclass", "NamedTuple", "DType", "dtypes", "PtrDType", "AddrSpace",
   "Ops", "UOp", "CompositeReduce", "CompositeTileCarrier", "TileGatherSpec",
-  "RowSoftmaxRepackSpec", "AMDRowSoftmaxRepackSpec", "AMDRowSoftmaxSlotSpec", "AMDPVCLaneSpec",
+  "RowSoftmaxRepackSpec", "NativeRowSoftmaxRepackSpec", "RowSoftmaxSlotSpec", "AMDPVCLaneSpec",
   "grouped_tile_load", "tile_gather", "build_owned_fragment_index_map",
   "lower_tile_gather", "lower_attached_tile_gather", "emit_tile_gather_shaped_wmma",
   "adapt_wmma_fragment", "shaped_wmma",
@@ -48,7 +48,7 @@ __all__ = [
   "amd_gfx1100_q16_attention", "amd_gfx1100_q16_kv32_attention", "amd_gfx1100_q16_kv32_hd128_attention",
   "amd_gfx1100_q16_kv64_hd128_loop_attention", "amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention",
   "amd_gfx1100_q16_grid_hd128_loop_attention", "amd_gfx1100_q16_grid_qk_stats_stage",
-  "amd_gfx1100_q16_grid_pv_slice_stage",
+  "amd_gfx1100_q16_grid_pv_slice_stage", "nv_sm120_q16_grid_hd128_cooperative_attention",
   "construct_hd16_tile_carriers", "composite_reduce_hd16_carriers", "emit_hd16_dual_tile_wmma",
   "adapt_composite_tile_fragments", "composite_reduce_tile_report", "amd_tile_wmma_boundary_report",
   "OnlineSoftmaxTile", "online_softmax_tile",

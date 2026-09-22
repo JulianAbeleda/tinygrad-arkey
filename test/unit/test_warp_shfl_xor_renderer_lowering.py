@@ -3,6 +3,8 @@ target-capability-policy-decoupling-scope-20260730.md). These pin the three acce
 source is unchanged, Metal gets its own native intrinsic with no leftover AMD/lane arithmetic, and a renderer
 that declares no provider fails loudly at lowering instead of silently emitting AMD text on the wrong target.
 """
+import sys
+
 import pytest
 
 from tinygrad import Tensor, dtypes
@@ -11,7 +13,7 @@ from tinygrad.codegen import to_program
 from tinygrad.renderer.cstyle import ClangRenderer, HIPRenderer, MetalRenderer
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
-from tinygrad.codegen.late.warp_reduce import WARP, warp_shfl_xor, pm_lower_warp_shfl_xor
+from tinygrad.codegen.late.warp_reduce import WARP, warp_shfl_xor, pm_lower_warp_shfl_xor, warp_bpermute, pm_lower_warp_bpermute
 from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_kernel
 
 # Pre-TG1 literal (tinygrad/codegen/late/warp_reduce.py:22-27 before this change). AMD must render byte-identical
@@ -60,6 +62,7 @@ def test_amd_kernel_source_is_byte_identical_to_pre_tg1():
   assert "__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute(" in src
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Metal objc bridge requires macOS libSystem.dylib")
 def test_metal_kernel_source_has_simd_shuffle_xor_and_no_amd_builtin_or_dead_lane_arithmetic():
   ren = MetalRenderer(Target.parse("METAL:METAL:Apple9"))
   src = _rendered_source("METAL", ren)
@@ -82,17 +85,19 @@ def test_cuda_provider_uses_a_lane_mask_like_metal_not_an_amd_address():
 
 
 def test_unprovided_renderer_raises_naming_the_op_and_the_target():
-  """A target with no warp_shfl_xor provider must fail loudly at lowering, never render AMD (or any
-  other target's) text silently -- this is the exact anti-pattern the scope calls out in section 4.4."""
+  """CPU provides an identity warp_shfl_xor (LOCAL ranges serialize to loops), but the
+  byte-address warp_bpermute stays unprovided and must fail loudly at lowering, naming
+  both the operation and the target -- never render another target's text silently."""
   ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
-  assert ClangRenderer.warp_shfl_xor is None
   lane = UOp.special(WARP, "lidx0")
-  tagged = warp_shfl_xor(lane.cast(dtypes.float32), 16, lane)
-  with pytest.raises(NotImplementedError, match="warp_shfl_xor"):
-    graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+  val = lane.cast(dtypes.float32)
+  assert graph_rewrite(warp_shfl_xor(val, 16, lane), pm_lower_warp_shfl_xor, ctx=ren) is val
+  tagged = _attention_style_bpermute()
+  with pytest.raises(NotImplementedError, match="warp_bpermute"):
+    graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
   # the message must also name the target, not just the operation, so a failure is actionable
   try:
-    graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+    graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
     assert False, "expected NotImplementedError"
   except NotImplementedError as e:
     assert "ClangRenderer" in str(e) and "CPU" in str(e)
@@ -105,10 +110,62 @@ def test_unprovided_renderer_raises_does_not_dispatch_on_device_default():
   raise for CPU, proving the decision reads `ctx`, not the process-global default device."""
   from tinygrad.helpers import Context
   ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
-  lane = UOp.special(WARP, "lidx0")
-  tagged = warp_shfl_xor(lane.cast(dtypes.float32), 16, lane)
+  tagged = _attention_style_bpermute()
   with Context(DEV="METAL"):
     from tinygrad import Device
     assert Device.DEFAULT == "METAL"
-    with pytest.raises(NotImplementedError, match="warp_shfl_xor"):
-      graph_rewrite(tagged, pm_lower_warp_shfl_xor, ctx=ren)
+    with pytest.raises(NotImplementedError, match="warp_bpermute"):
+      graph_rewrite(tagged, pm_lower_warp_bpermute, ctx=ren)
+
+
+# --- warp_bpermute (fused-attention row-softmax byte-address permute, P1 of the NV port scope) ---
+
+_HIP_BPERMUTE_F32 = "__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({0}, __builtin_bit_cast(unsigned int, {1})))"
+
+
+def _attention_style_bpermute():
+  """The exact shape the row-softmax lowering builds: byte address (lane^offset)*4 first, fp32 value second."""
+  lane = UOp.special(WARP, "lidx0")
+  addr = lane.cast(dtypes.int).alu(Ops.XOR, UOp.const(dtypes.int, 1)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+  value = lane.cast(dtypes.float32)
+  return warp_bpermute(addr, value)
+
+
+def test_hip_warp_bpermute_preserves_the_pinned_attention_literal():
+  """The attention bpermute is a tagged CUSTOMI at authoring time; HIP resolves it to the exact pre-tag
+  literal -- `unsigned int` value cast, (addr, value) sources -- which is what the four-hash AMD control
+  pins. A spelling drift here is a byte-identity regression, not a style point."""
+  ren = HIPRenderer(Target.parse("AMD:HIP:gfx1100"))
+  lowered = graph_rewrite(_attention_style_bpermute(), pm_lower_warp_bpermute, ctx=ren)
+  assert lowered.op is Ops.CUSTOMI
+  assert lowered.arg == _HIP_BPERMUTE_F32
+  assert lowered.src[0].op is Ops.MUL and lowered.src[0].dtype == dtypes.int   # the byte address
+  assert lowered.src[1].op is Ops.CAST and lowered.src[1].dtype == dtypes.float32  # the value
+
+
+def test_cuda_warp_bpermute_renders_shfl_sync_from_the_byte_address():
+  """CUDA has no register-by-address read; the byte address IS the source lane index times four, so
+  `__shfl_sync(0xffffffffu, value, addr >> 2)` is the exact, generic translation -- correct for both the
+  XOR butterfly and the half-wave broadcast the attention ABI builds."""
+  addr, value = _attention_style_bpermute().src
+  lowered = CUDARenderer.warp_bpermute(addr, value)
+  assert lowered.op is Ops.CUSTOMI and lowered.src == (addr, value)
+  assert lowered.arg == "__shfl_sync(0xffffffffu, {1}, (({0}) >> 2))"
+
+
+def test_isa_warp_bpermute_resolves_to_the_f2_marker():
+  """The AMD ISA renderer resolves the tag back to the Phase F.2 marker its isel consumes
+  (isel_customi arg == "bpermute", src=(addr, data)) -- the encoder path is untouched byte-for-byte."""
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  addr, value = _attention_style_bpermute().src
+  lowered = AMDISARenderer.warp_bpermute(addr, value)
+  assert lowered.op is Ops.CUSTOMI and lowered.arg == "bpermute" and lowered.src == (addr, value)
+
+
+def test_unprovided_warp_bpermute_renderer_raises_naming_the_op_and_the_target():
+  """Same fail-loud contract as warp_shfl_xor: a renderer with no warp_bpermute provider raises at
+  lowering, naming both the operation and the target, instead of rendering another target's text."""
+  ren = ClangRenderer(Target.parse("CPU:CLANG:x86_64,znver2"))
+  assert getattr(ClangRenderer, "warp_bpermute", None) is None
+  with pytest.raises(NotImplementedError, match="warp_bpermute"):
+    graph_rewrite(_attention_style_bpermute(), pm_lower_warp_bpermute, ctx=ren)

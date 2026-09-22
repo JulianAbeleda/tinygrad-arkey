@@ -1,0 +1,183 @@
+{
+  "schema": "tinygrad.nv_compiler_q6k_imma_gate.v1",
+  "adversarial": {
+    "shape": {
+      "M": 32,
+      "N": 32,
+      "K": 256
+    },
+    "identity": "c519344c99fade1ccbf8309e98d9edbe8425aa1b50ef3ed242d23824344c7997",
+    "geometry": {
+      "tile": [
+        32,
+        32,
+        64
+      ],
+      "waves": [
+        1,
+        2
+      ],
+      "threads": 64,
+      "global_size": [
+        1,
+        1,
+        1
+      ],
+      "local_size": [
+        32,
+        2,
+        1
+      ],
+      "ctas": 1
+    },
+    "correctness": {
+      "finite": true,
+      "reference_finite": true,
+      "unwritten_sentinels": 0,
+      "nonzero": 1024,
+      "max_abs": 0.046875,
+      "mean_abs": 0.0017375946044921875,
+      "allclose_rtol2e5_atol2e3": true,
+      "tensor_path_matches_direct": true
+    },
+    "compiler": {
+      "ordinary_matmul": true,
+      "expanded_global_weight_allocation": false,
+      "group_partial_allocation": false,
+      "candidate_identity": "c519344c99fade1ccbf8309e98d9edbe8425aa1b50ef3ed242d23824344c7997",
+      "candidate_identity_exact": true,
+      "signed_imma": true,
+      "sass": {
+        "cubin": "/tmp/nv-p2-q6v-art/adversarial.cubin",
+        "sass": "/tmp/nv-p2-q6v-art/adversarial.sass",
+        "returncode": 0,
+        "imma": 16,
+        "bar": 2,
+        "ldsm": 0,
+        "local_load": 0,
+        "local_store": 0,
+        "resources": {
+          "registers": 96,
+          "stack_bytes": 0,
+          "shared_bytes": 6144,
+          "local_bytes": 0
+        }
+      }
+    },
+    "timing": {
+      "samples_us": [
+        4.288,
+        4.288,
+        4.288,
+        4.288,
+        4.32,
+        4.384,
+        4.352,
+        4.32,
+        4.32
+      ],
+      "min_us": 4.288,
+      "median_us": 4.32,
+      "max_us": 4.384
+    },
+    "passed": true,
+    "readonly": {
+      "weight": true,
+      "record": true
+    }
+  },
+  "real": {
+    "v": {
+      "shape": {
+        "M": 512,
+        "N": 1024,
+        "K": 4096
+      },
+      "identity": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+      "geometry": {
+        "tile": [
+          64,
+          32,
+          64
+        ],
+        "waves": [
+          2,
+          2
+        ],
+        "threads": 128,
+        "global_size": [
+          32,
+          8,
+          1
+        ],
+        "local_size": [
+          32,
+          2,
+          2
+        ],
+        "ctas": 256
+      },
+      "correctness": {
+        "finite": true,
+        "reference_finite": true,
+        "unwritten_sentinels": 0,
+        "nonzero": 524288,
+        "max_abs": 0.00030517578125,
+        "mean_abs": 1.8032682419288903e-05,
+        "allclose_rtol2e5_atol2e3": true,
+        "tensor_path_matches_direct": true
+      },
+      "compiler": {
+        "ordinary_matmul": true,
+        "expanded_global_weight_allocation": false,
+        "group_partial_allocation": false,
+        "candidate_identity": "c16114d2797f68777892f24fe77a146153266241366f1c0210a33f7372758565",
+        "candidate_identity_exact": true,
+        "signed_imma": true,
+        "sass": {
+          "cubin": "/tmp/nv-p2-q6v-art/v.cubin",
+          "sass": "/tmp/nv-p2-q6v-art/v.sass",
+          "returncode": 0,
+          "imma": 16,
+          "bar": 2,
+          "ldsm": 0,
+          "local_load": 0,
+          "local_store": 0,
+          "resources": {
+            "registers": 96,
+            "stack_bytes": 0,
+            "shared_bytes": 8704,
+            "local_bytes": 0
+          }
+        }
+      },
+      "timing": {
+        "samples_us": [
+          98.24,
+          96.768,
+          95.84,
+          95.488,
+          95.616,
+          94.848,
+          94.368,
+          95.296,
+          95.712
+        ],
+        "min_us": 94.368,
+        "median_us": 95.616,
+        "max_us": 98.24
+      },
+      "passed": true,
+      "fixture": {
+        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+        "weight": "blk.0.attn_v.weight",
+        "format": "Q6_K"
+      },
+      "readonly": {
+        "weight": true,
+        "record": true
+      }
+    }
+  },
+  "passed": true
+}

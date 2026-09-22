@@ -1,0 +1,41 @@
+{
+  "count": 8,
+  "depth": 512,
+  "dtype": "float32",
+  "logits_change_across_positions": true,
+  "logits_sha256": "6ec7227eb9a481f77dfed1017b605355ef969ee1ffe7832fbc0331eff72b8ac6",
+  "max_context": 1024,
+  "mode": "logits",
+  "prelude_token": 13876,
+  "returned_argmax": [
+    64461,
+    4710,
+    64461,
+    1837,
+    64461,
+    1837,
+    64461,
+    64461
+  ],
+  "sample_argmax_match": true,
+  "schema": "tinygrad.nv_predispatch_qualification.v1",
+  "shape": [
+    8,
+    1,
+    151936
+  ],
+  "switches": {
+    "JIT_INPUT_DESCRIPTOR_CACHE": "1",
+    "JIT_REUSE_WRITTEN_INPUT_SHADOWS": "1"
+  },
+  "tokens": [
+    64461,
+    4710,
+    64461,
+    1837,
+    64461,
+    1837,
+    64461,
+    64461
+  ]
+}

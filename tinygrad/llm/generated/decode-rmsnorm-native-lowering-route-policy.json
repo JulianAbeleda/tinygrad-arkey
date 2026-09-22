@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_rmsnorm_native_lowering",
+  "description": "Selective Path 3 semantic RMSNorm native-lowering promotion. On NV sm_120 only the 4096-wide attention, FFN, and output norm sites are admitted; Q/K head norms retain their fused reduce-output plus RoPE/cache route. The qualified attention completion preserves all 17 shared-Q8 norm/provider bodies while replacing the remaining 19 legacy attention reduce-output bodies. Its 2026-08-26 candidate/control/candidate d512 bracket recovered 62.995 us/token with identical hashes across 432 timed tokens and reached a 4.156064 ms midpoint (240.612 tok/s). TINYGRAD_NATIVE_ATTN_NORM_COMPLETION_DISABLE=1 restores the 19 legacy bodies. The independent Q/K native bracket lost 1.792 us/token, so target admission remains site-filtered.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

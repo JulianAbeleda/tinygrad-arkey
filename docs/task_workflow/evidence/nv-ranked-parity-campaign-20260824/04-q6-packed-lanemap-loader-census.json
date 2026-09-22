@@ -1,0 +1,11 @@
+{
+  "schema": "tinygrad.nv_q6k_down_packed_lanemap_loader_census.v1",
+  "target": {"backend": "NV", "architecture": "sm_120"},
+  "default": {"admissions": 18, "packed_lanemap": 18, "rows_per_block": [1]},
+  "rollback": {
+    "environment": {"TINYGRAD_Q6K_FFN_DOWN_PACKED_LANEMAP_DISABLE": 1},
+    "admissions": 18,
+    "packed_lanemap": 0,
+    "rows_per_block": [1]
+  }
+}

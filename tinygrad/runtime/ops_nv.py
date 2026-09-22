@@ -21,6 +21,62 @@ nv_gpu = nv_570 # default to 570
 
 PMA = ContextVar("PMA", abs(VIZ.value)>=2)
 
+def _nv_relax_internal_membar(qmd:QMD) -> bool:
+  """Drop only the system membar on a Blackwell QMD that has a same-queue dependent successor."""
+  if qmd.ver < 5 or not int(os.environ.get("NV_RELAX_INTERNAL_QMD_MEMBAR", "1")): return False
+  qmd.write(cwd_membar_type=nv_gpu.NVCEC0_QMDV05_00_CWD_MEMBAR_TYPE_L1_NONE)
+  return True
+
+# Programmatic dependent launch (PDL) wiring, env-gated and name-pinned.
+# Off by default: empty lists leave every QMD byte-identical to today's
+# dependent_qmd0 chaining (QMD_SCHEDULE). When a producer/consumer pair is
+# named, the producer QMD additionally arms `arrive_at_latch` + program
+# pre-exit (released at the last CTA's trigger) and the consumer QMD waits on
+# that latch, so the consumer grid launches before the producer grid ends.
+# Matching uses exact names or `prefix:` rules, same vocabulary as the
+# renderer-side PDL emission in tinygrad/renderer/cuda.py.
+
+
+def _nv_pdl_match(name:str, spec:frozenset[str]) -> bool:
+  return name in spec or any(rule.startswith("prefix:") and name.startswith(rule.removeprefix("prefix:")) for rule in spec)
+
+
+def _nv_pdl_arm_pair(active_qmd:QMD, new_qmd:QMD, active_name:str, new_name:str) -> bool:
+  """Arm llama's PDL host half on a chained NV QMD pair (producer -> consumer).
+
+  Returns True when the pair was armed (producer arrives at the latch and
+  enables program pre-exit; consumer waits on the latch). Callers (the exec
+  chain path) leave every QMD byte-identical when this returns False.
+  """
+  producers = frozenset(x for x in os.environ.get("NV_PDL_PRODUCER_PROGRAMS", "").split(",") if x)
+  consumers = frozenset(x for x in os.environ.get("NV_PDL_CONSUMER_PROGRAMS", "").split(",") if x)
+  if not (producers and consumers): return False
+  if not _nv_pdl_match(active_name, producers) or not _nv_pdl_match(new_name, consumers): return False
+  active_qmd.write(arrive_at_latch_valid=1, arrive_at_latch_id=getenv("NV_PDL_LATCH_ID", 7),
+                   enable_program_pre_exit=1, pre_exit_at_last_cta_launch=1)
+  new_qmd.write(wait_on_latch_valid=1, wait_on_latch_id=getenv("NV_PDL_LATCH_ID", 7))
+  return True
+
+def _nv_split_phase_arm(active_qmd:QMD, new_qmd:QMD, producer_plan:dict|None, consumer_plan:dict|None) -> None:
+  """Write scheduler-owned split-phase latch fields onto a chained NV QMD pair.
+
+  Only called behind NV_SPLIT_PHASE=1; it replaces the env name-pinned
+  `_nv_pdl_arm_pair` on that path. `producer_plan` arms the previous
+  (producer) QMD with arrive-at-latch plus program pre-exit; `consumer_plan`
+  makes the new (consumer) QMD wait on that latch. The dependent_qmd0
+  execution-order chain is written by the caller before this runs and is
+  untouched here. A None plan leaves that QMD's PDL fields byte-identical.
+  """
+  if producer_plan is not None:
+    active_qmd.write(arrive_at_latch_valid=producer_plan["arrive_at_latch_valid"],
+                     arrive_at_latch_id=producer_plan["arrive_at_latch_id"],
+                     enable_program_pre_exit=producer_plan["enable_program_pre_exit"],
+                     pre_exit_at_last_cta_launch=producer_plan["pre_exit_at_last_cta_launch"])
+  if consumer_plan is not None:
+    new_qmd.write(wait_on_latch_valid=consumer_plan["wait_on_latch_valid"],
+                  wait_on_latch_id=consumer_plan["wait_on_latch_id"])
+
+
 @dataclass(frozen=True)
 class ProfilePMAEvent(ProfileEvent): device:str; kern:str; blob:bytes; exec_tag:int # noqa: E702
 
@@ -139,6 +195,11 @@ class NVCommandQueue(HWQueue[HCQSignal, 'NVDevice', 'NVProgram', 'NVArgsState'])
     gpfifo.put_value += 1
 
 class NVComputeQueue(NVCommandQueue):
+  def __init__(self, queue_idx=0):
+    self.queue_idx = queue_idx
+    self.active_prg_name:str|None = None
+    super().__init__()
+
   def memory_barrier(self):
     self.nvm(1, nv_gpu.NVC6C0_INVALIDATE_SHADER_CACHES_NO_WFI,
              nv_flags("NVC6C0_INVALIDATE_SHADER_CACHES_NO_WFI", instruction="true", global_data="true", constant="true"))
@@ -147,6 +208,13 @@ class NVComputeQueue(NVCommandQueue):
 
   def exec(self, prg:NVProgram, args_state:NVArgsState, global_size:tuple[sint, ...], local_size:tuple[sint, ...]):
     self.bind_args_state(args_state)
+
+    # CUDA's Blackwell ABI reads blockDim.{x,y,z} and gridDim.{x,y,z} from cbuf0
+    # words 216..218 and 220..222. QMD fields schedule the CTAs and threads but
+    # do not populate those CUDA builtins.
+    if prg.cbuf_0 and prg.dev.iface.compute_class >= nv_gpu.BLACKWELL_COMPUTE_A:
+      self.bind_sints_to_mem(*local_size, mem=args_state.buf.cpu_view(), fmt='I', offset=216*4)
+      self.bind_sints_to_mem(*global_size, mem=args_state.buf.cpu_view(), fmt='I', offset=220*4)
 
     qmd_buf = args_state.buf.offset(round_up(prg.constbufs[0][1], 1 << 8))
     qmd_buf.cpu_view().view(size=prg.qmd.mv.nbytes, fmt='B')[:] = prg.qmd.mv
@@ -165,7 +233,16 @@ class NVComputeQueue(NVCommandQueue):
       self.nvm(1, nv_gpu.NVC6C0_SEND_SIGNALING_PCAS2_B, 9)
     else:
       self.active_qmd.write(dependent_qmd0_pointer=qmd_buf.va_addr >> 8, dependent_qmd0_action=1, dependent_qmd0_prefetch=1, dependent_qmd0_enable=1)
+      # A dependent QMD is ordered by the compute scheduler itself.  Keep the final grid's system membar for
+      # host/device completion visibility, but allow internal same-queue edges to avoid paying a full L1
+      # system barrier. NV_RELAX_INTERNAL_QMD_MEMBAR=0 is the qualified rollback.
+      _nv_relax_internal_membar(self.active_qmd)
+      if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
+        _nv_split_phase_arm(self.active_qmd, qmd, getattr(self, "nv_split_producer_plan", None), getattr(self, "nv_split_consumer_plan", None))
+      elif self.active_prg_name is not None:
+        _nv_pdl_arm_pair(self.active_qmd, qmd, self.active_prg_name, prg.name)
 
+    self.active_prg_name = prg.name
     self.active_qmd, self.active_qmd_buf = qmd, qmd_buf
     return self
 
@@ -202,7 +279,7 @@ class NVComputeQueue(NVCommandQueue):
     self.active_qmd = None
     return self
 
-  def _submit(self, dev:NVDevice): self._submit_to_gpfifo(dev, dev.compute_gpfifo)
+  def _submit(self, dev:NVDevice): self._submit_to_gpfifo(dev, dev.compute_gpfifos[self.queue_idx])
 
 class NVCopyQueue(NVCommandQueue):
   def __init__(self, queue_idx=0):
@@ -257,8 +334,11 @@ class NVArgsState(CLikeArgsState):
     super().__init__(buf, prg, bufs, vals=vals, prefix=prg.cbuf_0 or None)
 
 class NVProgram(HCQProgram['NVDevice']):
-  def __init__(self, dev:NVDevice, name:str, lib:bytes, **kwargs):
+  def __init__(self, dev:NVDevice, name:str, lib:bytes, shared_mem:int=0, **kwargs):
     self.dev, self.name, self.lib = dev, name, lib
+    # shared_mem is positional as well as keyword so finalized PROGRAM UOps can
+    # transport it through ProgramInfo.aux/get_runtime without a side channel.
+    requested_shmem = shared_mem
     self.constbufs: dict[int, tuple[int, int]] = {0: (0, 0x160)} # dict[constbuf index, tuple[va_addr, size]]
 
     if (NAK:=isinstance(dev.renderer, NAKRenderer)):
@@ -294,6 +374,10 @@ class NVProgram(HCQProgram['NVDevice']):
       # Minimum cbuf_0 size for driver params: Blackwell needs index 223 (224 entries), older GPUs need index 11 (12 entries)
       min_cbuf0_entries = 224 if dev.iface.compute_class >= nv_gpu.BLACKWELL_COMPUTE_A else 12
       self.cbuf_0 = [0] * max(cbuf0_size // 4, min_cbuf0_entries)
+
+    # CUDA kernels with extern shared memory have a zero-sized ELF shared section.
+    # Let native callers opt into the launch-time allocation recorded in the QMD.
+    self.shmem_usage = max(self.shmem_usage, round_up(requested_shmem, 128))
 
     # Ensure device has enough local memory to run the program
     self.dev._ensure_has_local_memory(self.lcmem_usage)
@@ -335,6 +419,12 @@ class NVProgram(HCQProgram['NVDevice']):
       typ, param, sz = struct.unpack_from("BBH", sh.content, start_off)
       yield typ, param, sh.content[start_off+4:start_off+sz+4] if typ == 0x4 else sz
       start_off += (sz if typ == 0x4 else 0) + 4
+
+  def resource_audit(self) -> dict:
+    if not os.environ.get("NV_PROGRAM_RESOURCE_AUDIT"): return {}
+    return {"name":self.name,"regs_usage":self.regs_usage,"shared_size_bytes":self.shmem_usage,
+            "local_size_bytes":self.lcmem_usage,"max_threads":self.max_threads,
+            "lib_bytes":len(self.lib)}
 
   def __call__(self, *bufs, global_size:tuple[int,int,int]=(1,1,1), local_size:tuple[int,int,int]=(1,1,1), vals:tuple[int|None, ...]=(),
                wait=False, timeout:int|None=None):
@@ -379,6 +469,7 @@ class GPFifo:
   gpput: MMIOInterface
   entries_count: int
   token: int
+  handle: int  # raw RM channel handle (NvHandle) returned by rm_alloc, so NVA06F/NVA06C controls can target the channel
   put_value: int = 0
 
 class NVKIface:
@@ -472,8 +563,11 @@ class NVKIface:
       except RuntimeError as e: raise RuntimeError(f"{e}. Make sure GPUs #{self.gpu_minor} & #{dev.iface.gpu_minor} have P2P enabled.") from e
 
   def setup_gpfifo_vm(self, gpfifo):
+    self.setup_gpfifo_vm_at(gpfifo, self._alloc_gpu_vaddr(0x4000000, force_low=True), 0x4000000)
+
+  def setup_gpfifo_vm_at(self, gpfifo, base, length):
     self.uvm(nv_gpu.UVM_REGISTER_CHANNEL, nv_gpu.UVM_REGISTER_CHANNEL_PARAMS(gpuUuid=self.gpu_uuid, rmCtrlFd=self.fd_ctl.fd, hClient=self.root,
-      hChannel=gpfifo, base=self._alloc_gpu_vaddr(0x4000000, force_low=True), length=0x4000000))
+      hChannel=gpfifo, base=base, length=length))
 
   def _new_gpu_fd(self):
     fd_dev = FileIOInterface(f"/dev/nvidia{NVKIface.gpus_info[self.device_id].minor_number}", os.O_RDWR | os.O_CLOEXEC)
@@ -618,6 +712,7 @@ class NVDevice(HCQCompiled[NVSignal]):
     vaspace_params = nv_gpu.NV_VASPACE_ALLOCATION_PARAMETERS(vaBase=0x1000, vaSize=0x1fffffb000000,
       flags=nv_gpu.NV_VASPACE_ALLOCATION_FLAGS_ENABLE_PAGE_FAULTING | nv_gpu.NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED)
     vaspace = self.iface.rm_alloc(self.nvdevice, nv_gpu.FERMI_VASPACE_A, vaspace_params)
+    self.vaspace = vaspace
 
     self.iface.setup_vm(vaspace)
 
@@ -629,9 +724,28 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     ctxshare_params = nv_gpu.NV_CTXSHARE_ALLOCATION_PARAMETERS(hVASpace=vaspace, flags=nv_gpu.NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_ASYNC)
     ctxshare = self.iface.rm_alloc(self.channel_group, nv_gpu.FERMI_CONTEXT_SHARE_A, ctxshare_params)
+    self.ctxshare = ctxshare
 
-    self.compute_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group, offset=0, entries=0x10000, compute=True)
-    self.dma_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group, offset=0x100000, entries=0x10000, compute=False)
+    # This is normally a single compute channel.  The two environment knobs are
+    # deliberately construction-only: the native multi-channel probe needs to
+    # ask whether channels which exist *before* the first group schedule behave
+    # like CUDA's bootstrap group.  They are read before the group schedule and
+    # are construction-only.  Two is enabled by default on native NV; set
+    # HCQ_NUM_COMPUTE=1 to restore the old single-channel construction.
+    # Two is the only native concurrent construction qualified so far.  Fail
+    # closed above it instead of silently creating a topology we have not measured.
+    boot_compute_channels = min(2, max(1, getenv("HCQ_NUM_COMPUTE", 2)))
+    self.compute_gpfifos = [self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group,
+                                                offset=0x100000*i, entries=0x10000, compute=True,
+                                                debugger=(i == 0), flags=(0x10 if i % 2 else 0))
+                            for i in range(boot_compute_channels)]
+    # CUDA's first graphics group binds both compute and copy objects to some
+    # stream channels.  Keep this probe-only until execution and overlap pass.
+    if getenv("NV_BOOT_COMPUTE_CHANNEL_DMA", 0):
+      for fifo in self.compute_gpfifos: self.iface.rm_alloc(fifo.handle, self.iface.dma_class)
+    self.compute_gpfifo = self.compute_gpfifos[0]
+    self.dma_gpfifo = self._new_gpu_fifo(self.gpfifo_area, ctxshare, self.channel_group,
+                                         offset=0x100000*boot_compute_channels, entries=0x10000, compute=False)
     self.iface.rm_control(self.channel_group, nv_gpu.NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, nv_gpu.NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS(bEnable=1))
 
     self.cmdq_page:HCQBuffer = self.iface.alloc(0x200000, cpu_access=True)
@@ -647,23 +761,35 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     super().__init__(device, NVAllocator(self), [CUDARenderer, PTXRenderer, NVCCRenderer, NAKRenderer], functools.partial(NVProgram, self), NVSignal,
                      NVComputeQueue, NVCopyQueue, arch=self.arch)
+    # The copy queue waits on the compute timeline itself, so its source is ordered without a duplicate CPU pre-wait.
+    # NV_COPYOUT_SKIP_PRESYNC=0 restores the conservative generic HCQ copyout sequence.
+    self.copyout_wait_orders_source = bool(int(os.environ.get("NV_COPYOUT_SKIP_PRESYNC", "1")))
 
     self.pma_enabled = PMA.value > 0 and PROFILE >= 1
     if self.pma_enabled: self._prof_init()
 
     self._setup_gpfifos()
 
-  def _new_gpu_fifo(self, gpfifo_area, ctxshare, channel_group, offset=0, entries=0x400, compute=False, video=False) -> GPFifo:
-    notifier = self.iface.alloc(48 << 20, uncached=True)
+  def hw_compute_queues(self):
+    return [(None if i == 0 else f"COMPUTE:{i}", functools.partial(NVComputeQueue, queue_idx=i))
+            for i in range(len(self.compute_gpfifos))]
+
+  def _new_gpu_fifo(self, gpfifo_area, ctxshare, channel_group, offset=0, entries=0x400, compute=False, video=False,
+                    debugger: bool = True, engine_type: int|None = None, flags: int = 0, register_vm: bool = True,
+                    error_notifier_size: int = 48 << 20) -> GPFifo:
+    notifier = self.iface.alloc(error_notifier_size, uncached=True)
     params = nv_gpu.NV_CHANNELGPFIFO_ALLOCATION_PARAMETERS(gpFifoOffset=gpfifo_area.va_addr+offset, gpFifoEntries=entries, hContextShare=ctxshare,
       hObjectError=notifier.meta.hMemory, hObjectBuffer=self.virtmem if video else gpfifo_area.meta.hMemory,
-      hUserdMemory=(ctypes.c_uint32*8)(gpfifo_area.meta.hMemory), userdOffset=(ctypes.c_uint64*8)(entries*8+offset), engineType=19 if video else 0)
+      hUserdMemory=(ctypes.c_uint32*8)(gpfifo_area.meta.hMemory), userdOffset=(ctypes.c_uint64*8)(entries*8+offset),
+      engineType=engine_type if engine_type is not None else (19 if video else 0), flags=flags)
     gpfifo = self.iface.rm_alloc(channel_group, self.iface.gpfifo_class, params)
 
     if compute:
-      self.debug_compute_obj, self.debug_channel = self.iface.rm_alloc(gpfifo, self.iface.compute_class), gpfifo
-      debugger_params = nv_gpu.NV83DE_ALLOC_PARAMETERS(hAppClient=self.iface.root, hClass3dObject=self.debug_compute_obj)
-      self.debugger = self.iface.rm_alloc(self.nvdevice, nv_gpu.GT200_DEBUGGER, debugger_params)
+      compute_obj = self.iface.rm_alloc(gpfifo, self.iface.compute_class)
+      if debugger:
+        self.debug_compute_obj, self.debug_channel = compute_obj, gpfifo
+        debugger_params = nv_gpu.NV83DE_ALLOC_PARAMETERS(hAppClient=self.iface.root, hClass3dObject=self.debug_compute_obj)
+        self.debugger = self.iface.rm_alloc(self.nvdevice, nv_gpu.GT200_DEBUGGER, debugger_params)
     elif not video: self.iface.rm_alloc(gpfifo, self.iface.dma_class)
     else: self.iface.rm_alloc(gpfifo, self.iface.viddec_class)
 
@@ -673,9 +799,10 @@ class NVDevice(HCQCompiled[NVSignal]):
 
     ws_token_params = self.iface.rm_control(gpfifo, nv_gpu.NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
       nv_gpu.NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS(workSubmitToken=-1))
-    if ctxshare != 0: self.iface.setup_gpfifo_vm(gpfifo)
+    if ctxshare != 0 and register_vm: self.iface.setup_gpfifo_vm(gpfifo)
 
     return GPFifo(ring=gpfifo_area.cpu_view().view(offset, entries*8, fmt='Q'), entries_count=entries, token=ws_token_params.workSubmitToken,
+                  handle=gpfifo,
                   gpput=gpfifo_area.cpu_view().view(offset + entries*8 + getattr(nv_gpu.AmpereAControlGPFifo, 'GPPut').offset, fmt='I'))
 
   def _query_gpu_info(self, *reqs):

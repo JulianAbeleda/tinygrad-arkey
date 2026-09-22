@@ -1,0 +1,22 @@
+{
+  "schema": "tinygrad.nv_prefill_post_substrate_authority.v1",
+  "packet": "S0",
+  "status": "PASS",
+  "authority": {
+    "run_id": "r3-confirming-brackets",
+    "model": {"path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf", "sha256": "retained in candidate arms"},
+    "prompt": {"tokens": 512, "fixture": "inline:(i*7)%1000"},
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "driver": "595.84",
+    "clocks_session": "graphics=435 MHz, sm=435 MHz, memory=7001 MHz, P3; flock GPU session",
+    "source_manifest": "retained in candidate_0.json and candidate_1.json",
+    "environment": {"HCQ_NUM_COMPUTE": "2", "HCQ_NV_READY_PLACEMENT": "0", "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "combined-flash-direct-deps-cut-v2.json", "PROFILE": "0"}
+  },
+  "correctness": {"candidate_0_status": "PASS", "candidate_1_status": "PASS", "deep20_exact": true, "finite": true, "token": 198, "first_mismatch": null},
+  "census": {"predicted": {"canonical_weights": 198, "compiler_mains": 198, "q8_producers": 198, "unknown": 0}, "observed": {"canonical_weights": 198, "compiler_mains": 198, "q8_producers": 198, "weight_copy_kernels": 0, "partial_workspace_bytes": 0, "remaining_fp16_overlays": 54}},
+  "samples": {"tinygrad_bracket_0_ms": [72.14203,72.154594,72.137231,72.127022,72.142822,72.13155,72.132081,72.160856,72.161997], "tinygrad_bracket_1_ms": [72.159121,72.150726,72.117764,72.170462,72.167067,72.149464,72.177637,72.132542,72.109648], "llama_raw": "llama_r9.json"},
+  "wall": {"tinygrad_new_authority_median_ms": 72.146378, "tinygrad_new_authority_min_ms": 72.109648, "bracket_median_delta_ms": 0.008696, "llama_settled_median_ms": 35.3648185, "gap_median_ms": 36.7815595, "superseded_baseline_ms": 67.235719},
+  "observer": {"enabled": false, "profile": false},
+  "decision": "PASS: two confirming exact R9 brackets establish new authority; 67.235719 ms is superseded/unreproducible due absent source and clock provenance",
+  "next_packet": null
+}

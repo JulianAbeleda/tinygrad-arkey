@@ -1,0 +1,8 @@
+#include "nv_pp512_flash_phase1.cu"
+#include <cstdio>
+#include <vector>
+#include <cmath>
+#include <cstdlib>
+#include <cuda_runtime.h>
+static void ck(cudaError_t e,const char*s){if(e){fprintf(stderr,"%s: %s\n",s,cudaGetErrorString(e));std::exit(2);}}
+int main(){constexpr int D=128,S=512,Hq=32,Hkv=8,N=S*Hq*D; std::vector<float> hq(N),ho(N),ref(N); std::vector<half> hk(S*Hkv*D),hv(S*Hkv*D); for(int i=0;i<N;i++)hq[i]=((i%17)-8)*.01f; for(size_t i=0;i<hk.size();i++){hk[i]=__float2half(((int)i%11-5)*.01f);hv[i]=__float2half(((int)i%13-6)*.01f);} float *q,*o;half*k,*v;ck(cudaMalloc(&q,N*4),"q");ck(cudaMalloc(&k,hk.size()*2),"k");ck(cudaMalloc(&v,hv.size()*2),"v");ck(cudaMalloc(&o,N*4+32),"o");ck(cudaMemcpy(q,hq.data(),N*4,cudaMemcpyHostToDevice),"qcopy");ck(cudaMemcpy(k,hk.data(),hk.size()*2,cudaMemcpyHostToDevice),"kcopy");ck(cudaMemcpy(v,hv.data(),hv.size()*2,cudaMemcpyHostToDevice),"vcopy"); ck(cudaMemset(o,0,N*4+32),"canary"); nv_pp512_flash_phase1<<<dim3(S,Hq,1),dim3(128,1,1)>>>(q,k,v,o,0,1.f/sqrtf(128.f)); ck(cudaGetLastError(),"launch");ck(cudaDeviceSynchronize(),"sync");ck(cudaMemcpy(ho.data(),o,N*4,cudaMemcpyDeviceToHost),"out"); double mx=0; for(float x:ho)if(!std::isfinite(x))mx=INFINITY; printf("finite=%d max_abs=%g\n",std::isfinite(mx),mx); cudaEvent_t a,b;cudaEventCreate(&a);cudaEventCreate(&b);for(int i=0;i<20;i++)nv_pp512_flash_phase1<<<dim3(S,Hq,1),dim3(128)>>>(q,k,v,o,0,1.f/sqrtf(128.f));cudaEventRecord(a);for(int i=0;i<20;i++)nv_pp512_flash_phase1<<<dim3(S,Hq,1),dim3(128)>>>(q,k,v,o,0,1.f/sqrtf(128.f));cudaEventRecord(b);ck(cudaEventSynchronize(b),"timing");float ms;cudaEventElapsedTime(&ms,a,b);printf("r20_us_per_full_launch=%.3f\n",ms*1000/20);return 0;}

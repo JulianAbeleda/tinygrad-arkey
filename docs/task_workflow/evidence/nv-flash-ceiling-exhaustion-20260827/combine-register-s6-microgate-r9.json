@@ -1,0 +1,69 @@
+{
+  "device": "NV",
+  "exact": {
+    "bitwise_equal": true,
+    "max_abs_delta": 0.0,
+    "mismatched_fp16_words": 0,
+    "register_sha256": "af3f7286845d52bba6599d6fa7773043db96adb3664741763f25dc3134672e91",
+    "shared_sha256": "af3f7286845d52bba6599d6fa7773043db96adb3664741763f25dc3134672e91"
+  },
+  "git_commit": "e1823c25c4ee071544209b8f1eac2805ba38a11a",
+  "payload_sha256": "a961791c17e7ec25ce68616e90bfc9842b8af833079945b0a6416cfea7af73ec",
+  "schema": "tinygrad.nv_flash_combine_register_microgate.v1",
+  "shape": {
+    "head_dim": 128,
+    "heads": 32,
+    "output_dtype": "float16",
+    "splits": 6,
+    "stride": 130
+  },
+  "timing": {
+    "candidate_register_midpoint": 117.56443075,
+    "control_shared": 118.11215700000001,
+    "ratio": 0.9953626598318748,
+    "recovery_us": 0.5477262500000109,
+    "replays": 2000,
+    "reps": 9,
+    "samples": {
+      "register": [
+        [
+          118.644477,
+          117.8117225,
+          117.44044,
+          116.835599,
+          117.5868655,
+          118.0670175,
+          118.037096,
+          118.10401700000001,
+          118.416534
+        ],
+        [
+          119.34542900000001,
+          118.8530145,
+          118.866179,
+          118.234407,
+          116.9730775,
+          116.954262,
+          116.9497885,
+          117.0917655,
+          116.85998
+        ]
+      ],
+      "shared": [
+        [
+          118.28263749999999,
+          117.9872025,
+          118.0456625,
+          118.109482,
+          117.6445385,
+          118.163058,
+          118.11215700000001,
+          118.6206225,
+          118.703143
+        ]
+      ]
+    },
+    "unit": "us_per_launch_host_synchronized"
+  },
+  "verdict": "PRIMITIVE_PASS"
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "tinygrad.nv_compiler_q4k_down_primitive_gate.v2",
+  "role": "blk.4.ffn_down.weight",
+  "shape": {
+    "M": 512,
+    "N": 4096,
+    "K": 12288
+  },
+  "tile_k": 64,
+  "programs": 1,
+  "correctness": {
+    "finite": true,
+    "oracle_finite": true,
+    "unwritten_sentinels": 0,
+    "max_abs": 0.00146484375,
+    "allclose": true,
+    "readonly_words": true,
+    "readonly_record": true
+  },
+  "timing_us": {
+    "generated_min": 471.656,
+    "oracle_min": 1294.976,
+    "generated_samples": [
+      475.483,
+      471.656
+    ],
+    "oracle_samples": [
+      1295.008,
+      1294.976
+    ]
+  },
+  "resources": {
+    "generated_registers": null,
+    "generated_shared": null,
+    "generated_local": null
+  },
+  "verdict": "PASS"
+}

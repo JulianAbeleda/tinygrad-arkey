@@ -1,0 +1,10 @@
+{
+  "schema": "tinygrad.nv_prefill_q6down_boundary_r9_verdict.v1",
+  "packet": "D0.4",
+  "status": "STOP",
+  "matrix": {"arms": 2, "boundaries": 4, "temperatures": 2, "brackets": 3, "samples_after_warmup": 9},
+  "d03": "docs/task_workflow/evidence/nv-prefill-q6down-boundary-r9-real-20260829/d03-attribution.json",
+  "evidence": {"complete_real_matrix": true, "G0": "PASS", "G1": "PASS", "event_coverage": "100%", "lifecycle_capabilities": "UNAVAILABLE"},
+  "decision": "STOP: no exposure independently clears noise and no removable lifecycle mechanism is observer-supported; leave all Q6-down roles FP16.",
+  "d05": {"status": "UNAUTHORIZED", "reason": "D0.4 STOP; promotion gates did not authorize dominant-boundary validation."}
+}

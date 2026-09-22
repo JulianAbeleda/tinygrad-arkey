@@ -1,0 +1,114 @@
+{
+  "schema": "tinygrad.nv_q6k_mmvq_instruction_delta.v1",
+  "date": "2026-08-05",
+  "git_commit": "a1a51c349d1b8c55a6373631913ea7845e99cc8d",
+  "device": "NV",
+  "scope": {
+    "shape": [1024, 4096],
+    "quant": "Q6_K weights with a Q8_1 activation producer",
+    "comparison_rule": "llama SASS is structural evidence only; wall deltas are same-session tinygrad A/B/A measurements"
+  },
+  "llama_canonical_mmvq": {
+    "route": "mul_mat_vec_q<GGML_TYPE_Q6_K,1,false,false>",
+    "block": [32, 4, 1],
+    "registers": 48,
+    "explicit_shared_bytes": 384,
+    "sass_instructions": 295,
+    "idp4a": 6,
+    "shuffle_bfly": 5,
+    "lds": 3,
+    "reduction": "warps 1..3 publish one partial per lane, barrier, producer warps return, warp 0 loads three lane counterparts and performs the only shuffle reduction",
+    "cubin": "scratchpad/llama_cuda_quantized_oracle_dump/libggml-cuda.so.0.14.36.sm_120a.cubin",
+    "function_index": 355
+  },
+  "tinygrad_instruction_delta": {
+    "flat_static_control": {
+      "sass_instructions": 727,
+      "registers": 44,
+      "idp4a": 2,
+      "shuffle_bfly": 5,
+      "lds": 0,
+      "ldg_u16": 50,
+      "lop3": 230,
+      "prmt": 109,
+      "shf_r_hi": 142
+    },
+    "direct_dynamic_address": {
+      "sass_instructions": 191,
+      "registers": 39,
+      "idp4a": 2,
+      "shuffle_bfly": 5,
+      "lds": 0,
+      "ldg_u16": 10,
+      "lop3": 41,
+      "prmt": 0,
+      "shf_r_hi": 29
+    },
+    "llama_shaped_lane_stage_without_early_return": {
+      "sass_instructions": 726,
+      "registers": 38,
+      "explicit_shared_bytes": 384,
+      "idp4a": 2,
+      "shuffle_bfly": 5,
+      "lds": 3,
+      "barriers": 1,
+      "lop3": 229,
+      "prmt": 102,
+      "shf_r_hi": 141
+    }
+  },
+  "microgates": {
+    "direct_16_byte_cross_warp_merge": {
+      "raw_artifact": "/tmp/q6k_q8_warp_direct_full.json",
+      "raw_sha256": "fdbfda4461eac874faaf5ff6ad20ba9cc3120b52e5cb63c7cebb97dbd3e8d529",
+      "reps": 9,
+      "replays": 200,
+      "control_us": 64.653055,
+      "candidate_us": 64.68449,
+      "candidate_minus_control_us": 0.031435,
+      "candidate_minus_installed_us": -1.3715275,
+      "correctness": "bitwise equal to flat partial control; Q8 oracle max abs 0.01093483 <= 0.02",
+      "gate": "FAIL"
+    },
+    "direct_dynamic_q6_address": {
+      "raw_artifact": "/tmp/q6k_q8_warp_dynamic_full.json",
+      "raw_sha256": "eb37e5d28a87af3f44cd07558a548c94ac38afa8331eee5bc120f02b0644d93c",
+      "reps": 9,
+      "replays": 500,
+      "control_us": 64.101683,
+      "candidate_us": 64.439628,
+      "candidate_minus_control_us": 0.337945,
+      "candidate_minus_installed_us": -1.799673,
+      "correctness": "bitwise equal to static control; Q8 oracle max abs 0.01093483 <= 0.02",
+      "gate": "FAIL"
+    },
+    "llama_shaped_384_byte_lane_stage": {
+      "raw_artifact": "/tmp/q6k_q8_warp_lane_stage_full.json",
+      "raw_sha256": "fa2307790ee4e66362074af917e72c37390401687143c165158afd7c76b032f0",
+      "reps": 9,
+      "replays": 500,
+      "control_us": 62.570314,
+      "candidate_us": 62.774978,
+      "candidate_minus_control_us": 0.204664,
+      "candidate_minus_installed_us": -2.27586,
+      "correctness": "Q8 oracle max abs 0.01093578 <= 0.02; reduction-association delta vs control 0.000003815",
+      "gate": "FAIL"
+    }
+  },
+  "current_baseline_reopen": {
+    "route": "flat four-warp static Q8+DP4A partial4 plus external sum",
+    "historical_delta_us": 0.18505,
+    "historical_commit": "5b70ac",
+    "current_deltas_vs_installed_us": [-1.4029625, -2.137618, -2.480524],
+    "verdict": "REOPEN_MEASURED_PRIMITIVE_WIN",
+    "promotion": "BLOCKED_PENDING_MIXED_GROUP_INTEGRATION_AND_FULL_LOGIT_SEMANTIC_GATE"
+  },
+  "smallest_physical_mismatch": "llama stages unreduced lane partials from three producer warps and retires those warps after the barrier; the tinygrad flat route reduces all four warps independently and externally sums four scalars",
+  "substrate_blocker": {
+    "kind": "structured divergent early return after workgroup barrier",
+    "evidence": "tinygrad/codegen/__init__.py rejects pre-existing Ops.IF/ENDIF and only synthesizes IF for gated stores",
+    "not_a_hardware_limit": true
+  },
+  "next_decisive_gate": "Integrate the reopened flat Q6 consumer, default off, into the mixed Q4/Q4/Q6 shared-Q8 group; qualify full logits at g1/g4/g8/g12 under exact token, argmax, top-10 set, relative-L2 <= 1e-3, and perturbation-below-min-margin contracts before any settled wall claim.",
+  "overall_verdict": "STOP_CONDITION_MET_MEASURED_WIN_AND_PRECISE_EMITTER_BLOCKER"
+}

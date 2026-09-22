@@ -117,13 +117,21 @@ def test_scalarized_nested_accumulator_expression_is_normalized_once_per_destina
 
 
 def test_distinct_gep_store_keeps_ordinary_lane_store_semantics():
-  target, value = _duplicate_gep(arg=(0, 1, 2, 3))
+  out = UOp.placeholder((64,), dtypes.float, 0, addrspace=AddrSpace.GLOBAL)
+  base = UOp(Ops.INDEX, dtypes.float.ptr(64, addrspace=AddrSpace.GLOBAL).vec(4),
+             (out, UOp.vectorize(*(UOp.const(dtypes.weakint, i) for i in (2, 3, 4, 5)))))
+  reg = UOp(Ops.DEFINE_REG, dtypes.float.ptr(4, addrspace=AddrSpace.REG), arg=0)
+  value = UOp(Ops.INDEX, dtypes.float.vec(4), (reg, UOp.const(dtypes.weakint, 0)))
+  contribution = UOp.vectorize(*(UOp.const(dtypes.float, i + 1) for i in range(4)))
+  update = value.store(value + contribution)
+  value = UOp(Ops.INDEX, dtypes.float.vec(4), (reg.after(update), UOp.const(dtypes.weakint, 0)))
+  target = base.gep((0, 1, 2, 3))
   store = target.store(value)
   lowered = graph_rewrite(store, load_store_folding)
   assert lowered.op is Ops.STORE
   # The established GEP-store inversion moves the vector lane map to the
   # value; it must retain the original concrete output INDEX untouched.
-  assert lowered.src[0] is target.src[0] and lowered.src[1].op is Ops.GEP
+  assert lowered.src[0] is base and lowered.src[1].op is Ops.GEP
 
 
 def _loaded_targets(space=AddrSpace.GLOBAL, repeats=False):

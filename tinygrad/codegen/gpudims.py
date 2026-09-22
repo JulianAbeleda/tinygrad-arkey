@@ -75,7 +75,13 @@ def add_gpudims(ctx:Renderer, s:UOp):
 
   # get the idxs
   ki: KernelInfo = s.arg
-  if ctx.has_threads: idxs = [UOp.variable("core_id", 0, int(global_shape[0])-1, dtypes.int).cast(dtypes.weakint)]
+  if ctx.has_threads:
+    # CPU thread model: one core_id per grid element. A kernel whose work
+    # lives entirely in LOCAL/WARP ranges (the cooperative REDUCE_OUTPUT
+    # body) is a single work item; synthesize core_id over one element and
+    # serialize those ranges into loops below instead of indexing them.
+    gshape = global_shape or (1,)
+    idxs = [UOp.variable("core_id", 0, int(gshape[0])-1, dtypes.int).cast(dtypes.weakint)]
   elif ki.dont_use_locals:
     assert not local_dims, "can't use locals if there's no local dims"
     idxs = get_grouped_dims("idx", global_shape, ctx.global_max, reverse=True)
@@ -100,7 +106,9 @@ def add_gpudims(ctx:Renderer, s:UOp):
     if r.op is not Ops.RANGE: continue
     try:
       ii = (global_dims+local_dims).index(r.arg[0:-1])
-      if r.arg[1] == AxisType.REDUCE: continue
+      # A range tuple is (idx, axis), or (part, idx, axis) after
+      # pm_split_ranges; the axis is always the last element.
+      if r.arg[-1] == AxisType.REDUCE or (ctx.has_threads and r.arg[-1] in (AxisType.WARP, AxisType.LOCAL, AxisType.GROUP_REDUCE)): continue
       subs[r] = idxs[ii]
     except ValueError: continue
   return s.substitute(subs)

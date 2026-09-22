@@ -1,0 +1,47 @@
+{
+  "block": [
+    32,
+    2,
+    4
+  ],
+  "buffer_bytes": [
+    25165824,
+    2621440,
+    28311552
+  ],
+  "cubin": "docs/task_workflow/evidence/nv-prefill-gateup-schedule-discriminator-20260829/fragment_load_to_use_reorder.cubin",
+  "cubin_sha256": "43406cb2f1cf43037a025ff662a55b6c49e172ca9a1ae7cf7fc2ce08cb1e7d4a",
+  "finite": true,
+  "grid": [
+    96,
+    4,
+    1
+  ],
+  "median_us": 346.94400429725647,
+  "min_us": 345.5039858818054,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "nonzero": 6291456,
+  "output_sha256": "26ae24b2b60fb98d0317b2f3969334169e9b3b1ca68019348d78f59d38e7c57e",
+  "passed": true,
+  "readonly": {
+    "record": true,
+    "words": true
+  },
+  "reps": 9,
+  "role": "blk.0.ffn_gate.weight",
+  "samples_us": [
+    351.39200091362,
+    348.9600121974945,
+    347.03999757766724,
+    346.49598598480225,
+    346.94400429725647,
+    347.3919928073883,
+    346.015989780426,
+    345.5039858818054,
+    346.3999927043915
+  ],
+  "schema": "tinygrad.nv_prefill_gateup_ncu_bridge.v1",
+  "symbol": "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e",
+  "unwritten": 0,
+  "warmup": 10
+}

@@ -1,0 +1,26 @@
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    24576,
+    28311552,
+    28311552,
+    8192
+  ],
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/q4k_g3_lanemap_gemv_w1w3fused16_12288_4096.cubin",
+  "cubin_sha256": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+  "grid": [
+    12288,
+    1,
+    1
+  ],
+  "n_bufs": 4,
+  "reps": 3,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+  "verdict": "CUDA_LAUNCH_OK"
+}

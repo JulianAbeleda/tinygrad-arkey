@@ -1,0 +1,23 @@
+{
+  "argmax_tokens": [
+    38835,
+    34208,
+    13,
+    279
+  ],
+  "arm": "control",
+  "mode": "logits",
+  "schema": "tinygrad.nv_vocab_nacc4_qualification.v1",
+  "sha256": "32d08a28488a53e2bb0762f8b99284662b0911e7a3f348def07441d46ec17df3",
+  "shape": [
+    4,
+    1,
+    151936
+  ],
+  "tokens": [
+    38835,
+    34208,
+    13,
+    279
+  ]
+}

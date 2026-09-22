@@ -1,0 +1,277 @@
+{
+  "arm": "candidate",
+  "census": {
+    "all_weights_canonical": true,
+    "candidate_weight_args": 72,
+    "compiler_generated_main": 72,
+    "expanded_fp16_weight_bytes": 0,
+    "old_fixup": 0,
+    "partial_workspace_bytes": 0,
+    "q8_producer": 72,
+    "q8_records": 72,
+    "unique_weight_bases": 72,
+    "weight_copy_kernels": 0
+  },
+  "device_profile": {
+    "by_name": {
+      "E_1024_8_16_4_0474917d69356f3fb88ab57e908ee4f28ade9b7ce4aba40fce75ec61ac8f072d": {
+        "calls": 108,
+        "device_ms": 0.1895,
+        "max_ms": 0.0023,
+        "min_ms": 0.0015
+      },
+      "E_1024_8_16_4_869e848bb5316270adcd4bf13e8090a251cc6d2bf0836f27b4319c893157eb2c": {
+        "calls": 108,
+        "device_ms": 0.1713,
+        "max_ms": 0.0025,
+        "min_ms": 0.0013
+      },
+      "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": {
+        "calls": 6,
+        "device_ms": 0.0123,
+        "max_ms": 0.0023,
+        "min_ms": 0.002
+      },
+      "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": {
+        "calls": 108,
+        "device_ms": 0.3763,
+        "max_ms": 0.004,
+        "min_ms": 0.0033
+      },
+      "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": {
+        "calls": 108,
+        "device_ms": 0.3987,
+        "max_ms": 0.0043,
+        "min_ms": 0.0035
+      },
+      "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": {
+        "calls": 3,
+        "device_ms": 0.0142,
+        "max_ms": 0.0047,
+        "min_ms": 0.0047
+      },
+      "E_2048_4_8_16_2_03180df0efeb598bc45a49b92d84c58a8484f4dcd609cd4d3e4aacad5d583fce": {
+        "calls": 108,
+        "device_ms": 0.9348,
+        "max_ms": 0.0092,
+        "min_ms": 0.0083
+      },
+      "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": {
+        "calls": 108,
+        "device_ms": 0.3945,
+        "max_ms": 0.0043,
+        "min_ms": 0.003
+      },
+      "E_4_32_32_4_2_2_2_8_2_127_2_9e9fe095ccae4c757b96799f928901747e2ec817b074f802dfba07b1b95c4fa6": {
+        "calls": 216,
+        "device_ms": 39.766,
+        "max_ms": 0.188,
+        "min_ms": 0.182
+      },
+      "E_4_32_32_4_2_2_2_8_2_383_2_e1b756a0093f26f96af0ea5db74fc3b41e6a44ae02968e01214c238e807d7a9e": {
+        "calls": 108,
+        "device_ms": 57.0763,
+        "max_ms": 0.53,
+        "min_ms": 0.527
+      },
+      "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": {
+        "calls": 3,
+        "device_ms": 0.0063,
+        "max_ms": 0.0023,
+        "min_ms": 0.0018
+      },
+      "E_4_8_32_4_2_2_2_8_2_127_2_5b25908519df16d6540959b859dfc9b1b3da90428dede53099326cb17b2798b0": {
+        "calls": 216,
+        "device_ms": 38.2873,
+        "max_ms": 0.1817,
+        "min_ms": 0.1758
+      },
+      "E_512_16_8_2_4_4_7ba8bb6e17db46be97b12bb14aa0061205f501e4d34840e5e9a887084bd05ccc": {
+        "calls": 3,
+        "device_ms": 0.0158,
+        "max_ms": 0.0053,
+        "min_ms": 0.0053
+      },
+      "E_512_4_2_8_16_4_90bc800eaf9a6441acd8c7bf4e4ce6b36ec829b5916985f2e916b5d9931bd5af": {
+        "calls": 108,
+        "device_ms": 0.3165,
+        "max_ms": 0.003,
+        "min_ms": 0.0027
+      },
+      "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": {
+        "calls": 108,
+        "device_ms": 0.502,
+        "max_ms": 0.0055,
+        "min_ms": 0.0043
+      },
+      "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5": {
+        "calls": 108,
+        "device_ms": 1.6705,
+        "max_ms": 0.0192,
+        "min_ms": 0.0123
+      },
+      "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c": {
+        "calls": 108,
+        "device_ms": 0.8575,
+        "max_ms": 0.0088,
+        "min_ms": 0.0075
+      },
+      "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": {
+        "calls": 108,
+        "device_ms": 0.7087,
+        "max_ms": 0.0073,
+        "min_ms": 0.0057
+      },
+      "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": {
+        "calls": 3,
+        "device_ms": 0.014,
+        "max_ms": 0.005,
+        "min_ms": 0.0045
+      },
+      "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": {
+        "calls": 105,
+        "device_ms": 0.5418,
+        "max_ms": 0.0065,
+        "min_ms": 0.004
+      },
+      "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": {
+        "calls": 108,
+        "device_ms": 0.4558,
+        "max_ms": 0.0047,
+        "min_ms": 0.004
+      },
+      "E_64_64_8_16_4_6fbbb79c268af5049ba63c1085bc9fceeed2ba0dfed78a06bb342965de3c6d85": {
+        "calls": 108,
+        "device_ms": 0.718,
+        "max_ms": 0.0073,
+        "min_ms": 0.0063
+      },
+      "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": {
+        "calls": 108,
+        "device_ms": 0.217,
+        "max_ms": 0.0027,
+        "min_ms": 0.0018
+      },
+      "E_8_64_2_8_16_4_e106c4030a9d21cac72ff0bb3b8aa5e9a622cb2894412277e2f90534cf3f0e2e": {
+        "calls": 108,
+        "device_ms": 0.2025,
+        "max_ms": 0.0023,
+        "min_ms": 0.0015
+      },
+      "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": {
+        "calls": 3,
+        "device_ms": 0.0045,
+        "max_ms": 0.0015,
+        "min_ms": 0.0015
+      },
+      "native_finite_fp32_argmax_151936_t1024": {
+        "calls": 3,
+        "device_ms": 0.0248,
+        "max_ms": 0.0083,
+        "min_ms": 0.0083
+      },
+      "nv_sm120_q16_grid_hd128_loop_attention": {
+        "calls": 108,
+        "device_ms": 10.1207,
+        "max_ms": 0.0963,
+        "min_ms": 0.0885
+      },
+      "q8_compact_record_fp16": {
+        "calls": 216,
+        "device_ms": 0.668,
+        "max_ms": 0.0037,
+        "min_ms": 0.0027
+      },
+      "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": {
+        "calls": 3,
+        "device_ms": 8.696,
+        "max_ms": 2.9035,
+        "min_ms": 2.8942
+      },
+      "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": {
+        "calls": 219,
+        "device_ms": 2.5835,
+        "max_ms": 0.0125,
+        "min_ms": 0.0112
+      },
+      "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": {
+        "calls": 108,
+        "device_ms": 0.287,
+        "max_ms": 0.0033,
+        "min_ms": 0.0023
+      },
+      "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e": {
+        "calls": 216,
+        "device_ms": 77.5445,
+        "max_ms": 0.3653,
+        "min_ms": 0.3553
+      },
+      "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": {
+        "calls": 108,
+        "device_ms": 0.2068,
+        "max_ms": 0.002,
+        "min_ms": 0.0018
+      }
+    },
+    "device_ms": 243.9834,
+    "kernel_count": 3267,
+    "schema": "prefill-device-profile-range-summary.v2"
+  },
+  "program_names": {
+    "E_1024_8_16_4_0474917d69356f3fb88ab57e908ee4f28ade9b7ce4aba40fce75ec61ac8f072d": 36,
+    "E_1024_8_16_4_869e848bb5316270adcd4bf13e8090a251cc6d2bf0836f27b4319c893157eb2c": 36,
+    "E_1187_32_4_f4beb3197f89422fc17cc43ac33fb098f9c26058821e6e2828cc2932988e44da": 2,
+    "E_16_64_8_16_4_4_4ea2955fdd8af23b169ada2876a30ed724fe52d9315e1adef62c66827b05f700": 36,
+    "E_16_64_8_16_4_4_8dd1094c6224a05c333dde6c03d3b7671600e3fe89770b566c5a76143288c63f": 36,
+    "E_16_64_8_16_4_4_f3ac2d79aacaf9549697ec0413fcd425b8f5c163259e88d53787a393b07091af": 1,
+    "E_2048_4_8_16_2_03180df0efeb598bc45a49b92d84c58a8484f4dcd609cd4d3e4aacad5d583fce": 36,
+    "E_32_16_2_8_16_4_4_0132545605631df81ebe8ca65386af1a13361c79063ed3d18dcf3bfc3d53b263": 36,
+    "E_4_32_32_4_2_2_2_8_2_127_2_9e9fe095ccae4c757b96799f928901747e2ec817b074f802dfba07b1b95c4fa6": 72,
+    "E_4_32_32_4_2_2_2_8_2_383_2_e1b756a0093f26f96af0ea5db74fc3b41e6a44ae02968e01214c238e807d7a9e": 36,
+    "E_4_32_4_3a39b1a8ecb491ce70bff135129041430248b04e874e29e2e6fd3dbecfcf6703": 1,
+    "E_4_8_32_4_2_2_2_8_2_127_2_5b25908519df16d6540959b859dfc9b1b3da90428dede53099326cb17b2798b0": 72,
+    "E_512_16_8_2_4_4_7ba8bb6e17db46be97b12bb14aa0061205f501e4d34840e5e9a887084bd05ccc": 1,
+    "E_512_4_2_8_16_4_90bc800eaf9a6441acd8c7bf4e4ce6b36ec829b5916985f2e916b5d9931bd5af": 36,
+    "E_512_8_8_16_2_38ab5a6b4ffc4e22b0588bf8f0e2297dfb4ae544f0da3f6d785ce1f7058b2d98": 36,
+    "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5": 36,
+    "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c": 36,
+    "E_64_64_8_16_4_22db9d0fb5a7419924ea6bdd9d95dc7db64100c51de1477280b7272535bdc68d": 36,
+    "E_64_64_8_16_4_292d4153a76ae5aa63a9b9d879aac050fc5ae0bdb1761817c2857f5b4ab16a14": 1,
+    "E_64_64_8_16_4_45de44a40b814b9152599a11f60fc231b833c48c406fec2378af555b6f722f6d": 35,
+    "E_64_64_8_16_4_4ca7d648d46b86ea510ec6bddd0cc0ae3bd58b49b538dfa160729cc7630bc50b": 36,
+    "E_64_64_8_16_4_6fbbb79c268af5049ba63c1085bc9fceeed2ba0dfed78a06bb342965de3c6d85": 36,
+    "E_8_16_2_8_16_4_4_e8453c0df6fe6ba806b7f1f8f05499e65cbd1dcda843833b7fa10c8ff76bc095": 36,
+    "E_8_64_2_8_16_4_e106c4030a9d21cac72ff0bb3b8aa5e9a622cb2894412277e2f90534cf3f0e2e": 36,
+    "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346": 1,
+    "native_finite_fp32_argmax_151936_t1024": 1,
+    "nv_sm120_q16_grid_hd128_loop_attention": 36,
+    "q8_compact_record_fp16": 72,
+    "r_1187_32_4_16_2_2_2_4_8_5d34671e0b37cb71be07bf75d934e83829c4a02061eec3504cbb6cba4e7a88d6": 1,
+    "r_32_8_4_4_512_628602e2c7aa848d6e4ff1d7eb39bd95e9b93923f4805b7db94c8e9bfb030561": 73,
+    "r_4_32_8_16_32_4_c8de7edceff274caf5933f5d3fa68986da46aafacefe13dba3348b2120e3e4b2": 36,
+    "r_4_96_32_2_4_2_2_4_4_64_2_2_2_8cefca4b229d8048634693df0dd2614ca8c3df3f9d8527d95c0d4432b3a5a49e": 72,
+    "r_8_32_8_4_4_16_5534b419e310bcfa1ca9a84206065c075d335e64050b4b299203989888b6d11f": 36
+  },
+  "replay": {
+    "distinct_activation_output": true,
+    "finite": true,
+    "same_activation_exact": true
+  },
+  "route": {
+    "candidate_identity": "c0d2b181a6de5751180a48cc5c1b1d1c8977770845951d3196a6596877493d28",
+    "default_enabled": false
+  },
+  "schema": "tinygrad.nv_compiler_q4k_model_arm.v1",
+  "status": "PASS",
+  "token": 198,
+  "wall": {
+    "median_ms": 81.969776,
+    "min_ms": 81.909482,
+    "samples_ms": [
+      81.909482,
+      81.980055,
+      81.969776
+    ],
+    "tok_s": 6250.802562760683
+  }
+}

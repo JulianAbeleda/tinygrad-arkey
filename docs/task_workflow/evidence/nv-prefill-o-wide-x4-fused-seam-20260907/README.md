@@ -1,0 +1,5 @@
+# O direct-wide x4 fused-residual seam closure
+
+A generated direct-wide O Q4-A/x4 body with the logical XOR4 epilogue and fused logical residual is arithmetically viable in isolation. Canonical block0 O is bit-exact against the conventional fused-residual program (`max_abs=0`), weight and residual remain read-only, and SASS has LDSM8, SHFL64, STG.E.64=32, LDL0, STL0.
+
+It is not integrated or selected. The production model boundary passes the residual as a lazy graph value. Three bounded forms—extending the compiler ProgramInfo, using a distinct exported symbol, and wrapping the generated cubin in a four-slot native PROGRAM—each resolved an O call with only three buffers and failed closed before launch: `globals (0,1,2,3) exceed resolved CALL buffer count 3`. Materializing the residual would add a service and contradict the fused lifecycle target. All experimental production edits were reverted; the smallest remaining hook is a typed graph-buffer handoff for the existing residual value before opaque PROGRAM resolution.

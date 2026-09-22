@@ -1,0 +1,304 @@
+{
+  "arm_medians_us": {
+    "C0": 6.144,
+    "C2": 5.712,
+    "C3": 7.744
+  },
+  "arm_output_checksums": {
+    "C0": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C2": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+    "C3": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1"
+  },
+  "arm_runs": [
+    {
+      "arm": "C3",
+      "durations_us": [
+        7.776,
+        7.456,
+        7.808,
+        7.776,
+        7.84,
+        7.872,
+        7.712,
+        7.744,
+        7.776,
+        7.488,
+        7.648,
+        7.808,
+        7.808,
+        7.584,
+        7.808,
+        7.68,
+        7.712,
+        7.648,
+        7.68,
+        7.776
+      ],
+      "median_us": 7.76
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        5.696,
+        5.664,
+        5.664,
+        5.824,
+        5.856,
+        5.728,
+        5.696,
+        5.696,
+        5.76,
+        5.728,
+        5.824,
+        5.696,
+        5.792,
+        5.728,
+        5.792,
+        5.696,
+        5.696,
+        5.76,
+        5.76,
+        5.664
+      ],
+      "median_us": 5.728
+    },
+    {
+      "arm": "C0",
+      "durations_us": [
+        6.08,
+        6.176,
+        6.08,
+        6.144,
+        6.08,
+        6.144,
+        6.144,
+        6.176,
+        6.048,
+        6.176,
+        6.144,
+        6.144,
+        6.176,
+        6.112,
+        6.08,
+        6.112,
+        6.272,
+        6.112,
+        6.144,
+        6.176
+      ],
+      "median_us": 6.144
+    },
+    {
+      "arm": "C2",
+      "durations_us": [
+        5.632,
+        5.728,
+        5.664,
+        5.76,
+        5.76,
+        5.728,
+        5.696,
+        5.664,
+        5.696,
+        5.696,
+        5.728,
+        5.696,
+        5.728,
+        5.792,
+        5.664,
+        5.76,
+        5.728,
+        5.696,
+        5.696,
+        5.664
+      ],
+      "median_us": 5.696
+    },
+    {
+      "arm": "C3",
+      "durations_us": [
+        7.584,
+        7.744,
+        7.776,
+        7.776,
+        7.712,
+        7.712,
+        7.648,
+        7.648,
+        7.776,
+        7.712,
+        7.84,
+        7.712,
+        7.552,
+        7.968,
+        8.0,
+        7.776,
+        7.744,
+        7.52,
+        7.744,
+        7.872
+      ],
+      "median_us": 7.744
+    }
+  ],
+  "buffer_sizes": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": [
+      24576,
+      28311552,
+      28311552,
+      8192
+    ],
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": [
+      65536,
+      9437184,
+      8192
+    ],
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": [
+      16384,
+      41287680,
+      24576,
+      16384
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      8192,
+      16384,
+      8192
+    ]
+  },
+  "buffer_vas": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": [
+      157972373504,
+      138589574976,
+      138617902912,
+      157972361472
+    ],
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": [
+      157972590592,
+      138658027840,
+      157972537344
+    ],
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": [
+      157972451328,
+      138548287296,
+      157972373504,
+      157972332544
+    ],
+    "rmsnorm_q8_1_llama_provider_4096": [
+      157972537344,
+      157972451328,
+      142858915840
+    ]
+  },
+  "capture_identity": {
+    "dependencies": {
+      "down_out_to_provider_in": true,
+      "gateup_out_to_down_in": true,
+      "provider_out_to_target_in": true
+    },
+    "family_occurrence": 0,
+    "sequence": {
+      "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": 1470,
+      "q4k_warp_coop_q8_dp4a_partial_4096_4096": 1473,
+      "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": 1471,
+      "rmsnorm_q8_1_llama_provider_4096": 1472
+    }
+  },
+  "commit": "6570abc025514273faa100c66b979e531585a1e1",
+  "cubin_sha256": {
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": "94cf0d6ac72135e6d520675e88ad9047c8c19597e8a34d5178bc12322e738702",
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": "e1685b51941b066000e587aaa314ed5de975865ac52e08cb6a116f5a331746f0",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "gpu_state_after": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "100.41",
+    "pstate": "P0",
+    "temperature.gpu": "50"
+  },
+  "gpu_state_before": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "driver_version": "595.84",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "89.32",
+    "pstate": "P0",
+    "temperature.gpu": "49"
+  },
+  "identity": {
+    "C2_minus_C0_us": -0.432,
+    "C3_minus_C2_us": 2.032,
+    "P_minus_C0_us": 2.272,
+    "P_minus_C3_us": 0.672,
+    "identity_residual_us": -0.0
+  },
+  "installed_P": {
+    "all_us": [
+      9.024,
+      8.864,
+      8.224,
+      8.288,
+      8.16,
+      8.48,
+      8.416,
+      8.608,
+      8.416
+    ],
+    "complete_replay_count": 9,
+    "median_us": 8.416,
+    "steady_us": [
+      8.224,
+      8.288,
+      8.16,
+      8.48,
+      8.416,
+      8.608,
+      8.416
+    ],
+    "target_counts": [
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17,
+      17
+    ],
+    "warmup_dropped": 2
+  },
+  "n_per_block": 24,
+  "occurrence": 0,
+  "order": [
+    "C3",
+    "C2",
+    "C0",
+    "C2",
+    "C3"
+  ],
+  "production_output_checksum": "f957b6531dbd0fd302fc5d59ae925e8f0dd4f36130f93e069c3559567d6bc9a1",
+  "schema": "tinygrad.nv_r_predecessor_conditioned_exact.v1",
+  "token_ids": [
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ],
+  "token_sha256": "fc90421da972a70fd043dd57f4d30e53c4dd78918a3292725bdb42e63750585a",
+  "verdict": "MEASURED_IDENTITY",
+  "warmup_per_block": 4
+}

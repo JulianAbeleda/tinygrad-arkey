@@ -1,0 +1,6 @@
+score_bitwise=1
+combine_bitwise=1
+final_bitwise=1
+timeline flash1_start=6.112000 flash1_end=13.120000 o0_start=14.208000 o0_end=20.223999 overlap=0.000000
+rep=0 arm=0 hot=11.136000 cold=24.512001
+rep=0 arm=1 hot=28.000000 cold=32.032001

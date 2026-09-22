@@ -1,0 +1,1846 @@
+{
+  "rounds": 9,
+  "rows": [
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 36,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        278.816,
+        276.768,
+        275.968,
+        276.288,
+        275.456,
+        273.376,
+        275.712,
+        273.152,
+        275.456
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 37,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        273.408,
+        266.368,
+        279.2,
+        267.616,
+        267.936,
+        268.576,
+        269.632,
+        269.344,
+        272.128
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 40,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.384,
+        16.192,
+        16.384,
+        16.256,
+        16.16,
+        16.224,
+        16.256,
+        16.256,
+        16.256
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 80,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.128,
+        272.256,
+        273.024,
+        271.776,
+        271.584,
+        270.688,
+        271.2,
+        271.264,
+        271.424
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 81,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.176,
+        274.56,
+        268.832,
+        276.992,
+        275.648,
+        274.56,
+        277.376,
+        276.832,
+        275.968
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 84,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.864,
+        16.64,
+        16.544,
+        16.64,
+        16.608,
+        16.544,
+        16.48,
+        16.352,
+        16.192
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 124,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.856,
+        275.264,
+        274.848,
+        275.296,
+        275.328,
+        276.032,
+        275.2,
+        275.584,
+        274.976
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 125,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.36,
+        275.328,
+        276.0,
+        275.584,
+        275.168,
+        275.904,
+        275.616,
+        274.784,
+        272.448
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 128,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.416,
+        16.608,
+        16.576,
+        16.608,
+        16.448,
+        16.64,
+        16.64,
+        16.544,
+        16.544
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 168,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.904,
+        274.784,
+        272.224,
+        270.848,
+        272.032,
+        267.008,
+        266.752,
+        273.216,
+        273.216
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 169,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        266.784,
+        273.12,
+        275.776,
+        276.64,
+        276.832,
+        272.32,
+        272.832,
+        271.936,
+        271.296
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 172,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.288,
+        16.256,
+        16.192,
+        16.256,
+        16.288,
+        16.288,
+        16.224,
+        16.224,
+        16.16
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 211,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.064,
+        271.68,
+        273.856,
+        271.456,
+        271.104,
+        272.576,
+        272.416,
+        272.832,
+        271.776
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 212,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        276.608,
+        274.368,
+        275.424,
+        275.552,
+        275.584,
+        275.68,
+        275.968,
+        276.352,
+        275.904
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 215,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        17.12,
+        16.576,
+        16.512,
+        16.448,
+        16.448,
+        16.416,
+        16.512,
+        16.576,
+        16.512
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 254,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.248,
+        275.872,
+        275.808,
+        275.68,
+        275.872,
+        275.936,
+        276.032,
+        276.16,
+        276.384
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 255,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.304,
+        276.192,
+        275.616,
+        275.2,
+        272.48,
+        275.584,
+        274.816,
+        275.456,
+        275.872
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 258,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.576,
+        16.416,
+        16.288,
+        16.48,
+        16.384,
+        16.512,
+        16.416,
+        16.48,
+        16.416
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 298,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.32,
+        274.56,
+        270.976,
+        271.296,
+        270.816,
+        271.232,
+        271.04,
+        270.688,
+        270.816
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 299,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        272.8,
+        272.608,
+        272.48,
+        272.608,
+        272.256,
+        272.576,
+        272.192,
+        272.832,
+        271.68
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 302,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.576,
+        16.352,
+        16.192,
+        16.288,
+        16.256,
+        16.192,
+        16.32,
+        16.32,
+        16.32
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 341,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.064,
+        272.032,
+        271.552,
+        271.936,
+        275.104,
+        276.864,
+        275.232,
+        271.232,
+        270.912
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 342,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        272.288,
+        272.64,
+        272.064,
+        272.224,
+        271.296,
+        270.752,
+        270.88,
+        271.04,
+        270.528
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 345,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.608,
+        16.16,
+        16.16,
+        16.288,
+        16.256,
+        16.288,
+        16.224,
+        16.16,
+        16.224
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 384,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        273.6,
+        273.504,
+        272.256,
+        272.224,
+        272.032,
+        272.448,
+        272.64,
+        272.576,
+        272.384
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 385,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        271.904,
+        271.456,
+        272.0,
+        271.392,
+        271.296,
+        271.296,
+        271.104,
+        271.424,
+        271.776
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 388,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.64,
+        16.384,
+        16.128,
+        16.256,
+        16.224,
+        16.288,
+        16.288,
+        16.288,
+        16.384
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 428,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.736,
+        276.128,
+        275.808,
+        275.616,
+        275.456,
+        276.416,
+        276.224,
+        275.328,
+        276.768
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 429,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.144,
+        275.84,
+        275.648,
+        275.232,
+        275.648,
+        275.648,
+        275.744,
+        275.232,
+        276.128
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 432,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.672,
+        16.448,
+        16.416,
+        16.48,
+        16.416,
+        16.448,
+        16.576,
+        16.384,
+        16.512
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 471,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.12,
+        276.384,
+        276.064,
+        275.904,
+        275.968,
+        275.104,
+        275.296,
+        275.264,
+        275.552
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 472,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.56,
+        273.728,
+        269.568,
+        271.328,
+        271.232,
+        270.88,
+        270.752,
+        271.36,
+        270.112
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 475,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.384,
+        16.192,
+        16.096,
+        16.256,
+        16.096,
+        16.224,
+        16.128,
+        16.48,
+        16.448
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 514,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.712,
+        275.616,
+        273.344,
+        271.072,
+        270.816,
+        270.848,
+        270.848,
+        271.552,
+        271.136
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 515,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        270.112,
+        271.072,
+        270.496,
+        271.296,
+        270.944,
+        270.624,
+        270.816,
+        271.84,
+        272.448
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 518,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.448,
+        16.256,
+        16.256,
+        16.352,
+        16.448,
+        16.384,
+        16.608,
+        16.512,
+        16.576
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 558,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.456,
+        275.84,
+        275.84,
+        274.784,
+        274.88,
+        275.808,
+        275.872,
+        274.944,
+        272.992
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 559,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.456,
+        274.08,
+        270.848,
+        270.752,
+        270.432,
+        270.592,
+        270.528,
+        270.784,
+        270.304
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 562,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.64,
+        16.192,
+        16.096,
+        16.192,
+        16.256,
+        16.288,
+        16.224,
+        16.16,
+        16.448
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 601,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.32,
+        276.32,
+        271.168,
+        271.296,
+        270.656,
+        270.4,
+        271.136,
+        270.624,
+        271.232
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 602,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        270.656,
+        270.784,
+        271.968,
+        273.024,
+        272.736,
+        273.472,
+        273.216,
+        272.128,
+        271.584
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 605,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.48,
+        16.32,
+        16.448,
+        16.32,
+        16.288,
+        16.256,
+        16.288,
+        16.32,
+        16.64
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 644,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.256,
+        276.128,
+        274.816,
+        274.848,
+        275.456,
+        275.168,
+        274.048,
+        274.816,
+        271.808
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 645,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.304,
+        273.216,
+        269.696,
+        269.664,
+        271.328,
+        270.432,
+        270.272,
+        270.784,
+        270.304
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 648,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.288,
+        16.16,
+        16.288,
+        16.064,
+        16.16,
+        16.224,
+        16.224,
+        16.448,
+        16.16
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 688,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.52,
+        276.448,
+        275.968,
+        270.912,
+        271.104,
+        270.72,
+        271.104,
+        271.36,
+        274.24
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 689,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        277.312,
+        275.456,
+        275.36,
+        275.488,
+        274.912,
+        274.496,
+        272.48,
+        274.784,
+        272.384
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 692,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.576,
+        16.448,
+        16.448,
+        16.48,
+        16.448,
+        16.384,
+        16.416,
+        16.416,
+        16.48
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 731,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.488,
+        275.36,
+        270.848,
+        269.216,
+        269.824,
+        270.24,
+        274.72,
+        275.744,
+        272.96
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 732,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        270.784,
+        271.296,
+        270.848,
+        270.432,
+        270.72,
+        270.4,
+        271.936,
+        272.064,
+        271.872
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 735,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.416,
+        16.288,
+        16.16,
+        16.224,
+        16.352,
+        16.256,
+        16.352,
+        16.544,
+        16.544
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 774,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.448,
+        275.904,
+        275.392,
+        275.84,
+        275.264,
+        275.424,
+        275.68,
+        275.328,
+        274.848
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 775,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.136,
+        270.432,
+        269.984,
+        270.496,
+        270.656,
+        270.848,
+        270.944,
+        270.816,
+        270.816
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 778,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.32,
+        16.224,
+        16.256,
+        16.224,
+        16.192,
+        16.192,
+        16.224,
+        16.224,
+        16.096
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 818,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.992,
+        273.984,
+        273.568,
+        273.344,
+        272.8,
+        272.704,
+        272.576,
+        272.64,
+        272.128
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 819,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        272.416,
+        273.504,
+        272.704,
+        271.296,
+        268.992,
+        269.056,
+        268.896,
+        267.84,
+        267.776
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 822,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.416,
+        16.192,
+        16.288,
+        16.288,
+        16.16,
+        16.288,
+        16.192,
+        16.576,
+        16.48
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 861,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.568,
+        276.416,
+        272.032,
+        271.456,
+        271.328,
+        271.648,
+        271.136,
+        271.744,
+        272.8
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 862,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        271.648,
+        271.296,
+        271.584,
+        271.776,
+        271.488,
+        271.168,
+        271.648,
+        271.36,
+        271.36
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 865,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.768,
+        16.192,
+        16.256,
+        16.288,
+        16.192,
+        16.288,
+        16.288,
+        16.288,
+        16.608
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 904,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.704,
+        275.68,
+        276.0,
+        275.36,
+        276.672,
+        276.16,
+        275.936,
+        275.296,
+        275.616
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 905,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.36,
+        275.488,
+        275.968,
+        274.624,
+        272.512,
+        275.392,
+        273.376,
+        275.36,
+        274.336
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 908,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.64,
+        16.48,
+        16.448,
+        16.416,
+        16.512,
+        16.32,
+        16.352,
+        16.416,
+        16.48
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 948,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.216,
+        275.232,
+        271.36,
+        270.752,
+        270.432,
+        270.752,
+        270.752,
+        269.92,
+        269.76
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 949,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        276.128,
+        270.464,
+        270.816,
+        271.04,
+        270.88,
+        271.296,
+        271.488,
+        271.072,
+        270.88
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 952,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.608,
+        16.192,
+        16.192,
+        16.256,
+        16.16,
+        16.224,
+        16.192,
+        16.48,
+        16.64
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 991,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        277.696,
+        275.008,
+        273.76,
+        270.88,
+        271.296,
+        268.768,
+        268.512,
+        268.512,
+        269.888
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 992,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        271.936,
+        271.968,
+        271.904,
+        271.52,
+        271.52,
+        270.432,
+        271.616,
+        271.232,
+        271.488
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 995,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.512,
+        16.224,
+        16.256,
+        16.192,
+        16.256,
+        16.256,
+        16.064,
+        16.0,
+        16.256
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1034,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        272.544,
+        272.64,
+        272.256,
+        272.0,
+        271.776,
+        271.328,
+        271.296,
+        270.848,
+        271.712
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1035,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        272.16,
+        272.576,
+        272.288,
+        271.808,
+        272.0,
+        272.576,
+        272.576,
+        272.0,
+        273.184
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1038,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.672,
+        16.224,
+        16.32,
+        16.352,
+        16.288,
+        16.224,
+        16.288,
+        16.384,
+        16.512
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1078,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.832,
+        275.968,
+        275.968,
+        276.032,
+        276.064,
+        275.84,
+        275.552,
+        274.976,
+        275.68
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1079,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.264,
+        276.32,
+        276.224,
+        275.648,
+        275.968,
+        275.808,
+        276.864,
+        275.232,
+        273.856
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1082,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.64,
+        16.448,
+        16.384,
+        16.544,
+        16.48,
+        16.48,
+        16.384,
+        16.48,
+        16.384
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1121,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.384,
+        274.752,
+        271.52,
+        271.136,
+        270.272,
+        271.552,
+        271.136,
+        271.136,
+        271.424
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1122,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.72,
+        274.368,
+        276.224,
+        274.368,
+        268.736,
+        267.84,
+        276.736,
+        267.232,
+        278.656
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1125,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        17.408,
+        17.44,
+        17.088,
+        17.024,
+        16.992,
+        16.992,
+        16.96,
+        16.512,
+        16.64
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1164,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.264,
+        276.352,
+        276.448,
+        274.816,
+        276.64,
+        276.192,
+        276.576,
+        276.192,
+        276.48
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1165,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.56,
+        277.024,
+        275.168,
+        276.128,
+        272.864,
+        275.744,
+        272.544,
+        275.808,
+        275.776
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1168,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.544,
+        16.384,
+        16.512,
+        16.448,
+        16.384,
+        16.416,
+        16.576,
+        16.448,
+        16.544
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1208,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.16,
+        274.976,
+        274.976,
+        272.512,
+        274.72,
+        272.512,
+        274.656,
+        273.248,
+        274.784
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1209,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.144,
+        270.176,
+        270.592,
+        270.112,
+        269.984,
+        270.208,
+        269.824,
+        270.4,
+        269.984
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1212,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.416,
+        16.128,
+        16.192,
+        16.416,
+        16.48,
+        16.448,
+        16.576,
+        16.512,
+        16.544
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1251,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.936,
+        276.128,
+        269.728,
+        271.328,
+        271.136,
+        271.072,
+        271.904,
+        271.04,
+        271.584
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1252,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        269.984,
+        270.08,
+        270.208,
+        270.016,
+        270.208,
+        270.656,
+        272.992,
+        274.592,
+        270.784
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1255,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.384,
+        16.448,
+        16.448,
+        16.448,
+        16.64,
+        16.64,
+        16.512,
+        16.512,
+        16.32
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1294,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.928,
+        274.24,
+        271.808,
+        271.008,
+        271.328,
+        270.848,
+        271.328,
+        271.584,
+        271.328
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1295,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        272.896,
+        272.576,
+        272.576,
+        272.64,
+        271.616,
+        273.088,
+        272.128,
+        272.736,
+        272.224
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1298,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.544,
+        16.416,
+        16.384,
+        16.288,
+        16.32,
+        16.352,
+        16.32,
+        16.416,
+        16.64
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1338,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.288,
+        276.8,
+        275.648,
+        275.712,
+        276.256,
+        276.576,
+        275.648,
+        275.712,
+        275.008
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1339,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.784,
+        271.264,
+        270.976,
+        271.424,
+        270.464,
+        270.72,
+        270.848,
+        270.944,
+        270.816
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1342,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.672,
+        16.512,
+        16.576,
+        16.512,
+        16.544,
+        16.576,
+        16.512,
+        16.512,
+        16.512
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1382,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.416,
+        274.272,
+        272.352,
+        272.544,
+        272.0,
+        267.616,
+        268.704,
+        269.92,
+        274.24
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1383,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.912,
+        274.624,
+        272.128,
+        272.384,
+        271.808,
+        271.776,
+        271.552,
+        271.616,
+        271.392
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1386,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.544,
+        16.352,
+        16.288,
+        16.224,
+        16.256,
+        16.416,
+        16.224,
+        16.576,
+        16.448
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1426,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.96,
+        274.08,
+        273.184,
+        272.352,
+        270.272,
+        266.432,
+        267.68,
+        268.64,
+        269.216
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1427,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        275.072,
+        267.712,
+        268.416,
+        276.16,
+        276.16,
+        267.424,
+        268.768,
+        268.832,
+        279.008
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1430,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        17.088,
+        17.056,
+        17.024,
+        17.024,
+        17.088,
+        17.056,
+        16.512,
+        16.576,
+        16.608
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1470,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        275.648,
+        275.072,
+        275.776,
+        275.04,
+        274.656,
+        275.808,
+        276.16,
+        276.672,
+        275.2
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1471,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        273.696,
+        275.136,
+        275.904,
+        275.712,
+        275.136,
+        276.416,
+        275.36,
+        276.896,
+        276.128
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1474,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.928,
+        16.704,
+        16.576,
+        16.608,
+        16.576,
+        16.608,
+        16.704,
+        16.8,
+        16.672
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1514,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.0,
+        275.232,
+        275.36,
+        276.512,
+        276.192,
+        276.192,
+        275.648,
+        275.104,
+        274.976
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1515,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.912,
+        274.912,
+        274.688,
+        274.976,
+        272.128,
+        275.392,
+        274.464,
+        272.672,
+        274.048
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1518,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.608,
+        16.48,
+        16.512,
+        16.512,
+        16.448,
+        16.48,
+        16.448,
+        16.384,
+        16.352
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4_qo_streamk",
+      "ordinal": 1557,
+      "previous": "q8_ds4_fp16_pp512",
+      "samples_us": [
+        276.0,
+        274.656,
+        270.752,
+        274.464,
+        275.168,
+        272.544,
+        274.24,
+        271.84,
+        274.336
+      ]
+    },
+    {
+      "name": "q4_qo_streamk",
+      "next": "q4k_imma_fixup_active",
+      "ordinal": 1558,
+      "previous": "q4_qo_streamk",
+      "samples_us": [
+        274.208,
+        269.504,
+        269.92,
+        269.408,
+        270.08,
+        270.688,
+        270.112,
+        269.92,
+        269.792
+      ]
+    },
+    {
+      "name": "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+      "next": "E_64_192_8_16_4_5a2137f8e57933947793f5908b5b1c440a16780ed3881ebe0c386c7e3680548c",
+      "ordinal": 1561,
+      "previous": "q4k_imma_fixup_active",
+      "samples_us": [
+        16.608,
+        16.384,
+        16.448,
+        16.48,
+        16.384,
+        16.48,
+        16.512,
+        16.48,
+        16.448
+      ]
+    }
+  ],
+  "schema": "tinygrad.nv_prefill_live_service.v1",
+  "selected": [
+    "E_64_192_8_16_4_1e161f6c4c230e894f4d2601704fc92075a12b3f53be815dcba4bbed84e83ed5",
+    "q4_qo_streamk"
+  ]
+}

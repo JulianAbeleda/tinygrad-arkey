@@ -1,0 +1,8 @@
+{
+  "schema": "tinygrad.nv_role_delta.v1",
+  "generated_a_ms": 47.811322,
+  "native_k_ms": 47.902701,
+  "generated_c_ms": 47.824791,
+  "generated_mean_ms": 47.8180565,
+  "native_advantage_ms": -0.08464450000000312
+}

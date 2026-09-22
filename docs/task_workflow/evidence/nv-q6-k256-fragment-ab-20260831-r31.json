@@ -1,0 +1,133 @@
+{
+  "schema": "nv.q6_k256.fragment_load_ab.v1",
+  "passed": false,
+  "replicas": 21760,
+  "rounds": 31,
+  "exact_cross": true,
+  "structural_gate": true,
+  "move_needle_gate": false,
+  "native_speedup": 0.9805447470817121,
+  "native_saved_us": -0.7199999999999989,
+  "rows": {
+    "scalar": {
+      "exact_reference": true,
+      "exact_dot": true,
+      "finite": true,
+      "max_abs": 0.0,
+      "sass": {
+        "ldsm": 0,
+        "lds": 32,
+        "imma": 16,
+        "bar": 16,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 16
+      },
+      "resources": {
+        "registers": 96,
+        "shared_bytes": 6144,
+        "local_bytes": 576
+      },
+      "source": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/scalar.cu",
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/scalar.cubin",
+      "disassembly": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/scalar.sass",
+      "timing_us": {
+        "min": 36.032,
+        "median": 36.288,
+        "samples": [
+          44.128,
+          36.608,
+          36.448,
+          36.544,
+          36.48,
+          36.288,
+          36.192,
+          36.288,
+          36.288,
+          36.352,
+          36.224,
+          36.288,
+          36.32,
+          36.224,
+          36.256,
+          36.224,
+          36.256,
+          36.288,
+          36.384,
+          36.288,
+          36.288,
+          36.32,
+          36.256,
+          36.32,
+          36.32,
+          36.256,
+          36.192,
+          36.224,
+          36.32,
+          36.032,
+          36.128
+        ]
+      }
+    },
+    "native": {
+      "exact_reference": true,
+      "exact_dot": true,
+      "finite": true,
+      "max_abs": 0.0,
+      "sass": {
+        "ldsm": 16,
+        "lds": 0,
+        "imma": 16,
+        "bar": 16,
+        "ldl": 0,
+        "stl": 0,
+        "prmt": 16
+      },
+      "resources": {
+        "registers": 96,
+        "shared_bytes": 6144,
+        "local_bytes": 576
+      },
+      "source": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/native.cu",
+      "cubin": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/native.cubin",
+      "disassembly": "docs/task_workflow/evidence/nv-q6-k256-fragment-ab-20260831-r31/native.sass",
+      "timing_us": {
+        "min": 36.768,
+        "median": 37.007999999999996,
+        "samples": [
+          37.632,
+          37.248,
+          37.056,
+          37.088,
+          37.12,
+          37.088,
+          37.024,
+          37.12,
+          37.024,
+          37.152,
+          37.088,
+          36.992,
+          37.12,
+          36.96,
+          37.088,
+          36.96,
+          36.96,
+          37.024,
+          37.056,
+          37.056,
+          37.184,
+          36.928,
+          36.96,
+          36.992,
+          36.928,
+          36.992,
+          36.96,
+          36.928,
+          36.992,
+          36.896,
+          36.768
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,1089 @@
+{
+  "anchor_class": "gemv",
+  "classes": {
+    "flash_combine": {
+      "exposed_vs_gemv_us": 88.994,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 88.994,
+      "nodes": 36.0,
+      "union_us": 88.994
+    },
+    "flash_score": {
+      "exposed_vs_gemv_us": 182.018,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 182.018,
+      "nodes": 36.0,
+      "union_us": 182.018
+    },
+    "gemv": {
+      "exposed_vs_gemv_us": 4130.332,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 4130.332,
+      "nodes": 253.0,
+      "union_us": 4130.332
+    },
+    "norms": {
+      "exposed_vs_gemv_us": 416.162,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 416.162,
+      "nodes": 362.0,
+      "union_us": 416.162
+    },
+    "reduce_output": {
+      "exposed_vs_gemv_us": 15.744,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 15.744,
+      "nodes": 18.0,
+      "union_us": 15.744
+    },
+    "residual_cast": {
+      "exposed_vs_gemv_us": 119.169,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 119.169,
+      "nodes": 234.0,
+      "union_us": 119.169
+    },
+    "rope_kv": {
+      "exposed_vs_gemv_us": 67.105,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 67.105,
+      "nodes": 72.0,
+      "union_us": 67.105
+    },
+    "vocab_aux": {
+      "exposed_vs_gemv_us": 129.761,
+      "hidden_behind_gemv_us": 0.0,
+      "node_sum_us": 129.761,
+      "nodes": 10.0,
+      "union_us": 129.761
+    }
+  },
+  "complete_replays": 9,
+  "definitions": {
+    "class_exposure": "per-class exposure is non-additive; use non_anchor_aggregate for the equation",
+    "median_equation": "terms are medianed independently and can differ by sub-us rounding/non-additivity",
+    "multi_graph": "the decode token is concatenated across the graph list; graphs are sequential so exposure sums",
+    "overlap_mass_us": "node sum minus all-kernel interval union; not recoverable wall savings",
+    "span_discount_vs_node_sum_pct": "(node sum - graph span) / node sum; overlap mass net of internal gaps",
+    "streams": "distinct CUPTI kernel-row streamId values; does not prove graph-internal scheduling structure"
+  },
+  "evidence": "OBSERVED_PROFILED_CUPTI_INTERVALS",
+  "graph_ids": [
+    2,
+    5,
+    8,
+    11,
+    14,
+    17
+  ],
+  "graphs": {
+    "11": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv"
+      ],
+      "rows": 2304
+    },
+    "14": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv"
+      ],
+      "rows": 4608
+    },
+    "17": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv",
+        "vocab_aux"
+      ],
+      "rows": 261
+    },
+    "2": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv",
+        "vocab_aux"
+      ],
+      "rows": 288
+    },
+    "5": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv"
+      ],
+      "rows": 576
+    },
+    "8": {
+      "classes": [
+        "flash_combine",
+        "flash_score",
+        "gemv",
+        "norms",
+        "reduce_output",
+        "residual_cast",
+        "rope_kv"
+      ],
+      "rows": 1152
+    }
+  },
+  "inter_replay_gap": {
+    "all_median_us": 269.362,
+    "all_p05_us": 257.89,
+    "all_p95_us": 313.258,
+    "bounded_cap_us": 5000.0,
+    "bounded_count": 6,
+    "bounded_median_us": 269.362,
+    "excluded_count": 0,
+    "total_count": 6
+  },
+  "median": {
+    "internal_gap_us": 232.228,
+    "kernel_union_us": 5149.413,
+    "node_sum_us": 5149.413,
+    "nodes": 1021.0,
+    "overlap_mass_us": 0.0,
+    "span_discount_vs_node_sum_pct": -4.488,
+    "span_us": 5380.518,
+    "streams": 7.0
+  },
+  "non_anchor_aggregate": {
+    "exposed_vs_gemv_us": 1019.144,
+    "hidden_behind_gemv_us": 0.0,
+    "union_us": 1019.144
+  },
+  "provenance": {
+    "capture_command": null,
+    "capture_nsys_version": null,
+    "export_command": null,
+    "reproduction_command": "extra/llm_research/decode/nv_tinygrad_node_ledger.py --trace /tmp/tg_node_20260813.sqlite --graph-ids 2,5,8,11,14,17 --output /tmp/tg-node-ledger-20260813.json"
+  },
+  "replay_counts": {
+    "2": 9,
+    "5": 9,
+    "8": 9,
+    "11": 9,
+    "14": 9,
+    "17": 9
+  },
+  "replay_split": {
+    "11": {
+      "authority_node_count": 256,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    },
+    "14": {
+      "authority_node_count": 512,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    },
+    "17": {
+      "authority_node_count": 29,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    },
+    "2": {
+      "authority_node_count": 32,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    },
+    "5": {
+      "authority_node_count": 64,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    },
+    "8": {
+      "authority_node_count": 128,
+      "complete_replays": 9,
+      "discarded_fragments": 0,
+      "discarded_sizes": [],
+      "raw_fragments": 9
+    }
+  },
+  "schema": "tinygrad.cuda_graph_timeline_ledger.v1",
+  "shape_census": [
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "flash_combine",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "flash_fused_gmax_combine_32_128",
+      "median_duration_us": 2.464,
+      "name": "flash_fused_gmax_combine_32_128",
+      "registers_per_thread": 79,
+      "static_smem_bytes": 192,
+      "variant": "flash_fused_gmax_combine_32_128"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "flash_score",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        48,
+        8,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "median_duration_us": 5.056,
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 8192,
+      "variant": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 54,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q4k_g3_lanemap_gemv_1024_4096",
+      "median_duration_us": 3.616,
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "registers_per_thread": 61,
+      "static_smem_bytes": 0,
+      "variant": "q4k_g3_lanemap_gemv_1024_4096"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 72,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        12288,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q4k_g3_lanemap_gemv_12288_4096",
+      "median_duration_us": 19.072,
+      "name": "q4k_g3_lanemap_gemv_12288_4096",
+      "registers_per_thread": 61,
+      "static_smem_bytes": 0,
+      "variant": "q4k_g3_lanemap_gemv_12288_4096"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q4k_g3_lanemap_gemv_4096_12288",
+      "median_duration_us": 24.721,
+      "name": "q4k_g3_lanemap_gemv_4096_12288",
+      "registers_per_thread": 61,
+      "static_smem_bytes": 0,
+      "variant": "q4k_g3_lanemap_gemv_4096_12288"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 72,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q4k_g3_lanemap_gemv_4096_4096",
+      "median_duration_us": 7.936,
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "registers_per_thread": 61,
+      "static_smem_bytes": 0,
+      "variant": "q4k_g3_lanemap_gemv_4096_4096"
+    },
+    {
+      "block": [
+        4,
+        16,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        37984,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q6k_gen_coop_151936_4096",
+      "median_duration_us": 401.123,
+      "name": "q6k_gen_coop_151936_4096",
+      "registers_per_thread": 38,
+      "static_smem_bytes": 0,
+      "variant": "q6k_gen_coop_151936_4096"
+    },
+    {
+      "block": [
+        4,
+        16,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q6k_gen_coop_4096_12288",
+      "median_duration_us": 47.84,
+      "name": "q6k_gen_coop_4096_12288",
+      "registers_per_thread": 38,
+      "static_smem_bytes": 0,
+      "variant": "q6k_gen_coop_4096_12288"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "gemv",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        4,
+        32,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q6k_gen_partial_1024_4096_4",
+      "median_duration_us": 15.697,
+      "name": "q6k_gen_partial_1024_4096_4",
+      "registers_per_thread": 69,
+      "static_smem_bytes": 0,
+      "variant": "q6k_gen_partial_1024_4096_4"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        2,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+      "median_duration_us": 1.088,
+      "name": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815",
+      "registers_per_thread": 40,
+      "static_smem_bytes": 0,
+      "variant": "E_2_8_16_4_4_1ca44358cb95f4d7e61325e24ffe71af578967dba14c5676d2764c5d40b4a815"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        2,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+      "median_duration_us": 0.544,
+      "name": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_2_8_16_4_cf5f7bca5f52b0d70736d7128ed2a419c099b95e91ec63335add320112597e20"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_c6fef3561a9fbeaff7b7cbdb3bebc148b857f3d21ebffbe74f25607423ae7719",
+      "median_duration_us": 0.832,
+      "name": "E_32_32_4_c6fef3561a9fbeaff7b7cbdb3bebc148b857f3d21ebffbe74f25607423ae7719",
+      "registers_per_thread": 28,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_c6fef3561a9fbeaff7b7cbdb3bebc148b857f3d21ebffbe74f25607423ae7719"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 72,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "median_duration_us": 0.8,
+      "name": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077",
+      "registers_per_thread": 28,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_f14a5cc0d0ed4c907db43aacfd5901334d27623d4d4df6e2da5c013e85949077"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        2,
+        4,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+      "median_duration_us": 0.576,
+      "name": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_4_2_8_16_4_607f37a022a3f8d758d836ead042a389fdb28e7bf834c1661ce3453bf8e6f97c"
+    },
+    {
+      "block": [
+        2,
+        16,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+      "median_duration_us": 0.704,
+      "name": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63",
+      "registers_per_thread": 22,
+      "static_smem_bytes": 0,
+      "variant": "E_8_2_16_4_7ae2b0fabfeb6452f7333d67a1761f862ebf66b25c524cf29be3a0a86d967a63"
+    },
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 73,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "median_duration_us": 2.656,
+      "name": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc",
+      "registers_per_thread": 76,
+      "static_smem_bytes": 64,
+      "variant": "r_16_256_ed256c4ae79e0e20f4fdab97c161cae8055c723ab1fe435fd6bb57b2df6424cc"
+    },
+    {
+      "block": [
+        8,
+        4,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        2,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+      "median_duration_us": 0.928,
+      "name": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e",
+      "registers_per_thread": 74,
+      "static_smem_bytes": 512,
+      "variant": "r_2_8_4_4_16_88919c0cbc4a4f2d17879d9d823df8a2f0836a7829f344a1d9f8ee54e44a471e"
+    },
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "class": "norms",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+      "median_duration_us": 0.608,
+      "name": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e",
+      "registers_per_thread": 22,
+      "static_smem_bytes": 64,
+      "variant": "r_8_16_8_8be251892c3b04a858fcb4e42dcdb7206c177771323d804f05e9f1a628f3287e"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "reduce_output",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_32_32_4_2_8_cfa9da8eaf323595d8304be2253d71d6e6ba721142f56a31957010b4ce2a766b",
+      "median_duration_us": 0.896,
+      "name": "r_32_32_4_2_8_cfa9da8eaf323595d8304be2253d71d6e6ba721142f56a31957010b4ce2a766b",
+      "registers_per_thread": 74,
+      "static_smem_bytes": 0,
+      "variant": "r_32_32_4_2_8_cfa9da8eaf323595d8304be2253d71d6e6ba721142f56a31957010b4ce2a766b"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        128,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_128_32_3_2ba53b0e7c103a17221f1338cefdf7a455bdce4577bf982f53da9d0a4efe2961",
+      "median_duration_us": 0.608,
+      "name": "E_128_32_3_2ba53b0e7c103a17221f1338cefdf7a455bdce4577bf982f53da9d0a4efe2961",
+      "registers_per_thread": 17,
+      "static_smem_bytes": 0,
+      "variant": "E_128_32_3_2ba53b0e7c103a17221f1338cefdf7a455bdce4577bf982f53da9d0a4efe2961"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        128,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_128_32_3_4a0da381f7c5086325f1de7a3db76424d019ecbb97ef767a606ff8b944a30cd3",
+      "median_duration_us": 0.48,
+      "name": "E_128_32_3_4a0da381f7c5086325f1de7a3db76424d019ecbb97ef767a606ff8b944a30cd3",
+      "registers_per_thread": 18,
+      "static_smem_bytes": 0,
+      "variant": "E_128_32_3_4a0da381f7c5086325f1de7a3db76424d019ecbb97ef767a606ff8b944a30cd3"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 54,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+      "median_duration_us": 0.48,
+      "name": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5",
+      "registers_per_thread": 22,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_02a9738c0547f555d270a4d68dcef46d880b70889ac4f0845db19755a52f69d5"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+      "median_duration_us": 0.48,
+      "name": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_0a5eb0ac56c097a089f39541962d5d73b9bc613251a6320685824338d26b38c4"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b",
+      "median_duration_us": 0.512,
+      "name": "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_86a23e1a5cd1cbd6101066fd85449138b653e9ecbb53d1d704f32aa470cd6f2b"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "residual_cast",
+      "count_per_replay": 71,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+      "median_duration_us": 0.48,
+      "name": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_32_32_4_fab82d40f922cf5f6decf5a3a82d6b4c2c4b20acb8161ea4de44b3da581fa65b"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "class": "rope_kv",
+      "count_per_replay": 36,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+      "median_duration_us": 0.992,
+      "name": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2",
+      "registers_per_thread": 18,
+      "static_smem_bytes": 0,
+      "variant": "E_16_32_4_2_f97dcdcb1846b48225dea340aec269b51112d42e1510960ebb941d28524bf1c2"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "rope_kv",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+      "median_duration_us": 0.864,
+      "name": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b",
+      "registers_per_thread": 24,
+      "static_smem_bytes": 0,
+      "variant": "E_8_8_16_2_90f6c6e71d996ecf08fc5a06f5808cd0fe025ad10cbaf83f31dc13e5be3a556b"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "rope_kv",
+      "count_per_replay": 18,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        8,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+      "median_duration_us": 0.896,
+      "name": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8",
+      "registers_per_thread": 24,
+      "static_smem_bytes": 0,
+      "variant": "r_8_8_16_2_4_da68eeaa95084da816923e4165d65f2f6394390f4667676de3ed7e4f2a2c17c8"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1187,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "median_duration_us": 1.536,
+      "name": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f",
+      "registers_per_thread": 26,
+      "static_smem_bytes": 0,
+      "variant": "E_1187_32_4_76d37a73a646ec3a4b5e32ab783e0ace496f5855bbba7492c8c7fe87bbff5f1f"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1187,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+      "median_duration_us": 1.28,
+      "name": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e",
+      "registers_per_thread": 28,
+      "static_smem_bytes": 0,
+      "variant": "E_1187_32_4_e1ccc42612aa8f28b20a61db46f51dbe08ce7e41f6c77f3966e2be8e85e1f10e"
+    },
+    {
+      "block": [
+        8,
+        16,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        2,
+        4,
+        16
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "median_duration_us": 2.048,
+      "name": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee",
+      "registers_per_thread": 90,
+      "static_smem_bytes": 0,
+      "variant": "E_16_4_2_8_16_2_4_4_35a6fe556c331254f920c4212fdc0c33244d8269d7c93cb1897349f36a254aee"
+    },
+    {
+      "block": [
+        1,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "median_duration_us": 0.864,
+      "name": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_2_c8a3207cf1b8954ec08b9564cce9b00f69be9c09493c58ea1abd46b3664424e7"
+    },
+    {
+      "block": [
+        1,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "median_duration_us": 1.024,
+      "name": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346",
+      "registers_per_thread": 16,
+      "static_smem_bytes": 0,
+      "variant": "E_c9699af0d7ec2ef027b0f07fc5156c7a5f00221c2efb3447f24a23d08b2e0346"
+    },
+    {
+      "block": [
+        1,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        151936,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "q6k_vocab_scalar_reduce_151936_4096",
+      "median_duration_us": 71.425,
+      "name": "q6k_vocab_scalar_reduce_151936_4096",
+      "registers_per_thread": 38,
+      "static_smem_bytes": 0,
+      "variant": "q6k_vocab_scalar_reduce_151936_4096"
+    },
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        128,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "median_duration_us": 9.696,
+      "name": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5",
+      "registers_per_thread": 76,
+      "static_smem_bytes": 64,
+      "variant": "r_128_16_8_1187_7da14102900bfc75c32fee9dbc04f24d778449741b752dc5737a0b1ce2e107b5"
+    },
+    {
+      "block": [
+        16,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "median_duration_us": 0.64,
+      "name": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c",
+      "registers_per_thread": 20,
+      "static_smem_bytes": 64,
+      "variant": "r_16_8_b4bb03fadd22815ef0df0faac8ba18a5ed09d12cdce26ec47c6a08d63793a34c"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "median_duration_us": 3.68,
+      "name": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f",
+      "registers_per_thread": 42,
+      "static_smem_bytes": 0,
+      "variant": "r_32_32_4_32_4_b7c5eeb3ced63845c64b323fd8e5e923a69c1e162de001a94b565dcd96e9293f"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "class": "vocab_aux",
+      "count_per_replay": 1,
+      "dynamic_smem_bytes": 0,
+      "grid": [
+        1,
+        1,
+        1
+      ],
+      "local_memory_per_thread": 0,
+      "mangled_variant": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+      "median_duration_us": 37.6,
+      "name": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f",
+      "registers_per_thread": 76,
+      "static_smem_bytes": 0,
+      "variant": "r_32_4_1187_ded031b0e297fe4d56e6bca792a2e4d4948297b88c6435fae06ab0a28db8c67f"
+    }
+  ],
+  "source": {
+    "path": "/tmp/tg_node_20260813.sqlite",
+    "sha256": "560a3c4d9c3d2bdfb639d28771981998f5c8c8ef83ce72f8559609b9a752cee4",
+    "size_bytes": 3579904
+  },
+  "steady_replays": 7,
+  "tool": {
+    "path": "/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_tinygrad_node_ledger.py",
+    "sha256": "79ec2d6d3ce5516724cbbe2da041704919010cdd840ed367e9925c93a94bc436"
+  },
+  "warmup_replays_dropped": 2,
+  "warning": "Profiled intervals are not an unprofiled token-wall decomposition."
+}

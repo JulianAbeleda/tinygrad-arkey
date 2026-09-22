@@ -1,0 +1,61 @@
+{
+  "schema": "tinygrad.nv_llama_real_q6k_vocab_graph_capture.v1",
+  "runtime": "llama.cpp ggml CUDA backend",
+  "build_commit": "ac4cddeb0",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "workload": {"n_prompt": 512, "n_gen": 0, "n_gpu_layers": 99, "flash_attention": true},
+  "device": "NVIDIA GeForce RTX 5090 sm_120",
+  "kernel": {
+    "demangled": "mul_mat_vec_q<(ggml_type)14, (int)1, (bool)0, (bool)0>",
+    "symbol": "_Z13mul_mat_vec_qIL9ggml_type14ELi1ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+    "grid": [151936, 1, 1],
+    "block": [32, 4, 1],
+    "registers_per_thread": 48,
+    "static_shared_bytes": 384,
+    "graph_node_shared_bytes": 0,
+    "graph_node": 1185,
+    "parameter_count": 19,
+    "parameter_size_bytes": 144
+  },
+  "abi": {
+    "arg0_weight_device": "0x76f6ba004000",
+    "arg1_activation_q8_device": "0x302000000",
+    "arg2_ids": null,
+    "arg3_fusion": {"x_bias": null, "gate": null, "gate_bias": null, "glu_op": 0},
+    "arg4_output_device": "0x76f902800000",
+    "arg5_ncols_x": 4096,
+    "arg6_nchannels_y": [0, 0, 0],
+    "arg7_stride_row_x": 16,
+    "arg8_stride_col_y": [128, 9496, 0],
+    "arg9_stride_col_dst": 151936,
+    "arg10_nchannels_x": 1,
+    "arg11_stride_channel_x": [151936, 2048, 0],
+    "arg12_stride_channel_y": [128, 9496, 0],
+    "arg13_stride_channel_dst": 151936,
+    "arg14_nchannels_dst": 1,
+    "arg15_stride_sample_x": [151936, 2048, 0],
+    "arg16_stride_sample_y": [128, 9496, 0],
+    "arg17_stride_sample_dst": 151936,
+    "arg18_unused": 0
+  },
+  "capture": {
+    "command": "flock -w 600 /tmp/gpu-bench.lock env LD_PRELOAD=/tmp/llama_vocab_graph_tap.so LLAMA_VOCAB_TAP=/tmp/llama_vocab_graph_capture.jsonl llama-bench -m /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf -ngl 99 -fa 1 -p 512 -n 0 -r 2 -o json",
+    "launch_samples_ns": [42486791, 34607125],
+    "note": "Captured from real llama.cpp graph/context; no standalone wrapper launch. Pointer values are process-local and intentionally not reusable as fixture addresses.",
+    "exact_fixture_replay": {
+      "weight_fixture": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/output.weight.q6_k.bin",
+      "activation_fixture": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/final-hidden-row.f32",
+      "reference_fixture": "docs/task_workflow/evidence/nv-vocab-manyrow-e1-postnorm-fixture-20260829/reference-logits.f32",
+      "max_abs_error": 0.0930305719,
+      "argmax": 8503,
+      "reference_argmax": 8503,
+      "all_finite": true,
+      "guards_intact": true,
+      "q8_producer_us": 15.872,
+      "q8_plus_q6_us": 308.896,
+      "q6_only_us": 305.216,
+      "tolerance": {"atol": 0.5, "rtol": 0.02},
+      "pass": true
+    }
+  }
+}

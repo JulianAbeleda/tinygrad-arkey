@@ -1,0 +1,70 @@
+{
+  "comparison": {
+    "allclose": true,
+    "finite": true,
+    "max_abs": 0.001953125,
+    "mean_abs": 0.00012636184692382812,
+    "requested": true
+  },
+  "program": {
+    "accumulator_dtype": "float32",
+    "census": {
+      "owners": 1,
+      "programs": 1
+    },
+    "identity": {
+      "program_id": "fixture_t512_start0",
+      "provenance": "tinygrad_scheduler_generated",
+      "route_id": "nv_native_flash_pp512"
+    },
+    "output_dtype": "float16",
+    "provenance": "tinygrad_scheduler_generated"
+  },
+  "r9": {
+    "requested": false,
+    "samples": 1
+  },
+  "request": {
+    "k_shape": [
+      1,
+      8,
+      512,
+      128
+    ],
+    "q_shape": [
+      1,
+      32,
+      512,
+      128
+    ],
+    "scale": 0.08837890625,
+    "scale_dtype": "float16",
+    "v_shape": [
+      1,
+      8,
+      512,
+      128
+    ]
+  },
+  "schema": "nv_native_flash_pp512_gate/v1",
+  "spec": {
+    "abi": "tinygrad.native_flash_pp512.v1",
+    "accumulation_dtype": "float32",
+    "batch": 1,
+    "causal": true,
+    "head_dim": 128,
+    "k_dtype": "float16",
+    "kv_heads": 8,
+    "live_tokens": 512,
+    "output_dtype": "float16",
+    "output_layout": "B,Hq,T,Hd",
+    "q_dtype": "float16",
+    "query_group_size": 4,
+    "query_heads": 32,
+    "start_pos": 0,
+    "tokens": 512,
+    "v_dtype": "float16"
+  },
+  "stage": "complete",
+  "status": "CONSTRUCTED"
+}

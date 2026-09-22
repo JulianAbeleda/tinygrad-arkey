@@ -68,7 +68,7 @@ External sanity: shiinamiyuki/sm120_gemm's real BF16 GEMMs on the same chip reac
 TF, i.e. 55–85% of this R — consistent with R as the ceiling. A third-party figure (~319 TF,
 "76% of spec") is not directly comparable (different methodology/instruction), so 255.4 TF
 is the denominator for any efficiency claim in this bring-up, per
-`docs/what-makes-a-token-fast-20260731.md` §9: never quote a spec sheet. 255.4 TF is 61% of
+`docs/what-makes-inference-fast.md` §9: never quote a spec sheet. 255.4 TF is 61% of
 the 419 TF sheet figure.
 
 `BW` is measured in the next section, so `M* = (w/16)·(R/BW)` is a single number now.
@@ -122,6 +122,47 @@ llama.cpp on AMD, and it skips the fused-dequant work entirely. The 14B fp16 ove
 29.5 GB and does not fit — **Metal-shaped**: fused quant path, or q4k resident weights
 (~8 GB) with a dequant-to-fp16 strategy. On this 32 GB part the 8B decision is an
 afternoon, not a week.
+
+---
+
+# dp4a_peak_cuda.cu — measured achievable dp4a peak (NVIDIA sm_120 / RTX 5090)
+
+The int8 CUDA-core analogue of `mma_peak_cuda.cu`, measuring the mechanism the
+`nv-performance-campaign-scope-20260801.md` section 1a originally attributed to llama.cpp's
+prefill MMQ kernels: back-to-back `dp4a.s32.s32` on register-resident int8x4 operands, NACC
+independent accumulators, runtime trip count, never-taken store, zero loads in the hot loop.
+
+    export PATH=/usr/local/cuda-13.2/bin:$PATH
+    nvcc -O3 -arch=sm_120 -DNACC=8 dp4a_peak_cuda.cu -o dp4a_peak_cuda && ./dp4a_peak_cuda 32768
+
+Verify purity before believing a number (`cuobjdump --dump-sass`): the hot loop contains only
+`IDP.4A.S8.S8` (the sm_120 SASS form of dp4a), zero `LDG`/`LDS`/`STS`, and exactly one gated
+`STG` sentinel. 0 spills, 16 registers at `nacc=8`.
+
+## Result, NVIDIA GeForce RTX 5090 (GB202, sm_120), 2026-08-02
+
+Grid sweep (`tpb=256, iters=200000` at nacc=8):
+
+| blocks | G dp4a/s | INT8 TOPS (fp16-equiv TFLOPS) |
+| ---: | ---: | ---: |
+| 2048 | 894.8 | 7.2 |
+| 4096 | 929.7 | 7.4 |
+| 8192 | 942.5 | 7.5 |
+| 16384 | 949.0 | 7.6 |
+| 32768 | 950.8 | 7.6 |
+| 65536 | 950.1 | 7.6 |
+
+**R ≈ 950 G dp4a/s = 3.8 TMAC/s = 7.6 INT8 TOPS**, invariant across NACC 8->32 (959.0 G at
+nacc=32) — a hard instruction-issue ceiling on the CUDA-core integer pipe, ~34x below the fp16
+tensor pipe (255.4 TF). Each dp4a is 4 int8 MACs (8 int8 ops); "fp16-equiv TFLOPS" counts 2
+FLOP/MAC for apples-to-apples with llama-bench's `2*N*pp` convention.
+
+This number settles the mechanism question in `nv-performance-campaign-scope-20260801.md`
+section 8.2: llama.cpp's prefill `mul_mat_q<Q4_K,128>` / `<Q6_K,128>` kernels cannot be dp4a at
+their measured throughput (4.19e12 MACs in 32.95 ms busy needs 127 TMAC/s average; dp4a tops
+out at 3.8 TMAC/s). Their SASS is `IMMA.16832` / `IMMA.16816` — int8 tensor-core MMA. dp4a
+remains the right instruction in llama's decode GEMVs (`mul_mat_vec_q`), which are
+bandwidth-bound.
 
 ---
 
@@ -219,7 +260,7 @@ floor. An earlier version of this file used fixed `iters` values copied from the
 that never plateaued — physically impossible, and never reported externally. Root cause: `iters`
 was too small relative to `blocks`, so measured wall time was dominated by fixed host-side
 dispatch/synchronize round-trip overhead (~0.3–0.7ms) rather than GPU compute time — the enqueue-
-vs-execution trap from `docs/what-makes-a-token-fast-20260731.md` §9.6, reached this time through
+vs-execution trap from `docs/what-makes-inference-fast.md` §9.6, reached this time through
 undersized `iters` rather than a missing `synchronize()`. Fixed by calibration; see
 `fma_peak_metal.py`'s module docstring for the full account.
 
@@ -268,7 +309,7 @@ sentinel) in the whole kernel.
 
 **Verdict: one shared unit, not two.** On this M4, `simdgroup_multiply_accumulate` does not reach a
 separate, faster matrix pipe — it lowers onto (or performs comparably to) the same FP ALUs plain
-FMA already uses. `docs/what-makes-a-token-fast-20260731.md` §5's "which unit — worth 10–20×"
+FMA already uses. `docs/what-makes-inference-fast.md` §5's "which unit — worth 10–20×"
 principle does not apply here; see that doc's §5/§10 for the consequence for Metal prefill
 routing.
 

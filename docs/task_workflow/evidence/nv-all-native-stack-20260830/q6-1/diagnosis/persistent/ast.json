@@ -1,0 +1,415 @@
+{
+  "schema": "tinygrad.nv_q6_persistent_ast_probe.v1",
+  "status": "PASS",
+  "ast": {
+    "role": "ffn_down",
+    "op_histogram": {
+      "PARAM": 3,
+      "CONST": 53,
+      "RANGE": 13,
+      "MUL": 220,
+      "ADD": 339,
+      "FLOORDIV": 111,
+      "FLOORMOD": 167,
+      "INDEX": 124,
+      "DEFINE_LOCAL": 1,
+      "BARRIER": 2,
+      "AFTER": 2,
+      "CAST": 199,
+      "SHR": 110,
+      "AND": 110,
+      "BITCAST": 66,
+      "STORE": 61,
+      "GROUP": 7,
+      "CMPLT": 17,
+      "CMPNE": 17,
+      "WHERE": 18,
+      "SHL": 19,
+      "OR": 19,
+      "LOAD": 8,
+      "CONTRACT": 3,
+      "WMMA": 2,
+      "UNROLL": 2,
+      "REDUCE": 1,
+      "END": 1,
+      "SINK": 1
+    },
+    "special": [],
+    "stores": [
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      },
+      {
+        "op": "STORE",
+        "dtype": "dtypes.void",
+        "arg": "None",
+        "src": 2
+      }
+    ],
+    "packed_fragment_nodes": [],
+    "node_count": 1696
+  },
+  "owner_proof": {
+    "owners": 128,
+    "iterations": 8,
+    "tiles": 1024,
+    "bijection": true
+  }
+}

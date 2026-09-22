@@ -1,9 +1,20 @@
 from dataclasses import dataclass, field, replace
+import weakref
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
-from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, bind_memory_semantic_owner,
-                             memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
-from tinygrad.uop import MemorySemanticOwner
-from tinygrad.helpers import VIZ, pluralize, all_int
+from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, ParamArg, ReduceOutputSpec, CallInfo, ProgramInfo,
+                             bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
+from tinygrad.uop import MemorySemanticOwner, MemorySemanticClass
+from tinygrad.helpers import VIZ, Context, ContextVar, pluralize, all_int
+
+# Candidate callify contract. It remains closed by default until the independent
+# substrate census, logits, and reverse wall gates qualify it. Setting this to
+# zero is an exact rollback to the legacy materialization behavior.
+CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT = ContextVar("CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT", 0)
+
+# A separate, closed gate for turning one typed semantic value which is about
+# to become an opaque CALL input into its own precompiled producer.  This is
+# deliberately not implied by output redirect: it changes the call graph.
+CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER = ContextVar("CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER", 0)
 
 @dataclass
 class AllocCtx:
@@ -117,42 +128,728 @@ def contiguous_mops_to_view(c:UOp, src:UOp):
 
   return None
 
-def _precompiled_output_redirect(s:UOp, t:UOp) -> UOp|None:
+def _body_has_reduce_output_candidate(srcs:tuple[UOp, ...]) -> bool:
+  """Whether a precompiled body participates in the reduce-output route.
+
+  The owned-redirect behaviors are only load-bearing for a FUNCTION whose
+  body carries a REDUCE_OUTPUT marker with the owned-contiguous candidate
+  proof.  Gating them on the body instead of the global ContextVar keeps
+  every other precompiled family (residual E_32_32_4 add/cast programs,
+  attention, FFN) byte-identical to the closed control graph.
+  """
+  return any(u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec) and u.arg.owned_contiguous_candidate
+             for u in UOp.sink(*srcs).toposort())
+
+
+# Set by transform_to_call for the duration of its callify passes: the ids of
+# precompiled FUNCTIONs whose outputs feed a REDUCE_OUTPUT marker input.
+# The marker itself lives in a different body, so the body scan above cannot
+# see these producers; their outputs must keep the owned redirect so the
+# marker's input proof survives to rangeify.
+_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS", frozenset())
+
+# The narrower output-boundary set: precompiled FUNCTIONs whose RESULT chain
+# is the marker (terminal consumers) or whose output feeds a terminal marker's
+# input (their producers).  Only these keep the output redirect and the
+# direct invocation-input view; marker-bearing bodies whose result is ordinary
+# (the production per-block ``_run`` residual stream) keep the closed-graph
+# spelling so their residual kernel identities cannot shift.
+_ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS = ContextVar("_ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS", frozenset())
+_ACTIVE_NATIVE_INPUT_OUTPUTS = ContextVar("_ACTIVE_NATIVE_INPUT_OUTPUTS", frozenset())
+
+def _native_input_output_routes(sink:UOp) -> frozenset[tuple[int,int]]:
+  """Raw-graph precompiled outputs consumed directly by one finalized native input."""
+  found:list[tuple[int,int]]=[]
+  transparent={Ops.RESHAPE, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  for call in sink.toposort():
+    if call.op is not Ops.CALL or call.src[0].op is not Ops.PROGRAM or not isinstance(call.src[0].arg, ProgramInfo): continue
+    if not any(s.op is Ops.BINARY for s in call.src[0].src): continue
+    for i,arg in enumerate(call.src[1:]):
+      if i not in call.src[0].arg.ins: continue
+      original=arg
+      while arg.op in transparent and len(arg.src)>=1:
+        if arg.numel()!=original.numel() or arg.dtype!=original.dtype: break
+        arg=arg.src[0]
+      if arg.op is Ops.GETTUPLE and arg.src[0].op is Ops.FUNCTION and arg.src[0].arg.precompile:
+        found.append((id(arg.src[0]),arg.arg))
+  # Multiple finalized consumers are deliberately not admitted.
+  return frozenset(x for x in found if found.count(x)==1)
+
+
+
+def _reduce_output_route_function_ids(sink:UOp) -> tuple[frozenset[int], frozenset[int]]:
+  """Ids of precompiled FUNCTIONs on the reduce-output route.
+
+  Returns (route_ids, out_route_ids).  Walk every eligible marker's input
+  chain downward through transparent carriers (CONTIGUOUS, RESHAPE,
+  MEMORY_SEMANTIC) and GETTUPLE, crossing FUNCTION boundaries (an invocation
+  argument feeds the matching body PARAM), and collect every precompiled
+  FUNCTION whose output participates (route_ids).  Functions whose bodies
+  carry the marker need no entry here; the body scan covers them.
+
+  out_route_ids is the subset whose participation is on the marker's OUTPUT
+  boundary: the marker's own result must reach a FUNCTION body result or the
+  top-level sink through transparent legs.  A marker consumed inside a body
+  (the production per-block norm, whose result feeds attention/FFN) is not
+  terminal, so the producers feeding it keep the closed-graph output/input
+  spelling and their residual kernel identities cannot shift.
+  """
+  nodes = sink.toposort()
+  # PARAM nodes are interned across functions, so scope the slot lookup to the
+  # exact function whose body contains them; also record each marker's owner.
+  body_params: dict[int, dict[int, UOp]] = {}
+  marker_owner: dict[int, UOp|None] = {}
+  for f in nodes:
+    if f.op is not Ops.FUNCTION or f.src[0].op is not Ops.TUPLE: continue
+    slots: dict[int, UOp] = {}
+    for u in UOp.sink(*f.src[0].src).toposort():
+      if u.op is Ops.PARAM and isinstance(u.arg, ParamArg): slots.setdefault(u.arg.slot, u)
+      if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec): marker_owner.setdefault(id(u), f)
+    if slots: body_params[id(f)] = slots
+  # Terminal markers: reachable from a body result or the sink through the
+  # same transparent legs the redirect itself admits.
+  transparent = {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC}
+  terminal: set[int] = set()
+  def _collect_terminal(u:UOp) -> None:
+    stack = [u]
+    while stack:
+      x = stack.pop()
+      if x.op is Ops.REDUCE_OUTPUT and isinstance(x.arg, ReduceOutputSpec):
+        terminal.add(id(x)); continue
+      if x.op in transparent and len(x.src) == 1: stack.append(x.src[0])
+  for f in nodes:
+    if f.op is not Ops.FUNCTION or f.src[0].op is not Ops.TUPLE: continue
+    for r in f.src[0].src: _collect_terminal(r)
+  for r in sink.src: _collect_terminal(r)
+  route: set[int] = set()
+  out_route: set[int] = set()
+  for m in nodes:
+    if m.op is not Ops.REDUCE_OUTPUT or not isinstance(m.arg, ReduceOutputSpec): continue
+    if not (m.arg.owned_contiguous_candidate or m.arg.input_identity_at_marker): continue
+    terminal_marker = id(m) in terminal
+    stack: list[tuple[UOp, UOp|None]] = [(m.src[1], marker_owner.get(id(m)))]
+    seen: set[int] = set()
+    while stack:
+      x, owner = stack.pop()
+      if id(x) in seen: continue
+      seen.add(id(x))
+      if x.op is Ops.FUNCTION and x.arg.precompile:
+        route.add(id(x))
+        if terminal_marker: out_route.add(id(x))
+        continue
+      if x.op is Ops.GETTUPLE and len(x.src) == 1 and x.src[0].op is Ops.FUNCTION:
+        route.add(id(x.src[0]))
+        if terminal_marker: out_route.add(id(x.src[0]))
+        continue
+      if x.op is Ops.PARAM and isinstance(x.arg, ParamArg):
+        # Cross the function boundary: this body PARAM is fed by the owner's
+        # invocation argument at the same slot.
+        if owner is None or x.arg.slot >= len(owner.src) - 1: continue
+        stack.append((owner.src[1 + x.arg.slot], None)); continue
+      if x.op in transparent and len(x.src) == 1:
+        stack.append((x.src[0], owner)); continue
+  return frozenset(route), frozenset(out_route)
+
+
+def _is_reduce_output_route_function(c:UOp) -> bool:
+  """A precompiled FUNCTION participates in the route when its body carries
+  the marker or its output feeds a marker input (producer side)."""
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return False
+  if _body_has_reduce_output_candidate(c.src[0].src): return True
+  active = _ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS.value
+  return bool(active and id(c) in active)
+
+
+def _body_output_carries_reduce_output_marker(srcs:tuple[UOp, ...]) -> bool:
+  """Whether one body RESULT is the reduce-output marker's C6 output chain.
+
+  The redirect and direct-input-view behaviors change how the function's
+  output is stored and how its invocation arguments are bound; they are only
+  load-bearing when the marker sits on this function's OUTPUT boundary (the
+  caller materializes the marked value).  A function whose body merely
+  CONTAINS a marker as an intermediate (the production per-block ``_run``,
+  whose result is the residual stream) must keep the closed-graph output
+  spelling, or the residual E_32_32_4 kernel identities shift.
+  """
+  for item in srcs:
+    x = item
+    while x.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(x.src) == 1:
+      x = x.src[0]
+    if x.op is Ops.REDUCE_OUTPUT and isinstance(x.arg, ReduceOutputSpec): return True
+  return False
+
+
+def _declared_epilogue_absorption_after(x:UOp) -> UOp|None:
+  """The AFTER at the bottom of a transparent result chain with a declared
+  epilogue-absorbing typed output, else None.
+
+  The M2b absorbed block returns its ffn_down GEMV output as
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(PARAM, CALL)))``.  The producer-side typed
+  declaration (``epilogue_absorption_admitted=True``) proves that AFTER is the
+  concrete contiguous block output, so callify may bind the invocation output
+  slot in place.  The AFTER node recorded at program-execution time is rebuilt
+  when an enclosing @function substitutes its inputs, so the declaration is
+  also keyed by the opaque CALL's SINK body (stable across that substitution);
+  both spellings are checked here, fail-closed.
+  """
+  from tinygrad.llm.kernel_program import _DECLARED_TYPED_OUTPUTS
+  while x.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.MEMORY_SEMANTIC} and len(x.src):
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) < 2: return None
+  declared = _DECLARED_TYPED_OUTPUTS.get(x)
+  if declared is not None and declared.epilogue_absorption_admitted: return x
+  call = x.src[1]
+  if call.op is Ops.CALL and call.src[0].op is Ops.SINK:
+    sink_declared = _DECLARED_TYPED_OUTPUTS.get(call.src[0])
+    if sink_declared is not None and sink_declared.epilogue_absorption_admitted: return x
+  return None
+
+
+def _declared_after_output_slot_rebind(s:UOp, t:UOp) -> tuple[UOp, UOp]|None:
+  """Prove the declared epilogue-absorbing AFTER's nested CALL may write this
+  invocation's output slot in place: ``(param, view)`` with ``view`` an
+  equal-span reshape of the caller output slot ``t``, else None (fail-closed).
+
+  The M2b absorbed block returns
+  ``MEMORY_SEMANTIC(RESHAPE(AFTER(param, CALL)))`` where ``param`` is the
+  ffn_down GEMV's output placeholder (arg slot 0, exactly one occurrence).
+  Rebinding that PARAM to a view of the caller's output slot makes the opaque
+  CALL write the block output directly, so the redirect's body value bottoms
+  at the invocation output and no boundary copy can render.
+  """
+  after = _declared_epilogue_absorption_after(s)
+  if after is None: return None
+  param, call = after.src[0], after.src[1]
+  if param.op is not Ops.PARAM or call.op is not Ops.CALL or len(call.src) < 2: return None
+  if call.src[1] is not param or sum(arg is param for arg in call.src[1:]) != 1: return None
+  if param.dtype != t.dtype or param.numel() != t.numel(): return None
+  return param, t.reshape(param.shape)
+
+
+def _program_after_output_slot_rebind(s:UOp, t:UOp) -> tuple[UOp, UOp]|None:
+  """Rebind an exact PROGRAM-written result to its FUNCTION output slot.
+
+  This is the generic counterpart of the declared LLM epilogue contract.  A
+  direct ``AFTER(base, CALL(PROGRAM, ...))`` proves ownership when ProgramInfo
+  declares exactly one write-only argument backed by ``base``.  Read/write
+  slots fail closed because replacing them with a fresh FUNCTION output would
+  discard their incoming value.
+  """
+  if s.op is not Ops.AFTER or len(s.src) != 2 or s.dtype != t.dtype or s.numel() != t.numel(): return None
+  base, call = s.src
+  if call.op is not Ops.CALL or call.src[0].op is not Ops.PROGRAM or not isinstance(call.src[0].arg, ProgramInfo): return None
+  try: base_buf = base.buf_uop
+  except RuntimeError: return None
+  matches = []
+  for slot in call.src[0].arg.outs:
+    if slot in call.src[0].arg.ins or slot >= len(call.src)-1: continue
+    try:
+      if call.src[slot+1].buf_uop is base_buf: matches.append(slot)
+    except RuntimeError: pass
+  if len(matches) != 1: return None
+  # The base must name only that one argument.  Aliased invocation slots have
+  # a different mutation contract and remain on the conservative copy path.
+  try:
+    if sum(arg.buf_uop is base_buf for arg in call.src[1:]) != 1: return None
+  except RuntimeError: return None
+  return base, t.reshape(base.shape)
+
+
+def _body_output_is_declared_after(srcs:tuple[UOp, ...]) -> bool:
+  """Whether one body RESULT bottoms at an epilogue-absorbing declared AFTER.
+
+  The M2b absorbed block's result is the ffn_down GEMV's fp32 AFTER with the
+  producer-side typed declaration (``epilogue_absorption_admitted=True``); the
+  redirect keeps that output in place instead of rendering the boundary copy
+  the generic caller materialization creates.  Fail-closed: no declaration, or
+  a non-absorbing one, keeps the closed-graph spelling.
+  """
+  return any(_declared_epilogue_absorption_after(item) is not None for item in srcs)
+
+
+def _precompiled_output_redirect(s:UOp, t:UOp, redirect:bool) -> UOp|None:
   # how output s lands in the caller's buffer t, or None if it must be copied into t
+  # An owned contiguous result is the same allocation contract with an explicit
+  # semantic carrier. Materialize its source directly into this invocation's
+  # resolved output slot and retain ownership on the dependency-bearing AFTER.
+  # This is intentionally exact: no movement/view may sit between the owner and
+  # CONTIGUOUS, and dtype/span must match the allocated slot.
+  if redirect and s.op is Ops.MEMORY_SEMANTIC and len(s.src) == 1:
+    contig = s.src[0]
+    if contig.op is Ops.CONTIGUOUS:
+      if s.dtype != t.dtype or s.shape != t.shape: return None
+      placed = t.after(t.store(contig.src[0]))
+      if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
+      return placed
+    # M2c declared-AFTER boundary: the result is the ffn_down GEMV's fp32 AFTER
+    # through the block's identity reshape (MEMORY_SEMANTIC(RESHAPE(AFTER))).
+    # The producer declaration proves the AFTER is the concrete contiguous
+    # block output.  transform_precompiled_call rebinds the nested CALL's
+    # output PARAM to a view of the invocation output slot, so the AFTER's
+    # base IS that slot; returning the bare AFTER (no STORE) leaves the CALL
+    # as the sole writer and no boundary copy can render.  Fail-closed: no
+    # declaration keeps the generic spelling.
+    if (after := _declared_epilogue_absorption_after(s)) is not None:
+      if s.dtype != t.dtype or s.shape != t.shape: return None
+      placed = after.reshape(t.shape)
+      if (owner := memory_semantic_owner(s)) is not None: bind_memory_semantic_owner(placed, owner)
+      return placed
   # materialize straight into t
   if s.op is Ops.CONTIGUOUS: return t.after(t.store(s.src[0]))
   # rebind output storage to t
   if s.op in {Ops.BUFFER, Ops.MULTI} and s.has_buffer_identity(): return t
   return None
 
+def _exact_precompiled_output_argument(x:UOp) -> bool:
+  """Prove one concrete invocation argument is exactly a prior precompiled output."""
+  original, expected = x, x.numel()
+  # transform_precompiled_call normalizes a non-AFTER argument with one outer
+  # transport CONTIGUOUS before a parent consumer is revisited.
+  if (x.op is Ops.CONTIGUOUS and len(x.src) == 1 and x.src[0].op is Ops.MEMORY_SEMANTIC and
+      memory_semantic_owner(x.src[0]) is not None): x = x.src[0]
+  # Top-down callify can visit the consumer before transforming the producer.
+  # Accept the same exact owned pre-call spelling; GETTUPLE(FUNCTION) is the
+  # producer's fresh output-allocation contract and no movement is stripped.
+  if x.op is Ops.MEMORY_SEMANTIC and len(x.src) == 1 and memory_semantic_owner(x) is not None:
+    x = x.src[0]
+    if x.op is not Ops.CONTIGUOUS or x.numel() != expected or x.dtype != original.dtype: return False
+    if x.src[0].has_precompiled_output_identity(): return True
+    # If the producer was already transformed, the same owned spelling now
+    # encloses its exact dependency-bearing AFTER.
+    x = x.src[0]
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return False
+    x = x.src[0]
+  if x.op is not Ops.AFTER or len(x.src) != 2: return False
+  base, call = x.src
+  if base.dtype != original.dtype or call.op is not Ops.CALL or not call.arg.precompile: return False
+  try: base_buf = base.buf_uop
+  except RuntimeError: return False
+  matches = []
+  for slot,arg in enumerate(call.src[1:]):
+    try:
+      if arg.buf_uop is base_buf: matches.append(slot)
+    except RuntimeError: pass
+  return len(matches) == 1 and matches[0] in call.arg.precompiled_output_slots
+
+def _direct_owned_precompiled_input_view(x:UOp) -> UOp:
+  """Strip only the proven caller materialization around a future CALL output.
+
+  This is the pre-transform counterpart of
+  collapse_owned_precompiled_output_contiguous: the nested producer is still
+  GETTUPLE(FUNCTION), so no AFTER exists yet.  The exact owner + contiguous +
+  fresh precompiled output spelling proves that the requested allocation is
+  that future invocation slot; rebuilding only its equal-span shape preserves
+  the dependency when FUNCTION becomes CALL.
+  """
+  owner = memory_semantic_owner(x)
+  if owner is None or x.op is not Ops.MEMORY_SEMANTIC or len(x.src) != 1: return x
+  contig = x.src[0]
+  if contig.op is not Ops.CONTIGUOUS or len(contig.src) != 1: return x
+  produced = contig.src[0]
+  if not produced.has_precompiled_output_identity() or produced.dtype != x.dtype or produced.numel() != x.numel(): return x
+  view = produced.reshape(x.shape).rtag(None)
+  bind_memory_semantic_owner(view, owner)
+  return view
+
+def _opaque_call_written_param_slots(call:UOp) -> tuple[int, ...]:
+  """Return only concrete PARAM slots written by one opaque call body."""
+  if call.op is not Ops.CALL or call.src[0].op is not Ops.SINK: return ()
+  slots:set[int] = set()
+  for u in call.src[0].toposort():
+    if u.op is not Ops.STORE: continue
+    for target in u.src[0].toposort():
+      if target.op is Ops.PARAM and isinstance(target.arg, ParamArg): slots.add(target.arg.slot)
+  return tuple(sorted(slots))
+
+def _exact_invocation_param_contiguous(x:UOp) -> int|None:
+  """Match CONTIGUOUS(RESHAPE*(PARAM)) without crossing movement or span."""
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1: return None
+  expected, cur = x.numel(), x.src[0]
+  while cur.op is Ops.RESHAPE and len(cur.src):
+    if cur.numel() != expected or cur.dtype != x.dtype: return None
+    cur = cur.src[0]
+  if cur.op is not Ops.PARAM or not isinstance(cur.arg, ParamArg): return None
+  if cur.numel() != expected or cur.dtype != x.dtype: return None
+  return cur.arg.slot
+
+def _collapse_owned_invocation_input_contiguous(srcs:tuple[UOp, ...], args:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """Keep one prior invocation output direct through a nested opaque CALL.
+
+  A precompiled consumer normalizes its invocation arguments and its body can
+  independently normalize the same PARAM before an opaque kernel.  For an
+  exact prior precompiled output those are two identity copies.  Remove only
+  the inner one: a read-only CALL argument, equal-span RESHAPEs to one PARAM,
+  whose concrete invocation argument proves the owned output contract.
+  """
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return srcs
+  replacements:dict[UOp,UOp] = {}
+  for call in UOp.sink(*srcs).toposort():
+    if call.op is not Ops.CALL or call.arg.precompile: continue
+    written = _opaque_call_written_param_slots(call)
+    if not written: continue
+    candidate_slots = [_exact_invocation_param_contiguous(arg) for arg in call.src[1:]]
+    for call_slot,(arg,param_slot) in enumerate(zip(call.src[1:], candidate_slots)):
+      if param_slot is None or call_slot in written or param_slot >= len(args): continue
+      # Reject an aliased input spelling inside this CALL.  This first contract
+      # owns one read argument only; input/output and repeated-input aliases
+      # require separate lifetime proofs.
+      if candidate_slots.count(param_slot) != 1 or not _exact_precompiled_output_argument(args[param_slot]): continue
+      param = arg.src[0]
+      while param.op is Ops.RESHAPE: param = param.src[0]
+      replacement = param.reshape(arg.shape).rtag(None)
+      if (owner := memory_semantic_owner(args[param_slot])) is not None: bind_memory_semantic_owner(replacement, owner)
+      replacements[arg] = replacement
+  return tuple(src.substitute(replacements) for src in srcs) if replacements else srcs
+
+def _candidate_param_slot(x:UOp) -> int|None:
+  """Return only an equal-span invocation PARAM below the marker input."""
+  expected = x.numel()
+  while x.op is Ops.RESHAPE and len(x.src):
+    if x.src[0].numel() != expected: return None
+    x = x.src[0]
+  return x.arg.slot if x.op is Ops.PARAM and isinstance(x.arg, ParamArg) else None
+
+def _bind_reduce_output_invocation_inputs(srcs:tuple[UOp, ...], args:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """Carry an outer invocation proof into an exact candidate PARAM marker.
+
+  Function input substitution intentionally removes the caller's AFTER from
+  the body. This records only the slot whose concrete argument still carries
+  that dependency; rangeify must match the same PARAM before admitting it.
+  """
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return srcs
+  replacements:dict[UOp,UOp] = {}
+  for marker in UOp.sink(*srcs).toposort():
+    if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): continue
+    if not marker.arg.owned_contiguous_candidate or marker.arg.invocation_input_slot is not None: continue
+    slot = _candidate_param_slot(marker.src[1])
+    if slot is None or slot >= len(args) or not _exact_precompiled_output_argument(args[slot]): continue
+    replacements[marker] = marker.replace(arg=marker.arg._replace(invocation_input_slot=slot))
+  return tuple(src.substitute(replacements) for src in srcs) if replacements else srcs
+
+def _trace_reduce_output_markers(srcs:tuple[UOp, ...], stage:str) -> None:
+  """Count marker reachability at a callify boundary, without affecting IR."""
+  from tinygrad.llm.reduce_output_trace import REDUCE_OUTPUT_TRACE, trace_reduce_output
+  if not REDUCE_OUTPUT_TRACE.value: return
+  for u in UOp.sink(*srcs).toposort():
+    if u.op is Ops.REDUCE_OUTPUT and isinstance(u.arg, ReduceOutputSpec):
+      trace_reduce_output(stage, "candidate" if u.arg.owned_contiguous_candidate else "ordinary")
+
+def bind_precompiled_call_reduce_output_inputs(c:UOp) -> UOp|None:
+  """Revisit the proof after nested producer FUNCTIONs become concrete CALLs."""
+  if not c.arg.precompile or c.src[0].op is not Ops.SINK: return None
+  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:])
+  if srcs == c.src[0].src: return None
+  return c.replace(src=(c.src[0].replace(src=srcs), *c.src[1:]))
+
+def _typed_semantic_reduce_output_input(x:UOp) -> tuple[UOp, MemorySemanticOwner]|None:
+  """Recognize the one production spelling which cannot reach STORE lowering.
+
+  This is intentionally a spelling matcher, not a transparent-wrapper helper:
+  ``CONTIGUOUS(RESHAPE(MEMORY_SEMANTIC(REDUCE_OUTPUT)))`` with one
+  RUNTIME_SCRATCH owner, equal span/dtype throughout, and no other movement.
+  The producer is only safe to isolate if its two executable inputs are exact
+  PARAM identity views; that makes its ABI concrete in the enclosing CALL.
+  """
+  original, expected = x, x.numel()
+  if x.op is not Ops.CONTIGUOUS or len(x.src) != 1: return None
+  x = x.src[0]
+  # RESHAPE carries its shape descriptor as a second source in UOp IR.
+  if x.op is not Ops.RESHAPE or not x.src or x.numel() != expected: return None
+  x = x.src[0]
+  if x.op is not Ops.MEMORY_SEMANTIC or len(x.src) != 1 or x.numel() != expected: return None
+  owner = memory_semantic_owner(x)
+  if owner is None or owner.semantic_class is not MemorySemanticClass.RUNTIME_SCRATCH: return None
+  marker = x.src[0]
+  if marker.op is not Ops.REDUCE_OUTPUT or not isinstance(marker.arg, ReduceOutputSpec): return None
+  if marker.dtype != original.dtype or marker.numel() != expected or marker.shape != x.shape: return None
+  # No views, aliases, or inferred captures are allowed at this first generic
+  # boundary.  A later widening must prove its own ABI separately.
+  if len(marker.src) != 3 or _candidate_param_slot(marker.src[1]) is None or _candidate_param_slot(marker.src[2]) is None: return None
+  if marker.src[1] is marker.src[2]: return None
+  return marker, owner
+
+def _precompiled_typed_semantic_producer(marker:UOp, owner:MemorySemanticOwner, output_shape:tuple[int, ...]) -> UOp|None:
+  """Build an opaque producer CALL with a concrete output slot and AFTER edge.
+
+  The body keeps the typed semantic producer intact, so normal late lowering
+  owns its implementation.  Its only external values are the exact two PARAM
+  input views checked above.  This preserves output dtype/span and leaves the
+  enclosing consumer with an ordinary dependency-bearing invocation result.
+  """
+  inputs = (marker.src[1], marker.src[2])
+  # Param slots in a parent function need not be dense or ordered.  Make this
+  # producer's ABI local and immutable rather than borrowing those slot ids.
+  params = tuple(arg.param_like(i) for i,arg in enumerate(inputs))
+  body_marker = marker.substitute(dict(zip(inputs, params)))
+  body = UOp.maketuple(body_marker)
+  producer = UOp(Ops.FUNCTION, dtypes.void, (body, *inputs),
+                 CallInfo(name="typed_semantic_reduce_output_producer", precompile=True))
+  produced = transform_precompiled_call(producer)
+  if produced is None or produced.op is not Ops.TUPLE or len(produced.src) != 1: return None
+  ret = produced.src[0]
+  if ret.dtype != marker.dtype or ret.numel() != marker.numel(): return None
+  # This producer always has two proven inputs followed by its one allocated
+  # result.  Record that output contract even when the independent redirect
+  # feature is off: downstream identity validation must not infer it.
+  if ret.op is not Ops.AFTER or len(ret.src) != 2 or ret.src[1].op is not Ops.CALL: return None
+  call = ret.src[1].replace(arg=replace(ret.src[1].arg, precompiled_output_slots=(len(inputs),)))
+  ret = ret.replace(src=(ret.src[0], call))
+  # RESHAPE is the only admitted output adaptation and has already been
+  # proven equal-span by the spelling matcher.  Ownership moves to the
+  # concrete invocation output, never to a normalized body PARAM.
+  ret = ret.reshape(output_shape)
+  bind_memory_semantic_owner(ret, owner)
+  return ret
+
+def callify_typed_semantic_call_inputs(c:UOp) -> UOp|None:
+  """Isolate one exact typed producer immediately before an opaque CALL."""
+  if not CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER or c.op is not Ops.CALL: return None
+  replacements:dict[UOp,UOp] = {}
+  for arg in c.src[1:]:
+    matched = _typed_semantic_reduce_output_input(arg)
+    if matched is None: continue
+    marker, owner = matched
+    if (producer := _precompiled_typed_semantic_producer(marker, owner, arg.shape)) is None: continue
+    replacements[arg] = producer
+  return c.replace(src=(c.src[0], *(replacements.get(arg, arg) for arg in c.src[1:]))) if replacements else None
+
+def _function_body_invocation_nodes(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """One FUNCTION's value graph, excluding nested PARAM namespaces."""
+  seen:set[UOp] = set()
+  stack = list(srcs)
+  while stack:
+    x = stack.pop()
+    if x in seen: continue
+    seen.add(x)
+    # Finalized PROGRAM executables and nested FUNCTION bodies each own a
+    # separate PARAM namespace.  Only their invocation arguments belong to the
+    # FUNCTION currently being transformed; descending into src[0] aliases
+    # equal integer slots across scopes and can incorrectly disqualify every
+    # read-only carrier in a deeply nested model.
+    opaque_program = x.op is Ops.CALL and x.src and x.src[0].op is Ops.PROGRAM
+    nested_function = x.op is Ops.FUNCTION and x.src
+    stack.extend(x.src[1:] if opaque_program or nested_function else x.src)
+  return tuple(seen)
+
+_readonly_program_input_cache:weakref.WeakKeyDictionary[UOp, frozenset[int]] = weakref.WeakKeyDictionary()
+
+def _readonly_program_input_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
+  """FUNCTION PARAM slots used exclusively as read-only opaque PROGRAM inputs.
+
+  This is deliberately a whole-use proof.  A PARAM which also reaches ordinary
+  tensor math, a writable PROGRAM slot, or an unknown wrapper is not eligible
+  for direct invocation ownership even if one of its uses is read-only.
+  """
+  if _memo is None: _memo = {}
+  if srcs in _memo: return _memo[srcs]
+  root = UOp.maketuple(*srcs)
+  if root in _readonly_program_input_cache: return _readonly_program_input_cache[root]
+  # Break malformed/cyclic nesting fail-closed while recursively proving
+  # ordinary forwarding through child FUNCTION invocation ABIs.
+  _memo[srcs] = frozenset()
+  nodes = _function_body_invocation_nodes(srcs)
+  uses:dict[UOp, list[UOp]] = {x: [] for x in nodes}
+  for user in nodes:
+    opaque_program = user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM
+    nested_function = user.op is Ops.FUNCTION and user.src
+    children = user.src[1:] if opaque_program or nested_function else user.src
+    for child in children:
+      if child in uses: uses[child].append(user)
+
+  # CONTIGUOUS is admitted only as a use-chain spelling here.  The caller-side
+  # ownership proof below still has to establish that the invocation argument
+  # is one full canonical model allocation before that request can be erased.
+  transparent = {Ops.RESHAPE, Ops.BITCAST, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  candidates:dict[int, UOp] = {}
+  for call in nodes:
+    if call.op is Ops.CALL and call.src and call.src[0].op is Ops.PROGRAM and isinstance(call.src[0].arg, ProgramInfo):
+      info = call.src[0].arg
+      input_idxs = tuple(idx for idx in info.ins if idx not in info.outs and idx < len(call.src)-1)
+    elif call.op is Ops.FUNCTION and call.src and call.src[0].op is Ops.TUPLE:
+      input_idxs = tuple(idx for idx in _readonly_program_input_param_slots(call.src[0].src, _memo) if idx < len(call.src)-1)
+    else: continue
+    for idx in input_idxs:
+      arg, expected_bytes = call.src[idx+1], call.src[idx+1].numel() * call.src[idx+1].dtype.itemsize
+      while arg.op in transparent and len(arg.src) == 1:
+        source = arg.src[0]
+        if source.numel() * source.dtype.itemsize != expected_bytes: break
+        arg = source
+      if arg.op is Ops.PARAM and isinstance(arg.arg, ParamArg): candidates[arg.arg.slot] = arg
+
+  admitted:set[int] = set()
+  for slot, param in candidates.items():
+    stack, visited, valid, program_reads = [param], set(), True, 0
+    while stack and valid:
+      value = stack.pop()
+      if value in visited: continue
+      visited.add(value)
+      for user in uses.get(value, ()):
+        if user.op in transparent and len(user.src) == 1 and \
+           user.numel() * user.dtype.itemsize == value.numel() * value.dtype.itemsize:
+          stack.append(user)
+          continue
+        if user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM and isinstance(user.src[0].arg, ProgramInfo):
+          info = user.src[0].arg
+          positions = tuple(i for i,arg in enumerate(user.src[1:]) if arg is value)
+          if positions and all(i in info.ins and i not in info.outs for i in positions):
+            program_reads += len(positions)
+            continue
+        if user.op is Ops.FUNCTION and user.src and user.src[0].op is Ops.TUPLE:
+          positions = tuple(i for i,arg in enumerate(user.src[1:]) if arg is value)
+          nested_readonly = _readonly_program_input_param_slots(user.src[0].src, _memo)
+          if positions and all(i in nested_readonly for i in positions):
+            program_reads += len(positions)
+            continue
+        valid = False
+        break
+    if valid and program_reads: admitted.add(slot)
+  _memo[srcs] = frozenset(admitted)
+  _readonly_program_input_cache[root] = _memo[srcs]
+  return _memo[srcs]
+
+_writable_function_param_cache:weakref.WeakKeyDictionary[UOp, frozenset[int]] = weakref.WeakKeyDictionary()
+
+def _writable_function_param_slots(srcs:tuple[UOp, ...], _memo:dict[tuple[UOp, ...], frozenset[int]]|None=None) -> frozenset[int]:
+  """PARAM slots which may be written in this FUNCTION or a nested callee."""
+  if _memo is None: _memo = {}
+  if srcs in _memo: return _memo[srcs]
+  root = UOp.maketuple(*srcs)
+  if root in _writable_function_param_cache: return _writable_function_param_cache[root]
+  _memo[srcs] = frozenset()
+  nodes = _function_body_invocation_nodes(srcs)
+  writable:set[int] = set()
+  transparent = {Ops.RESHAPE, Ops.BITCAST, Ops.MEMORY_SEMANTIC, Ops.CONTIGUOUS}
+  def param_slot(value:UOp) -> int|None:
+    while value.op in transparent and len(value.src) == 1: value = value.src[0]
+    return value.arg.slot if value.op is Ops.PARAM and isinstance(value.arg, ParamArg) else None
+  destinations=[]
+  for user in nodes:
+    if user.op is Ops.CALL and user.src and user.src[0].op is Ops.PROGRAM and isinstance(user.src[0].arg, ProgramInfo):
+      for idx in user.src[0].arg.outs:
+        if idx < len(user.src)-1 and (slot := param_slot(user.src[idx+1])) is not None: writable.add(slot)
+    elif user.op is Ops.FUNCTION and user.src and user.src[0].op is Ops.TUPLE:
+      for idx in _writable_function_param_slots(user.src[0].src, _memo):
+        if idx < len(user.src)-1 and (slot := param_slot(user.src[idx+1])) is not None: writable.add(slot)
+    elif user.op is Ops.STORE and user.src:
+      # STORE destinations may carry INDEX/view nodes rather than a direct
+      # PARAM. Any enclosing PARAM in that destination address is writable.
+      destinations.append(user.src[0])
+  for value in _function_body_invocation_nodes(tuple(destinations)):
+    if value.op is Ops.PARAM and isinstance(value.arg, ParamArg): writable.add(value.arg.slot)
+  _memo[srcs] = frozenset(writable)
+  _writable_function_param_cache[root] = _memo[srcs]
+  return _memo[srcs]
+
+def _exact_readonly_model_parameter_carrier(x:UOp) -> bool:
+  """Whether x names one complete canonical model-parameter allocation.
+
+  Only zero-offset, byte-preserving wrappers are transparent.  Partial slices,
+  computed values, materializations and dependency-bearing values all retain
+  the conservative copy boundary.
+  """
+  owner = memory_semantic_owner(x)
+  if owner is None or owner.semantic_class is not MemorySemanticClass.MODEL_PARAMETER: return False
+  original_bytes = x.numel() * x.dtype.itemsize
+  cur = x
+  while cur.op in {Ops.MEMORY_SEMANTIC, Ops.RESHAPE, Ops.BITCAST} and len(cur.src) == 1:
+    source = cur.src[0]
+    if source.numel() * source.dtype.itemsize != original_bytes: return False
+    cur = source
+  if cur.op is Ops.SLICE:
+    if len(cur.src) != 2 or cur.src[0].op is not Ops.BUFFER or cur.src[1].op is not Ops.CONST or cur.src[1].arg != 0: return False
+    cur = cur.src[0]
+  if cur.op is not Ops.BUFFER or cur.numel() * cur.dtype.itemsize != original_bytes: return False
+  try: return x.buf_uop is cur
+  except RuntimeError: return False
+
+def _direct_readonly_model_parameter_carrier(x:UOp) -> UOp|None:
+  """Remove only redundant CONTIGUOUS requests around an exact carrier."""
+  direct = x
+  while direct.op is Ops.CONTIGUOUS and len(direct.src) == 1 and direct.dtype == x.dtype and direct.numel() == x.numel():
+    direct = direct.src[0]
+  return direct if _exact_readonly_model_parameter_carrier(direct) else None
+
 def transform_precompiled_call(c:UOp) -> UOp|None:
   if not c.arg.precompile: return None
   assert c.src[0].op is Ops.TUPLE, f"expected TUPLE body for precompiled FUNCTION, got {c.src[0].op}"
-  input_buffers = tuple(x.contiguous() if x.op not in {Ops.AFTER, Ops.BIND} else x for x in c.src[1:])
+  # At this point FUNCTION inputs have already been substituted with PARAMs.
+  _trace_reduce_output_markers(c.src[0].src, "after_function_substitution")
+  # The owned-redirect/typed-input behaviors are scoped to bodies that
+  # actually carry the reduce-output route; every other precompiled family
+  # transforms exactly like the closed control graph.
+  ro_route = _is_reduce_output_route_function(c)
+  # The output-boundary behaviors are narrower: only a function whose RESULT
+  # carries the marker redirects its output and strips caller materialization
+  # from its inputs, plus the producers feeding such a terminal marker (their
+  # exact output must survive as the marker's invocation input).  Marker-
+  # bearing producers with an ordinary output (the production per-block
+  # decode function) keep the closed-graph spelling.
+  out_active = _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS.value
+  out_route = CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT and (
+    _body_output_carries_reduce_output_marker(c.src[0].src) or
+    _body_output_is_declared_after(c.src[0].src) or
+    bool(out_active and id(c) in out_active))
+  native_output_idxs={idx for fid,idx in _ACTIVE_NATIVE_INPUT_OUTPUTS.value if fid==id(c)}
+  writable_inputs = _writable_function_param_slots(c.src[0].src)
+  # An exact prior precompiled output already has a fresh contiguous output
+  # allocation.  Retain its invocation spelling so the nested producer can
+  # become AFTER(output, CALL); adding another transport CONTIGUOUS here would
+  # create the first of two identity copies at a consumer FUNCTION boundary.
+  direct_model_inputs = {i:direct for i,x in enumerate(c.src[1:])
+                         if i not in writable_inputs and (direct := _direct_readonly_model_parameter_carrier(x)) is not None}
+  input_buffers = tuple(_direct_owned_precompiled_input_view(x) if
+                        out_route and _exact_precompiled_output_argument(x)
+                        else direct_model_inputs[i] if i in direct_model_inputs
+                        else x if x.op in {Ops.AFTER, Ops.BIND} else x.contiguous() for i,x in enumerate(c.src[1:]))
 
   # add the outputs to the call
-  srcs = c.src[0].src
+  # Qualify against the original invocation arguments. input_buffers may add
+  # transport CONTIGUOUS nodes after the exact owned caller spelling, while
+  # preserving the same positional slot.
+  srcs = _bind_reduce_output_invocation_inputs(c.src[0].src, c.src[1:]) if ro_route else c.src[0].src
+  srcs = _collapse_owned_invocation_input_contiguous(srcs, c.src[1:]) if ro_route else srcs
   resolved = [c.gettuple(i) for i in range(len(srcs))]
   outs = tuple(r.empty_like() for r in resolved)
   targets = [o.param_like(len(c.src)-1+i).shrink_to(s.shape) for i,(o,s) in enumerate(zip(outs, srcs))]
 
   subs:dict[UOp, UOp] = {}
   items:list[UOp] = []
-  for s, t in zip(srcs, targets):
+  program_output_idxs:set[int] = set()
+  for output_idx,(s, t) in enumerate(zip(srcs, targets)):
+    original_s = s
+    if (program_rebind := _program_after_output_slot_rebind(original_s, t)) is not None:
+      subs[program_rebind[0]] = program_rebind[1]
+      items.append(original_s)
+      program_output_idxs.add(output_idx)
+      continue
     after_deps:list[UOp] = []
     while s.op is Ops.AFTER:
       after_deps.extend(s.src[1:])
       s = s.src[0]
-    if (placed := _precompiled_output_redirect(s, t)) is not None and s not in subs:
+    if (placed := _precompiled_output_redirect(s, t, out_route or output_idx in native_output_idxs)) is not None and s not in subs:
       subs[s] = placed
+      # M2c output-slot rebind: the declared AFTER's nested CALL writes this
+      # invocation's output slot directly (proven fail-closed by the helper),
+      # so the redirected body value bottoms at the caller's own buffer and
+      # the identity copy between the CALL output and the block output folds.
+      if (rebind := _declared_after_output_slot_rebind(s, t)) is not None:
+        subs[rebind[0]] = rebind[1]
       items.append(s.after(*after_deps) if after_deps else s)
     else:
       items.append(t.after(t.store(s), *after_deps))
   fxn = UOp.sink(*(x.substitute(subs) for x in items))
+  _trace_reduce_output_markers(fxn.src, "after_callify")
 
   # body switches from TUPLE to SINK, so the node becomes an opaque CALL (not FUNCTION)
-  new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), c.arg)
+  output_slots = tuple(len(input_buffers)+i for i in range(len(outs)) if ro_route or i in native_output_idxs or i in program_output_idxs)
+  new_call = UOp(Ops.CALL, c.dtype, (fxn, *input_buffers, *outs), replace(c.arg, precompiled_output_slots=output_slots))
   rets = tuple(o.after(new_call) for o in outs)
+  # Output ownership is invocation side data. Keep the executable result as a
+  # bare AFTER so ownership cannot trigger a second materialization; never bind
+  # normalized PARAMs in the function body.
+  for source, ret in zip(srcs, rets):
+    if (owner := memory_semantic_owner(source)) is not None: bind_memory_semantic_owner(ret, owner)
 
   # if the CALL has symbolic shapes, shrink the max-sized output to the actual symbolic shape
   # NOTE: must use resolved shapes from the FUNCTION (which substitutes PARAMs with external args), not raw body shapes
@@ -160,13 +857,87 @@ def transform_precompiled_call(c:UOp) -> UOp|None:
 
   return UOp.maketuple(*rets)
 
+def _resolve_precompiled_gettuple(g:UOp, t:UOp) -> UOp:
+  """Resolve GETTUPLE without dropping a proven output's allocation tag.
+
+  Callification numbers requested Tensor results on GETTUPLE.  Replacing the
+  nested FUNCTION with a TUPLE normally discards that wrapper and therefore
+  its tag.  Retain it only when the selected value is the exact invocation
+  output whose slot was established from the nested PROGRAM's declared
+  write-only ``ProgramInfo.outs`` contract.  Ordinary tuple values keep the
+  legacy untagged resolution.
+  """
+  selected = t.src[g.arg]
+  if g.tag is None: return selected
+  # Special PROGRAM results carry the immutable output-slot declaration made
+  # above.  An ordinary enclosing FUNCTION may then forward that result via
+  # its explicit fallback STORE; validate that exact write while the SINK body
+  # is still visible.  This is what makes nested outer(inner(v)) retain the
+  # requested Tensor identity without declaring unrelated tuple values owned.
+  proven = _exact_precompiled_output_argument(selected)
+  if not proven:
+    original, cur = selected, selected
+    while cur.op is Ops.RESHAPE and len(cur.src) == 1 and cur.src[0].numel() == original.numel(): cur = cur.src[0]
+    if cur.op is Ops.AFTER and len(cur.src) == 2 and cur.src[1].op is Ops.CALL and cur.src[1].arg.precompile and cur.src[1].src[0].op is Ops.SINK:
+      base, call = cur.src
+      try:
+        matches = [slot for slot,arg in enumerate(call.src[1:]) if arg.buf_uop is base.buf_uop]
+      except RuntimeError: matches = []
+      if len(matches) == 1:
+        slot = matches[0]
+        proven = any(store.op is Ops.STORE and _candidate_param_slot(store.src[0]) == slot and
+                     store.src[0].dtype == original.dtype and store.src[0].numel() == original.numel()
+                     for store in call.src[0].toposort())
+  if not proven: return selected
+  return selected.replace(tag=(selected.tag or ())+g.tag)
+
+def collapse_owned_precompiled_output_contiguous(c:UOp) -> UOp|None:
+  """Remove one caller materialization around an exact precompiled output.
+
+  Admitted spelling: CONTIGUOUS((RESHAPE|MEMORY_SEMANTIC)*,
+  CONTIGUOUS(AFTER(output_buffer, precompiled CALL))). Only zero-offset,
+  equal-span reshapes are present; every other movement fails closed.  This
+  collapse is scoped to the reduce-output route: the wrapped CALL must carry
+  a REDUCE_OUTPUT marker in its body, so non-norms precompiled families keep
+  their closed-graph materialization.
+  """
+  if not CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT: return None
+  owner = memory_semantic_owner(c.src[0])
+  if owner is None: return None
+  x = c.src[0]
+  while x.op in {Ops.RESHAPE, Ops.MEMORY_SEMANTIC}: x = x.src[0]
+  after = x.src[0] if x.op is Ops.CONTIGUOUS and x.src[0].op is Ops.AFTER else x if x.op is Ops.AFTER else None
+  if after is None: return None
+  if len(after.src) != 2 or after.src[1].op is not Ops.CALL or not after.src[1].arg.precompile: return None
+  if not _body_has_reduce_output_candidate(after.src[1].src[0].src): return None
+  try:
+    base, call = after.src[0].buf_uop, after.src[1]
+    if sum(arg.buf_uop is base for arg in call.src[1:]) != 1: return None
+    if c.dtype != after.dtype or c.numel() != after.numel(): return None
+  except (RuntimeError, ValueError): return None
+  # Rebuild only the requested flat shape. The skipped chain contains no
+  # movement other than RESHAPE, so this is the identical zero-offset view.
+  # The requested contiguous tag is satisfied by the invocation output itself;
+  # retaining it would re-materialize the same value (or cycle this rewrite).
+  view = after.reshape(c.shape).rtag(None)
+  bind_memory_semantic_owner(view, owner)
+  return view
+
 # NOTE: adding rules to here is bad. these all need to run before the schedule cache
 pm_early_transform_tensor_graph = PatternMatcher([
   # transform precompiled FUNCTIONs into CALLs (body becomes SINK with stores)
   (UPat(Ops.FUNCTION, name="c"), transform_precompiled_call),
 
   # resolve TUPLE+GETTUPLE (for precompiled calls)
-  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), lambda g,t: t.src[g.arg]),
+  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), _resolve_precompiled_gettuple),
+
+  # Exact owned caller view of a precompiled invocation output. This runs only
+  # after FUNCTION->CALL exposes the concrete output buffer and dependency.
+  (UPat(Ops.CONTIGUOUS, name="c"), collapse_owned_precompiled_output_contiguous),
+
+  # A consumer FUNCTION may be transformed before its nested producer. Rebind
+  # candidate PARAM proof once the producer output is a concrete AFTER(CALL).
+  (UPat(Ops.CALL, name="c"), bind_precompiled_call_reduce_output_inputs),
 
   # CONTIGUOUS(MOPS(BUFFER/SLICE)) → CONTIGUOUS(SLICE) when movement ops collapse to contiguous range
   (UPat(Ops.CONTIGUOUS, src=(UPat(GroupOp.Movement, name="src"),), name="c"), contiguous_mops_to_view),
@@ -183,6 +954,21 @@ pm_early_transform_tensor_graph = PatternMatcher([
   (UPat(Ops.CONTIGUOUS, name="u"), replace_contig_with_store_after),
   # remove DETACH/CONTIGUOUS_BACKWARD (allows more contiguous removal)
   (UPat((Ops.DETACH, Ops.CONTIGUOUS_BACKWARD), name="x"), lambda x: x.src[0]),
+])
+
+# This must run top-down, before the ordinary early pass visits and
+# materializes the CONTIGUOUS child.  At that point the parent CALL relation is
+# no longer visible and the structural contract would be impossible to prove.
+pm_typed_semantic_call_input = PatternMatcher([
+  (UPat(Ops.CALL, name="c", allow_any_len=True), callify_typed_semantic_call_inputs),
+])
+
+# The parent relation is initially a precompiled FUNCTION.  Expose that outer
+# CALL top-down under the typed gate, then inspect its inputs before the normal
+# bottom-up early pass reaches their CONTIGUOUS children.
+pm_precompile_function_boundary = PatternMatcher([
+  (UPat(Ops.FUNCTION, name="c"), transform_precompiled_call),
+  (UPat(Ops.GETTUPLE, src=(UPat(Ops.TUPLE, name="t"),), name="g"), _resolve_precompiled_gettuple),
 ])
 
 def finalize_after(ctx:AllocCtx, x:UOp):
@@ -253,6 +1039,23 @@ def _semantic_after_materialization(m:UOp, a:UOp) -> UOp|None:
 
 def _semantic_contiguous_materialization(m:UOp, c:UOp) -> UOp|None:
   """Materialize an explicitly owned CONTIGUOUS result without annotating its value path."""
+  # Defer an exact precompiled result until the early FUNCTION->CALL rewrite
+  # exposes its concrete output AFTER. Materializing here would create the
+  # redundant caller-side adapter before that identity is knowable.
+  if c.src[0].op is Ops.GETTUPLE and c.src[0].src[0].op is Ops.FUNCTION and c.src[0].src[0].arg.precompile:
+    return None
+  # A precompiled invocation already owns this exact contiguous output. Bind
+  # the semantic owner to that invocation result instead of allocating and
+  # copying it a second time.
+  if c.src[0].op is Ops.AFTER:
+    after = c.src[0]
+    if len(after.src) == 2 and after.src[1].op is Ops.CALL and after.src[1].arg.precompile:
+      try:
+        base = after.src[0].buf_uop
+        if c.dtype == after.dtype and c.shape == after.shape and sum(arg.buf_uop is base for arg in after.src[1].src[1:]) == 1:
+          bind_memory_semantic_owner(after, m.arg)
+          return after
+      except (RuntimeError, ValueError): pass
   if c.device is None: return None
   try: shape = c._shape
   except RuntimeError: return None
@@ -287,19 +1090,43 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # one-token LLM sample grew by 121 dispatches) despite being value-preserving.
   big_sink = big_sink.replace(src=tuple(output.src[0] if output.op is Ops.MEMORY_SEMANTIC else output
                                         for output in original_outputs))
-  big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
-  rewritten_outputs = big_sink.src
-  # uop list is a list in the original_sink graph and we can map to the tags later
-  # here we build buffer map
-  dont_realize = {Ops.CONST, Ops.BUFFER, Ops.BIND, Ops.DEFINE_VAR, Ops.AFTER}
-  ctx = AllocCtx(bases=set([x.multibase for x in big_sink.src if x.base.op not in dont_realize]))
+  # Reduce-output route membership is computed on the RAW graph, before
+  # semantic materialization rewrites the marker's input chain.  The callify
+  # passes below consult it so only route functions take the owned-redirect
+  # contract; every other precompiled family transforms byte-identically.
+  route_ids, out_route_ids = _reduce_output_route_function_ids(big_sink)
+  native_input_outputs = _native_input_output_routes(big_sink)
+  with Context(_ACTIVE_REDUCE_OUTPUT_ROUTE_FUNCTIONS=route_ids,
+               _ACTIVE_REDUCE_OUTPUT_OUT_ROUTE_FUNCTIONS=out_route_ids,
+               _ACTIVE_NATIVE_INPUT_OUTPUTS=native_input_outputs):
+    big_sink = graph_rewrite(big_sink, pm_semantic_materialization, name="semantic materialization boundary")
+    rewritten_outputs = big_sink.src
+    # uop list is a list in the original_sink graph and we can map to the tags later
+    # here we build buffer map
+    dont_realize = {Ops.CONST, Ops.BUFFER, Ops.BIND, Ops.DEFINE_VAR, Ops.AFTER}
+    ctx = AllocCtx(bases=set([x.multibase for x in big_sink.src if x.base.op not in dont_realize]))
 
-  # this rewrite is "read-only", it adds simple things to buffer_map and may sink things on big_sink, bottom_up
-  # this is the only one where we have to be careful to not break the tensor graph
-  big_sink = graph_rewrite(big_sink, add_tags, ctx=ctx, bottom_up=True, name="number the uops")
+    # this rewrite is "read-only", it adds simple things to buffer_map and may sink things on big_sink, bottom_up
+    # this is the only one where we have to be careful to not break the tensor graph
+    big_sink = graph_rewrite(big_sink, add_tags, ctx=ctx, bottom_up=True, name="number the uops")
 
-  # here we can break the tensor graph. this is the only place you need to maintain numbered tags
-  big_sink = graph_rewrite(big_sink, pm_early_transform_tensor_graph, name="early transform tensor graph")
+    # here we can break the tensor graph. this is the only place you need to maintain numbered tags
+    # Input ownership must be decided while the enclosing FUNCTION can still
+    # see its concrete invocation arguments.  A bottom-up pass materializes the
+    # nested producer's caller CONTIGUOUS first and loses that relation.  Expose
+    # precompiled consumers top-down for either gated input-boundary contract.
+    # A precompiled body may itself call another precompiled FUNCTION (the resadd fold's
+    # block-output chain). enter_calls=False rewrites never see those nested FUNCTIONs and
+    # rangeify.resolve_function deliberately skips precompile bodies, so they would land raw
+    # in every composite and crash the NV render (weakint SPECIAL inside the embedded body).
+    # Resolve nested precompile FUNCTIONs bottom-up with body entry before the early pass.
+    big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, name="nested precompile boundary",
+                             bottom_up=True, enter_calls=True)
+    if CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT or CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
+      big_sink = graph_rewrite(big_sink, pm_precompile_function_boundary, bottom_up=False, name="typed semantic function boundary")
+    if CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER:
+      big_sink = graph_rewrite(big_sink, pm_typed_semantic_call_input, bottom_up=False, name="typed semantic call input")
+    big_sink = graph_rewrite(big_sink, pm_early_transform_tensor_graph, name="early transform tensor graph")
 
   # here we construct the final buffer_map. this is everything that will go into the tensor map
   graph_rewrite(big_sink, pm_finalize_call, ctx=ctx, name="finalize call")

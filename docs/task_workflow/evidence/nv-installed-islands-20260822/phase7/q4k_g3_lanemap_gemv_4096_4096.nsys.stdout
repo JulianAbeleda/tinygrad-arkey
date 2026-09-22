@@ -1,0 +1,38 @@
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    9437184,
+    8192
+  ],
+  "cubin": "/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase7/q4k_g3_lanemap_gemv_4096_4096.cubin",
+  "cubin_sha256": "7a7683942b4a12aba2ba5fa3b03be0678fbef2d0436c0daf4c93232e2d71bee7",
+  "grid": [
+    4096,
+    1,
+    1
+  ],
+  "n_bufs": 3,
+  "reps": 2000,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_g3_lanemap_gemv_4096_4096",
+  "vals": [],
+  "verdict": "CUDA_LAUNCH_OK"
+}
+Collecting data...
+Generating '/tmp/nsys-report-2554.qdstrm'
+
+[1/1] [0%                          ] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [0%                          ] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [=======36%                  ] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [==========49%               ] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [==============63%           ] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [========================100%] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+[1/1] [========================100%] q4k_g3_lanemap_gemv_4096_4096.nsys-rep
+Generated:
+	/home/ubuntu/tinygrad-arkey/docs/task_workflow/evidence/nv-installed-islands-20260822/phase7/q4k_g3_lanemap_gemv_4096_4096.nsys-rep

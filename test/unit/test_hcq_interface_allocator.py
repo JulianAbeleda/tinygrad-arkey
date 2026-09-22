@@ -1,4 +1,4 @@
-from tinygrad.runtime.support.hcq import HCQBuffer, HCQInterfaceAllocator
+from tinygrad.runtime.support.hcq import HCQBuffer, HCQInterfaceAllocator, _hcq_copyout_needs_presync
 from tinygrad.runtime.ops_amd import AMDAllocator
 from tinygrad.runtime.support.memory import TLSFAllocator
 from tinygrad.llm import device_facts
@@ -28,7 +28,7 @@ def test_amd_interface_allocator_publishes_its_large_allocation_granularity():
   allocator.dev = type("FakeAMDDevice", (), {"is_am":lambda self:True})()
   assert allocator.allocation_granularity == 2 << 20
   allocator.dev = type("FakeKFDDevice", (), {"is_am":lambda self:False})()
-  assert allocator.allocation_granularity is None
+  assert allocator.allocation_granularity == 4 << 10
 
 
 def test_amd_interface_allocator_reports_live_allocatable_heap_bytes():
@@ -46,3 +46,7 @@ def test_default_memory_probe_falls_back_to_live_allocator(monkeypatch):
   monkeypatch.setattr(device_facts, "_rocm_smi_memory_probe", lambda _device:(_ for _ in ()).throw(FileNotFoundError()))
   monkeypatch.setattr(device_facts, "_allocator_memory_probe", lambda _device:expected)
   assert device_facts._default_memory_probe("AMD") == expected
+
+def test_copyout_presync_is_skipped_only_when_device_owns_source_ordering():
+  assert _hcq_copyout_needs_presync(type("DefaultDevice", (), {})())
+  assert not _hcq_copyout_needs_presync(type("OrderedCopyDevice", (), {"copyout_wait_orders_source":True})())

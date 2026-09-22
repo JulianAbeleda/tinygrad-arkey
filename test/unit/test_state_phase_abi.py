@@ -147,24 +147,24 @@ def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
 # tying them together, so the two renderers could drift from each other and from the declaration.
 
 def test_drain_lane_coeffs_are_the_only_statement_of_the_convention():
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
   for head_dim in (64, 128, 256):
-    spec = AMDAttentionOutputDrainSpec(head_dim=head_dim, blocks=head_dim//16)
+    spec = AttentionOutputDrainSpec(head_dim=head_dim, blocks=head_dim//16)
     c_e, c_half, c_j, c_col = spec.drain_lane_coeffs
     # the declared human-facing string is a rendering of the coefficients, not an independent copy
     assert spec.address_expr_text == f"e*{c_e}+halfwave*{c_half}+j*{c_j}+col"
     # the relations both renderers rely on when they factor / shift
     assert c_e == 2*c_half and c_col == 1 and c_j == 16
   # the shipped default declaration must still agree with its own derivation
-  AMDAttentionOutputDrainSpec().validate()
-  assert AMDAttentionOutputDrainSpec().address_expr == AMDAttentionOutputDrainSpec().address_expr_text
+  AttentionOutputDrainSpec().validate()
+  assert AttentionOutputDrainSpec().address_expr == AttentionOutputDrainSpec().address_expr_text
 
 
 def test_isa_drain_encoding_agrees_with_the_declared_address_expression():
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
   from tinygrad.renderer.isa.amd_attention_abi import drain_lane_encoding
   head_dim = 128
-  c_e, c_half, c_j, c_col = AMDAttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
+  c_e, c_half, c_j, c_col = AttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
   for output_block_base in (0, 4):
     half_shift, group_row_stride, _ = drain_lane_encoding(head_dim, 0, 0, output_block_base)
     assert 1 << half_shift == c_half and group_row_stride == 16*c_half
@@ -181,8 +181,8 @@ def test_isa_drain_encoding_agrees_with_the_declared_address_expression():
 
 
 def test_hip_drain_expansion_addresses_match_the_declared_convention():
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
-  spec = AMDAttentionOutputDrainSpec(head_dim=128, blocks=8)
+  from tinygrad.uop.ops import AttentionOutputDrainSpec
+  spec = AttentionOutputDrainSpec(head_dim=128, blocks=8)
   c_e, c_half, c_j, c_col = spec.drain_lane_coeffs
   # cstyle.py emits `(2e+halfwave)*c_half + (j+base)*c_j + col`; that factoring is only equal to the
   # declared `e*c_e + halfwave*c_half + ...` while c_e == 2*c_half, which is what it checks.

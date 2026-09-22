@@ -4,7 +4,7 @@ from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
-from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
+from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp, PostBarrierRegion, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge
 from tinygrad.uop.ops import AttentionWMMARole, WMMARoleLedger, FinalLinearMetadata, get_attention_wmma_role, set_attention_wmma_role
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
@@ -25,8 +25,10 @@ from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinc
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
 from tinygrad.codegen.late.fdot2 import pm_fdot2, line_lower_fdot2
-from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor
+from tinygrad.codegen.late.warp_reduce import pm_warp_reduce, pm_lower_warp_shfl_xor, pm_lower_warp_bpermute
 from tinygrad.codegen.late.flash_decode_intrinsics import pm_lower_flash_decode_intrinsics
+from tinygrad.codegen.late.int8_dot import pm_lower_int8x4_dot
+from tinygrad.codegen.late.native_fragment import pm_lower_native_fragment, is_native_fragment_carrier, is_native_fragment_marker
 from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -54,6 +56,24 @@ register_pipe_symbolic = symbolic_simple + PatternMatcher([
 ])
 
 pm_index_is_shrink = PatternMatcher([
+  # Custom-kernel placeholders keep a non-flat arg's shape as RESHAPE/EXPAND over the flat
+  # PARAM (UOp.placeholder reshapes when len(shape) > 1). The RESHAPE is pure metadata for a
+  # flat global buffer: fold it to the PARAM so a kernel body can read the arg with a flat
+  # index, and drop the shape STACK (nothing consumes it, and no renderer has a RESHAPE rule).
+  # EXPAND over a CONST is a scalar broadcast; folding it keeps the value scalar. Image
+  # buffers keep their shape (coordinates carry meaning), and multi-index (3+ src) INDEX
+  # bases are left untouched (their strides were built against the shaped view).
+  (UPat((Ops.RESHAPE, Ops.EXPAND), src=(UPat.var("buf"), UPat()), name="x"),
+   lambda x, buf: buf if (buf.op is Ops.CONST or
+                          (isinstance(buf.dtype, PtrDType) and not isinstance(buf.dtype, ImageDType)
+                           and buf.addrspace is AddrSpace.GLOBAL)) else None),
+  # A scalar pointer-typed INDEX read as a VALUE (the shaped-arg flat read spelling
+  # `extra[row].cast(dtype)`) needs its LOAD; the vector pointer casts the expander creates
+  # for real loads/stores (and any other pointer-typed cast, i.e. a store address) keep
+  # their existing SHRINK path below.
+  (UPat(Ops.CAST, src=(UPat(Ops.INDEX, name="idx")), name="c"),
+   lambda c, idx: c.replace(src=(idx.load(),)) if isinstance(idx.dtype, PtrDType) and idx.dtype.v == 1
+                  and not isinstance(c.dtype, PtrDType) else None),
   # rewrite non-image INDEX to SHRINK
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var("idx"))).cast(name="x"), lambda buf,idx,x:
     UOp(Ops.SHRINK, dtype=buf.dtype.base, src=(buf, idx, UOp.const(dtypes.int, x.dtype.count))) if isinstance(buf.dtype, PtrDType) else None),
@@ -70,7 +90,7 @@ pm_remove_vec_dtypes = PatternMatcher([
   (UPat(Ops.LOAD, name="x"), lambda x: x.src[0] if x.src[0].addrspace == AddrSpace.REG else None),
   # remove all vec dtypes
   (UPat(GroupOp.All-{Ops.PARAM, Ops.BUFFER, Ops.DEFINE_LOCAL, Ops.DEFINE_REG}, name="x"),
-   lambda x: x.replace(dtype=x.dtype.base.scalar().base)),
+   lambda x: None if is_native_fragment_carrier(x) or is_native_fragment_marker(x) else x.replace(dtype=x.dtype.base.scalar().base)),
   # replace DEFINE_LOCAL/DEFINE_REG with BUFFER
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG), name="x"), lambda x:
    x.replace(op=Ops.BUFFER, arg=ParamArg(x.arg, addrspace=AddrSpace.LOCAL if x.op == Ops.DEFINE_LOCAL else AddrSpace.REG))),
@@ -87,15 +107,44 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     if _inv.ENABLED: _inv.set_stage(_prev_stage)
 
 def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
+  params = [x for x in ast.backward_slice_with_self if x.op is Ops.PARAM and isinstance(x.arg, ParamArg)]
+  const_restrict = [x for x in params if x.arg.const_restrict]
+  if const_restrict and not getattr(ren, "supports_const_restrict_pointer", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve const_restrict pointer qualification")
+  if const_restrict:
+    if len(const_restrict) != 1: raise RuntimeError("const_restrict requires exactly one annotated pointer PARAM per kernel")
+    owner = const_restrict[0]
+    if not isinstance(owner.dtype, PtrDType) or owner.addrspace is not AddrSpace.GLOBAL or owner.arg.addrspace is not AddrSpace.GLOBAL or \
+       owner.dtype.base not in {dtypes.int, dtypes.uint, dtypes.float} or owner.dtype.base.vcount != 1:
+      raise RuntimeError("const_restrict requires one scalar 32-bit GLOBAL pointer PARAM")
+    if sum(x.arg.slot == owner.arg.slot for x in params) != 1:
+      raise RuntimeError("const_restrict pointer PARAM has ambiguous ABI-slot ownership")
+    writable = {p for x in ast.backward_slice_with_self if x.op is Ops.STORE for p in x.src[0].pointer_base_params()}
+    if owner in writable: raise RuntimeError("const_restrict pointer PARAM is written in this kernel")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, StrictAfter) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_strict_after", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve strict_after compiler ordering")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, LoadSchedule) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_load_schedule", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve schedule_after load ordering")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, RegionLoad) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_region_load", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve lexical load regions")
+  if any(x.op is Ops.AFTER and isinstance(x.arg, RegionLoadBridge) for x in ast.backward_slice_with_self) and \
+     not getattr(ren, "supports_region_load_bridge", False):
+    raise RuntimeError(f"{type(ren).__name__} cannot preserve split region-load register bridges")
   if VIZ: graph_rewrite(ast, PatternMatcher([]), name="View Base AST")
   if DEBUG >= 5: print(pyrender(ast))
   # Resolve any renderer-lowered warp_shfl_xor (codegen/late/warp_reduce.py) against `ren` as early as possible,
   # so hand-authored kernels that call it directly at AST-construction time see it lowered at the exact same
   # pipeline position the old inline AMD string used to occupy -- required for the AMD byte-identical guarantee.
   ast = graph_rewrite(ast, pm_lower_warp_shfl_xor, ctx=ren, name="lower warp_shfl_xor")
+  ast = graph_rewrite(ast, pm_lower_warp_bpermute, ctx=ren, name="lower warp_bpermute")
   # Same TG7 seam for flash-decode's fdot2/exp2f (codegen/late/flash_decode_intrinsics.py) -- resolved at the
   # identical pipeline position the old inline AMD strings occupied.
   ast = graph_rewrite(ast, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics")
+  ast = graph_rewrite(ast, pm_lower_int8x4_dot, ctx=ren, name="lower int8x4 dot")
+  ast = graph_rewrite(ast, pm_lower_native_fragment, ctx=ren, name="lower native fragments")
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = unroll_recurrence(ast, _u)
@@ -167,9 +216,11 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
     _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
   sink = graph_rewrite(sink, _expander_pm, name="expander")
+  sink = graph_rewrite(sink,pm_lower_native_fragment,ctx=ren,name="lower post-expander native fragments")
   # pm_warp_reduce (above) builds warp_shfl_xor tags fresh during this pass -- resolve them here too, in the
   # same relative position the old inline AMD string occupied, rather than letting them ride further downstream.
   sink = graph_rewrite(sink, pm_lower_warp_shfl_xor, ctx=ren, name="lower warp_shfl_xor (post-expander)")
+  sink = graph_rewrite(sink, pm_lower_warp_bpermute, ctx=ren, name="lower warp_bpermute (post-expander)")
   sink = graph_rewrite(sink, pm_lower_flash_decode_intrinsics, ctx=ren, name="lower flash_decode intrinsics (post-expander)")
 
   # add locals
@@ -213,7 +264,8 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
           if s in users: users[s].append(u)
       stale = {r for r, us in users.items() if r not in ended_ranges and all(u.op is Ops.AFTER for u in us)}
       if stale:
-        sink = sink.substitute({u: u.replace(src=tuple(s for s in u.src if s not in stale)) for u in topo if u.op is Ops.AFTER})
+        sink = sink.substitute({u: u.replace(src=tuple(s for s in u.src if s not in stale)) for u in topo
+                                if u.op is Ops.AFTER and not isinstance(u.arg, (StrictAfter, LoadSchedule))})
   # A composite REDUCE lowered during the pass above can be shared by several
   # REDUCE_SLOT users. Resolve those projections after the structured TUPLE is
   # present, then let dead graph nodes disappear naturally.
@@ -297,7 +349,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   extra_matcher = ren.extra_matcher if ren.extra_matcher is not None else PatternMatcher([])
   # Safety net: any warp_shfl_xor tag that reached this point unresolved (e.g. a future call site) still gets
   # caught here, before final string rendering, rather than crashing inside the generic CUSTOMI arg formatter.
-  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_lower_flash_decode_intrinsics+pm_split_ends
+  pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_lower_warp_shfl_xor+pm_lower_warp_bpermute+pm_lower_flash_decode_intrinsics+pm_lower_int8x4_dot+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")
@@ -319,12 +371,45 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
 # inject IF/ENDIF. only needed if device doesn't support gated stores
 pm_linearize_cleanups = PatternMatcher([
-  # if statements are not allowed in the graph
-  (UPat((Ops.IF, Ops.ENDIF)), lambda: panic(RuntimeError, "if not allowed in graph")),
+  # Only typed, validated post-barrier regions may originate in a graph.
+  # Untagged IF/ENDIF remain reserved for the gated-store lowering below.
+  (UPat((Ops.IF, Ops.ENDIF), name="x"),
+   lambda x: None if isinstance(x.arg, PostBarrierRegion) else panic(RuntimeError, "if not allowed in graph")),
   # gated STORE becomes IF-STORE-ENDIF. this is the only use of IF-ENDIF
   (UPat(Ops.STORE, name="u", src=(UPat((Ops.INDEX, Ops.SHRINK)).or_casted(), UPat(), UPat(name="gate", dtype=dtypes.bool))),
    lambda u, gate: ((st:=u.replace(src=u.src[0:2])), [mif:=UOp(Ops.IF, src=(gate, u.src[0])), st, UOp(Ops.ENDIF, src=(mif,))]))
 ])
+
+def validate_post_barrier_regions(lst:list[UOp], ren:Renderer) -> None:
+  """Validate lexical and synchronization safety before rendering regions."""
+  def workgroup_uniform_gate(gate:UOp) -> bool:
+    # Fail closed: a uniform region predicate may contain only scalar ALU over
+    # constants and global workgroup ids. In particular, local ids, ranges,
+    # loads, and buffer indices can vary across workitems and are rejected.
+    allowed=GroupOp.ALU|{Ops.CONST,Ops.SPECIAL,Ops.CAST,Ops.BITCAST}
+    return all(x.op in allowed and (x.op is not Ops.SPECIAL or str(x.arg).startswith("gidx")) for x in gate.toposort())
+  stack:list[tuple[UOp, int]] = []
+  positions = {u:i for i,u in enumerate(lst)}
+  for i,u in enumerate(lst):
+    if u.op is Ops.IF and isinstance(u.arg, PostBarrierRegion):
+      if not ren.supports_post_barrier_regions:
+        raise RuntimeError(f"{ren.__class__.__name__} does not support graph-authored post-barrier regions")
+      if len(u.src) != 2 or u.src[0].dtype is not dtypes.bool or u.src[1].op is not Ops.BARRIER:
+        raise RuntimeError("post-barrier region IF must have <bool gate, barrier> sources")
+      if positions.get(u.src[1], i) >= i: raise RuntimeError("post-barrier region must follow its anchor barrier")
+      if u.arg.workgroup_uniform and not workgroup_uniform_gate(u.src[0]):
+        raise RuntimeError("workgroup-uniform post-barrier region gate is not proved uniform")
+      stack.append((u, i))
+    elif u.op is Ops.ENDIF and isinstance(u.arg, PostBarrierRegion):
+      if not stack: raise RuntimeError("post-barrier region ENDIF has no open IF")
+      mif,start = stack.pop()
+      if u.arg != mif.arg or len(u.src) < 2 or u.src[0] is not mif:
+        raise RuntimeError("post-barrier region ENDIF must reference its IF and at least one body root")
+      if any(mif not in root.backward_slice_with_self for root in u.src[1:]):
+        raise RuntimeError("every post-barrier region body root must depend on its IF")
+      if not mif.arg.workgroup_uniform and any(x.op is Ops.BARRIER for x in lst[start+1:i]):
+        raise RuntimeError("workgroup barriers are forbidden inside a predicated post-barrier region")
+  if stack: raise RuntimeError("post-barrier region IF has no matching ENDIF")
 
 # requires lst be toposorted. like graph rewrite, but for lines
 def line_rewrite(lst:list[UOp], pm:PatternMatcher, ctx=None) -> list[UOp]:
@@ -370,6 +455,7 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   expected_roles = prg.arg.wmma_role_expectation if isinstance(prg.arg, ProgramInfo) else ()
   if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
     lst = line_lower_fdot2(lst)
+  validate_post_barrier_regions(lst, ctx)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None
@@ -435,7 +521,12 @@ def do_assemble(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
 
 def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
   src = ctx.render(list(lin.src))
-  new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src)))) if ctx.has_aux else prg.arg
+  if __import__('os').getenv('NV_F2_SOURCE_DUMP'):
+    import re
+    name = re.sub(r'[^A-Za-z0-9_.-]', '_', getattr(getattr(prg, "arg", None), "name", "kernel"))
+    open(f'/tmp/nv1-generated-{name}.cu','w').write(src)
+  provenance = ("tinygrad_renderer", f"{type(ctx).__module__}.{type(ctx).__qualname__}", ctx.target.device)
+  new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src))) if ctx.has_aux else prg.arg.aux, provenance=provenance)
   return prg.replace(src=prg.src + (UOp(Ops.SOURCE, arg=src),), arg=new_arg)
 
 def do_compile(ctx:Renderer, prg:UOp, source:UOp) -> UOp|None:
@@ -471,6 +562,21 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   elif ast.op is Ops.SINK:
     assert isinstance(ast.arg, KernelInfo), "requires KernelInfo on arg to to_program"
     full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
+    full_sink = graph_rewrite(full_sink, pm_lower_native_fragment, ctx=renderer, name="lower materialized native fragments")
+    if __import__('os').getenv('NV_F2_POST_CENSUS'):
+      ss=[{'id':id(u),'name':str(u.arg),'dtype':str(u.dtype),'op':str(u.op)} for u in full_sink.toposort() if u.op is Ops.SPECIAL]
+      print('NV_F2_POST_CENSUS '+__import__('json').dumps(ss, sort_keys=True))
+    # NV grouped attention carries a physical 128-thread lidx.  Fragment
+    # expansion can leave a legacy 32-thread lidx with the same C identifier;
+    # make that lane source consume the physical special instead of declaring a
+    # second CUDA variable.  Other programs retain their original specials.
+    nv_lidx = [u for u in full_sink.toposort() if u.op is Ops.SPECIAL and str(u.arg) == "lidx0" and u.dtype == dtypes.int]
+    _extent = lambda u: getattr(getattr(u, "src", (None,))[0], "arg", None)
+    nv_physical = next((u for u in nv_lidx if _extent(u) == 128), None)
+    if nv_physical is not None and any(_extent(u) == 32 for u in nv_lidx):
+      full_sink = graph_rewrite(full_sink, PatternMatcher([
+        (UPat(Ops.SPECIAL, name="s"), lambda s: nv_physical if str(s.arg) == "lidx0" and _extent(s) == 32 else s),
+      ]), name="canonicalize grouped NV lidx", bottom_up=True)
     declared_roles = []
     for u in full_sink.toposort():
       if u.op is not Ops.WMMA: continue

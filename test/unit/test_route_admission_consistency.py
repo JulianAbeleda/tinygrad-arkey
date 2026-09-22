@@ -79,7 +79,7 @@ def test_candidate_quant_matches_the_manifest():
   for name, cand in _candidates().items():
     quant = getattr(cand, "quant", None)
     if quant is None: continue          # the flash candidates carry no quant field; manifest says fp16
-    assert quant in route_manifest.route(cand.route_id)["quant"], \
+    assert quant.name in route_manifest.route(cand.route_id)["quant"], \
       f"{name} admits {quant!r} but manifest route {cand.route_id!r} does not list it"
 
 

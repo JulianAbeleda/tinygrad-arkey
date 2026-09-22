@@ -1,0 +1,106 @@
+{
+  "arms": {
+    "1": [
+      {
+        "ms_per_token": 5.5832,
+        "nmeas": 32,
+        "tok_s": 179.109
+      },
+      {
+        "ms_per_token": 5.602,
+        "nmeas": 32,
+        "tok_s": 178.507
+      },
+      {
+        "ms_per_token": 5.5704,
+        "nmeas": 32,
+        "tok_s": 179.519
+      },
+      {
+        "ms_per_token": 5.594,
+        "nmeas": 48,
+        "tok_s": 178.763
+      },
+      {
+        "ms_per_token": 5.572,
+        "nmeas": 48,
+        "tok_s": 179.469
+      }
+    ],
+    "2": [
+      {
+        "ms_per_token": 5.4395,
+        "nmeas": 32,
+        "tok_s": 183.842
+      },
+      {
+        "ms_per_token": 5.4736,
+        "nmeas": 32,
+        "tok_s": 182.696
+      }
+    ],
+    "3": [
+      {
+        "ms_per_token": 5.3459,
+        "nmeas": 32,
+        "tok_s": 187.059
+      },
+      {
+        "ms_per_token": 5.3132,
+        "nmeas": 32,
+        "tok_s": 188.211
+      }
+    ],
+    "4": [
+      {
+        "ms_per_token": 5.3176,
+        "nmeas": 32,
+        "tok_s": 188.054
+      },
+      {
+        "ms_per_token": 5.3075,
+        "nmeas": 32,
+        "tok_s": 188.413
+      },
+      {
+        "ms_per_token": 5.3291,
+        "nmeas": 32,
+        "tok_s": 187.651
+      },
+      {
+        "ms_per_token": 5.3343,
+        "nmeas": 48,
+        "tok_s": 187.466
+      }
+    ]
+  },
+  "bracket_1_48": {
+    "arm1_ms": 5.594,
+    "arm3_ms": 5.572,
+    "bracket_ms": 5.583,
+    "delta_pct": -4.46,
+    "delta_us": -248.7,
+    "four_stream_ms": 5.3343,
+    "tok_s_delta": "+8.6"
+  },
+  "conclusion": "Route B at HEAD is NOT flat: CUDA_GRAPH_STREAMS=4 is +4.8% wall vs 1 stream, tokens bitwise identical. The 08-15 FLAT record (c74567a24) predates the multi-stream capture-deps fix 86d653651 and is superseded.",
+  "depth": 512,
+  "git_commit": "3042a2a74",
+  "medians_ms_per_token": {
+    "1": 5.5843,
+    "2": 5.4566,
+    "3": 5.3296,
+    "4": 5.3221
+  },
+  "medians_tok_s": {
+    "1": 179.07,
+    "2": 183.27,
+    "3": 187.63,
+    "4": 187.9
+  },
+  "mode": "CUDA_GRAPH_STREAMS A/B",
+  "model": "Qwen3-8B-Q4_K_M",
+  "schema": "tinygrad.nv_route_b_head.v1",
+  "settle": 4,
+  "token_sha": "ddf344135e5781458f1183b5d5ce6ee6441af4b78b85a1467efdae4a19a61a41"
+}

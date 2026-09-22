@@ -1,0 +1,48 @@
+==PROF== Connected to process 2383665 (/usr/bin/python3.12)
+==PROF== Profiling "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": 0%....50%....100% - 9 passes
+{
+  "block": [
+    32,
+    1,
+    1
+  ],
+  "buf_bytes": 67108864,
+  "buf_sizes": [
+    16384,
+    9437184,
+    8192,
+    16384
+  ],
+  "cubin": "docs/task_workflow/evidence/nv-catch-llama-ledger-20260822/phase1/q4k_g3_lanemap_gemv_epi_resadd_4096_4096.cubin",
+  "cubin_sha256": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda",
+  "grid": [
+    4096,
+    1,
+    1
+  ],
+  "n_bufs": 4,
+  "reps": 5,
+  "schema": "tinygrad.nv_cubin_ncu_launcher.v1",
+  "symbol": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+  "verdict": "CUDA_LAUNCH_OK"
+}
+==PROF== Disconnected from process 2383665
+[2383665] python3.12@127.0.0.1
+  q4k_g3_lanemap_gemv_epi_resadd_4096_4096 (4096, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    --------------------------------------------------- ----------- ------------
+    Metric Name                                         Metric Unit Metric Value
+    --------------------------------------------------- ----------- ------------
+    dram__bytes.sum                                           Mbyte         9.47
+    dram__bytes_op_read.sum                                   Mbyte         9.47
+    dram__bytes_op_write.sum                                   byte            0
+    gpu__time_duration.sum                                       us        10.75
+    l1tex__t_bytes.sum                                        Mbyte       155.45
+    lts__t_bytes.sum                                          Mbyte        11.34
+    lts__t_sectors_op_read.sum                               sector       345777
+    lts__t_sectors_op_write.sum                              sector         4312
+    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        32.22
+    sm__warps_active.avg.pct_of_peak_sustained_active             %        39.80
+    smsp__issue_active.avg.pct_of_peak_sustained_active           %        39.75
+    --------------------------------------------------- ----------- ------------
+

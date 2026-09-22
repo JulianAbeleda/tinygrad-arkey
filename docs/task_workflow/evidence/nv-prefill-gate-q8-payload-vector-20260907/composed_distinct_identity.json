@@ -1,0 +1,66 @@
+{
+  "all_control": true,
+  "all_candidate": false,
+  "rows": [
+    {
+      "cycle": 0,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 1,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 2,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 3,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 4,
+      "control": true,
+      "candidate": false,
+      "max_abs": 0.4400123357772827
+    },
+    {
+      "cycle": 5,
+      "control": true,
+      "candidate": false,
+      "max_abs": 0.6352139115333557
+    },
+    {
+      "cycle": 6,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 7,
+      "control": true,
+      "candidate": false,
+      "max_abs": 0.41193974018096924
+    },
+    {
+      "cycle": 8,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    },
+    {
+      "cycle": 9,
+      "control": true,
+      "candidate": true,
+      "max_abs": 0.0
+    }
+  ]
+}

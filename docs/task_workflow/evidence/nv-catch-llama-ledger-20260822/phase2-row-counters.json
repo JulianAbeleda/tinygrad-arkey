@@ -1,0 +1,293 @@
+{
+  "rows": [
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        16384,
+        9437184,
+        8192
+      ],
+      "cubin_sha256": "7a7683942b4a12aba2ba5fa3b03be0678fbef2d0436c0daf4c93232e2d71bee7",
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 9.45,
+        "dram__bytes_op_read.sum": 9.45,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 47.71,
+        "gpu__time_duration.sum": 11.26,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 55.89,
+        "lts__t_bytes.sum": 11.21,
+        "lts__t_sector_op_read_hit_rate.pct": 13.52,
+        "sm__inst_executed.sum": 5234688.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 30.94
+      },
+      "name": "q4k_g3_lanemap_gemv_4096_4096",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q4k_g3_lanemap_gemv_4096_4096\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2363810\n[2363810] python3.12@127.0.0.1\n  q4k_g3_lanemap_gemv_4096_4096 (4096, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte         9.45\n    dram__bytes_op_read.sum                                   Mbyte         9.45\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        47.71\n    gpu__time_duration.sum                                       us        11.26\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        55.89\n    lts__t_bytes.sum                                          Mbyte        11.21\n    lts__t_sector_op_read_hit_rate.pct                            %        13.52\n    sm__inst_executed.sum                                      inst      5234688\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        30.94\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        2359296,
+        8192
+      ],
+      "cubin_sha256": "68a66d03d29975f1d9024050c67d263db013b70cafa48a87f895090bcdcb717d",
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 2.38,
+        "dram__bytes_op_read.sum": 2.38,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 23.61,
+        "gpu__time_duration.sum": 5.73,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 25.72,
+        "lts__t_bytes.sum": 4.01,
+        "lts__t_sector_op_read_hit_rate.pct": 38.2,
+        "sm__inst_executed.sum": 1308672.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 14.24
+      },
+      "name": "q4k_g3_lanemap_gemv_1024_4096",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q4k_g3_lanemap_gemv_1024_4096\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2363845\n[2363845] python3.12@127.0.0.1\n  q4k_g3_lanemap_gemv_1024_4096 (1024, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte         2.38\n    dram__bytes_op_read.sum                                   Mbyte         2.38\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        23.61\n    gpu__time_duration.sum                                       us         5.73\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        25.72\n    lts__t_bytes.sum                                          Mbyte         4.01\n    lts__t_sector_op_read_hit_rate.pct                            %        38.20\n    sm__inst_executed.sum                                      inst      1308672\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        14.24\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        4096,
+        3440640,
+        8192
+      ],
+      "cubin_sha256": "04715f07e0d824e243dbb61c5bd15bded7f00b1991c5f6bb38578c3fe74b4e03",
+      "grid": [
+        1024,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 3.46,
+        "dram__bytes_op_read.sum": 3.46,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 34.89,
+        "gpu__time_duration.sum": 5.63,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 28.38,
+        "lts__t_bytes.sum": 5.08,
+        "lts__t_sector_op_read_hit_rate.pct": 29.69,
+        "sm__inst_executed.sum": 2198528.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 28.38
+      },
+      "name": "q6k_v_four_warp_fp16_direct_1024_4096",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q6k_v_four_warp_fp16_direct_1024_4096\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2363881\n[2363881] python3.12@127.0.0.1\n  q6k_v_four_warp_fp16_direct_1024_4096 (1024, 1, 1)x(128, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte         3.46\n    dram__bytes_op_read.sum                                   Mbyte         3.46\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        34.89\n    gpu__time_duration.sum                                       us         5.63\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        28.38\n    lts__t_bytes.sum                                          Mbyte         5.08\n    lts__t_sector_op_read_hit_rate.pct                            %        29.69\n    sm__inst_executed.sum                                      inst      2198528\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        28.38\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        32,
+        4,
+        1
+      ],
+      "buf_sizes": [
+        798720,
+        16384,
+        18874368
+      ],
+      "cubin_sha256": "2b974ac133ccc23faeb95420041da0d86f0c08e6873addbd4f376caa7688a6d7",
+      "grid": [
+        48,
+        8,
+        1
+      ],
+      "metrics": {},
+      "name": "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+      "ncu_returncode": 1,
+      "raw_tail": "==PROF== Connected to process 2363916 (/usr/bin/python3.12)\n==PROF== Disconnected from process 2363916\n==ERROR== The application returned an error code (1).\n\nTraceback (most recent call last):\n  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_cubin_ncu_launcher.py\", line 106, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/extra/llm_research/decode/nv_cubin_ncu_launcher.py\", line 75, in main\n    check(cuda.cuLaunchKernel(function, grid[0], grid[1], grid[2], block[0], block[1], block[2], 0, stream, params, None))\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_cuda.py\", line 16, in check\n    raise RuntimeError(f\"CUDA Error {status}, {error}\")\nRuntimeError: CUDA Error 1, invalid argument"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        8192,
+        798720
+      ],
+      "cubin_sha256": "885232287deb30e3b491bd212f563c10b4eeefe013892ce24be6c0303edbe9b6",
+      "grid": [
+        32,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 808.19,
+        "dram__bytes_op_read.sum": 808.19,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 8.17,
+        "gpu__time_duration.sum": 5.63,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 1.32,
+        "lts__t_bytes.sum": 1.0,
+        "lts__t_sector_op_read_hit_rate.pct": 11.02,
+        "sm__inst_executed.sum": 23712.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 0.81
+      },
+      "name": "flash_fused_gmax_combine_f16_32_128",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"flash_fused_gmax_combine_f16_32_128\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2363941\n[2363941] python3.12@127.0.0.1\n  flash_fused_gmax_combine_f16_32_128 (32, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Kbyte       808.19\n    dram__bytes_op_read.sum                                   Kbyte       808.19\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %         8.17\n    gpu__time_duration.sum                                       us         5.63\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %         1.32\n    lts__t_bytes.sum                                          Mbyte         1.00\n    lts__t_sector_op_read_hit_rate.pct                            %        11.02\n    sm__inst_executed.sum                                      inst        23712\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %         0.81\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        16384,
+        9437184,
+        8192,
+        16384
+      ],
+      "cubin_sha256": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda",
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 9.47,
+        "dram__bytes_op_read.sum": 9.47,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 49.89,
+        "gpu__time_duration.sum": 10.78,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 57.62,
+        "lts__t_bytes.sum": 11.35,
+        "lts__t_sector_op_read_hit_rate.pct": 14.42,
+        "sm__inst_executed.sum": 5255168.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 32.03
+      },
+      "name": "q4k_g3_lanemap_gemv_epi_resadd_4096_4096",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q4k_g3_lanemap_gemv_epi_resadd_4096_4096\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2363976\n[2363976] python3.12@127.0.0.1\n  q4k_g3_lanemap_gemv_epi_resadd_4096_4096 (4096, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte         9.47\n    dram__bytes_op_read.sum                                   Mbyte         9.47\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        49.89\n    gpu__time_duration.sum                                       us        10.78\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        57.62\n    lts__t_bytes.sum                                          Mbyte        11.35\n    lts__t_sector_op_read_hit_rate.pct                            %        14.42\n    sm__inst_executed.sum                                      inst      5255168\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        32.03\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        32,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        24576,
+        28311552,
+        28311552,
+        8192
+      ],
+      "cubin_sha256": "5642ea229b93e1f40dd00b9965212529751865d1697b76a2098e6ca3e3e6a3af",
+      "grid": [
+        12288,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 56.64,
+        "dram__bytes_op_read.sum": 56.64,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 78.49,
+        "gpu__time_duration.sum": 40.93,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 60.55,
+        "lts__t_bytes.sum": 60.73,
+        "lts__t_sector_op_read_hit_rate.pct": 5.76,
+        "sm__inst_executed.sum": 28348416.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 53.16
+      },
+      "name": "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q4k_g3_lanemap_gemv_w1w3fused16_12288_4096\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2364011\n[2364011] python3.12@127.0.0.1\n  q4k_g3_lanemap_gemv_w1w3fused16_12288_4096 (12288, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte        56.64\n    dram__bytes_op_read.sum                                   Mbyte        56.64\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        78.49\n    gpu__time_duration.sum                                       us        40.93\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        60.55\n    lts__t_bytes.sum                                          Mbyte        60.73\n    lts__t_sector_op_read_hit_rate.pct                            %         5.76\n    sm__inst_executed.sum                                      inst     28348416\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        53.16\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        128,
+        1,
+        1
+      ],
+      "buf_sizes": [
+        16384,
+        41287680,
+        24576,
+        16384
+      ],
+      "cubin_sha256": "e1685b51941b066000e587aaa314ed5de975865ac52e08cb6a116f5a331746f0",
+      "grid": [
+        4096,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 41.34,
+        "dram__bytes_op_read.sum": 41.34,
+        "dram__bytes_op_write.sum": 0.0,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 67.54,
+        "gpu__time_duration.sum": 34.72,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 64.83,
+        "lts__t_bytes.sum": 49.37,
+        "lts__t_sector_op_read_hit_rate.pct": 15.94,
+        "sm__inst_executed.sum": 24248320.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 64.83
+      },
+      "name": "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2364046\n[2364046] python3.12@127.0.0.1\n  q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd (4096, 1, 1)x(128, 1, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte        41.34\n    dram__bytes_op_read.sum                                   Mbyte        41.34\n    dram__bytes_op_write.sum                                   byte            0\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        67.54\n    gpu__time_duration.sum                                       us        34.72\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        64.83\n    lts__t_bytes.sum                                          Mbyte        49.37\n    lts__t_sector_op_read_hit_rate.pct                            %        15.94\n    sm__inst_executed.sum                                      inst     24248320\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        64.83\n    --------------------------------------------------- ----------- ------------\n\n"
+    },
+    {
+      "block": [
+        2,
+        16,
+        1
+      ],
+      "buf_sizes": [
+        610304,
+        510504960,
+        8192
+      ],
+      "cubin_sha256": "46ae07b81bad8bd00b1c06bb8fe5af9abbcf0c3f85d936423fdf79687bdaf4a1",
+      "grid": [
+        75968,
+        1,
+        1
+      ],
+      "metrics": {
+        "dram__bytes.sum": 515.7,
+        "dram__bytes_op_read.sum": 510.52,
+        "dram__bytes_op_write.sum": 5.18,
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed": 88.42,
+        "gpu__time_duration.sum": 330.53,
+        "l1tex__throughput.avg.pct_of_peak_sustained_elapsed": 69.29,
+        "lts__t_bytes.sum": 521.95,
+        "lts__t_sector_op_read_hit_rate.pct": 1.68,
+        "sm__inst_executed.sum": 292324864.0,
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed": 69.29
+      },
+      "name": "q6k_gen_coop_151936_4096_inkernel",
+      "ncu_returncode": 0,
+      "raw_tail": "  \"schema\": \"tinygrad.nv_cubin_ncu_launcher.v1\",\n  \"symbol\": \"q6k_gen_coop_151936_4096_inkernel\",\n  \"verdict\": \"CUDA_LAUNCH_OK\"\n}\n==PROF== Disconnected from process 2364081\n[2364081] python3.12@127.0.0.1\n  q6k_gen_coop_151936_4096_inkernel (75968, 1, 1)x(2, 16, 1), Context 1, Stream 13, Device 0, CC 12.0\n    Section: Command line profiler metrics\n    --------------------------------------------------- ----------- ------------\n    Metric Name                                         Metric Unit Metric Value\n    --------------------------------------------------- ----------- ------------\n    dram__bytes.sum                                           Mbyte       515.70\n    dram__bytes_op_read.sum                                   Mbyte       510.52\n    dram__bytes_op_write.sum                                  Mbyte         5.18\n    dram__throughput.avg.pct_of_peak_sustained_elapsed            %        88.42\n    gpu__time_duration.sum                                       us       330.53\n    l1tex__throughput.avg.pct_of_peak_sustained_elapsed           %        69.29\n    lts__t_bytes.sum                                          Mbyte       521.95\n    lts__t_sector_op_read_hit_rate.pct                            %         1.68\n    sm__inst_executed.sum                                      inst    292324864\n    sm__throughput.avg.pct_of_peak_sustained_elapsed              %        69.29\n    --------------------------------------------------- ----------- ------------\n\n"
+    }
+  ],
+  "schema": "tinygrad.nv_row_counter_bridge.v1"
+}

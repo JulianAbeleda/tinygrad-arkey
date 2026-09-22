@@ -45,7 +45,7 @@ cross-validation that this measurement reproduces a known baseline.
 - beats the materialized dequant→GEMM incumbent (2293) by **+57%** (3610 sustained, per §3's
   refutation; the earlier "+12% sustained" framing rested on 2558, now shown to be harness overhead)
 - beats the fp16 GEMM figure (2733) — but note that figure was an *unsearched default schedule*, so it
-  was never a ceiling. Treating it as one would be trap 7 in `what-makes-a-token-fast` §9.
+  was never a ceiling. Treating it as one would be trap 7 in `what-makes-inference-fast` §9.
 
 **NOT valid — do not make this comparison:**
 

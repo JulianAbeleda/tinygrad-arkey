@@ -1,0 +1,82 @@
+{
+  "candidate": {
+    "blocks_per_sub": 2,
+    "blocks_per_warp": 4,
+    "id": "q6k_v_four_warp_fp16_direct_1024_4096",
+    "parts": 1,
+    "provider_nodes": 0,
+    "threads_per_row": 128,
+    "warps_per_row": 4
+  },
+  "control": {
+    "id": "q6k_gen_partial_1024_4096_4",
+    "spec": {
+      "accumulators": 1,
+      "block_axis": "reduce",
+      "epilogue": "",
+      "k": 4096,
+      "lane_extent": 16,
+      "parts": 4,
+      "pos_axis": "reduce",
+      "quant": "Q6_K",
+      "reduction": "external_sum",
+      "role": "attn_kv",
+      "route_family": "q6k_partial",
+      "row_tile": 4,
+      "rows": 1024,
+      "storage": "packed_u16",
+      "target": "amd_gfx1100"
+    }
+  },
+  "correctness": {
+    "atol": 0.02,
+    "candidate_max_abs_ref": 1.9073486328125e-05,
+    "candidate_vs_control_max_abs": 2.956390380859375e-05,
+    "control_max_abs_ref": 2.956390380859375e-05,
+    "pass": true
+  },
+  "device": "NV",
+  "git_commit": "5f4e554f1815b5706cad45914d89f69397bdfd23",
+  "payload": {
+    "q6_sha256": "653c9331685e40d02af27d1a2cc60747ca5b7c9a00b0135caed9f31573b03881",
+    "x_sha256": "b859acf14292c4299bdbb2fe826389dbf62ae589355801b44dc67ee34d5ccc3f"
+  },
+  "schema": "tinygrad.q6k_v_four_warp_fp16_microgate.v1",
+  "timing": {
+    "candidate_b": [
+      132.93483,
+      130.061325,
+      129.9404,
+      130.08442,
+      130.10456,
+      129.325795,
+      129.79242
+    ],
+    "candidate_median": 130.061325,
+    "candidate_vs_partial_kernel_only_delta": -0.3863749999999868,
+    "control_a": [
+      184.402965,
+      165.11414000000002,
+      73.01585,
+      72.650615,
+      72.7191,
+      72.70447,
+      72.553935
+    ],
+    "control_c": [
+      73.34908,
+      72.596465,
+      72.733925,
+      73.12265500000001,
+      72.766385,
+      73.324635,
+      72.58333999999999
+    ],
+    "control_midpoint_median": 72.74274249999999,
+    "delta": 57.31858250000002,
+    "partial_kernel_only_median": 130.4477,
+    "replays": 200,
+    "reps": 7,
+    "unit": "us_per_graph_replay"
+  }
+}

@@ -1,0 +1,282 @@
+{
+  "admitted_blocks": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "arm": "production",
+  "complete_replay_count": 21,
+  "count": 8,
+  "depth": 512,
+  "gpu_state": {
+    "clocks.mem": "14001",
+    "clocks.sm": "2842",
+    "name": "NVIDIA GeForce RTX 5090",
+    "persistence_mode": "Enabled",
+    "power.draw": "126.78",
+    "temperature.gpu": "42"
+  },
+  "group_size_histogram": {
+    "32": 36,
+    "64": 36,
+    "80": 21,
+    "128": 36,
+    "256": 36,
+    "394": 15
+  },
+  "ledger": {
+    "node_count": 560.0,
+    "node_sum_us": 4508.064,
+    "overlap_us": 3.664,
+    "span_us": 5957.5,
+    "union_us": 4505.125
+  },
+  "max_context": 1024,
+  "per_name_table": {
+    "E": {
+      "mean_us": 1.812,
+      "median_us": 1.792,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "E_1187_32_4": {
+      "mean_us": 5.095,
+      "median_us": 5.072,
+      "per_replay_count": 2.0,
+      "replay_samples": 18
+    },
+    "E_16_4_2_8_16_2_4_4": {
+      "mean_us": 2.953,
+      "median_us": 3.04,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "E_2": {
+      "mean_us": 2.014,
+      "median_us": 2.08,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "E_32_32_4": {
+      "mean_us": 54.56,
+      "median_us": 54.544,
+      "per_replay_count": 38.0,
+      "replay_samples": 18
+    },
+    "E_8_8_16_2": {
+      "mean_us": 41.737,
+      "median_us": 41.76,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": {
+      "mean_us": 232.891,
+      "median_us": 232.848,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "flash_fused_gmax_combine_f16_32_128": {
+      "mean_us": 101.282,
+      "median_us": 101.232,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "q4k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": {
+      "mean_us": 375.031,
+      "median_us": 374.848,
+      "per_replay_count": 18.0,
+      "replay_samples": 18
+    },
+    "q4k_g3_lanemap_gemv_1024_4096": {
+      "mean_us": 130.565,
+      "median_us": 130.464,
+      "per_replay_count": 28.0,
+      "replay_samples": 18
+    },
+    "q4k_g3_lanemap_gemv_4096_4096": {
+      "mean_us": 165.108,
+      "median_us": 165.104,
+      "per_replay_count": 19.0,
+      "replay_samples": 18
+    },
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": {
+      "mean_us": 330.891,
+      "median_us": 330.864,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "q4k_g3_lanemap_gemv_w1w3fused16_12288_4096": {
+      "mean_us": 1358.236,
+      "median_us": 1358.288,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "q4k_warp_coop_q8_dp4a_partial_1024_4096": {
+      "mean_us": 94.932,
+      "median_us": 94.928,
+      "per_replay_count": 26.0,
+      "replay_samples": 18
+    },
+    "q4k_warp_coop_q8_dp4a_partial_4096_4096": {
+      "mean_us": 140.19,
+      "median_us": 140.144,
+      "per_replay_count": 17.0,
+      "replay_samples": 18
+    },
+    "q6k_fp16_mmvq_direct_4096_12288_epi_ffnresadd": {
+      "mean_us": 551.643,
+      "median_us": 551.52,
+      "per_replay_count": 18.0,
+      "replay_samples": 18
+    },
+    "q6k_gen_coop_151936_4096_inkernel": {
+      "mean_us": 312.359,
+      "median_us": 312.112,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "q6k_q8_warp_direct_1024_4096": {
+      "mean_us": 30.082,
+      "median_us": 30.08,
+      "per_replay_count": 8.0,
+      "replay_samples": 18
+    },
+    "q6k_v_four_warp_fp16_direct_1024_4096": {
+      "mean_us": 44.987,
+      "median_us": 44.928,
+      "per_replay_count": 10.0,
+      "replay_samples": 18
+    },
+    "r_128_16_8_1187": {
+      "mean_us": 10.967,
+      "median_us": 10.976,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "r_16_256": {
+      "mean_us": 124.583,
+      "median_us": 124.528,
+      "per_replay_count": 37.0,
+      "replay_samples": 18
+    },
+    "r_16_8": {
+      "mean_us": 1.285,
+      "median_us": 1.248,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "r_32_32_4_32_4": {
+      "mean_us": 4.487,
+      "median_us": 4.48,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "r_32_32_4_4": {
+      "mean_us": 19.253,
+      "median_us": 19.216,
+      "per_replay_count": 17.0,
+      "replay_samples": 18
+    },
+    "r_32_4_1187": {
+      "mean_us": 39.387,
+      "median_us": 39.36,
+      "per_replay_count": 1.0,
+      "replay_samples": 18
+    },
+    "r_8_32_4_4": {
+      "mean_us": 29.367,
+      "median_us": 29.344,
+      "per_replay_count": 26.0,
+      "replay_samples": 18
+    },
+    "reduce_output_rmsnorm_1_4096": {
+      "mean_us": 134.332,
+      "median_us": 134.368,
+      "per_replay_count": 19.0,
+      "replay_samples": 18
+    },
+    "reduce_output_rmsnorm_rope_32_128": {
+      "mean_us": 68.892,
+      "median_us": 68.752,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "reduce_output_rmsnorm_rope_8_128": {
+      "mean_us": 68.78,
+      "median_us": 68.8,
+      "per_replay_count": 36.0,
+      "replay_samples": 18
+    },
+    "rmsnorm_q8_1_llama_provider_4096": {
+      "mean_us": 30.425,
+      "median_us": 30.368,
+      "per_replay_count": 17.0,
+      "replay_samples": 18
+    }
+  },
+  "reps": 2,
+  "route_source": "production-policy",
+  "schema": "tinygrad.nv_qk_norm_rope_semantic_profile.v1",
+  "settled": {
+    "accepted_samples_ms_per_token": [
+      6.730648625,
+      6.644770875
+    ],
+    "external_contention_high_limit_ms": 6.945342999999999,
+    "median_ms_per_token": 6.68770975,
+    "prelude_token": 13876,
+    "rejected_high_samples_ms_per_token": [],
+    "samples_ms_per_token": [
+      6.730648625,
+      6.644770875
+    ],
+    "timed_token_count": 16,
+    "token_hashes": [
+      "9e6664fd1d67a6124e786daaa1d895bdb64b972c3991c54dd5fcc6cea16f6881",
+      "09e23af5efdd347a236110c102ad9fd8d6881bdaa2d929dffac8ec50a28da44a"
+    ],
+    "token_stream_hash": "cc523cc67a8622f6a0efc130c1ec7497faa0620448f7bc5ea59385273ac92fb6",
+    "warmup_tokens": [
+      38835,
+      34208,
+      13,
+      279,
+      3974,
+      13876
+    ]
+  },
+  "steady_replay_count": 18
+}

@@ -19,7 +19,7 @@ def test_every_env_gate_in_the_builder_is_either_an_arm_or_declared_out_of_scope
   arm would be certified by a gate that never compiled it -- which is the exact hole this was built to close."""
   src = (ROOT / "extra/llm_research/flash_kernels.py").read_text()
   found = set(re.findall(r'getenv\(\s*"([A-Z0-9_]+)"', src))
-  covered = {k for _, env in fvf.ARMS for k in env}
+  covered = {k for _, env, _ in fvf.ARMS for k in env}
   # DECODE_STAGE_COALESCE is deliberately out of scope; see the ARMS comment in the gate.
   out_of_scope = {"DECODE_STAGE_COALESCE"}
   assert found - covered - out_of_scope == set(), \
@@ -27,12 +27,23 @@ def test_every_env_gate_in_the_builder_is_either_an_arm_or_declared_out_of_scope
 
 
 def test_the_default_arm_is_first_and_sets_nothing():
-  assert fvf.ARMS[0][0] == "default" and fvf.ARMS[0][1] == {}
+  assert fvf.ARMS[0][0] == "default" and fvf.ARMS[0][1] == {} and fvf.ARMS[0][2] == {}
 
 
-def test_split_score_arm_is_present():
-  """This is the arm extra/audit/lowering_baseline.py cannot see, and the reason this gate exists."""
-  assert "DECODE_ATTN_TILE_SPLIT_SCORE" in dict(fvf.ARMS)["split_score"]
+def test_inline_reduce_arm_drives_the_descriptor_field():
+  """The inline arm must drive the descriptor-owned reduce_structure field (the only path production
+  consults now), while keeping the legacy env alias declared covered for the untouched research builder."""
+  arms = {name: (env, kwargs) for name, env, kwargs in fvf.ARMS}
+  assert "inline_reduce" in arms
+  env, kwargs = arms["inline_reduce"]
+  assert env == {"DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE": "1"}
+  assert kwargs == {"reduce_structure": "inline"}
+
+
+def test_dead_split_score_branch_is_not_declared_as_an_arm():
+  """The DECODE_ATTN_TILE_SPLIT_SCORE branch no longer exists in the builder at HEAD, so declaring it as an
+  arm would certify a graph the builder cannot produce. The stored artifact must not claim that arm either."""
+  assert "split_score" not in {name for name, _, _ in fvf.ARMS}
 
 
 def test_both_score_variants_share_one_merge_tail():

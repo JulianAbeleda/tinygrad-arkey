@@ -1,0 +1,604 @@
+{
+  "layers": 36,
+  "per_family_us": {
+    "flash_combine": {
+      "off_path_us": 0.0,
+      "on_path_us": 105.75,
+      "total_us": 105.75
+    },
+    "flash_score": {
+      "off_path_us": 0.0,
+      "on_path_us": 266.75,
+      "total_us": 266.75
+    },
+    "gemv_kv": {
+      "off_path_us": 298.75,
+      "on_path_us": 0.0,
+      "total_us": 298.75
+    },
+    "reduce": {
+      "off_path_us": 30.75,
+      "on_path_us": 24.0,
+      "total_us": 54.75
+    },
+    "residual": {
+      "off_path_us": 64.25,
+      "on_path_us": 65.5,
+      "total_us": 129.75
+    },
+    "rmsnorm": {
+      "off_path_us": 89.75,
+      "on_path_us": 97.0,
+      "total_us": 186.75
+    }
+  },
+  "per_layer": [
+    {
+      "dead_us": 4.75,
+      "exposure_us": 36.25,
+      "layer": 0,
+      "o_id": 16,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 17.75,
+      "q_id": 7,
+      "spine_node_ids": [
+        10,
+        12,
+        14,
+        15
+      ]
+    },
+    {
+      "dead_us": 2.75,
+      "exposure_us": 34.0,
+      "layer": 1,
+      "o_id": 33,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 18.0,
+      "q_id": 22,
+      "spine_node_ids": [
+        25,
+        27,
+        29,
+        31,
+        32
+      ]
+    },
+    {
+      "dead_us": 2.75,
+      "exposure_us": 33.0,
+      "layer": 2,
+      "o_id": 50,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 16.5,
+      "q_id": 39,
+      "spine_node_ids": [
+        42,
+        44,
+        46,
+        48,
+        49
+      ]
+    },
+    {
+      "dead_us": 4.0,
+      "exposure_us": 32.75,
+      "layer": 3,
+      "o_id": 67,
+      "off_path_mass_us": 12.75,
+      "on_path_mass_us": 16.0,
+      "q_id": 56,
+      "spine_node_ids": [
+        59,
+        61,
+        63,
+        65,
+        66
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 33.75,
+      "layer": 4,
+      "o_id": 85,
+      "off_path_mass_us": 14.0,
+      "on_path_mass_us": 16.5,
+      "q_id": 73,
+      "spine_node_ids": [
+        76,
+        79,
+        81,
+        83,
+        84
+      ]
+    },
+    {
+      "dead_us": 8.75,
+      "exposure_us": 41.5,
+      "layer": 5,
+      "o_id": 103,
+      "off_path_mass_us": 15.25,
+      "on_path_mass_us": 17.5,
+      "q_id": 91,
+      "spine_node_ids": [
+        94,
+        97,
+        99,
+        101,
+        102
+      ]
+    },
+    {
+      "dead_us": 2.25,
+      "exposure_us": 31.75,
+      "layer": 6,
+      "o_id": 120,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 15.75,
+      "q_id": 109,
+      "spine_node_ids": [
+        112,
+        114,
+        116,
+        118,
+        119
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 30.75,
+      "layer": 7,
+      "o_id": 138,
+      "off_path_mass_us": 13.5,
+      "on_path_mass_us": 15.25,
+      "q_id": 126,
+      "spine_node_ids": [
+        129,
+        132,
+        134,
+        136,
+        137
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 33.0,
+      "layer": 8,
+      "o_id": 156,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 16.0,
+      "q_id": 144,
+      "spine_node_ids": [
+        147,
+        150,
+        152,
+        154,
+        155
+      ]
+    },
+    {
+      "dead_us": 1.75,
+      "exposure_us": 30.0,
+      "layer": 9,
+      "o_id": 173,
+      "off_path_mass_us": 12.5,
+      "on_path_mass_us": 15.75,
+      "q_id": 162,
+      "spine_node_ids": [
+        165,
+        167,
+        169,
+        171,
+        172
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 32.75,
+      "layer": 10,
+      "o_id": 191,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 15.75,
+      "q_id": 179,
+      "spine_node_ids": [
+        182,
+        185,
+        187,
+        189,
+        190
+      ]
+    },
+    {
+      "dead_us": 3.5,
+      "exposure_us": 32.0,
+      "layer": 11,
+      "o_id": 209,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 15.5,
+      "q_id": 197,
+      "spine_node_ids": [
+        200,
+        203,
+        205,
+        207,
+        208
+      ]
+    },
+    {
+      "dead_us": 0.5,
+      "exposure_us": 31.75,
+      "layer": 12,
+      "o_id": 226,
+      "off_path_mass_us": 12.5,
+      "on_path_mass_us": 18.75,
+      "q_id": 215,
+      "spine_node_ids": [
+        218,
+        220,
+        222,
+        224,
+        225
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 33.75,
+      "layer": 13,
+      "o_id": 241,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 16.75,
+      "q_id": 232,
+      "spine_node_ids": [
+        235,
+        237,
+        239,
+        240
+      ]
+    },
+    {
+      "dead_us": 3.5,
+      "exposure_us": 34.25,
+      "layer": 14,
+      "o_id": 259,
+      "off_path_mass_us": 14.75,
+      "on_path_mass_us": 16.0,
+      "q_id": 247,
+      "spine_node_ids": [
+        250,
+        253,
+        255,
+        257,
+        258
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 30.5,
+      "layer": 15,
+      "o_id": 276,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 15.5,
+      "q_id": 265,
+      "spine_node_ids": [
+        268,
+        270,
+        272,
+        274,
+        275
+      ]
+    },
+    {
+      "dead_us": 1.75,
+      "exposure_us": 30.75,
+      "layer": 16,
+      "o_id": 294,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 16.0,
+      "q_id": 282,
+      "spine_node_ids": [
+        285,
+        288,
+        290,
+        292,
+        293
+      ]
+    },
+    {
+      "dead_us": 2.75,
+      "exposure_us": 32.25,
+      "layer": 17,
+      "o_id": 312,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 16.25,
+      "q_id": 300,
+      "spine_node_ids": [
+        303,
+        306,
+        308,
+        310,
+        311
+      ]
+    },
+    {
+      "dead_us": 3.0,
+      "exposure_us": 31.25,
+      "layer": 18,
+      "o_id": 329,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 15.25,
+      "q_id": 318,
+      "spine_node_ids": [
+        321,
+        323,
+        325,
+        327,
+        328
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 29.25,
+      "layer": 19,
+      "o_id": 344,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.0,
+      "q_id": 335,
+      "spine_node_ids": [
+        338,
+        340,
+        342,
+        343
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 32.0,
+      "layer": 20,
+      "o_id": 359,
+      "off_path_mass_us": 14.0,
+      "on_path_mass_us": 14.75,
+      "q_id": 350,
+      "spine_node_ids": [
+        353,
+        355,
+        357,
+        358
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 30.25,
+      "layer": 21,
+      "o_id": 374,
+      "off_path_mass_us": 13.5,
+      "on_path_mass_us": 14.75,
+      "q_id": 365,
+      "spine_node_ids": [
+        368,
+        370,
+        372,
+        373
+      ]
+    },
+    {
+      "dead_us": 5.75,
+      "exposure_us": 33.5,
+      "layer": 22,
+      "o_id": 389,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.5,
+      "q_id": 380,
+      "spine_node_ids": [
+        383,
+        385,
+        387,
+        388
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 30.25,
+      "layer": 23,
+      "o_id": 404,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 15.0,
+      "q_id": 395,
+      "spine_node_ids": [
+        398,
+        400,
+        402,
+        403
+      ]
+    },
+    {
+      "dead_us": 2.5,
+      "exposure_us": 29.75,
+      "layer": 24,
+      "o_id": 419,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 14.25,
+      "q_id": 410,
+      "spine_node_ids": [
+        413,
+        415,
+        417,
+        418
+      ]
+    },
+    {
+      "dead_us": 4.0,
+      "exposure_us": 31.5,
+      "layer": 25,
+      "o_id": 434,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 14.5,
+      "q_id": 425,
+      "spine_node_ids": [
+        428,
+        430,
+        432,
+        433
+      ]
+    },
+    {
+      "dead_us": 2.0,
+      "exposure_us": 30.25,
+      "layer": 26,
+      "o_id": 449,
+      "off_path_mass_us": 13.5,
+      "on_path_mass_us": 14.75,
+      "q_id": 440,
+      "spine_node_ids": [
+        443,
+        445,
+        447,
+        448
+      ]
+    },
+    {
+      "dead_us": 2.5,
+      "exposure_us": 30.25,
+      "layer": 27,
+      "o_id": 464,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.5,
+      "q_id": 455,
+      "spine_node_ids": [
+        458,
+        460,
+        462,
+        463
+      ]
+    },
+    {
+      "dead_us": 2.5,
+      "exposure_us": 30.0,
+      "layer": 28,
+      "o_id": 479,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.25,
+      "q_id": 470,
+      "spine_node_ids": [
+        473,
+        475,
+        477,
+        478
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 32.25,
+      "layer": 29,
+      "o_id": 494,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 15.25,
+      "q_id": 485,
+      "spine_node_ids": [
+        488,
+        490,
+        492,
+        493
+      ]
+    },
+    {
+      "dead_us": 3.75,
+      "exposure_us": 32.0,
+      "layer": 30,
+      "o_id": 509,
+      "off_path_mass_us": 13.75,
+      "on_path_mass_us": 14.5,
+      "q_id": 500,
+      "spine_node_ids": [
+        503,
+        505,
+        507,
+        508
+      ]
+    },
+    {
+      "dead_us": 4.25,
+      "exposure_us": 32.0,
+      "layer": 31,
+      "o_id": 524,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.5,
+      "q_id": 515,
+      "spine_node_ids": [
+        518,
+        520,
+        522,
+        523
+      ]
+    },
+    {
+      "dead_us": 2.5,
+      "exposure_us": 30.0,
+      "layer": 32,
+      "o_id": 539,
+      "off_path_mass_us": 13.0,
+      "on_path_mass_us": 14.5,
+      "q_id": 530,
+      "spine_node_ids": [
+        533,
+        535,
+        537,
+        538
+      ]
+    },
+    {
+      "dead_us": 3.25,
+      "exposure_us": 31.75,
+      "layer": 33,
+      "o_id": 554,
+      "off_path_mass_us": 13.5,
+      "on_path_mass_us": 15.0,
+      "q_id": 545,
+      "spine_node_ids": [
+        548,
+        550,
+        552,
+        553
+      ]
+    },
+    {
+      "dead_us": 3.5,
+      "exposure_us": 31.5,
+      "layer": 34,
+      "o_id": 569,
+      "off_path_mass_us": 13.5,
+      "on_path_mass_us": 14.5,
+      "q_id": 560,
+      "spine_node_ids": [
+        563,
+        565,
+        567,
+        568
+      ]
+    },
+    {
+      "dead_us": 1.75,
+      "exposure_us": 29.75,
+      "layer": 35,
+      "o_id": 584,
+      "off_path_mass_us": 13.25,
+      "on_path_mass_us": 14.75,
+      "q_id": 575,
+      "spine_node_ids": [
+        578,
+        580,
+        582,
+        583
+      ]
+    }
+  ],
+  "schema": "tinygrad.nv_s1_onpath_offpath.v1",
+  "source_control": "docs/task_workflow/output/nv-rmsnorm-phaseB-control-20260820.json",
+  "summary": {
+    "dead_total_us": 109.75,
+    "exposure_total_us": 1152.25,
+    "off_path_mass_total_us": 483.5,
+    "on_path_mass_total_us": 559.0,
+    "overlap_ceiling_us": 483.5,
+    "post_overlap_floor_us": 559.0
+  }
+}

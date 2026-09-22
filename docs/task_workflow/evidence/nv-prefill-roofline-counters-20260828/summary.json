@@ -1,0 +1,45 @@
+{
+  "schema": "tinygrad.nv_prefill_q4_gateup_roofline_counters.v1",
+  "target": "NVIDIA RTX 5090 sm_120",
+  "shape": {"m": 512, "n": 12288, "k": 4096},
+  "useful_gmac": 25.769803776,
+  "analytic_int8_roof_tmac_s": 407.7,
+  "retained_cold_lifecycle": {
+    "quantize_us": 3.1806,
+    "mmq_us_approx": 166.0,
+    "fixup_us": 8.3258,
+    "complete_us_approx": 177.5064,
+    "complete_tmac_s": 145.18,
+    "roof_pct": 35.61
+  },
+  "ncu_cache_conditioned_main": {
+    "duration_us": 89.056,
+    "dram_bytes": 11921664,
+    "l2_requested_bytes": 137059616,
+    "l2_hit_rate_pct": 87.905152,
+    "shared_bank_read_bytes": 172626416,
+    "shared_bank_write_bytes": 71647600,
+    "imma_ops": 17179869184,
+    "imma_warp_instructions": 2097152,
+    "tensor_active_elapsed_pct": 28.696447,
+    "active_warps_max_pct": 16.654424,
+    "long_scoreboard_per_issue_active": 0.374165,
+    "short_scoreboard_per_issue_active": 0.091759,
+    "registers_per_thread": 251,
+    "shared_bytes_per_cta": 58880,
+    "local_spilling_requests": 0,
+    "useful_tmac_s": 289.36,
+    "roof_pct": 70.97,
+    "authority": "physical counters; cache-conditioned replay, not cold wall"
+  },
+  "tiny_fp16_control": {
+    "duration_us": 569.7,
+    "useful_tmac_s": 45.23,
+    "measured_issue_roof_tmac_s": 127.7,
+    "roof_pct": 35.42,
+    "algorithmic_weight_bytes": 402653184,
+    "algorithmic_weight_service_tb_s": 0.7068,
+    "physical_counter_status": "unavailable: direct NV HCQ launch is not intercepted by CUDA API/CUPTI NCU"
+  },
+  "verdict": "after representation conversion, cold packed-weight service plus one-CTA-per-SM register/shared residency limit tensor duty"
+}

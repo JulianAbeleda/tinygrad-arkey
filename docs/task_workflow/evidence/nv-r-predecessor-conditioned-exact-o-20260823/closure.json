@@ -1,0 +1,179 @@
+{
+  "adjudication": {
+    "position_only_C6_minus_C3_us": 0.0,
+    "real_prefix_minus_position_C5_minus_C6_us": 0.016
+  },
+  "arm_medians_us": {
+    "C0": 8.68,
+    "C2": 8.216,
+    "C3": 8.376,
+    "C4": 8.336,
+    "C5": 8.392,
+    "C6": 8.376
+  },
+  "authority_profiles": [
+    "o-session-f-profile.jsonl",
+    "o-session-r-profile.jsonl"
+  ],
+  "authority_sessions": [
+    "o-session-f.json",
+    "o-session-r.json"
+  ],
+  "clean_chain_bridge": {
+    "clean_C_to_C0_us_per_call": 0.9821,
+    "current_P_minus_clean_C_us_per_call": 1.7261,
+    "current_vs_frozen_P_drift_us_per_call": 0.24,
+    "frozen_P_minus_clean_C_us_per_call": 1.4861
+  },
+  "count_weighted_projection": {
+    "C2_minus_C0_us_per_token": -16.704,
+    "C3_minus_C2_us_per_token": 5.76,
+    "C4_minus_C3_us_per_token": -1.44,
+    "C5_minus_C4_us_per_token": 2.016,
+    "P_minus_C0_us_per_token": 26.784,
+    "P_minus_C5_us_per_token": 37.152,
+    "clean_C_to_C0_us_per_token": 35.356,
+    "current_P_minus_clean_C_us_per_token": 62.14,
+    "projection_only": true
+  },
+  "cubin_sha256": {
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": "2b974ac133ccc23faeb95420041da0d86f0c08e6873addbd4f376caa7688a6d7",
+    "flash_fused_gmax_combine_f16_32_128": "885232287deb30e3b491bd212f563c10b4eeefe013892ce24be6c0303edbe9b6",
+    "q4k_g3_lanemap_gemv_epi_resadd_4096_4096": "3e7c9b9e6792c7d0b6d9db53106b9033aaf3d79113b88e469f8ffdb1067fdcda",
+    "rmsnorm_q8_1_llama_provider_4096": "70505ad1fc1b66b0329d5f794881da5f2b0e9196f019a146e912ce6a5f32c6cb"
+  },
+  "identity": {
+    "C2_minus_C0_us": -0.464,
+    "C3_minus_C2_us": 0.16,
+    "C4_minus_C3_us": -0.04,
+    "C5_minus_C4_us": 0.056,
+    "P_minus_C0_us": 0.744,
+    "P_minus_C5_us": 1.032,
+    "identity_residual_us": 0.0
+  },
+  "installed_P_median_us": 9.424,
+  "production_output_checksum": "a5ca76164e6902c086f9f961025dee2e8e6b804a2b12ce06ce1632c017dcd946",
+  "profile_overlap": {
+    "overlapping_interval_count": 0,
+    "overlapping_names": [],
+    "rows": [
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 0,
+        "target_us": 9.76
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 1,
+        "target_us": 9.792
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 2,
+        "target_us": 9.376
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 3,
+        "target_us": 9.44
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 4,
+        "target_us": 9.28
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 5,
+        "target_us": 9.568
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 6,
+        "target_us": 9.536
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 7,
+        "target_us": 9.984
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-f-profile.jsonl",
+        "replay": 8,
+        "target_us": 9.344
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 0,
+        "target_us": 9.952
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 1,
+        "target_us": 9.664
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 2,
+        "target_us": 9.568
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 3,
+        "target_us": 9.216
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 4,
+        "target_us": 9.472
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 5,
+        "target_us": 9.248
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 6,
+        "target_us": 9.408
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 7,
+        "target_us": 9.568
+      },
+      {
+        "overlap_names": [],
+        "profile": "o-session-r-profile.jsonl",
+        "replay": 8,
+        "target_us": 9.28
+      }
+    ],
+    "target_interval_count": 18
+  },
+  "schema": "tinygrad.nv_r_predecessor_conditioned_exact_o_merge.v1",
+  "scope": {
+    "all_occurrences_generalization": "UNMEASURED",
+    "family_count": 36,
+    "measured_occurrence": 0
+  },
+  "token_sha256": "fc90421da972a70fd043dd57f4d30e53c4dd78918a3292725bdb42e63750585a",
+  "verdict": "O_OCCURRENCE0_CLOSED"
+}

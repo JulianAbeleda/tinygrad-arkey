@@ -1,0 +1,21 @@
+{
+  "raw": {
+    "LDSM": 64,
+    "SHFL": 0,
+    "STG.E.64": 64,
+    "STL": 18,
+    "LDL": 28
+  },
+  "coalesced": {
+    "LDSM": 64,
+    "SHFL": 128,
+    "STG.E.64": 64,
+    "STL": 17,
+    "LDL": 25
+  },
+  "source": {
+    "x4": 33,
+    "shfl": 128,
+    "float2_direct_plus_partial": 64
+  }
+}

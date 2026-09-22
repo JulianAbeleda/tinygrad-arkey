@@ -1,0 +1,195 @@
+{
+  "comparison": "traced-mode device intervals; no profile-share scaling",
+  "launches": {
+    "llama": 1186,
+    "llama_unknown": 0,
+    "tiny": 1449,
+    "tiny_unknown": 0
+  },
+  "llama_final_row_proof": {
+    "full_m512_down_main_count": 35,
+    "full_m512_gate_main_count": 35,
+    "full_m512_up_main_count": 35,
+    "layer35_down_grid": [
+      4096,
+      1,
+      1
+    ],
+    "layer35_down_kernel": "mul_mat_vec_q",
+    "layer35_ffn_norm_grid": [
+      1,
+      1,
+      1
+    ],
+    "layer35_gate_up_grid": [
+      12288,
+      1,
+      1
+    ],
+    "layer35_gate_up_kernel": "mul_mat_vec_q",
+    "layer35_gather_launches": 3,
+    "ordinary_m512_ffn_layers": 35
+  },
+  "profiled": {
+    "device_union_debt_ns": 41196467.0,
+    "instrumentation_delta_llama_ns": 749716,
+    "instrumentation_delta_tiny_ns": 5307577.0,
+    "llama_boundary_residual_ns": 2545300,
+    "llama_device_idle_ns": 201442,
+    "llama_device_span_ns": 32884783,
+    "llama_device_union_ns": 32683341,
+    "llama_wall_ns": 35430083,
+    "tiny_boundary_residual_ns": 498691.0,
+    "tiny_device_idle_ns": 307232.0,
+    "tiny_device_span_ns": 74187040.0,
+    "tiny_device_union_ns": 73879808.0,
+    "tiny_wall_ns": 74685731.0
+  },
+  "regions": [
+    {
+      "active_debt_ns": 6080.0,
+      "exclusive_debt_ns": 6080.0,
+      "llama_active_ns": 0,
+      "llama_exclusive_ns": 0,
+      "region": "input/embed/graph setup",
+      "tiny_active_ns": 6080.0,
+      "tiny_exclusive_ns": 6080.0
+    },
+    {
+      "active_debt_ns": -745287.0,
+      "exclusive_debt_ns": -708967.0,
+      "llama_active_ns": 2145511,
+      "llama_exclusive_ns": 2109191,
+      "region": "norm/conversion",
+      "tiny_active_ns": 1400224.0,
+      "tiny_exclusive_ns": 1400224.0
+    },
+    {
+      "active_debt_ns": 1978446.0,
+      "exclusive_debt_ns": 1978446.0,
+      "llama_active_ns": 2514450,
+      "llama_exclusive_ns": 2514450,
+      "region": "Q",
+      "tiny_active_ns": 4492896.0,
+      "tiny_exclusive_ns": 4492896.0
+    },
+    {
+      "active_debt_ns": 959419.0,
+      "exclusive_debt_ns": 959419.0,
+      "llama_active_ns": 1251141,
+      "llama_exclusive_ns": 1251141,
+      "region": "K",
+      "tiny_active_ns": 2210560.0,
+      "tiny_exclusive_ns": 2210560.0
+    },
+    {
+      "active_debt_ns": 5327464.0,
+      "exclusive_debt_ns": 5327464.0,
+      "llama_active_ns": 1053720,
+      "llama_exclusive_ns": 1053720,
+      "region": "V",
+      "tiny_active_ns": 6381184.0,
+      "tiny_exclusive_ns": 6381184.0
+    },
+    {
+      "active_debt_ns": 1670649.0,
+      "exclusive_debt_ns": 1688537.0,
+      "llama_active_ns": 1657447,
+      "llama_exclusive_ns": 1639559,
+      "region": "Flash",
+      "tiny_active_ns": 3328096.0,
+      "tiny_exclusive_ns": 3328096.0
+    },
+    {
+      "active_debt_ns": 2080451.0,
+      "exclusive_debt_ns": 2080451.0,
+      "llama_active_ns": 2397213,
+      "llama_exclusive_ns": 2397213,
+      "region": "O",
+      "tiny_active_ns": 4477664.0,
+      "tiny_exclusive_ns": 4477664.0
+    },
+    {
+      "active_debt_ns": 6674975.0,
+      "exclusive_debt_ns": 6678975.0,
+      "llama_active_ns": 6086529,
+      "llama_exclusive_ns": 6082529,
+      "region": "gate",
+      "tiny_active_ns": 12761504.0,
+      "tiny_exclusive_ns": 12761504.0
+    },
+    {
+      "active_debt_ns": 6894751.0,
+      "exclusive_debt_ns": 6894751.0,
+      "llama_active_ns": 6111329,
+      "llama_exclusive_ns": 6111329,
+      "region": "up",
+      "tiny_active_ns": 13006080.0,
+      "tiny_exclusive_ns": 13006080.0
+    },
+    {
+      "active_debt_ns": -144963.0,
+      "exclusive_debt_ns": -144963.0,
+      "llama_active_ns": 903843,
+      "llama_exclusive_ns": 903843,
+      "region": "activation/multiply",
+      "tiny_active_ns": 758880.0,
+      "tiny_exclusive_ns": 758880.0
+    },
+    {
+      "active_debt_ns": 12066558.0,
+      "exclusive_debt_ns": 12066878.0,
+      "llama_active_ns": 6940482,
+      "llama_exclusive_ns": 6940162,
+      "region": "down",
+      "tiny_active_ns": 19007040.0,
+      "tiny_exclusive_ns": 19007040.0
+    },
+    {
+      "active_debt_ns": 1739349.0,
+      "exclusive_debt_ns": 1798166.0,
+      "llama_active_ns": 1379275,
+      "llama_exclusive_ns": 1320458,
+      "region": "residual/RoPE/KV/support",
+      "tiny_active_ns": 3118624.0,
+      "tiny_exclusive_ns": 3118624.0
+    },
+    {
+      "active_debt_ns": -5024,
+      "exclusive_debt_ns": -1312,
+      "llama_active_ns": 5024,
+      "llama_exclusive_ns": 1312,
+      "region": "final-row gather/prune",
+      "tiny_active_ns": 0,
+      "tiny_exclusive_ns": 0
+    },
+    {
+      "active_debt_ns": 2608414.0,
+      "exclusive_debt_ns": 2611038.0,
+      "llama_active_ns": 313154,
+      "llama_exclusive_ns": 310530,
+      "region": "vocabulary",
+      "tiny_active_ns": 2921568.0,
+      "tiny_exclusive_ns": 2921568.0
+    },
+    {
+      "active_debt_ns": 9408.0,
+      "exclusive_debt_ns": 9408.0,
+      "llama_active_ns": 0,
+      "llama_exclusive_ns": 0,
+      "region": "output/token transfer",
+      "tiny_active_ns": 9408.0,
+      "tiny_exclusive_ns": 9408.0
+    }
+  ],
+  "schema": "tinygrad.nv_prefill_cross_runtime_exact_accounting.v1",
+  "status": "PASS",
+  "unprofiled": {
+    "llama_settled_median_ns": 35019399.0,
+    "llama_settled_min_ns": 34680367,
+    "median_wall_debt_ns": 34472779.0,
+    "minimum_wall_debt_ns": 34697787.0,
+    "tiny_median_ns": 69492178.0,
+    "tiny_min_ns": 69378154.0
+  }
+}

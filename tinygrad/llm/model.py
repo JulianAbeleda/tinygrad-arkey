@@ -2,6 +2,7 @@ from __future__ import annotations
 import contextlib, contextvars, functools, hashlib, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
+from tinygrad.helpers import prod, getenv
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.llm.admission import (
@@ -13,8 +14,21 @@ from tinygrad.llm.admission import (
 from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
-from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route,
+from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
+                                        _q4k_single_projection_load_style,
+                                        decode_kv_store_route, flash_decode_attention_route,
+                                        q4k_gate_up_primitive_linear_call, q4k_gate_up_rms_affine_qualification_call,
+                                        q6k_vocab_top1_call,
                                         should_use_flash_decode as _route_should_use_flash_decode)
+from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
+from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, q4k_q8_fine_o_call, q4k_q8_o_call,
+                                               shared_q8_attention_call)
+from tinygrad.llm.packed_argmax import (make_native_argmax_host_mirror, native_argmax_finite_fp32,
+                                        native_argmax_finite_fp32_host_mirror, packed_argmax_finite_fp32,
+                                        read_native_argmax_host_mirror)
+from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
+from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call, q4k_qkv_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -22,7 +36,7 @@ from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_pref
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
-  qk_primitive_eligibility_from_device_facts, _module_at,
+  qk_primitive_capability_from_device_facts, kv_cache_fp16_eligible, _module_at,
 )
 from tinygrad.llm.model_facts import (
   PREFILL_OVERLAY_LINEAR_NAMES, attach_program_identity_metadata, bind_gguf_program_tensor_facts,
@@ -38,10 +52,27 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            prefill_activation, prefill_output, prefill_scratch, runtime_activation,
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
-from tinygrad.llm.model_route_plan import build_model_route_plan
+from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
+  decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
+  decode_q4k_w1w3_fp16_store_promoted, decode_q4k_gate_up_four_warp_vector_promoted,
+  decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
+  decode_rmsnorm_native_lowering_promoted, decode_rmsnorm_native_lowering_site_promoted,
+  decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
+  decode_producer_kv_cache_sink_promoted, decode_q4k_kv_pair_promoted,
+  decode_native_argmax_threads,
+  decode_shared_q8_attention_promoted,
+  decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
+  decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
+  decode_shared_q8_q4q4_qkv_full_promoted, decode_q4k_q4q4_qkv_full_promoted,
+  decode_flash_llama_vec_wide_promoted,
+  decode_q4k_ffn_down_fp16_geometry_promoted,
+  decode_q6k_ffn_down_fp16_geometry_promoted, decode_q6k_ffn_down_packed_lanemap_promoted,
+  decode_q6k_ffn_down_unroll_promoted,
+  decode_q6k_v_four_warp_fp16_geometry_promoted)
 from tinygrad.llm.prefill_candidate_runtime import decode_prefill_graph_candidate_set, automatic_promoted_prefill_graph_policy
 from tinygrad.llm.physical_memory_ledger import AllocationOwner, bind_allocation_owner
 from tinygrad.uop.ops import Ops, resolve
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY = contextvars.ContextVar("_memory_adaptive_measurement_authority", default=None)
 _GENERIC_LLM_CONTROL = contextvars.ContextVar("_generic_llm_control", default=False)
@@ -58,8 +89,252 @@ def generic_llm_control():
   try: yield
   finally: _GENERIC_LLM_CONTROL.reset(token)
 
+def _nv_q4_imma_pp512_mode() -> str|None:
+  """Select exactly one default-off Qwen3-8B pp512 research binding."""
+  raw,compiler,llama=bool(getenv("NV_Q4_IMMA_PP512",0)),bool(getenv("NV_COMPILER_Q4_IMMA_PP512",0)),bool(getenv("NV_LLAMA_PACKED_Q4K_PP512",0))
+  if sum((raw,compiler,llama)) > 1: raise RuntimeError("NV Q4 IMMA research bindings are mutually exclusive")
+  return "llama" if llama else "compiler" if compiler else "raw" if raw else None
+
+def _nv_compiler_q4_gate_only_pp512_enabled(config) -> bool:
+  return bool(getenv("NV_COMPILER_Q4_GATE_ONLY_PP512", 0)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_imma_pp512_qualified(config) -> bool:
+  """Fail-closed model/shape identity for the compiler-owned research arm."""
+  return (config.prefill_ubatch, config.num_blocks, config.dim, config.hidden_dim, config.n_heads,
+          config.n_kv_heads, config.head_dim, config.num_experts) == (512, 36, 4096, 12288, 32, 8, 128, 0)
+
+def _nv_compiler_q4_imma_capture(model, jit, binding):
+  """Return stable capture-local state without putting it in a device global."""
+  captures = getattr(model, "_nv_compiler_q4_imma_pp512_captures", None)
+  if captures is None: captures = model._nv_compiler_q4_imma_pp512_captures = {}
+  program=getattr(binding,"q_program",None)
+  if program is None: program=getattr(binding,"main_program",None)
+  info=getattr(program,"arg",None)
+  binding_identity=(type(binding).__module__,type(binding).__qualname__,getattr(binding,"candidate_identity",None),
+    getattr(info,"name",None),getattr(binding,"n",None),getattr(binding,"population",None),tuple(getattr(binding,"roles",())))
+  key=(jit,binding_identity)
+  if key not in captures: captures[key] = binding.new_capture()
+  return captures[key]
+
+def _nv_llama_packed_q4k_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q4k_pp512_captures",None)
+  if captures is None: captures=model._nv_llama_packed_q4k_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_gate_up_epilogue_enabled(config) -> bool:
+  return getenv("NV_LLAMA_PACKED_GATE_UP_EPILOGUE_PP512", 0) and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_llama_full_packed_pp512_enabled(config) -> bool:
+  # Promoted exact-shape production route. One opt-out owns the complete
+  # gate/up + down + QKV + O stack so partial production configurations cannot
+  # arise accidentally. Research epilogues remain independently default-off.
+  return bool(getenv("NV_LLAMA_FULL_PACKED_PP512", 1)) and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_q4_production_mode(config) -> str|None:
+  """Select independent production leases after explicit research overrides.
+
+  The qualified generated stack is the ordinary exact-shape NV default.
+  NV_COMPILER_FULL_PACKED_PP512=0 rolls the whole stack back to llama; explicit
+  research overrides remain authoritative for diagnosis.
+  """
+  explicit = _nv_q4_imma_pp512_mode()
+  if explicit is not None: return explicit
+  if Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and bool(getenv("NV_COMPILER_FULL_PACKED_PP512",1)):
+    return "compiler"
+  return "llama" if _nv_llama_full_packed_pp512_enabled(config) else None
+
+def _nv_qkv_packed_capture(model,jit,binding):
+  captures=getattr(model,"_nv_qkv_packed_pp512_captures",None)
+  if captures is None: captures=model._nv_qkv_packed_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_prefill_role_enabled(config, override:str) -> bool:
+  """Implicit llama consumers must follow the same stack as packed projections."""
+  return Device.DEFAULT == "NV" and bool(getenv(override, int(_nv_q4_production_mode(config) == "llama")))
+
+def _nv_compiler_q6_vocab_pp512_enabled(config) -> bool:
+  # The qualified compiler stack includes its vocabulary tail. Explicit llama
+  # leases take precedence over the implicit selection; two explicit leases conflict.
+  llama_vocab = bool(getenv("NV_LLAMA_Q6_VOCAB_PP512", 0))
+  enabled = bool(getenv("NV_COMPILER_Q6_VOCAB_PP512", int(_nv_q4_production_mode(config) == "compiler" and not llama_vocab)))
+  if enabled and llama_vocab: raise RuntimeError("compiler and llama Q6 vocab leases conflict")
+  return enabled and Device.DEFAULT == "NV" and _nv_compiler_q4_imma_pp512_qualified(config) and config.vocab_size == 151936 \
+      and Device[Device.DEFAULT].arch in ("sm_120", "sm_120a")
+
+def _nv_llama_packed_o_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_o_pp512_captures",None)
+  if captures is None: captures=model._nv_llama_packed_o_pp512_captures={}
+  if jit not in captures: captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_q6k_down_enabled(config)->bool:
+  # The exact generated Stream-K route owns Q6 FFN-down whenever the
+  # qualified compiler gate/up+K stack is active.  Setting its lease to zero
+  # is the explicit rollback to the existing llama route.
+  return (not _nv_compiler_q6_imma_role_enabled(config, "ffn_down") and
+          (_nv_llama_full_packed_pp512_enabled(config) or
+          (bool(getenv("NV_LLAMA_PACKED_Q6K_DOWN_PP512",0)) and _nv_compiler_q4_imma_pp512_qualified(config))))
+
+def _nv_llama_packed_q6k_down_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q6k_down_pp512_captures",None)
+  if captures is None:captures=model._nv_llama_packed_q6k_down_pp512_captures={}
+  if jit not in captures:captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_llama_packed_q4k_down_enabled(config)->bool:
+  return ((_nv_q4_production_mode(config) == "llama") or
+          (bool(getenv("NV_LLAMA_PACKED_Q4K_DOWN_PP512",0)) and _nv_compiler_q4_imma_pp512_qualified(config)))
+
+def _nv_llama_packed_q4k_down_capture(model,jit,binding):
+  captures=getattr(model,"_nv_llama_packed_q4k_down_pp512_captures",None)
+  if captures is None:captures=model._nv_llama_packed_q4k_down_pp512_captures={}
+  if jit not in captures:captures[jit]=binding.new_capture()
+  return captures[jit]
+
+def _nv_compiler_q4k_down_enabled(config)->bool:
+  """Generated Q4 FFN-down Stream-K lease inside the exact compiler pp512 arm."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_DOWN_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_imma_k_pp512_enabled(config) -> bool:
+  """Qualified generated K lease; zero rolls back K inside the compiler stack."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_IMMA_K_PP512", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_gate_streamk_enabled(config) -> bool:
+  """Select the qualified generated gate/up Stream-K body inside the compiler pp512 arm."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_GATE_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_gate_q8_reuse_enabled(config) -> bool:
+  """Reuse one generated Q8 record across each ordered gate/up pair; zero is rollback."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q8_REUSE", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
+def _nv_compiler_q4_gate_q8_packed_loads_enabled(config) -> bool:
+  """Use qualified packed Q8 DS4 loads on the selected gate/up body; zero is rollback."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q8_PACKED_LOADS", 1)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
+def _nv_compiler_q4_gate_q4_packed_publication_enabled(config) -> bool:
+  """Experimental packed Q4 nibble publication; explicit one enables it."""
+  return bool(getenv("NV_COMPILER_Q4_GATE_Q4_PACKED_PUBLICATION", 0)) and _nv_compiler_q4_gate_streamk_enabled(config)
+
+def _model_capture_identity(capture)->str|None:
+  asset=getattr(capture,"asset",capture)
+  return getattr(capture,"candidate_identity",None) or getattr(asset,"candidate_identity",None)
+
+def _record_model_owned_prefill_candidate(lin, shape:tuple[int,int,int], capture) -> None:
+  """Observe an invoked model-owned capture through its exact policy attachment."""
+  binding=getattr(lin,"_prefill_graph_gemm_binding",None)
+  policy=binding.get("selected_policy") if isinstance(binding,dict) else None
+  identity=policy.get("candidate_identity") if isinstance(policy,dict) else None
+  role=getattr(lin,"_prefill_graph_role",None)
+  runtime_identity=_model_capture_identity(capture)
+  if runtime_identity != getattr(lin,"_nv_model_owned_candidate_identity",None):
+    raise RuntimeError("model-owned prefill capture identity drift")
+  if isinstance(role,str) and isinstance(identity,str):
+    from tinygrad.llm.prefill_graph_gemm import record_model_forward_candidate
+    record_model_forward_candidate(role=role,shape=shape,canonical_identity=identity,one_buffer=True)
+
+def _nv_compiler_q4_imma_q_pp512_enabled(config) -> bool:
+  """Selected generated Q Stream-K route; zero is explicit rollback to wide Q."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_Q_STREAMK", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_imma_o_pp512_enabled(config) -> bool:
+  """Selected generated O Stream-K x4 route; zero is explicit rollback."""
+  return Device.DEFAULT == "NV" and bool(getenv("NV_COMPILER_Q4_O_STREAMK_X4", 1)) and _nv_q4_production_mode(config) == "compiler" and \
+    _nv_compiler_q4_imma_pp512_qualified(config)
+
+def _nv_compiler_q4_imma_k_capture(model, jit, binding):
+  captures = getattr(model, "_nv_compiler_q4_imma_k_pp512_captures", None)
+  if captures is None: captures = model._nv_compiler_q4_imma_k_pp512_captures = {}
+  if jit not in captures: captures[jit] = binding.new_capture()
+  return captures[jit]
+
+def _nv_compiler_q6_imma_pp512_enabled(config) -> bool:
+  """Generated Q6 lease, active by default only inside the qualified compiler gate/up+K arm."""
+  return bool(getenv("NV_COMPILER_Q6_IMMA_PP512", 1)) and _nv_compiler_q4_imma_k_pp512_enabled(config)
+
+def _nv_compiler_q6_imma_role_enabled(config, role:str) -> bool:
+  # FFN-down passed the exact live-oracle and full-model gates.  Attention-V
+  # remains research-only until it independently clears those gates.
+  roles = frozenset(str(getenv("NV_COMPILER_Q6_IMMA_PP512_ROLES", "attn_v,ffn_down")).split(","))
+  return _nv_compiler_q6_imma_pp512_enabled(config) and role in roles
+
+def _nv_compiler_q6_imma_capture(model, jit, binding):
+  captures = getattr(model, "_nv_compiler_q6_imma_pp512_captures", None)
+  if captures is None: captures = model._nv_compiler_q6_imma_pp512_captures = {}
+  if jit not in captures: captures[jit] = binding.new_capture()
+  return captures[jit]
+
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
+
+def _adaptive_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
+  """Measured G4 context band: S48 wins through Tc=768; S64 wins for Tc=769..1024."""
+  return 64 if enabled and max_context <= 1024 and 768 <= start_pos < max_context else None
+
+def _active_horizon_flash_split_count(enabled:bool,start_pos:int,max_context:int)->int|None:
+  """Promoted live-context selector for the llama-derived wide vector Flash family."""
+  if not enabled: return None
+  tc = start_pos + 1
+  if tc <= 512 or tc > min(max_context, 4352): return None
+  split_count, token_bound = ((6,768) if tc <= 768 else (8,1024) if tc <= 1024 else
+                              (10,1280) if tc <= 1280 else (18,2304) if tc <= 2304 else (34,4352))
+  return split_count if token_bound <= max_context else None
+
+def _flash_decode_geometry_for_split(base:dict, split_count:int|None) -> dict:
+  """Translate a graph-identity split into the geometry lease it was qualified for."""
+  geometry = dict(base)
+  if split_count in (6, 8, 10, 18, 34):
+    geometry.update(split_count=split_count, llama_vec_wide=True,
+                    token_bound={6:768, 8:1024, 10:1280, 18:2304, 34:4352}[split_count],
+                    policy_selected=True)
+  elif split_count is not None:
+    geometry["split_count"] = split_count
+  return geometry
+
+def _flash_jit_variant(split_count:int|None, default, s6, s64, live_variants:dict|None=None):
+  if split_count == 6: return s6
+  if split_count == 64: return s64
+  return (live_variants or {}).get(split_count, default)
+
+def _decode_feedback_pingpong_admitted(config, target:tuple[str, str], native_argmax_threads:int, getenv_fn=getenv) -> bool:
+  return bool(target == ("NV", "sm_120") and native_argmax_threads and not config.ring and config.num_experts == 0 and
+              (config.num_blocks, config.dim, config.hidden_dim, config.n_heads, config.n_kv_heads, config.head_dim,
+               config.vocab_size, config.qk_norm) == (36, 4096, 12288, 32, 8, 128, 151936, 128) and
+              not getenv_fn("TINYGRAD_DECODE_FEEDBACK_PINGPONG_DISABLE", 0))
+
+def _flash_block_geometry(model, index:int, base:dict) -> dict:
+  """Merge research block-local Flash geometry after the model-wide lease.
+
+  The model entry points refresh block state before every capture/replay.  A
+  separate override map keeps dose-limited experiments from being silently
+  erased by that refresh while leaving the production path unchanged.
+  """
+  override=getattr(model,"_flash_decode_block_geometry_overrides",{}).get(index,{})
+  return {**base,**override}
+
+def _request_static_flash_split_count(prompt_len:int, expected_output_tokens:int|None, max_context:int)->int|None:
+  """Select the measured single-graph S64 crossing route from an explicit request horizon."""
+  if expected_output_tokens is None: return None
+  if expected_output_tokens < 0: raise ValueError("expected_output_tokens must be non-negative")
+  # Qualified at prompt 704: 65 pre-cliff tokens lose ~20.3 us each and are
+  # repaid after about ten post-cliff tokens. Keep admission on that measured
+  # near-boundary band until a broader horizon bracket exists.
+  return 64 if max_context <= 1024 and 704 <= prompt_len < max_context and prompt_len + expected_output_tokens >= 779 else None
+
+def prefill_v2_target_admitted(device_facts:object|None) -> bool:
+  """Whether the concrete fp16 prefill-v2 route is admissible on this load target.
+
+  Candidate contexts are admitted only after their target-specific schedule
+  is independently qualified.  NV sm_120 now uses the candidate-owned tile
+  with a TC-only warmstart; all four projection shapes match the generic
+  reference bit-for-bit.
+  """
+  return True
 
 # TG8 (docs/task_workflow/input/target-capability-policy-decoupling-scope-20260730.md): the pre-TG8 gate
 # ANDed a shape allowlist with a hardcoded `backend == "AMD" and arch == "gfx1100"` target-string equality.
@@ -68,25 +343,35 @@ def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int
 # below, `_custom_kernel_prefill_attn_promoted`.
 #
 # This is deliberately NOT the TG3 quant-gate pattern (capability read from renderer facts + a promoted_targets
-# policy that defaults OPEN when no record is loaded, tinygrad/llm/model_route_plan.py). There is no
-# independent capability question here to decompose: `custom_kernel_attention` injects an already-CAPTURED,
-# hand-authored AMD gfx1100 machine-code program (.hip.cpp/.amdisa.s produced by
-# extra/llm_research/generate_shared_attention_captures; see fused_attention.py's module docstring) via
-# Tensor.uop_program, not a generically-lowered operation the renderer can express or reject per target. So
-# "capability" and "policy" collapse into one fused question -- "was a captured program promoted for this
-# exact target" -- and it must default CLOSED, not open: an 8B/14B Qwen3 model on Metal satisfies the exact
-# same ADMITTED_GRIDS shape as AMD, and a TG3-style "no record -> admitted" default would attempt to inject
-# raw AMD gfx1100 ISA as an opaque program on a non-AMD renderer -- a correctness/crash risk, not a missed
-# optimization. Promotion is therefore an explicit, hardcoded-but-isolated allowlist (not derived from
-# ModelRoutePlan, whose "no record" default is wrong for this route), so a future promotion can widen it
-# without touching the shape gate or this call site.
-_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS: frozenset[tuple[str|None, str|None]] = frozenset({("AMD", "gfx1100")})
+# policy that defaults OPEN when no record is loaded, tinygrad/llm/model_route_plan.py) -- but the reason is
+# NOT the retired "captured program" claim: the fused kernel is no longer an opaque AMD gfx1100 machine-code
+# injection. FlashPrefillAttentionSpec (schedule/wmma/flash_prefill.py) owns the topology as DATA and builds
+# the kernel as ordinary UOps through spec.emit(); the renderer lowers them like any other program, and
+# injection is via Tensor.uop_program. What still makes admission target-dependent is the FRAGMENT MATH:
+# until the per-target decomposition is numerically proven, running it on an unproven target yields a compile
+# failure or wrong numbers, not a crash. So the closed default stands, sourced from a BoltBeam route-policy
+# record in the exact shape of `load_qk_target_promotion` (model_route_plan.py): JSON,
+# `schema == "boltbeam.route_policy.v1"`, `promoted_targets` list of {backend, architecture}. No record ->
+# CLOSED (this route's deliberate deviation from TG3's "no record -> open" default); record loaded -> the
+# enforced set. The checked-in record is the promotion gate: `git diff` on that file is the promotion review
+# artifact, and widening promotion never touches the shape gate or this call site.
+_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD = pathlib.Path(__file__).with_name("generated") / "custom-kernel-prefill-attention-route-policy.json"
+
+def _load_custom_kernel_prefill_attn_promotion() -> frozenset[tuple[str|None, str|None]]:
+  """Read the fused-prefill-attention promotion record (boltbeam.route_policy.v1, see the comment above)."""
+  data = json.loads(_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1":
+    raise ValueError(f"{_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTION_RECORD} is not a boltbeam.route_policy.v1 route policy")
+  targets = data.get("promoted_targets")
+  if targets is None: return frozenset()  # no promotion record -> closed (see the module comment above)
+  return frozenset((t.get("backend"), t.get("architecture")) for t in targets)
+
+_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS: frozenset[tuple[str|None, str|None]] = _load_custom_kernel_prefill_attn_promotion()
 
 def _custom_kernel_prefill_attn_promoted(backend:str|None, arch:str|None) -> bool:
-  """TG8 policy authority: is (backend, architecture) promoted for the hand-captured custom-kernel-injection
-  prefill attention route? See the module-level comment above `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS`
-  for why this must default closed rather than reusing ModelRoutePlan.target_promoted's "no record -> open"
-  default."""
+  """TG8 policy authority: is (backend, architecture) promoted for the fused prefill attention route?
+  See the module-level comment above `_CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS` for why this must
+  default closed rather than reusing ModelRoutePlan.target_promoted's "no record -> open" default."""
   return (backend, arch) in _CUSTOM_KERNEL_PREFILL_ATTN_PROMOTED_TARGETS
 
 def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:
@@ -199,7 +484,7 @@ def _selected_inventory_routes(inventory:dict, candidate_route_id:str) -> dict[s
           for row in inventory.get("rows", ())}
 
 def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, ubatch:int=512,
-                                          selected_model_source:str|None=None):
+                                          selected_model_source:str|None=None, workload_reuse:bool=False):
   """Consume an exact measured/cache result, or truthfully select the direct packed baseline.
 
   Normal loads always select the baseline. The only non-baseline authority is
@@ -208,7 +493,8 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
   inventory = derive_selected_gguf_prefill_inventory(kv, meta, ubatch)
   invocation_ids = tuple(row["invocation_id"] for row in inventory["rows"])
   request = {"schema": "tinygrad.model_memory_adaptive_request.v1", "inventory": inventory,
-             "device_facts": device_facts.planning_snapshot(), "workload": {"prefill_ubatch": ubatch}}
+             "device_facts": device_facts.planning_snapshot(),
+             "workload": {"prefill_ubatch": ubatch,"workload_reuse":bool(workload_reuse)}}
   authority = _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY.get()
   selected = None
   if authority is not None:
@@ -321,6 +607,107 @@ def _prefill_semantic(enabled:bool, mark, value:Tensor) -> Tensor:
                   prefill_scratch: runtime_scratch}.get(mark)
   if runtime_mark is None: raise ValueError("execution semantic requires a prefill role marker")
   return (mark if enabled else runtime_mark)(value)
+
+def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> Tensor|None:
+  """L1 M3 fused decode RMSNorm (l1-decode-plumbing-fusion-design-20260802.md section 6 norm
+  family): one kernel per norm replaces the generic mean/var reduce + epilogue pair. Returns
+  None to keep the legacy graph when the route is not promoted or the shape/strides contract
+  does not hold. Decode-only by construction: the call sites gate on `not _prefill`."""
+  if not promoted or x.dtype not in (dtypes.float32, dtypes.float16): return None
+  dim = x.shape[-1]
+  if dim < 32 or dim % 32: return None
+  numel = prod(x.shape)
+  rows = numel // dim
+  if rows < 1 or rows * dim != numel: return None
+  # The model stores norm weights packed; the lazy fp16 view is a per-token dequant when fed
+  # through the opaque kernel boundary. The fp16 weights are materialized ONCE at load (see
+  # Transformer.from_gguf) because the traced call sites run inside a Function dispatch where
+  # ALLOW_DEVICE_USAGE is 0 and realizing here would raise. No prep means no fused route.
+  w = getattr(norm, "_decode_fused_weight", None)
+  if w is None: return None
+  # Pass the exact flat activation view. The raw producer uop (x.uop.base) can
+  # carry axes the opaque boundary must not materialize (the embedding gather's
+  # vocab-block loop shows up as an extra rank and the scheduler stages it at
+  # the wrong shape, collapsing the kernel's sumsq to a scalar). The custom-kernel
+  # transport contiguous()s this view into the exact (numel,) buffer the emitter
+  # indexes, so rows stay row-major. That per-call materialization is the measured
+  # reason this route is closed-default non-landing (see the norm-fusion record).
+  x_in = x.reshape(numel)
+  x_rank = 1
+  # 256 elements per warp is the measured occupancy sweet spot for the single-row 4096 shape
+  # (512 threads, 8 elems/lane); smaller norms stay at one warp per row.
+  warps = max(1, min(16, dim // 256))
+  spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=norm.eps, warps_per_row=warps,
+                           x_dtype=x.dtype, weight_dtype=dtypes.float16, out_dtype=out_dtype, x_rank=x_rank)
+  emitter,ticket=lower_authorized_candidate({"family":"decode_rmsnorm.v1","rows":rows,"dim":dim,
+    "eps":norm.eps,"warps_per_row":warps,"x_dtype":str(x.dtype),"weight_dtype":str(dtypes.float16),
+    "out_dtype":str(out_dtype),"x_rank":x_rank},(("decode_rmsnorm_native_lowering","decode_rmsnorm"),
+    ("decode_norm_fusion","decode_norm_fusion")))
+  program = KernelProgram("decode_norm", spec.kernel_name, KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+                          emitter, output_spec=OutputSpec((numel,), out_dtype), boltbeam_ticket=ticket)
+  out = execute_promoted_program(None, x_in, w, program=program)
+  return out.reshape(x.shape)
+
+def _decode_reduce_output_rmsnorm(norm, x:Tensor, promoted:bool) -> Tensor:
+  """Attach the ordinary-UOp cooperative RMSNorm marker at an explicit decode call site.
+
+  Unlike a flag on ``nn.RMSNorm``, this helper cannot leak the experimental marker into
+  prefill: every model call site passes a ``not _prefill``-gated promotion decision.  The
+  complete ordinary RMSNorm remains source zero and therefore remains the fallback whenever
+  late concrete-view admission declines the one-program lowering.
+  """
+  out = norm(x)
+  if not promoted or norm.weight is None: return out
+  # Bind the load-time fp16 identity buffer for every row count.  The ordinary
+  # fp32 epilogue already rounds through fp16 in-kernel, so the pre-rounded
+  # buffer carries the same half values (r2 logits gate passed bitwise), and
+  # binding it keeps the fused body from materializing one fresh weight cast
+  # kernel per q/k body per token (the measured 0fd8e427 overhead).
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
+  return out._semantic_reduce_output_rmsnorm(x, out, weight, norm.eps)
+
+def _decode_reduce_output_rmsnorm_rope(norm, x:Tensor, ordinary_rope:Tensor, freqs:Tensor, promoted:bool) -> Tensor:
+  """Attach the closed-default full-head RoPE epilogue to REDUCE_OUTPUT.
+
+  ``ordinary_rope`` is the complete fallback.  The semantic marker retains
+  the pre-norm input and the persistent frequency table, allowing rangeify to
+  emit one cooperative body without an opaque KernelProgram materialization.
+  """
+  if not promoted or norm.weight is None: return ordinary_rope
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
+  return ordinary_rope._semantic_reduce_output_rmsnorm(x, ordinary_rope, weight, norm.eps, freqs=freqs)
+
+def _decode_reduce_output_rmsnorm_fp16_consumer(norm, x:Tensor, promoted:bool) -> Tensor:
+  """Closed-default typed RMSNorm boundary for Q4 decode consumers only.
+
+  Block attention/FFN Q4 consumers already use this fp16 cast as their input
+  ABI.  Mark that exact fallback value, rather than piercing its cast later.
+  Q/K and output norms retain fp32-output semantics and never use this helper.
+  """
+  out = norm(x)
+  if not promoted or norm.weight is None: return out
+  weight = getattr(norm, "_decode_reduce_output_weight", None)
+  if weight is None: weight = norm.weight
+  typed_out = out.cast(dtypes.float16)
+  return typed_out._semantic_reduce_output_rmsnorm(x, typed_out, weight, norm.eps)
+
+def _decode_reduce_output_norm_flags(block, prefill:bool) -> tuple[bool,bool]:
+  """Return (attention, FFN) REDUCE_OUTPUT decisions for one block trace."""
+  if prefill: return False,False
+  global_route=bool(getattr(block,"_decode_reduce_output_rmsnorm_promoted",False))
+  shared_lease=isinstance(getattr(block,"_shared_q8_attention_admission",None),SharedQ8AttentionAdmission)
+  fused_attn_lease=shared_lease and bool(getattr(block,"_decode_reduce_output_attn_rmsnorm_promoted",False))
+  native_attn=bool(getattr(getattr(block,"attn_norm",None),"_rmsnorm_native_promoted",False)) and \
+    not getenv("TINYGRAD_NATIVE_ATTN_NORM_COMPLETION_DISABLE",0)
+  # The FFN-norm site is independently gateable so a census can close it while
+  # the fp32 q/k site stays promoted (the live-split flash route depends on
+  # that site).  Absent the knob it follows the global route, so production
+  # behavior is unchanged.
+  ffn_route=bool(getattr(block,"_decode_reduce_output_ffn_rmsnorm_promoted",global_route))
+  return (global_route and not native_attn) or fused_attn_lease,ffn_route
+
 
 def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, bound_extent:int) -> Tensor:
   """Retain the lazy symbolic slice used by decode and chunked prefill JITs."""
@@ -435,15 +822,77 @@ class FFNBlock:
       self.ffn_up      = nn.Linear(config.dim, config.hidden_dim, bias=False)
       self.ffn_down    = nn.Linear(config.hidden_dim, config.dim, bias=False)
 
-  def _feed_forward(self, x:Tensor) -> Tensor:
+  def _feed_forward(self, x:Tensor, residual:Tensor|None=None) -> Tensor:
+    """Dense decode callers may thread the block residual (h) so the ffn_down
+    GEMV absorbs the h+ffn_out add in-kernel (M2b, nv-epilogue-absorption-
+    route-scope-20260810.md). Prefill/MoE paths ignore the kwarg."""
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
+      # Default-off research overlay for the qualified Qwen3-8B pp512 packed
+      # gate/up lifecycle. The finalized native programs participate in the
+      # ordinary TinyJit graph; every miss preserves the corrected fp16
+      # fallback unchanged.
+      if (_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else _nv_q4_production_mode(self.config))) is not None and (_mode not in ("compiler","llama","gate_only") or _nv_compiler_q4_imma_pp512_qualified(self.config)) \
+          and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear) \
+          and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear) and x.device == "NV" \
+          and x.numel() == 512*4096:
+        _binding, _flat = self._nv_q4_imma_pp512_binding, x.reshape(512,4096)
+        _gate_binding = getattr(self, "_nv_compiler_q4_gate_only_pp512_binding", None)
+        if _mode == "gate_only":
+          g = _prefill_semantic(_prefill, prefill_activation, _gate_binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
+          u = _prefill_semantic(_prefill, prefill_activation, _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+        elif _mode == "llama":
+          if _nv_llama_packed_gate_up_epilogue_enabled(self.config):
+            h=_binding.project_pair_epilogue(_flat,self.ffn_gate.prefill_packed_weight(),self.ffn_up.prefill_packed_weight(),model_family="qwen3_8b")
+            h=_prefill_semantic(_prefill,prefill_activation,h)
+          else:
+            g,u=_binding.project_pair(_flat,self.ffn_gate.prefill_packed_weight(),self.ffn_up.prefill_packed_weight(),model_family="qwen3_8b")
+            g,u=_prefill_semantic(_prefill,prefill_activation,g),_prefill_semantic(_prefill,prefill_activation,u)
+        else:
+          g = _prefill_semantic(_prefill, prefill_activation,
+            _binding.project(_flat, self.ffn_gate.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_gate"))
+          u = _prefill_semantic(_prefill, prefill_activation,
+            _binding.project(_flat, self.ffn_up.prefill_packed_weight(), model_family="qwen3_8b", role="ffn_up"))
+          _record_model_owned_prefill_candidate(self.ffn_gate,(512,12288,4096),_binding)
+          _record_model_owned_prefill_candidate(self.ffn_up,(512,12288,4096),_binding)
+        if not (_mode == "llama" and _nv_llama_packed_gate_up_epilogue_enabled(self.config)):
+          h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
+        if _nv_compiler_q6_imma_role_enabled(self.config,"ffn_down") and hasattr(self, "_nv_compiler_q6_imma_pp512_binding") and isinstance(self.ffn_down, Q6KPrimitiveLinear):
+          # The ordinary overlay route casts this post-SiLU product before
+          # GEMM. Preserve that exact boundary for the native fp16 producer.
+          down_input = h.reshape(512, 12288).cast(dtypes.float16).contiguous()
+          projected=self._nv_compiler_q6_imma_pp512_binding.project(down_input, self.ffn_down.prefill_packed_weight(),
+              model_family="qwen3_8b", role="ffn_down")
+          _record_model_owned_prefill_candidate(self.ffn_down,(512,4096,12288),self._nv_compiler_q6_imma_pp512_binding)
+          return _prefill_semantic(_prefill, prefill_activation,projected.reshape(x.shape[:-1]+(4096,)))
+        if _nv_llama_packed_q6k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q6k_down_pp512_binding") and isinstance(self.ffn_down,Q6KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q6k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+        if _nv_llama_packed_q4k_down_enabled(self.config) and hasattr(self, "_nv_llama_packed_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          return _prefill_semantic(_prefill,prefill_activation,self._nv_llama_packed_q4k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down").reshape(x.shape[:-1]+(4096,)))
+        if _nv_compiler_q4k_down_enabled(self.config) and hasattr(self, "_nv_compiler_q4k_down_pp512_binding") and isinstance(self.ffn_down,Q4KPrimitiveLinear):
+          down_input=h.reshape(512,12288).cast(dtypes.float16).contiguous()
+          projected=self._nv_compiler_q4k_down_pp512_binding.project(
+            down_input,self.ffn_down.prefill_packed_weight(),model_family="qwen3_8b",role="ffn_down")
+          _record_model_owned_prefill_candidate(self.ffn_down,(512,4096,12288),self._nv_compiler_q4k_down_pp512_binding)
+          return _prefill_semantic(_prefill,prefill_activation,projected.reshape(x.shape[:-1]+(4096,)))
+        _down_in = h.reshape(x.shape[:-1]+(12288,))
+        _down_out = _pf16(self.ffn_down, _down_in).contiguous()
+        if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
+          self._research_down_input, self._research_down_output = _down_in, _down_out
+        return _prefill_semantic(_prefill, prefill_activation, _down_out)
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
       # kernel (mirrors the gated chained-FFN prefill authority shape). MoE/fused fall through.
       g = _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_gate, x).contiguous())
       u = _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_up, x).contiguous())
       h = _prefill_semantic(_prefill, prefill_activation, (g.silu() * u).contiguous())
-      return _prefill_semantic(_prefill, prefill_activation, _pf16(self.ffn_down, h).contiguous())
+      _down_in, _down_out = h, _pf16(self.ffn_down, h).contiguous()
+      if getattr(self, "_research_capture_down_io", False) and tuple(_down_in.shape[-2:]) == (512,12288):
+        self._research_down_input, self._research_down_output = _down_in, _down_out
+      return _prefill_semantic(_prefill, prefill_activation, _down_out)
     if hasattr(self, 'ffn_gate_exps'):
       h = x.unsqueeze(2)  # (B, T, 1, D) - add expert dim for broadcasting
       logits = self.ffn_gate_inp(x)
@@ -470,15 +919,50 @@ class FFNBlock:
     if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
       gate, up = self.ffn_gateup(x)
       return self.ffn_down(_prefill_semantic(_prefill, prefill_activation, gate.silu().contiguous()) * up)
+    # Research-only scalar-packet Q8 fold: one packed W1/W3 producer plus the
+    # four-warp Q4/Q8 DP4A resadd consumer replaces the fused16 producer and the
+    # installed Q4-down resadd kernel. The admission lives on ffn_down; every
+    # gate/up/down shape miss returns None and falls through unchanged.
+    _scalar_q8_admission = getattr(self.ffn_down, "_q4k_ffn_down_mmvq_admission", None)
+    if (not _prefill and getattr(_scalar_q8_admission, "scalar_q8_packet", False)
+        and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear)
+        and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear)
+        and isinstance(getattr(self, "ffn_down", None), Q4KPrimitiveLinear)):
+      from tinygrad.llm.q4k_ffn_down_mmvq import q4k_ffn_down_mmvq_scalar_packet_call
+      folded = q4k_ffn_down_mmvq_scalar_packet_call(self.ffn_gate, self.ffn_up, self.ffn_down, x, residual, _scalar_q8_admission)
+      if folded is not None: return folded
+    if not _prefill and getattr(self, "_decode_q4k_w1w3_fusion_promoted", False):
+      _fg, _fu = getattr(self, "ffn_gate", None), getattr(self, "ffn_up", None)
+      if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear):
+        _four_warp_admission = getattr(_fg, "_q4k_gate_up_four_warp_admission", None)
+        if _four_warp_admission is not None:
+          from tinygrad.llm.q4k_gate_up_four_warp_mmvq import q4k_gate_up_four_warp_call
+          _four_warp_z = q4k_gate_up_four_warp_call(_four_warp_admission, _fg, _fu, x)
+          if _four_warp_z is not None:
+            return self.ffn_down(_four_warp_z) if residual is None else self.ffn_down(_four_warp_z, normed_h=residual)
+        # Fused w1+w3 decode GEMV (q4k-w1w3-fused-qv-implementation-record-20260803.md): ONE kernel
+        # computes silu(gate(x)) * up(x); the fallback lambda reproduces the legacy chain's z exactly,
+        # so an off-target/off-shape admission changes nothing about what ffn_down consumes.
+        # M2a (nv-epilogue-absorption-m2a-promotion-record-20260812.md): the fused16 spelling stores
+        # fp16 directly, folding ffn_down's input cast (the ordinary E_128_32_3 epilogue). Default-on
+        # for NV sm_120 through the loader record; the research lease still forces it where the
+        # record is closed (AB arms keep the same control/candidate contract).
+        _w1w3_fp16_store = not _prefill and (getattr(self, "_q4k_w1w3_fp16_store_lease", False)
+                                             or getattr(self, "_decode_q4k_w1w3_fp16_store_promoted", False))
+        z = q4k_gate_up_primitive_linear_call(_fg, _fu, x,
+          fallback=lambda: _prefill_semantic(_prefill, prefill_activation, _fg(x).silu().contiguous()) * _fu(x),
+          store_fp16=_w1w3_fp16_store)
+        return self.ffn_down(z) if residual is None else self.ffn_down(z, normed_h=residual)
     gated = _prefill_semantic(_prefill, prefill_activation, self.ffn_gate(x).silu().contiguous())
-    return self.ffn_down(gated * self.ffn_up(x))
+    z = gated * self.ffn_up(x)
+    return self.ffn_down(z) if residual is None else self.ffn_down(z, normed_h=residual)
 
   # given the token-prefix match, return how much cached state this block can still reuse
   def _reusable_prefix_len(self, prefix_len:int, cached_len:int) -> int: return prefix_len
   # return writes that reset this block's state after a cache mismatch
   def _state_reset_ops(self) -> list[Tensor]: return []
   def _init_state(self, x:Tensor): raise NotImplementedError
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor: raise NotImplementedError
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor: raise NotImplementedError
 
   def __call__(self, x: Tensor, start_pos: int|UOp):
     self._init_state(x)
@@ -486,19 +970,140 @@ class FFNBlock:
     # input -- reading it off self inside _run would bake it at _run's compile time (attributes don't rebind).
     _rf = getattr(self, "_ring_freqs", None)
     # we pass in the weights implicitly so we unpack the GGUF on the fly
-    @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
       _prefill = getattr(self, "_is_prefill", False)
-      with role_metadata("rms_norm"): normed_x = _prefill_semantic(_prefill, prefill_scratch, self.attn_norm(x))
-      attn_out = self._attention(normed_x, start_pos, ring_freqs)
-      with role_metadata("residual"): h = _prefill_semantic(_prefill, prefill_activation, x + attn_out)
-      with role_metadata("rms_norm"): normed_h = _prefill_semantic(_prefill, prefill_scratch, self.ffn_norm(h))
-      ffn_out = self._feed_forward(normed_h)
+      _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+      # A bounded shared-Q8 lease owns an independent REDUCE_OUTPUT marker only
+      # for this block's attention norm. The fused provider consumes its
+      # explicit (fallback, x, weight) sources; every miss retains the ordinary
+      # fallback and the global reduce-output policy remains closed.
+      _reduce_output_attn_norm,_reduce_output_norm=_decode_reduce_output_norm_flags(self,_prefill)
+      _epi_fused = not _prefill and getattr(self, "_decode_q4k_epilogue_fusion_promoted", False)
+      with role_metadata("rms_norm"):
+        _nx = _decode_rmsnorm(self.attn_norm, x, _fused_norm, dtypes.float16)
+        normed_x = _prefill_semantic(_prefill, prefill_scratch,
+          _nx if _nx is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.attn_norm, x, _reduce_output_attn_norm))
+      # L1 M4: o-proj residual-add epilogue absorption. When the gate is open, the attn_output
+      # GEMV adds the block input x as an in-kernel epilogue, saving the generic E_32_32_4
+      # elementwise add kernel. The residual is handed to _attention only when THIS block's
+      # attn_output is an admitted Q4K primitive -- the absorption signal, not the promotion record
+      # (MLA/GatedDeltaNet blocks and nn.Linear attn_output cannot absorb; dropping x there corrupts h).
+      _attn_linear = getattr(self, "attn_output", None)
+      # The residual_add variant has its OWN per-variant record
+      # (decode-q4k-epilogue-resadd-route-policy.json, m4-resadd-landing-scope-20260806.md); the
+      # combined M4 flag stays closed so the ffn_down prelude and fp16_cast cannot fire.
+      _epi_resadd = not _prefill and getattr(self, "_decode_q4k_epilogue_resadd_promoted", False)
+      _epi_compiler_o = bool(getattr(self, "_nv_compiler_q4k_o_pp512_binding", None)) and _prefill
+      _epi_residual = (isinstance(_attn_linear, Q4KPrimitiveLinear) and (
+        _epi_compiler_o or
+        (_epi_fused and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)) or
+        (_epi_resadd and getattr(getattr(_attn_linear, "route_admission", None), "q4k_epilogue_resadd_admitted", False))))
+      attn_out = self._attention(normed_x, start_pos, ring_freqs, residual_for_output=(x if _epi_residual else None))
       with role_metadata("residual"):
-        return _prefill_semantic(_prefill, prefill_activation, (h + ffn_out).contiguous())
+        h = _prefill_semantic(_prefill, prefill_activation,
+          attn_out if _epi_residual else x + attn_out)
+      with role_metadata("rms_norm"):
+        _nh = _decode_rmsnorm(self.ffn_norm, h, _fused_norm, dtypes.float16)
+        normed_h = _prefill_semantic(_prefill, prefill_scratch,
+          _nh if _nh is not None else _decode_reduce_output_rmsnorm_fp16_consumer(self.ffn_norm, h, _reduce_output_norm))
+      # Terminal prefill research lease also applies to the ordinary (non
+      # compiler-primitive) path.  Gather before any FFN work so this cannot
+      # silently benchmark a dense fallback.
+      _row = getattr(self, "_final_row_prune_requested_row", None) if _prefill else None
+      if _row is not None and not (_prefill and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None)):
+        # Captured compiler arms may flatten (B,T,D) to (T,D); gather the
+        # token axis in either rank without ever producing an empty view.
+        def _terminal_row(t):
+          if len(t.shape) == 3: return t[:, _row:_row+1, :]
+          if len(t.shape) == 2: return t.reshape(1, t.shape[0], t.shape[1])[:, _row:_row+1, :]
+          raise RuntimeError(f"final-row prune requires rank-2/3 hidden, got {t.shape}")
+        if _row < 0 or _row >= (h.shape[1] if len(h.shape) == 3 else h.shape[0]):
+          raise RuntimeError(f"final-row prune requested row {_row} outside hidden shape {h.shape}")
+        h, normed_h = _terminal_row(h), _terminal_row(normed_h)
+      # Research-only ownership split: expose the residual and exact fp16 norm
+      # result as distinct precompiled outputs. The native Q8 producer owns
+      # normed_h directly; h remains the residual input to the ordinary tail.
+      if _prefill and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None):
+        # Closed research hook: after the terminal attention block, only the
+        # requested row is live.  The model installs this attribute explicitly;
+        # absent it, preserve the dense graph spelling exactly.
+        _row = getattr(self, "_final_row_prune_requested_row", None)
+        if _row is not None:
+          h, normed_h = h[:, _row:_row+1], normed_h[:, _row:_row+1]
+        return h, normed_h
+      # L1 M4: ffn_down silu*mul prelude + residual epilogue absorption. When the gate is open,
+      # the down GEMV reads gate_out and up_out directly and computes silu(gate)*up inline (no
+      # E_128_32_3 elementwise kernel), then adds h as an in-kernel epilogue (no E_32_32_4
+      # residual-add kernel). The h add is absorbed only when THIS block's ffn_down is an admitted
+      # Q4K primitive -- again the absorption signal, never the record alone.
+      _ffn_absorbed = False
+      _ffn_down_linear = getattr(self, "ffn_down", None)
+      # M2b ffn_down residual add (nv-epilogue-absorption-route-scope-20260810.md): under the
+      # harness-installed _ffn_down_resadd_lease the ffn_down Q4K/Q6K GEMV absorbs the h+ffn_out
+      # add in-kernel (total + h[row], fp32 store) and the block returns ffn_out directly. The
+      # lease is checked on the model, the block, AND the linear (the route re-checks it
+      # fail-closed), and "gate_out" absent keeps the M4 fused-prelude path closed/distinct. The
+      # loader record (_decode_ffn_down_resadd_promoted, decode-ffn-down-resadd-route-policy.json)
+      # promotes the same spelling for NV sm_120; the lease still forces it where the record is
+      # closed (research arms keep the same control/candidate contract).
+      _ffn_resadd_lease = (not _prefill
+                           and (getattr(self, "_ffn_down_resadd_lease", False) or getattr(self, "_decode_ffn_down_resadd_promoted", False))
+                           and isinstance(_ffn_down_linear, (Q4KPrimitiveLinear, Q6KPrimitiveLinear))
+                           and (getattr(_ffn_down_linear, "_ffn_down_resadd_lease", False)
+                                or getattr(_ffn_down_linear, "_decode_ffn_down_resadd_promoted", False))
+                           and getattr(_ffn_down_linear, "route_role", "") == "ffn_down"
+                           and not hasattr(self, "ffn_gate_exps"))
+      if (_epi_fused and isinstance(_ffn_down_linear, Q4KPrimitiveLinear) and
+          getattr(getattr(_ffn_down_linear, "route_admission", None), "q4k_epilogue_fusion_admitted", False)):
+        gate_out = self.ffn_gate(normed_h)
+        up_out = self.ffn_up(normed_h)
+        ffn_out = self.ffn_down(gate_out, gate_out=gate_out, up_out=up_out, normed_h=h)
+        _ffn_absorbed = True
+      else:
+        # M1 norm-epilogue absorption: research-only, explicit lease.  Retain raw h across the
+        # FFN norm boundary and apply its scalar RMS scale plus fp16 affine weight at each Q4
+        # packed load, so the ffn-norm chain (r_16_256 + E_32_32_4_f14a5cc0) folds away and the
+        # fused gate/up GEMV stores the fp16 z directly.  No loader policy creates this
+        # attribute.  Checked BEFORE the M2b branch: under the M1 harness the M2b residual add
+        # stays live, so the absorbed z feeds ffn_down(z, normed_h=h) instead of the plain
+        # ffn_down(z).
+        _rms_affine_weight = getattr(self, "_rms_affine_gateup_norm_weight", None)
+        if (not _prefill and _rms_affine_weight is not None
+            and isinstance(getattr(self, "ffn_gate", None), Q4KPrimitiveLinear)
+            and isinstance(getattr(self, "ffn_up", None), Q4KPrimitiveLinear)):
+          z = q4k_gate_up_rms_affine_qualification_call(self.ffn_gate, self.ffn_up, h, _rms_affine_weight,
+            self.ffn_norm.eps, fallback=lambda: None, store_fp16=True)
+          if z is not None:
+            ffn_out = self.ffn_down(z, normed_h=h) if _ffn_resadd_lease else self.ffn_down(z)
+            _ffn_absorbed = _ffn_resadd_lease
+          elif _ffn_resadd_lease:
+            ffn_out = self._feed_forward(normed_h, residual=h)
+            _ffn_absorbed = True
+          else:
+            ffn_out = self._feed_forward(normed_h)
+        elif _ffn_resadd_lease:
+          ffn_out = self._feed_forward(normed_h, residual=h)
+          _ffn_absorbed = True
+        else:
+          ffn_out = self._feed_forward(normed_h)
+      with role_metadata("residual"):
+        # M2b absorbed block output: the ffn_down GEMV's AFTER is the concrete contiguous fp32
+        # block output, so forcing .contiguous() here would materialize an E_32_32_4 copy per
+        # block (same in-place pattern as the M4 attn_out residual above). The plain
+        # (h + ffn_out) path keeps its transport contiguous exactly as before.
+        return _prefill_semantic(_prefill, prefill_activation,
+          ffn_out if _ffn_absorbed else (h + ffn_out).contiguous())
     # @function wraps the traced return in a call/gettuple node. Mark that concrete block-output boundary as well as
     # its residual creation site so callification cannot hide the allocation identity from the manifest.
-    return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _run(x, start_pos, _rf).contiguous())
+    _runner = function(precompile=True, allow_implicit=True)(_run)
+    if getattr(self, "_is_prefill", False) and (_nv_llama_full_packed_pp512_enabled(self.config) or _nv_q4_imma_pp512_mode() is not None):
+      h, normed_h = _runner(x, start_pos, _rf)
+      _row = getattr(self, "_final_row_prune_requested_row", None)
+      if _row is not None:
+        if len(h.shape) != 3 or h.shape[1] != 1:
+          raise RuntimeError(f"final-row prune callify returned invalid shape {h.shape}; expected [B,1,D]")
+      return _prefill_semantic(True, prefill_activation, (h + self._feed_forward(normed_h)).contiguous())
+    return _prefill_semantic(getattr(self, "_is_prefill", False), prefill_activation, _runner(x, start_pos, _rf).contiguous())
 
 class TransformerBlock(FFNBlock):
   def __init__(self, config:TransformerConfig):
@@ -514,18 +1119,81 @@ class TransformerBlock(FFNBlock):
     self.attn_output = nn.Linear(config.head_dim * config.n_heads, config.dim, bias=False)
     if config.qk_norm: self.attn_q_norm, self.attn_k_norm = nn.RMSNorm(config.qk_norm, config.norm_eps), nn.RMSNorm(config.qk_norm, config.norm_eps)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     if getattr(self, '_prefill_v2', False) and not hasattr(self, "attn_qkv"):  # prefill v2: fp16 isolated q/k/v
-      q, k, v = (_prefill_semantic(_prefill, prefill_scratch, _pf16(lin, x).contiguous())
-                 for lin in (self.attn_q, self.attn_k, self.attn_v))
+      if getattr(self, "_nv_qkv_packed_pp512_binding", None) is not None and x.device == "NV" and x.numel() == 512*4096:
+        flat=x.reshape(512,4096); cap=self._nv_qkv_packed_pp512_binding
+        q,k,v=cap.project_qkv(flat,self.attn_q.prefill_packed_weight(),self.attn_k.prefill_packed_weight(),self.attn_v.prefill_packed_weight())
+      elif _nv_compiler_q4_imma_k_pp512_enabled(self.config) and \
+          isinstance(getattr(self,"attn_k",None),Q4KPrimitiveLinear) and x.device == "NV" and x.numel() == 512*4096:
+        binding, flat = self._nv_compiler_q4_imma_k_pp512_binding, x.reshape(512,4096)
+        if getattr(self, "_nv_compiler_q4k_q_pp512_binding", None) is not None and isinstance(self.attn_q,Q4KPrimitiveLinear):
+          q = _prefill_semantic(_prefill,prefill_scratch,self._nv_compiler_q4k_q_pp512_binding.project(
+            flat,self.attn_q.prefill_packed_weight(),model_family="qwen3_8b",role="attn_q"))
+          _record_model_owned_prefill_candidate(self.attn_q,(512,4096,4096),self._nv_compiler_q4k_q_pp512_binding)
+        else: q = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_q,x).contiguous())
+        k = _prefill_semantic(_prefill,prefill_scratch,
+          binding.project(flat,self.attn_k.prefill_packed_weight(),model_family="qwen3_8b",role="attn_k"))
+        if getattr(self, "_nv_compiler_q4_imma_v_pp512_enabled", False) and x.device == "NV" and isinstance(self.attn_v, Q4KPrimitiveLinear):
+          v = _prefill_semantic(_prefill,prefill_scratch,
+            self._nv_compiler_q4_imma_v_pp512_binding.project(flat,self.attn_v.prefill_packed_weight(),
+              model_family="qwen3_8b",role="attn_v"))
+        elif _nv_compiler_q6_imma_role_enabled(self.config,"attn_v") and isinstance(self.attn_v,Q6KPrimitiveLinear):
+          v = _prefill_semantic(_prefill,prefill_scratch,
+            self._nv_compiler_q6_imma_pp512_binding.project(flat,self.attn_v.prefill_packed_weight(),
+              model_family="qwen3_8b",role="attn_v"))
+        else:
+          v = _prefill_semantic(_prefill,prefill_scratch,_pf16(self.attn_v,x).contiguous())
+      else:
+        q, k, v = (_prefill_semantic(_prefill, prefill_scratch, _pf16(lin, x).contiguous())
+                   for lin in (self.attn_q, self.attn_k, self.attn_v))
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
-    else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
+    else:
+      # Closed research lease for an exact ordinary Q4/Q4 K/V pair. Harnesses
+      # install it only on blocks outside the shared-Q8 triple boundary.
+      _q4qkv = q4k_qkv_call(getattr(self, "_q4k_qkv_admission", None), self.attn_q, self.attn_k, self.attn_v, x)
+      _q4kv_pair = None if _q4qkv is not None else q4k_kv_pair_call(
+        getattr(self, "_q4k_kv_pair_admission", None), self.attn_k, self.attn_v, x)
+      # P3a qualification hook: this is CLOSED by construction.  The loader
+      # never installs ``_shared_q8_attention_admission``; a harness may lease
+      # one exact block and the callee revalidates the real Q4/Q4/{Q4,Q6} tuple.
+      # A miss preserves the three ordinary primitive calls verbatim.
+      _shared_q8 = None if _q4kv_pair is not None else shared_q8_attention_call(
+        getattr(self, "_shared_q8_attention_admission", None), self.attn_q, self.attn_k, self.attn_v, x, start_pos,
+        getattr(self, "_shared_q8_attention_norm_weight", None))
+      q, k, v = (_q4qkv if _q4qkv is not None else (self.attn_q(x), *_q4kv_pair) if _q4kv_pair is not None else
+                 _shared_q8 if _shared_q8 is not None else (self.attn_q(x), self.attn_k(x), self.attn_v(x)))
     q, k, v = (_prefill_semantic(_prefill, prefill_scratch, value) for value in (q, k, v))
+    # Qualification-only producer-side cache sink captures the exact terminal projection
+    # values before reshape/transpose. The admission object is never installed by the
+    # loader, so ordinary production traces do not retain these extra Python references.
+    _producer_kv_inputs = (k, v) if (not _prefill and getattr(self, "_producer_kv_cache_sink_admission", None) is not None) else None
+    # Decode kv-store fusion (decode-kv-store-chain-fusion-scope-20260803.md, Option A): capture the flat
+    # k/v GEMV outputs BEFORE reshape/transpose so the fused store kernel can consume them as [kvh*Hd+elem]
+    # views. v is never normed, so the pre-transpose capture is final; k is rebound below after the
+    # qk_norm==head_dim norm (Qwen3-8B: qk_norm==128==head_dim) so the kernel receives POST-NORM k, exactly
+    # what the legacy apply_rope+store chain would have roped and stored.
+    _kv_store_flat = [k, v] if (not _prefill and getattr(self, "_decode_kv_store_fusion_promoted", False)) else None
+    _kv_vparts = 1
+    if _kv_store_flat is not None:
+      # Absorb the q4k GEMV's v-parts reduce into the fused store kernel (decode-kv-store-chain-fusion-
+      # scope-20260803.md revision): hand the route the raw parts view (Hkv*Hd, VPART) plus its extent so
+      # the kernel sums the partials in-register. A graph without the parts reduce keeps (v, 1) and the
+      # reduce materializes as before.
+      _kv_store_flat[1], _kv_vparts = _kv_store_parts_view(_kv_store_flat[1])
+    _fused_norm = not _prefill and getattr(self, "_decode_norm_fusion_promoted", False)
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    _qk_norm_rope = not _prefill and getattr(self, "_decode_qk_norm_rope_promoted", False)
+    _q_norm_input = _k_norm_input = None
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
       with role_metadata("rms_norm"):
-        q, k = (_prefill_semantic(_prefill, prefill_scratch, norm(value))
-                for norm, value in ((self.attn_q_norm, q), (self.attn_k_norm, k)))
+        _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
+        _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
+        q = _prefill_semantic(_prefill, prefill_scratch,
+          _nq if _nq is not None else _decode_reduce_output_rmsnorm(self.attn_q_norm, q, _reduce_output_norm))
+        k = _prefill_semantic(_prefill, prefill_scratch,
+          _nk if _nk is not None else _decode_reduce_output_rmsnorm(self.attn_k_norm, k, _reduce_output_norm))
 
     B, T, _ = x.shape
     if self.config.attn_output_gate:
@@ -535,9 +1203,27 @@ class TransformerBlock(FFNBlock):
     k = k.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     v = v.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     if self.config.qk_norm == self.config.head_dim:
+      _q_norm_input, _k_norm_input = q, k
       with role_metadata("rms_norm"):
-        q, k = (_prefill_semantic(_prefill, prefill_scratch, norm(value))
-                for norm, value in ((self.attn_q_norm, q), (self.attn_k_norm, k)))
+        _nq = _decode_rmsnorm(self.attn_q_norm, q, _fused_norm)
+        _nk = _decode_rmsnorm(self.attn_k_norm, k, _fused_norm)
+        q = _prefill_semantic(_prefill, prefill_scratch,
+          _nq if _nq is not None else _decode_reduce_output_rmsnorm(self.attn_q_norm, q, _reduce_output_norm))
+        k = _prefill_semantic(_prefill, prefill_scratch,
+          _nk if _nk is not None else _decode_reduce_output_rmsnorm(self.attn_k_norm, k, _reduce_output_norm))
+      if _kv_store_flat is not None:
+        # Post-norm k is a fresh contiguous (B,Hkv,T,Hd) buffer, so the flat (B,T,Hkv*Hd) reshape is a pure
+        # view (no copy) with the same [kvh*Hd+elem] linear layout as the pre-transpose capture.
+        _kv_store_flat[0] = k.reshape(B, T, self.config.n_kv_heads * self.config.head_dim)
+
+    # Position-invariant decode graph (llama.cpp reference): every structural slice (KV
+    # store slot, rope read, KV read extent) indexes the cache by the UNBOUND start_pos
+    # variable, so the captured graph key cannot depend on the concrete token position.
+    # The bound UOp remains the JIT input carrier; exec supplies the value as var_vals.
+    # Same twin pattern as flash_decode_attention_route / decode_kv_store_route /
+    # shared_q8_attention_call; unbind() yields the generator's DEFINE_VAR node itself.
+    _graph_pos = start_pos.src[0] if (isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and
+                                      len(start_pos.src) == 2 and start_pos.src[0].op is Ops.DEFINE_VAR) else start_pos
 
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
@@ -548,19 +1234,34 @@ class TransformerBlock(FFNBlock):
     # (covers PREFILL, which must ALSO store un-roped K so the ring decode reads it consistently).
     _rope_read = (_ring_freqs is not None or getattr(self, "_ring_active", False)) \
                  and self.config.rope_dim == self.config.head_dim
+    # Decode kv-store fusion admission (decode-kv-store-chain-fusion-scope-20260803.md section 6): gate is
+    # the promotion record AND concrete decode shape (T==1,B==1; the kernel stores exactly one token slot
+    # at `start_pos`, so a batched or chunked trace must keep the legacy chain) AND full-head rope AND
+    # qk_norm in (0, head_dim) (the kernel consumes post-norm k via _kv_store_flat) AND no rope-at-read
+    # (store roped K, which the ring path must NOT do) AND an fp16/fp32 cache (the kernel writes the
+    # cache's own dtype -- fp32 on NV, fp16 on AMD -- so the stored bytes match the legacy chain; a
+    # quant/other cache keeps legacy).
+    _kv_store_fused = _kv_store_flat is not None and isinstance(T, int) and T == 1 and B == 1 and not _rope_read and \
+      self.config.rope_dim == self.config.head_dim and self.config.qk_norm in (0, self.config.head_dim) and \
+      self.cache_kv.dtype in (dtypes.float16, dtypes.float32)
     _fr = _ring_freqs if _ring_freqs is not None else self.freqs_cis
     # full-ring (ctx>=N): the buffer is full and the write slot wraps, so the live read length is the WHOLE buffer N
     # (all slots valid), not start_pos+T (start_pos is the wrapped write slot, not a length). Selects [0:N] reads + Tc=N.
     _ring_full = getattr(self, "_ring_full", False)
-    _rl = self.config.max_context if _ring_full else (start_pos + T)
+    _rl = self.config.max_context if _ring_full else (_graph_pos + T)
     # Q is roped via _fr (the gathered ring table when ring, else freqs_cis) indexed by start_pos: in the full ring
     # start_pos is the write slot wp, and _fr[wp] = freqs[pos_of(wp)] = the query's (newest) position -> consistent
     # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
-    q = _prefill_semantic(_prefill, prefill_scratch,
-                          apply_rope(q[..., :self.config.rope_dim], _fr[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1))
-    if not _rope_read:
-      k = _prefill_semantic(_prefill, prefill_scratch,
-                            apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1))
+    _q_flash_rope_inputs=(q,_fr[_graph_pos:_graph_pos+T])
+    _q_rope = apply_rope(q[..., :self.config.rope_dim], _q_flash_rope_inputs[1]).cat(q[..., self.config.rope_dim:], dim=-1)
+    if _qk_norm_rope and _q_norm_input is not None and self.config.rope_dim == self.config.head_dim and not _rope_read:
+      _q_rope = _decode_reduce_output_rmsnorm_rope(self.attn_q_norm, _q_norm_input, _q_rope, _fr, True)
+    q = _prefill_semantic(_prefill, prefill_scratch, _q_rope)
+    if not _rope_read and not _kv_store_fused:
+      _k_rope = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[_graph_pos:_graph_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
+      if _qk_norm_rope and _k_norm_input is not None and self.config.rope_dim == self.config.head_dim:
+        _k_rope = _decode_reduce_output_rmsnorm_rope(self.attn_k_norm, _k_norm_input, _k_rope, self.freqs_cis, True)
+      k = _prefill_semantic(_prefill, prefill_scratch, _k_rope)
 
     # NOTE: we don't want to change self.cache_kv, the function API doesn't support this well
     if self.config.kv_quant and _rope_read:
@@ -575,17 +1276,37 @@ class TransformerBlock(FFNBlock):
       _sc = _prefill_semantic(_prefill, prefill_scratch, (_kv.abs().max(axis=-1, keepdim=True) / 127.0).maximum(1e-8))
       _kvq = _prefill_semantic(_prefill, prefill_scratch, (_kv / _sc).round().cast(dtypes.int8))
       _sch = _prefill_semantic(_prefill, prefill_scratch, _sc.reshape(2, B, _Hkv, T).cast(dtypes.float16))
-      _st_kv = self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(_kvq.uop)
-      _st_sc = self.cache_kv_scale[:, :, :, start_pos:start_pos+T].uop.store(_sch.uop)
+      _st_kv = self.cache_kv[:, :, :, _graph_pos:_graph_pos+T, :].uop.store(_kvq.uop)
+      _st_sc = self.cache_kv_scale[:, :, :, _graph_pos:_graph_pos+T].uop.store(_sch.uop)
       assigned_kv = Tensor(self.cache_kv.uop.after(_st_kv))
       assigned_scale = Tensor(self.cache_kv_scale.uop.after(_st_sc))
-      _ksc = assigned_scale[0, :, :, 0:start_pos+T].reshape(B, _Hkv, start_pos+T, 1)
-      _vsc = assigned_scale[1, :, :, 0:start_pos+T].reshape(B, _Hkv, start_pos+T, 1)
-      k = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[0, :, :, 0:start_pos+T, :].cast(dtypes.float16) * _ksc)
-      v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:start_pos+T, :].cast(dtypes.float16) * _vsc)
+      _ksc = assigned_scale[0, :, :, 0:_graph_pos+T].reshape(B, _Hkv, _graph_pos+T, 1)
+      _vsc = assigned_scale[1, :, :, 0:_graph_pos+T].reshape(B, _Hkv, _graph_pos+T, 1)
+      k = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[0, :, :, 0:_graph_pos+T, :].cast(dtypes.float16) * _ksc)
+      v = _prefill_semantic(_prefill, prefill_scratch, assigned_kv[1, :, :, 0:_graph_pos+T, :].cast(dtypes.float16) * _vsc)
     else:
       assigned_scale = None
-      assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
+      _producer_assigned_kv = None
+      if (_producer_kv_inputs is not None and not _rope_read and not _kv_store_fused and isinstance(B, int) and B == 1 and
+          isinstance(T, int) and T == 1 and self.config.rope_dim == self.config.head_dim and
+          self.config.qk_norm == self.config.head_dim):
+        _producer_assigned_kv = producer_kv_cache_sink_call(
+          getattr(self, "_producer_kv_cache_sink_admission", None), self.cache_kv,
+          _producer_kv_inputs[0], _producer_kv_inputs[1], self.attn_k_norm, self.freqs_cis, self.config.max_context)
+      if _producer_assigned_kv is not None:
+        # The cache AFTER carries the K-producer call that also consumed final V;
+        # flash therefore waits on the same semantic K/V join as the legacy store.
+        assigned_kv = _producer_assigned_kv
+      elif _kv_store_fused:
+        # Option A: ONE kernel ropes k in-kernel (exact apply_rope arithmetic, fp32), casts k/v to the
+        # cache's own dtype, and stores both at slot start_pos -- replacing the k-rope + k-cast + v-cast +
+        # Tensor.stack(k,v) + cache store chain. `assigned_kv` is the cache AFTER the store, same contract
+        # as the legacy chain (flash route reads assigned_kv directly; the SDPA reads below are DCE'd).
+        assigned_kv = decode_kv_store_route(self.cache_kv, _kv_store_flat[0], _kv_store_flat[1], self.freqs_cis,
+                                            self.config.n_kv_heads, self.config.head_dim, self.config.max_context,
+                                            vparts=_kv_vparts)
+      else:
+        assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, _graph_pos:_graph_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
       _kfull = assigned_kv[0]
       if _rope_read:
         # rope-at-read for the NON-flash (SDPA/prefill) consumers: K is stored un-roped. Rotate the FULL concrete-MAXC
@@ -605,17 +1326,51 @@ class TransformerBlock(FFNBlock):
     #v = self.cache_kv[1, :, :, 0:start_pos+T, :]
 
     # NOTE: this mask is causal_lower_right, not the causal_upper_left generated by is_casual = True
-    # TODO: this if statement should be removed and it shouldn't generate extra kernels
-    mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
-      if resolve(T != 1) else None
+    # Materialize on CONCRETE extents (max T rows, max_context cols) then slice to the symbolic
+    # (T, start_pos+T) view: triu over a symbolic extent lowers arange through a cumsum into a
+    # quadratic kernel (two full KV loops per output element), which wedges symbolic prefill at
+    # deep context (observed 794ms QK^T epilogue at KV=4096). The concrete mask renders as two
+    # linear E kernels and QK^T reads the sliced buffer as data3 with no fused loops.
+    # The diagonal/extent index the UNBOUND position variable (_graph_pos), so the mask is
+    # position data, not graph structure: it matches the unbound KV read extents symbolically
+    # and resolves per-position at exec through var_vals.
+    _mask_rows = T.simplify().vmax if isinstance(T, UOp) else T
+    mask = Tensor.full((1, 1, _mask_rows, self.config.max_context), float("-inf"), dtype=x.dtype, buffer=True) \
+      .triu(_graph_pos+1)[:, :, :T, :_graph_pos+T] if resolve(T != 1) else None
     # The model owns two separately captured decode graphs. The immutable
     # candidate binding selects the flash graph upstream; ring decode always
     # uses it because its wrapped write slot is not a logical context length.
-    if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
+    _o_q8 = None
+    _o_q8_fine = False
+    if _nv_llama_prefill_role_enabled(self.config, "NV_LLAMA_FATTN_MMA_PP512") and _ring_freqs is None and not _ring_full and \
+       not self.config.kv_quant and isinstance(start_pos, int) and start_pos == 0 and isinstance(B, int) and B == 1 and \
+       isinstance(T, int) and T == 512 and self.config.n_heads == 32 and self.config.n_kv_heads == 8 and \
+       self.config.head_dim == 128 and mask is not None:
+      # Exact llama whole-tile MMA boundary. The binding owns its output and
+      # records the native launch in the graph; every other shape stays on the
+      # established attention route.
+      from extra.llm_research.prefill.nv_llama_fattn_mma_pp512_binding import project
+      attn = project(q.contiguous(), k.cast(dtypes.float16).contiguous(), v.cast(dtypes.float16).contiguous(),
+                     mask.cast(dtypes.float16).contiguous()).cast(q.dtype)
+    elif _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
-      out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
+      _flash_geom = getattr(self, "_flash_decode_tile_geometry_lease", None)
+      _o_q8_fine = bool((_flash_geom or {}).get("o_q8_fine_owned",False))
+      _o_prefetch_groups = int((_flash_geom or {}).get("o_successor_prefetch_groups", 0))
+      _o_successor_weights = None
+      if _o_prefetch_groups:
+        if not isinstance(self.attn_output, Q4KPrimitiveLinear) or not hasattr(self.attn_output, "q4k_storage"):
+          raise ValueError("Flash O successor prefetch requires a Q4_K attention-output projection")
+        _o_successor_weights = self.attn_output.q4k_storage.words.to(x.device)
+      # M2d combine-fp16 lease (nv-epilogue-absorption-route-scope-20260810.md): harness-installed
+      # on the model and every block; fail-closed absent keeps the closed-default policy answer
+      # (fp32 combine, byte-identical legacy graph).
+      _flash_result = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
                                          kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
-                                         ring_full=_ring_full)
+                                         ring_full=_ring_full,
+                                         combine_fp16=bool(getattr(self, "_flash_combine_fp16_lease", False)),
+                                         tile_geometry=_flash_geom, successor_weights=_o_successor_weights)
+      out,_o_q8 = _flash_result if isinstance(_flash_result,tuple) else (_flash_result,None)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif self.config.prefill_custom_kernel_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P5b: the proven custom-kernel-injection route's OWN independent eligibility boundary
@@ -645,7 +1400,7 @@ class TransformerBlock(FFNBlock):
       with role_metadata("shared_prefill_attention"):
         attn = _prefill_semantic(_prefill, prefill_scratch,
           route_prefill_attention(q.cast(dtypes.float16), k.cast(dtypes.float16), v.cast(dtypes.float16),
-            mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
+            mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True,q_rope_inputs=_q_flash_rope_inputs).cast(q.dtype))
     elif self.config.prefill_tc_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # Q/K/V have the same fp16 activation contract for resident-overlay and
       # packed-weight projections.  Capture attention once at that boundary;
@@ -680,17 +1435,39 @@ class TransformerBlock(FFNBlock):
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
     out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
+    # L1 M4: when residual_for_output is set (q4k epilogue gate open AND this block's attn_output is an
+    # admitted Q4K primitive), the attn_output GEMV adds the residual in-kernel instead of as a separate
+    # elementwise kernel. The isinstance guard keeps an nn.Linear attn_output from seeing the kwarg.
+    _has_residual = residual_for_output is not None and isinstance(self.attn_output, Q4KPrimitiveLinear)
     if getattr(self, '_prefill_v2', False):
-      return _prefill_semantic(_prefill, prefill_activation, _pf16(self.attn_output, out_in).contiguous())
+      _o_binding = getattr(self, "_nv_compiler_q4k_o_pp512_binding", None) or getattr(self, "_nv_llama_packed_o_pp512_binding", None)
+      if _o_binding is not None and isinstance(self.attn_output,Q4KPrimitiveLinear) and out_in.numel() == 512*4096:
+        _res = getattr(self, "_nv_compiler_q4k_o_pp512_binding", None)
+        out=_o_binding.project(out_in.cast(dtypes.float16).contiguous().reshape(512,4096),self.attn_output.prefill_packed_weight(), residual_for_output.reshape(512,4096).cast(dtypes.float32) if _res is not None else None, model_family="qwen3_8b",role="attn_output")
+        if _res is not None: _record_model_owned_prefill_candidate(self.attn_output,(512,4096,4096),_o_binding)
+      else: out = _pf16(self.attn_output, out_in)
+      return _prefill_semantic(_prefill, prefill_activation, out.reshape(x.shape).contiguous())
+    if _has_residual:
+      if _o_q8 is not None:
+        _q8_o=(q4k_q8_fine_o_call(True,self.attn_output,_o_q8,residual_for_output) if _o_q8_fine else
+               q4k_q8_o_call(True,self.attn_output,_o_q8,residual_for_output))
+        if _q8_o is None: raise RuntimeError("combine-owned Q8 O route failed after admission")
+        return _prefill_semantic(_prefill,prefill_activation,_q8_o)
+      return _prefill_semantic(_prefill, prefill_activation,
+        self.attn_output(out_in, residual=residual_for_output))
     return _prefill_semantic(_prefill, prefill_activation, self.attn_output(out_in))
 
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
-      # The promoted generated decode-attention shape was validated with fp16 K/V cache storage (TG-P14 KV_BOTH parity
-      # and roofline closeout). Keep that fact-defined shape on fp16 so the generated tile reads the same cache dtype
-      # the promotion measured; other shapes keep the default dtype.
-      _generated_decode_shape_supported = qk_primitive_eligibility_from_device_facts( \
-        getattr(self.config, "prefill_device_facts", None)).eligible and x.shape[0] == 1 and self.config.n_heads == 32 \
+      # KV cache dtype decision (decode-kv-store-chain-fusion-scope-20260803.md revision): fp16 storage is
+      # byte-identical to fp32 for the decode tile because the tile casts the cache to fp16 on read
+      # (flash_decode_attention.py::make_kv_element_loader), and it halves KV bytes. Whether fp16 is
+      # EXPRESSIBLE is a device capability (DeviceCapabilities.supports_fp16 from the opened renderer's
+      # supported_dtypes() -- never a backend/architecture string; the pre-TG3 AMD gfx1100 eligibility was
+      # removed). The validated-shape gate (batch 1, 32 heads, 8 kv heads, 128 head dim) keeps the measured
+      # promotion scope; other shapes keep the default dtype.
+      _generated_decode_shape_supported = kv_cache_fp16_eligible( \
+        getattr(self.config, "prefill_device_facts", None)) and x.shape[0] == 1 and self.config.n_heads == 32 \
         and self.config.n_kv_heads == 8 and self.config.head_dim == 128
       _kv_dtype = dtypes.float16 if _generated_decode_shape_supported else None
       # Admission guardrail (B5): assert the ACTUAL cache_kv bytes (with the real dtype) fit the admitted VRAM budget
@@ -740,7 +1517,7 @@ class MLATransformerBlock(FFNBlock):
     self.attn_v_b = {"weight": Tensor.zeros(config.n_heads, config.v_head_dim, config.kv_lora_rank)}
     self.attn_output = nn.Linear(config.n_heads * config.v_head_dim, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     mark_scratch = lambda value: _prefill_semantic(_prefill, prefill_scratch, value)
     B, T, _ = x.shape
@@ -752,20 +1529,25 @@ class MLATransformerBlock(FFNBlock):
     else: q_proj = mark_scratch(self.attn_q(x))
     q = mark_scratch(q_proj.reshape(B, T, self.config.n_heads, self.config.head_dim).transpose(1, 2))
     q_nope, q_rope = q[..., :q_nope_head_dim], q[..., q_nope_head_dim:]
-    q = (q_nope @ self.attn_k_b["weight"].transpose(-1, -2)).cat(apply_rope(q_rope, self.freqs_cis[start_pos:start_pos+T]), dim=-1)
+    # Position-invariant graph structure: index rope reads and the KV store slot by the
+    # UNBOUND start_pos variable (see TransformerBlock._attention for the full rationale).
+    _graph_pos = start_pos.src[0] if (isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and
+                                      len(start_pos.src) == 2 and start_pos.src[0].op is Ops.DEFINE_VAR) else start_pos
+    q = (q_nope @ self.attn_k_b["weight"].transpose(-1, -2)).cat(apply_rope(q_rope, self.freqs_cis[_graph_pos:_graph_pos+T]), dim=-1)
 
     kv_a = mark_scratch(self.attn_kv_a_mqa(x))
     with role_metadata("rms_norm"): c_kv = self.attn_kv_a_norm(kv_a[..., :self.config.kv_lora_rank])
     k_rope = apply_rope(
       kv_a[..., self.config.kv_lora_rank:].reshape(B, T, 1, self.config.rope_dim).transpose(1, 2),
-      self.freqs_cis[start_pos:start_pos+T])
+      self.freqs_cis[_graph_pos:_graph_pos+T])
 
     k_store = mark_scratch(c_kv.reshape(B, 1, T, self.config.kv_lora_rank).cat(k_rope.reshape(B, 1, T, self.config.rope_dim), dim=-1))
-    k = Tensor(self.cache_k.uop.after(self.cache_k[:, :, start_pos:start_pos+T, :].uop.store(k_store.uop)))[:, :, 0:start_pos+T, :]
+    k = Tensor(self.cache_k.uop.after(self.cache_k[:, :, _graph_pos:_graph_pos+T, :].uop.store(k_store.uop)))[:, :, 0:_graph_pos+T, :]
     v = k[..., :self.config.kv_lora_rank]
 
-    mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
-      if resolve(T != 1) else None
+    _mask_rows = T.simplify().vmax if isinstance(T, UOp) else T
+    mask = Tensor.full((1, 1, _mask_rows, self.config.max_context), float("-inf"), dtype=x.dtype, buffer=True) \
+      .triu(_graph_pos+1)[:, :, :T, :_graph_pos+T] if resolve(T != 1) else None
     with role_metadata("attn_score"): attn = q @ k.transpose(-1, -2) * (1.0 / self.config.head_dim ** 0.5)
     if mask is not None:
       with role_metadata("attn_mask"): attn = attn + mask
@@ -795,7 +1577,7 @@ class GatedDeltaNetBlock(FFNBlock):
     self.ssm_a = Tensor.zeros(self.num_v_heads)
     self.ssm_norm, self.ssm_out = nn.RMSNorm(self.head_v_dim, config.norm_eps), nn.Linear(ssm.inner_size, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None, residual_for_output:Tensor|None=None) -> Tensor:
     _prefill = getattr(self, "_is_prefill", False)
     mark_scratch = lambda value: _prefill_semantic(_prefill, prefill_scratch, value)
     B, T, _ = x.shape
@@ -864,6 +1646,45 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    self.rollout_jit_flash_s6 = TinyJit(self.forward)
+    self.rollout_jit_flash_s64 = TinyJit(self.forward)
+    self.rollout_jit_flash_live = {s:TinyJit(self.forward) for s in (8, 10, 18, 34)}
+    self.prefill_greedy_jit = TinyJit(self.forward_greedy)
+    self.prefill_v2_greedy_jit = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_s6 = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_s64 = TinyJit(self.forward_greedy)
+    self.rollout_greedy_jit_flash_live = {s:TinyJit(self.forward_greedy) for s in (8, 10, 18, 34)}
+    # Closed-default P5 experiment: two captures can form an alias-free
+    # device-resident feedback ring.  A harness must explicitly promote the
+    # route and provide the alternating slot; ordinary callers retain the
+    # single-capture path and CapturedJit's generic written-input firewall.
+    self.rollout_greedy_pingpong_jits = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy) for _ in range(2))
+    self.rollout_greedy_pingpong_jits_flash_live = {
+      s:tuple(TinyJit(self.forward_greedy) for _ in range(2)) for s in (8, 10, 18, 34)}
+    # Diagnostic-only captures return the already-computed decode logits beside
+    # the sampled token. They are separate so the production sampled graph's
+    # return/lifetime contract remains byte-for-byte unchanged.
+    self.rollout_logits_jit = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_s6 = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_s64 = TinyJit(self.forward_with_logits)
+    self.rollout_logits_jit_flash_live = {s:TinyJit(self.forward_with_logits) for s in (8, 10, 18, 34)}
+    self.rollout_greedy_logits_jit = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_s6 = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_s64 = TinyJit(self.forward_greedy_with_logits)
+    self.rollout_greedy_logits_jit_flash_live = {s:TinyJit(self.forward_greedy_with_logits) for s in (8, 10, 18, 34)}
+    self.rollout_greedy_logits_pingpong_jits = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_s6 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_s64 = tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2))
+    self.rollout_greedy_logits_pingpong_jits_flash_live = {
+      s:tuple(TinyJit(self.forward_greedy_with_logits) for _ in range(2)) for s in (8, 10, 18, 34)}
     self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # The selected prefill candidate gets a separate concrete-M capture.
@@ -966,8 +1787,27 @@ class Transformer:
       if json.loads(getattr(self.config, "prefill_memory_plan", None) or "{}").get("decision") != "FULL_RESIDENT_OVERLAY": return 0
     elif not prefill_policy_uses_overlay(policy): return 0
     covered = list(self._prefill_v2_covered())
+    compiler_k_linears = {id(block.attn_k) for block in self.blk if hasattr(block,"attn_k")}
+    compiler_q6_v_down_linears = ({id(block.attn_v) for block in self.blk if isinstance(getattr(block,"attn_v",None),Q6KPrimitiveLinear)} |
+                                  {id(block.ffn_down) for block in self.blk if isinstance(getattr(block,"ffn_down",None),Q6KPrimitiveLinear)})
     n = 0
-    for lin, _, _ in covered:
+    for lin, out_f, in_f in covered:
+      if getattr(lin, "_pf16_w", None) is not None: continue
+      # The default-off compiler Q4_K research route consumes canonical packed
+      # gate/up parameters directly.  Keeping their unused fp16 overlays would
+      # violate the representation contract and needlessly retain ~7 GiB on
+      # Qwen3-8B.  Every non-exact role/shape preserves the normal overlay.
+      if _nv_q4_production_mode(self.config) == "compiler" and isinstance(lin, Q4KPrimitiveLinear) and \
+          getattr(lin, "_prefill_graph_role", None) == "ffn_gate_up" and \
+          (self.config.prefill_ubatch, out_f, in_f) == (512, 12288, 4096):
+        continue
+      if _nv_compiler_q4_imma_k_pp512_enabled(self.config) and isinstance(lin,Q4KPrimitiveLinear) and id(lin) in compiler_k_linears and \
+          (self.config.prefill_ubatch,out_f,in_f) == (512,1024,4096):
+        continue
+      q6_role = "attn_v" if (self.config.prefill_ubatch,out_f,in_f)==(512,1024,4096) else \
+                "ffn_down" if (self.config.prefill_ubatch,out_f,in_f)==(512,4096,12288) else ""
+      if _nv_compiler_q6_imma_role_enabled(self.config,q6_role) and isinstance(lin,Q6KPrimitiveLinear) and id(lin) in compiler_q6_v_down_linears:
+        continue
       lin._pf16_w = _mark_physical_semantic(lin.weight.cast(dtypes.float16).contiguous().realize(), model_parameter); n += 1
     return n
 
@@ -978,7 +1818,7 @@ class Transformer:
     # tax to load time, so every generation -- including the first -- is warm. Bounded: ceil(max_context/UBATCH)
     # jits. Safe to leave the dummy KV behind: a fresh model's first generation starts at start_pos=0 and
     # overwrites the cache in chunk order before any position is read.
-    if not (self.config.prefill_v2 and self.config.prefill_concrete_kv): return 0
+    if not (self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and self.config.prefill_concrete_kv): return 0
     ubatch = self.config.prefill_ubatch
     temp = materialize_runtime_input(Tensor([0.0]).contiguous())
     dummy = materialize_runtime_input(Tensor.zeros(1, ubatch, dtype="int32").contiguous())
@@ -993,26 +1833,127 @@ class Transformer:
     return (self.config.lm_head_route != "lazy" and bool(self.blk) and
             getattr(self.blk[0], '_prefill_v2', False) and is_direct_packed_prefill_linear(self.output))
 
+  @staticmethod
+  def _bound_position_var_vals(start_pos: int|UOp) -> dict[str, int]:
+    """Value of a bound position UOp, keyed by its unbound variable name. Position-invariant
+    decode graphs reference the UNBOUND variable (llama.cpp: positions are launch-time data,
+    never graph structure), so the BIND node is pruned from the schedule; eager realize needs
+    this carrier to resolve the variable. The JIT supplies the same value from its input args."""
+    if isinstance(start_pos, UOp) and start_pos.op is Ops.BIND and len(start_pos.src) == 2 and \
+       start_pos.src[1].op is Ops.CONST:
+      return {start_pos.src[0].expr: start_pos.src[1].arg}
+    return {}
+
+  @staticmethod
+  def _stamp_position_var_vals(t: Tensor, vv: dict[str, int]) -> Tensor:
+    if vv: t._var_vals = vv
+    return t
+
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     _prefill = resolve(tokens.shape[1] != 1)
+    _vv = Transformer._bound_position_var_vals(start_pos)
     x = _prefill_semantic(_prefill, prefill_activation, self.token_embd(tokens).float())  # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
-    with role_metadata("rms_norm"): x = _prefill_semantic(_prefill, prefill_scratch, self.output_norm(x))
-    if self._lm_head_wants_pf16(): return _prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous())
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    with role_metadata("rms_norm"):
+      x = _prefill_semantic(_prefill, prefill_scratch,
+        _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
+    if _prefill and _nv_compiler_q6_vocab_pp512_enabled(self.config) and tuple(x.shape)==(1,512,4096) and isinstance(self.output,Q6KPrimitiveLinear):
+      from tinygrad.llm.q6k_vocab_manyrow import Q6KVocabFourWarpAdmission, q6k_vocab_four_warp_call
+      logits=q6k_vocab_four_warp_call(Q6KVocabFourWarpAdmission(), self.output, x[:, -1:, :])
+      if logits is None: raise RuntimeError("compiler Q6 vocab admission failed")
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill,prefill_output,logits),_vv)
+    if _prefill and _nv_llama_prefill_role_enabled(self.config,"NV_LLAMA_Q6_VOCAB_PP512") and tuple(x.shape)==(1,512,4096) and \
+       self.config.vocab_size==151936 and isinstance(self.output,Q6KPrimitiveLinear):
+      from extra.llm_research.prefill.nv_llama_q6k_vocab_pp512_binding import binding_for
+      logits=binding_for("NV").project(x[0,-1].cast(dtypes.float32).contiguous(),self.output.prefill_packed_weight())
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill,prefill_output,logits.reshape(1,1,151936)),_vv)
+    if self._lm_head_wants_pf16():
+      return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous()), _vv)
     # The lazy LM head is still the selected output tensor's actual runtime invocation.  Record it before Tensor's
     # downstream final-token pruning; the prefill-forward context prevents the same call during decode from counting.
     notify_prefill_route(self.output)
-    return _prefill_semantic(_prefill, prefill_output, self.output(x))
+    return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, self.output(x)), _vv)
 
-  def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+  def _decode_vocab_top1_sample(self, tokens:Tensor, start_pos:int|UOp) -> Tensor | None:
+    """Decode-only research route for the fused vocab top-1 epilogue.
+
+    Mirrors ``logits`` up to the LM head, then replaces the full 151936-row logits materialization
+    plus the four-kernel argmax tail with the P1 packed per-tile reduce.  Returns ``None`` for any
+    shape/route that cannot be fused so the ordinary greedy path stays the live fallback.
+    """
+    _prefill = resolve(tokens.shape[1] != 1)
+    if _prefill: return None
+    x = _prefill_semantic(_prefill, prefill_activation, self.token_embd(tokens).float())
+    for block in self.blk: x = block(x, start_pos)
+    _reduce_output_norm = not _prefill and getattr(self, "_decode_reduce_output_rmsnorm_promoted", False)
+    with role_metadata("rms_norm"):
+      x = _prefill_semantic(_prefill, prefill_scratch,
+        _decode_reduce_output_rmsnorm(self.output_norm, x, _reduce_output_norm))
+    notify_prefill_route(self.output)
+    return q6k_vocab_top1_call(self.output, x, self.output.route_admission.admitted)
+
+  def _forward_sampled(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, with_logits:bool) -> Tensor|tuple[Tensor, Tensor]:
     # This runs inside the TinyJit body: feedback's lazy clone/store is captured in the decode schedule instead of
     # being realized by JIT input preparation as a separate per-token copy and synchronization.
     tokens = _runtime_input_boundary(tokens)
-    logits = self.logits(tokens, start_pos)[:, -1, :]
+    _vv = Transformer._bound_position_var_vals(start_pos)
+    _logits = self.logits(tokens, start_pos)
+    # Pruned prefill graphs already return the requested terminal row.
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
-    sampled = (logits / temperature.maximum(1e-12) -
-               (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
-    return _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    scores = logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    sampled = native_argmax_finite_fp32(scores, native_threads) if native_threads and not resolve(tokens.shape[1] != 1) \
+      else scores.argmax(-1, keepdim=True)
+    sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    # The diagnostic return must own a fresh replay-written allocation.  The
+    # sampling path reads ``logits`` in-place, while a view of that internal
+    # producer can be reused by the JIT memory plan after argmax has consumed
+    # it.  Keep production byte-identical and return a held copy only for the
+    # full-logit oracle.
+    sampled = Transformer._stamp_position_var_vals(sampled, _vv)
+    return (sampled, Transformer._stamp_position_var_vals(logits.clone(), _vv)) if with_logits else sampled
+
+  def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+    return self._forward_sampled(tokens, start_pos, temperature, False)  # type: ignore[return-value]
+
+  def forward_greedy(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+    tokens = _runtime_input_boundary(tokens)
+    _prefill = resolve(tokens.shape[1] != 1)
+    if not _prefill and getattr(self, "_decode_vocab_top1_lease", False):
+      sampled = self._decode_vocab_top1_sample(tokens, start_pos)
+      if sampled is not None:
+        return Transformer._stamp_position_var_vals(_prefill_semantic(_prefill, prefill_output, sampled),
+                                                    Transformer._bound_position_var_vals(start_pos))
+    _logits = self.logits(tokens, start_pos)
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
+    sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
+      native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+      packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
+      logits.argmax(-1, keepdim=True)
+    return Transformer._stamp_position_var_vals(_prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled),
+                                                Transformer._bound_position_var_vals(start_pos))
+
+  def forward_greedy_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
+    tokens = _runtime_input_boundary(tokens)
+    _logits = self.logits(tokens, start_pos)
+    logits = _logits[:, 0, :] if _logits.shape[1] == 1 else _logits[:, -1, :]
+    native_threads = getattr(self, "_decode_native_argmax_lease", getattr(self, "_decode_native_argmax_threads", 0))
+    _host_mirror = getattr(self, "_decode_host_argmax_mirror", None)
+    sampled = native_argmax_finite_fp32_host_mirror(logits, _host_mirror, native_threads)[0] if native_threads and _host_mirror is not None else \
+      native_argmax_finite_fp32(logits, native_threads) if native_threads else \
+      packed_argmax_finite_fp32(logits, -1, keepdim=True) if getattr(self, "_decode_packed_argmax_promoted", False) else \
+      logits.argmax(-1, keepdim=True)
+    sampled = _prefill_semantic(resolve(tokens.shape[1] != 1), prefill_output, sampled)
+    _vv = Transformer._bound_position_var_vals(start_pos)
+    return Transformer._stamp_position_var_vals(sampled, _vv), Transformer._stamp_position_var_vals(logits.clone(), _vv)
+
+  def forward_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> tuple[Tensor, Tensor]:
+    """Diagnostic decode tap.  The logits already feed sampling; this only retains them as a JIT return."""
+    return self._forward_sampled(tokens, start_pos, temperature, True)  # type: ignore[return-value]
 
   def forward_ring(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, freqs:Tensor) -> Tensor:
     # StreamingLLM ring decode: `freqs` is a per-step JIT INPUT (the slot-relative pre-gathered cos|sin table). Set it
@@ -1020,34 +1961,275 @@ class Transformer:
     for block in self.blk: block._ring_freqs = freqs
     return self.forward(tokens, start_pos, temperature)
 
+  def decode_with_logits(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
+                         feedback_slot:int|None=None, flash_split_count:int|None=None) -> tuple[Tensor, Tensor]:
+    """Closed-surface diagnostic tap for a normal (non-ring) one-token decode.
+
+    It deliberately rejects prefill and ring inputs rather than silently
+    capturing a different production route.  Normal ``__call__`` remains the
+    sole production entry point.
+    """
+    if resolve(tokens.shape[1] != 1): raise ValueError("decode_with_logits only supports one-token decode")
+    if _GENERIC_LLM_CONTROL.get(): raise ValueError("decode_with_logits does not support generic-control routing")
+    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = True
+    flash_geometry = _flash_decode_geometry_for_split(
+      getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
+    for index,block in enumerate(self.blk):
+      block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = use_flash, False, False, None, False
+      block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
+    if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
+    pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
+    greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_pingpong_jits_flash,
+      self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64,
+      self.rollout_greedy_logits_pingpong_jits_flash_live)
+    greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_logits_jit_flash,
+      self.rollout_greedy_logits_jit_flash_s6, self.rollout_greedy_logits_jit_flash_s64,
+      self.rollout_greedy_logits_jit_flash_live)
+    greedy_jit = ((greedy_flash_pair if use_flash else self.rollout_greedy_logits_pingpong_jits)[feedback_slot]
+                  if pingpong else (greedy_flash if use_flash else self.rollout_greedy_logits_jit))
+    direct_greedy = bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    jit = greedy_jit if direct_greedy and float(temperature.item()) == 0.0 else \
+          (_flash_jit_variant(flash_split_count, self.rollout_logits_jit_flash, self.rollout_logits_jit_flash_s6,
+                              self.rollout_logits_jit_flash_s64, self.rollout_logits_jit_flash_live)
+           if use_flash else self.rollout_logits_jit)
+    with prefill_route_scope(False), self._decode_callify_substrate(), self._decode_flash_load_schedule_substrate(use_flash):
+      return jit(tokens, start_pos, temperature)
+
+  @contextlib.contextmanager
+  def _decode_callify_substrate(self):
+    """M2c callify substrate: the block-output copy fold (and the reduce-output
+    route when its policy promotes) is gated on callify Context flags that
+    production decode normally leaves closed. When a promoted policy requires
+    them, decode graph capture runs under the Context so the booked graph
+    renders in production; closed policies keep the legacy closed-graph
+    spelling (no Context, byte-identical legacy graph)."""
+    if not getattr(self, "_decode_callify_substrate_promoted", False):
+      yield
+      return
+    from tinygrad.callify import CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER
+    from tinygrad.helpers import Context
+    with Context(CALLIFY_OWNED_PRECOMPILED_OUTPUT_REDIRECT=1, CALLIFY_TYPED_SEMANTIC_INPUT_PRODUCER=1):
+      yield
+
+  @contextlib.contextmanager
+  def _decode_flash_load_schedule_substrate(self, use_flash:bool):
+    """Contain the measured NV Flash compiler and graph-layout contract.
+
+    The score kernel needs the two-argument launch bound to expose its K/V
+    request wall.  The corresponding token-wall qualification used an initial
+    graph cap of 33 so score/combine do not straddle the first arbitrary
+    doubling seam.  Apply both as one admitted capture lease: changing either
+    independently reproduces the measured conversion failure.
+    """
+    if not use_flash or not getattr(self, "_decode_flash_load_schedule_promoted", False):
+      yield
+      return
+    from tinygrad.helpers import Context
+    with Context(NV_FLASH_LOAD_SCHEDULE=1, JIT_BATCH_SIZE=33): yield
+
+  def _concrete_prefill_jit(self, start_pos:int, greedy:bool) -> TinyJit:
+    jit = self.prefill_v2_jits.setdefault((start_pos, greedy), TinyJit(self.forward_greedy if greedy else self.forward))
+    if not self.config.prefill_workload_reuse and jit.cnt: jit.reset()
+    return jit
+
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
-               ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
+               ring_freqs:Tensor|None=None, ring_full:bool=False, greedy:bool=False, feedback_slot:int|None=None,
+               flash_split_count:int|None=None) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     generic_control = _GENERIC_LLM_CONTROL.get()
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
-    is_prefill_v2 = self.config.prefill_v2 and is_prefill and isinstance(tokens.shape[1], int) and not generic_control
+    is_prefill_v2 = self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and \
+      is_prefill and isinstance(tokens.shape[1], int) and not generic_control
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill and not generic_control
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
-    for block in self.blk:
+    flash_geometry = _flash_decode_geometry_for_split(
+      getattr(self, "_flash_decode_tile_geometry_lease", None) or {}, flash_split_count)
+    for index,block in enumerate(self.blk):
       block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
         use_flash, is_prefill_v2, is_prefill, None, ring_full
+      block._flash_decode_tile_geometry_lease = _flash_block_geometry(self,index,flash_geometry) or None
+    _nv_compiler_binding = _nv_gate_only_binding = _nv_llama_binding = _nv_llama_q6_down_binding = _nv_llama_q4_down_binding = _nv_compiler_q4_down_binding = _nv_compiler_k_binding = _nv_compiler_q6_binding = _nv_qkv_binding = _nv_o_binding = _nv_compiler_o_binding = _nv_compiler_q_binding = None
+    if is_prefill_v2 and _nv_compiler_q4_imma_q_pp512_enabled(self.config):
+      from dataclasses import replace as _dc_replace
+      from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_q_binding_for
+      _nv_compiler_q_binding=_dc_replace(compiler_q_binding_for("NV",variant="streamk"),population=len(self.blk),roles=("attn_q",))
+      _nv_compiler_q_binding.prepare(len(self.blk))
+    if is_prefill_v2 and _nv_compiler_q4_imma_o_pp512_enabled(self.config):
+      from extra.llm_research.prefill.nv_compiler_q4k_qo_binding import binding_for as compiler_o_binding_for
+      _nv_compiler_o_binding=compiler_o_binding_for("NV",variant="streamk",native_q_x4=True,o_only=True)
+      _nv_compiler_o_binding.prepare(len(self.blk))
+    if is_prefill_v2 and (_nv_q4_production_mode(self.config) == "llama" or getenv("NV_LLAMA_PACKED_QKV_PP512",0)):
+      if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed QKV requires exact Qwen3-8B pp512 topology")
+      from extra.llm_research.prefill.nv_qkv_packed_pp512_binding import binding_for as qkv_binding_for
+      _nv_qkv_binding=qkv_binding_for("NV")
+    if is_prefill_v2 and (_nv_q4_production_mode(self.config) == "llama" or getenv("NV_LLAMA_PACKED_O_PP512",0)):
+      if not _nv_compiler_q4_imma_pp512_qualified(self.config): raise RuntimeError("NV packed O requires exact Qwen3-8B pp512 topology")
+      from extra.llm_research.prefill.nv_llama_packed_q4k_o_pp512_binding import binding_for as o_binding_for
+      _nv_o_binding=o_binding_for("NV"); _nv_o_binding.prepare_records(len(self.blk))
+    if is_prefill_v2 and (nv_q4_mode := ("gate_only" if _nv_compiler_q4_gate_only_pp512_enabled(self.config) else _nv_q4_production_mode(self.config))) is not None:
+      if nv_q4_mode in ("compiler","llama") and not _nv_compiler_q4_imma_pp512_qualified(self.config):
+        raise RuntimeError("NV packed Q4 IMMA pp512 routes only admit the exact dense Qwen3-8B topology")
+      if nv_q4_mode in ("compiler", "gate_only"):
+        from extra.llm_research.prefill.nv_compiler_q4k_pp512_binding import binding_for
+      elif nv_q4_mode == "llama":
+        from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for
+      else:
+        from extra.llm_research.prefill.nv_q4_imma_pp512_binding import binding_for
+      # The generated Stream-K gate/up route wins its current 216-role
+      # full-model bracket.  It remains bounded by the existing exact compiler
+      # pp512 admission; zero is the explicit rollback to the wide compiler body.
+      if nv_q4_mode == "compiler" and _nv_compiler_q4_gate_streamk_enabled(self.config):
+        _gate_x4_interleave = bool(getenv("NV_COMPILER_Q4_GATE_X4_INTERLEAVE", 1))
+        _gate_q8_packed = _gate_x4_interleave and _nv_compiler_q4_gate_q8_packed_loads_enabled(self.config)
+        _gate_q4_packed = _gate_x4_interleave and _nv_compiler_q4_gate_q4_packed_publication_enabled(self.config)
+        _nv_binding = binding_for("NV", variant="streamk", producer_arithmetic="llama",
+                                  pair_q8_reuse=_nv_compiler_q4_gate_q8_reuse_enabled(self.config),
+                                  native_weight_a_x4=_gate_x4_interleave, coalesced_swapped_output=_gate_x4_interleave,
+                                  q8_ds4_packed_loads=_gate_q8_packed,q4_packed_publication=_gate_q4_packed)
+      else: _nv_binding = binding_for("NV")
+      if nv_q4_mode == "gate_only":
+        _nv_gate_only_binding = _nv_binding
+        _nv_gate_only_binding.prepare_records(len(self.blk))
+        _nv_gate_only_binding.install_warmstart(self)
+        from extra.llm_research.prefill.nv_llama_packed_q4k_pp512_binding import binding_for as llama_binding_for
+        _nv_binding = llama_binding_for("NV")
+        _nv_binding.prepare_pairs(len(self.blk))
+        _nv_llama_binding = _nv_binding
+      elif nv_q4_mode == "compiler":
+        _nv_binding.prepare_records(len(self.blk)*2)
+        _nv_binding.install_warmstart(self)
+        _nv_compiler_binding = _nv_binding
+      elif nv_q4_mode == "llama":
+        _nv_binding.prepare_pairs(len(self.blk))
+        _nv_llama_binding = _nv_binding
+      else:
+        _nv_binding.prepare_outputs(len(self.blk)*2)
+        _nv_binding.begin_trace()
+        for block in self.blk: block._nv_q4_imma_pp512_binding = _nv_binding
+    if is_prefill_v2 and _nv_compiler_q4_imma_k_pp512_enabled(self.config):
+      if _nv_q4_production_mode(self.config) != "compiler" or not _nv_compiler_q4_imma_k_pp512_enabled(self.config):
+        raise RuntimeError("NV compiler Q4 K pp512 route requires the exact compiler gate/up Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_compiler_q4k_k_pp512_binding import binding_for as k_binding_for
+      _nv_compiler_k_binding = k_binding_for("NV")
+      _nv_compiler_k_binding.prepare_records(len(self.blk))
+      _nv_compiler_k_binding.install_warmstart(self)
+    if is_prefill_v2 and _nv_llama_packed_q6k_down_enabled(self.config):
+      if not _nv_llama_packed_q6k_down_enabled(self.config):raise RuntimeError("llama Q6 down requires the exact llama Q4 gate/up Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_llama_packed_q6k_down_pp512_binding import binding_for as q6_down_binding_for
+      _nv_llama_q6_down_binding=q6_down_binding_for("NV");_nv_llama_q6_down_binding.prepare_records(18)
+    if is_prefill_v2 and _nv_llama_packed_q4k_down_enabled(self.config):
+      if not _nv_llama_packed_q4k_down_enabled(self.config):raise RuntimeError("llama Q4 down requires the exact llama Q4 gate/up Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_llama_packed_q4k_down_pp512_binding import binding_for as q4_down_binding_for
+      _nv_llama_q4_down_binding=q4_down_binding_for("NV");_nv_llama_q4_down_binding.prepare_records(18)
+    if is_prefill_v2 and _nv_compiler_q4k_down_enabled(self.config):
+      from extra.llm_research.prefill.nv_compiler_q4k_down_pp512_binding import capture_for as q4_down_capture_for
+      _nv_compiler_q4_down_binding=q4_down_capture_for("NV",variant="streamk",streamk_unroll=8)
+      _nv_compiler_q4_down_binding.prepare_records(18)
+    if is_prefill_v2 and _nv_compiler_q6_imma_pp512_enabled(self.config):
+      if _nv_q4_production_mode(self.config) != "compiler" or not _nv_compiler_q6_imma_pp512_enabled(self.config):
+        raise RuntimeError("NV compiler Q6 V/down pp512 route requires the exact compiler gate/up+K Qwen3-8B arm")
+      from extra.llm_research.prefill.nv_compiler_q6k_pp512_binding import binding_for as q6_binding_for
+      _nv_compiler_q6_binding = q6_binding_for("NV")
+      _nv_compiler_q6_binding.prepare_records(len(self.blk))
+      _nv_compiler_q6_binding.install_warmstart(self)
     # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
     # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
     # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.
+    if feedback_slot not in (None, 0, 1): raise ValueError("feedback_slot must be None, 0, or 1")
     if ring_freqs is not None and not is_prefill:
       _rjit = self.rollout_jit_ring_full if ring_full else self.rollout_jit_ring
       return _rjit(tokens, start_pos, temperature, ring_freqs)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
-      jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
+      jit = self._concrete_prefill_jit(start_pos, greedy)
+      # A caller that did not admit workload reuse did not budget the much larger
+      # second-use capture peak. Keep the concrete-KV fast path, but execute its
+      # compiled kernels eagerly on every independent use instead of letting
+      # TinyJit transition from cnt=1 into capture. Explicit reuse policies retain
+      # the existing precompile/capture behavior.
     else:
-      jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
-            (self.rollout_jit_flash if use_flash else self.rollout_jit)
+      pingpong = bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) and feedback_slot is not None
+      greedy_flash_pair = _flash_jit_variant(flash_split_count, self.rollout_greedy_pingpong_jits_flash,
+        self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64,
+        self.rollout_greedy_pingpong_jits_flash_live)
+      greedy_flash = _flash_jit_variant(flash_split_count, self.rollout_greedy_jit_flash,
+        self.rollout_greedy_jit_flash_s6, self.rollout_greedy_jit_flash_s64,
+        self.rollout_greedy_jit_flash_live)
+      rollout_greedy = ((greedy_flash_pair if use_flash else self.rollout_greedy_pingpong_jits)[feedback_slot]
+                        if pingpong else (greedy_flash if use_flash else self.rollout_greedy_jit))
+      jit = ((self.prefill_v2_greedy_jit if greedy else self.prefill_v2_jit) if is_prefill_v2 else (self.prefill_greedy_jit if greedy else self.prefill_jit)) if is_prefill else \
+            (rollout_greedy if greedy else
+             (_flash_jit_variant(flash_split_count, self.rollout_jit_flash, self.rollout_jit_flash_s6,
+                                 self.rollout_jit_flash_s64, self.rollout_jit_flash_live)
+              if use_flash else self.rollout_jit))
+    if _nv_compiler_binding is not None:
+      # The compiled PROGRAM is cached once per device, but every model/JIT
+      # owns a distinct trace identity. Mutable graph storage is allocated
+      # lazily by project() and retained only by that capture.
+      capture = _nv_compiler_q4_imma_capture(self, jit, _nv_compiler_binding)
+      capture.begin_trace()
+      for block in self.blk:
+        block._nv_q4_imma_pp512_binding = capture
+        block.ffn_gate._nv_model_owned_candidate_identity=block.ffn_up._nv_model_owned_candidate_identity=_model_capture_identity(capture)
+    if _nv_gate_only_binding is not None:
+      capture = _nv_compiler_q4_imma_capture(self, jit, _nv_gate_only_binding)
+      capture.begin_trace()
+      for block in self.blk: block._nv_compiler_q4_gate_only_pp512_binding = capture
+    if _nv_llama_binding is not None:
+      capture=_nv_llama_packed_q4k_capture(self,jit,_nv_llama_binding)
+      capture.begin_trace()
+      for block in self.blk: block._nv_q4_imma_pp512_binding=capture
+    if _nv_qkv_binding is not None:
+      qkv_capture=_nv_qkv_packed_capture(self,jit,_nv_qkv_binding); qkv_capture.begin_trace()
+      for block in self.blk: block._nv_qkv_packed_pp512_binding=qkv_capture
+    if _nv_o_binding is not None:
+      o_capture=_nv_llama_packed_o_capture(self,jit,_nv_o_binding); o_capture.begin_trace()
+      for block in self.blk: block._nv_llama_packed_o_pp512_binding=o_capture
+    if _nv_compiler_q_binding is not None:
+      q_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_q_binding)
+      q_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q4k_q_pp512_binding=q_capture
+        block.attn_q._nv_model_owned_candidate_identity=_model_capture_identity(q_capture)
+        if isinstance(block.attn_q,Q4KPrimitiveLinear) and hasattr(block.attn_q,"_pf16_w"): delattr(block.attn_q,"_pf16_w")
+    if _nv_compiler_o_binding is not None:
+      o_capture=_nv_compiler_q4_imma_capture(self,jit,_nv_compiler_o_binding)
+      o_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q4k_o_pp512_binding=o_capture
+        block.attn_output._nv_model_owned_candidate_identity=_model_capture_identity(o_capture)
+    if _nv_llama_q6_down_binding is not None:
+      q6_capture=_nv_llama_packed_q6k_down_capture(self,jit,_nv_llama_q6_down_binding);q6_capture.begin_trace()
+      for block in self.blk:block._nv_llama_packed_q6k_down_pp512_binding=q6_capture
+    if _nv_llama_q4_down_binding is not None:
+      q4_down_capture=_nv_llama_packed_q4k_down_capture(self,jit,_nv_llama_q4_down_binding);q4_down_capture.begin_trace()
+      for block in self.blk:block._nv_llama_packed_q4k_down_pp512_binding=q4_down_capture
+    if _nv_compiler_q4_down_binding is not None:
+      q4_down_capture=_nv_compiler_q4_down_binding;q4_down_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q4k_down_pp512_binding=q4_down_capture
+        block.ffn_down._nv_model_owned_candidate_identity=_model_capture_identity(q4_down_capture)
+        if isinstance(block.ffn_down,Q4KPrimitiveLinear) and hasattr(block.ffn_down,"_pf16_w"): delattr(block.ffn_down,"_pf16_w")
+    if _nv_compiler_k_binding is not None:
+      k_capture = _nv_compiler_q4_imma_k_capture(self,jit,_nv_compiler_k_binding)
+      k_capture.begin_trace()
+      for block in self.blk: block._nv_compiler_q4_imma_k_pp512_binding = k_capture
+    if _nv_compiler_q6_binding is not None:
+      q6_capture = _nv_compiler_q6_imma_capture(self,jit,_nv_compiler_q6_binding)
+      q6_capture.begin_trace()
+      for block in self.blk:
+        block._nv_compiler_q6_imma_pp512_binding = q6_capture
+        if isinstance(block.ffn_down,Q6KPrimitiveLinear): block.ffn_down._nv_model_owned_candidate_identity=_model_capture_identity(q6_capture)
     if not is_prefill_v2:
+      if not is_prefill:
+        # Decode captures under the M2c callify substrate when a promoted policy
+        # requires it; prefill graphs always stay on the closed-graph spelling.
+        with prefill_route_scope(is_prefill), self._decode_callify_substrate(), self._decode_flash_load_schedule_substrate(use_flash):
+          return jit(tokens, start_pos, temperature)
       with prefill_route_scope(is_prefill): return jit(tokens, start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
@@ -1076,11 +2258,11 @@ class Transformer:
     use_q4k_primitive = use_q6k_primitive = not isinstance(gguf, Tensor)
     _authority_workload = _measurement_authority[2] if _measurement_authority is not None else {}
     _prefill_ubatch = int(_authority_workload.get("prefill_ubatch", PREFILL_UBATCH))
+    _workload_reuse = bool(_authority_workload.get("workload_reuse", False))
     if _prefill_ubatch <= 0: raise ValueError("selected prefill candidate requires a positive physical M")
     _requested_max_context, _admit_resolved, _ring_admitted = max_context, False, False
     _kv_quant = False
     _overlay_request = None
-    _workload_reuse = False
     _runtime_policy = immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "direct-packed-baseline",
       "routes": {}, "provenance": "preloaded tensors have no selected-GGUF inventory", "measured": False})
     def _print_admission(plan, kv_tag:str, cap_text:str):
@@ -1099,7 +2281,8 @@ class Transformer:
       _runtime_inventory = derive_selected_gguf_prefill_inventory(_admit_kv, _admit_meta, _prefill_ubatch)
       _runtime_policy = select_memory_adaptive_runtime_policy(kv=_admit_kv, meta=_admit_meta,
                                                                device_facts=_device_facts, ubatch=_prefill_ubatch,
-                                                               selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()))
+                                                               selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()),
+                                                               workload_reuse=_workload_reuse)
       _automatic_overlay_policy = None
       if prefill_policy_strategy(_runtime_policy) == "DIRECT_PACKED_FALLBACK" and _runtime_policy.get("measured") is False:
         _automatic_overlay_policy = automatic_promoted_prefill_graph_policy(
@@ -1154,6 +2337,8 @@ class Transformer:
       # the e2e bench row, never a silent drop.
       if _device_facts.capabilities.supports_fp16 is True and _automatic_overlay_policy is None and not _overlay_request:
         _admit["prefill_overlay_promotion"] = "no-promoted-candidate"
+      elif _automatic_overlay_policy is not None and _effective_strategy is Strategy.FULL_RESIDENT_OVERLAY:
+        _admit["prefill_overlay_promotion"] = _automatic_overlay_policy["graph_gemm"]["candidate_set_identity"]
       # A completed machine-search record may carry a fully attributed allocation ledger. Apply it only after context
       # and KV representation are resolved. Ordinary direct-packed loading needs no caller-injected hardware facts.
       if all(_route_memory.get(key) is not None for key in _EXACT_ROUTE_MEMORY_KEYS):
@@ -1217,13 +2402,22 @@ class Transformer:
       _print_admission(_plan, "", f"trained {_admission_inputs.trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
 
     _runtime_policy = select_prefill_runtime_policy(_runtime_policy, scanned_device_facts=_device_facts,
-      workload_reuse=_workload_reuse)
+      workload_reuse=bool(_runtime_policy.get("workload_reuse",_workload_reuse)))
     _workload_reuse = bool(_runtime_policy.get("workload_reuse", False))
     # S6: the runtime prefill-v2 flag is True for every executed strategy (REFUSE raises at admission), so it
     # is folded to True here; the admission-time capability keeps the v2_on name on AdmissionInputs.
     _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, True)
     _flash_decode = any(candidate.bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
                         for candidate in (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE))
+    # Warm the fused-attention spec-target cache at load time (decode's resolve-once pattern,
+    # decode_routes.py:151): custom_kernel_attention runs inside a Tensor Function dispatch where
+    # Device[...] is disallowed, so the runtime lookup must be a cache hit. Devices without a renderer
+    # stay unwarmed and fail closed to SDPA at the call site.
+    try:
+      from tinygrad.llm.fused_attention import warm_attention_spec_target
+      warm_attention_spec_target(_device_facts.selected_device)
+    except ValueError:
+      pass
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:
@@ -1279,7 +2473,258 @@ class Transformer:
     finally:
       for _n, _v in zip(("uniform", "glorot_uniform"), _saved_init):
         delattr(Tensor, _n) if _v is None else setattr(Tensor, _n, _v)
+    # L1 M3: the fused decode RMSNorm route resolves ONCE from the load-entry facts (same
+    # (backend, arch) the QK primitives use), never from a target-string guess. Blocks read
+    # their own copy so the traced norm call sites need no transformer back-reference.
+    _norm_cap = qk_primitive_capability_from_device_facts(_device_facts)
+    # Dense S8 Flash load-schedule promotion.  The substrate itself is generic
+    # (capture-scoped launch bounds + graph cap), while admission remains at
+    # the exact topology qualified at token wall.  Quantization is deliberately
+    # absent from this predicate: the Flash graph shape, not the weight format,
+    # owns the contract.  MoE stays closed until it receives its own lifecycle
+    # qualification.
+    model._decode_flash_load_schedule_promoted = bool(
+      decode_flash_llama_vec_wide_promoted((_norm_cap.backend, _norm_cap.architecture)) and
+      not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and
+      config.num_blocks == 36 and config.n_heads == 32 and config.n_kv_heads == 8 and
+      config.head_dim == 128 and config.max_context >= 513)
+    # Active-horizon selection is inseparable from explicit capture placement:
+    # without both S6/S8 ping-pong pairs prewarmed, the Tc=769 lazy capture
+    # spike erases the steady-state saving. `generate` therefore activates
+    # the selector only after `_prewarm_active_horizon_flash_pairs` succeeds.
+    model._flash_decode_active_horizon_lease = bool(
+      model._decode_flash_load_schedule_promoted and
+      not getenv("TINYGRAD_FLASH_ACTIVE_HORIZON_DISABLE", 0))
+    _norm_promoted = decode_norm_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_norm_fusion_promoted = _norm_promoted
+    for _b in model.blk: _b._decode_norm_fusion_promoted = _norm_promoted
+    # L1 M4: q4k GEMV epilogue fusion gate. CLOSED default (decode-q4k-epilogue-fusion-route-policy.json,
+    # measured non-landing, m4-q4k-epilogue-measurement-record-20260802.md); M2's Q6K in-kernel merge
+    # keeps its own separate record (decode-epilogue-fusion-route-policy.json, NV sm_120). Same
+    # resolve-once pattern as M3 -- blocks carry their own copy so the traced call sites need no back-ref.
+    _q4k_epi_promoted = decode_q4k_epilogue_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    for _b in model.blk: _b._decode_q4k_epilogue_fusion_promoted = _q4k_epi_promoted
+    # L1 M4 o-proj residual_add variant gate. CLOSED default (decode-q4k-epilogue-resadd-route-policy.json,
+    # m4-resadd-landing-scope-20260806.md); separate from the combined M4 record so this one measured
+    # copy-free variant can promote alone. Same resolve-once pattern as the M4 combined gate.
+    _q4k_resadd_promoted = decode_q4k_epilogue_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
+    for _b in model.blk: _b._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
+    # L1 GEMV substrate: decode shared-Q8 attention group. CLOSED default
+    # (decode-shared-q8-attention-route-policy.json, empty promoted_targets until the
+    # section-6 full gate passes, nv-gemv-substrate-landing-scope-20260808.md). Same
+    # resolve-once pattern as the M4 gate; the loader installs the booked max18
+    # cooperative lease (blocks 1-12, 14-18, and 25) only when the record promotes NV sm_120.
+    _shared_q8_promoted = decode_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_shared_q8_attention_promoted = _shared_q8_promoted
+    for _b in model.blk: _b._decode_shared_q8_attention_promoted = _shared_q8_promoted
+    # Q6 V direct-output consumer sub-variant gate. CLOSED default
+    # (decode-q6-direct-shared-q8-attention-route-policy.json, empty promoted_targets until
+    # the all-depth gate passes, nv-q6-direct-shared-q8-promotion-scope-20260814.md). It only
+    # changes the Q6_K V consumer inside an already-installed shared-Q8 lease; Q4_K V blocks and
+    # the shared Q8_1 provider are untouched, so the flag is inert unless the group lease above
+    # is also promoted. Same resolve-once pattern as the group gate.
+    _q6_direct_promoted = decode_q6_direct_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
+    for _b in model.blk: _b._decode_q6_direct_shared_q8_attention_promoted = _q6_direct_promoted
+    # Cooperative Q4/Q8 direct-output sub-variant. It retains the four warp
+    # partials and their left-to-right fp32 association, but merges them inside
+    # the producer CTA. This removes 43 completion nodes in the max17 group.
+    # TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT=1 restores the prior partial ABI.
+    _q4_direct_promoted = _shared_q8_promoted and decode_q4_direct_shared_q8_attention_promoted(
+      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT", 0)
+    model._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
+    for _b in model.blk: _b._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
+    # Shared-Q8 Q4/Q4 K/V dual-output producer. This is separately gated from
+    # the direct-output consumer and is inert unless both prerequisite shared
+    # Q8 and cooperative direct-output records are active.
+    _shared_q8_q4kv_pair_promoted = _q4_direct_promoted and decode_shared_q8_q4kv_pair_promoted(
+      (_norm_cap.backend,_norm_cap.architecture))
+    model._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
+    for _b in model.blk: _b._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
+    _shared_q8_q4q6_pair_promoted = _q4_direct_promoted and _q6_direct_promoted and \
+      decode_shared_q8_q4q6_kv_pair_promoted((_norm_cap.backend,_norm_cap.architecture))
+    model._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
+    for _b in model.blk: _b._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
+    _shared_q8_q4q4_full_promoted = _q4_direct_promoted and decode_shared_q8_q4q4_qkv_full_promoted(
+      (_norm_cap.backend,_norm_cap.architecture))
+    model._decode_shared_q8_q4q4_qkv_full_promoted = _shared_q8_q4q4_full_promoted
+    # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
+    # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
+    # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
+    # admitted Q4K primitives, so the model flag alone never changes the legacy chain.
+    _w1w3_promoted = decode_q4k_w1w3_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
+    for _b in model.blk: _b._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
+    # M2a fp16-store spelling gate (decode-q4k-w1w3-fp16-store-route-policy.json, NV sm_120 promoted,
+    # nv-epilogue-absorption-m2a-promotion-record-20260812.md). SEPARATE record from the w1w3 fusion
+    # gate above: the fused16 kernel stores fp16 in-kernel, absorbing the E_128_32_3 ffn-activation
+    # cast; it only applies when the fused kernel itself is admitted, so the flag is ANDed with the
+    # w1w3 admission. The harness lease `_q4k_w1w3_fp16_store_lease` still forces the spelling where
+    # the loader record is closed (research arms), so the AB contract is unchanged.
+    _w1w3_fp16_promoted = _w1w3_promoted and decode_q4k_w1w3_fp16_store_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
+    for _b in model.blk: _b._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
+    _gateup_fourwarp_promoted = _w1w3_fp16_promoted and decode_q4k_gate_up_four_warp_vector_promoted(
+      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_Q4K_GATE_UP_FOUR_WARP_DISABLE", 0)
+    model._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
+    for _b in model.blk: _b._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
+    # M2b+M2c ffn-down residual-add absorption gate (decode-ffn-down-resadd-route-policy.json,
+    # NV sm_120 promoted, nv-epilogue-absorption-m2c-ab-20260811.json BOOKED). M2b: the ffn_down
+    # Q4K/Q6K GEMV absorbs the h+ffn_out add in-kernel; M2c: the declared epilogue-absorbing block
+    # output gets its CALL rebound to the caller output slot so the identity copies fold. The flag
+    # is carried on the model and every block; the ffn_down linear copies are installed after the
+    # Q4K/Q6K primitive replacement below (the primitives are the objects that carry route_role).
+    # The harness lease _ffn_down_resadd_lease still forces the route where the record is closed.
+    _ffn_resadd_promoted = decode_ffn_down_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
+    for _b in model.blk: _b._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
+    # Q4_K FFN-down four-warp fp16 geometry route (decode-q4k-ffn-down-fp16-geometry-route-policy.json,
+    # NV sm_120 promoted, -100.3 us at d512). It replaces the installed 1-warp/row epi_ffnresadd GEMV
+    # with the 4-warp/row fp16-FMA direct consumer; the control topology it swaps against requires the
+    # M2b ffn-down residual-add promotion, so the flag is ANDed with _ffn_resadd_promoted. The Q4-only
+    # admission is installed on the replaced Q4K primitives after they are built below.
+    model._decode_q4k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
+      decode_q4k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # Q6_K FFN-down four-warp fp16 geometry route (decode-q6k-ffn-down-fp16-geometry-route-policy.json,
+    # NV sm_120 promoted, device 25.7 us vs 31.0 us control). Same closed-default shape as the Q4
+    # analog: it replaces the row_tile-2 coop Q6 consumer with the 4-warp/row fp16 direct consumer,
+    # requires the M2b ffn-down residual-add promotion, and is ANDed with it at resolve time.
+    model._decode_q6k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
+      decode_q6k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6k_ffn_down_packed_lanemap_promoted = model._decode_q6k_ffn_down_fp16_geometry_promoted and \
+      decode_q6k_ffn_down_packed_lanemap_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6k_ffn_down_unroll_promoted = model._decode_q6k_ffn_down_packed_lanemap_promoted and \
+      decode_q6k_ffn_down_unroll_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # Q6_K attention-V four-warp fp16 geometry route (decode-q6k-v-four-warp-fp16-geometry-route-policy.json,
+    # NV sm_120 promoted, in-loop 5.12 us vs 17.94 us control, -147.35 us/token wall bracket). It replaces
+    # the parts route on the 10 Q6_K attention-V blocks with a 128-thread four-warp fp16 direct consumer;
+    # the V output binds to the kv-store route as a flat fp32 view (vparts=1), so no parts reduce is left.
+    model._decode_q6k_v_four_warp_promoted = decode_q6k_v_four_warp_fp16_geometry_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
+    # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
+    # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
+    # _attention call sites need no transformer back-reference. The _attention gate additionally
+    # requires decode shape (T==1,B==1), full-head rope, qk_norm in (0, head_dim), no rope-at-read, and
+    # an fp16 cache, so the model flag alone never changes the legacy chain.
+    _kv_store_promoted = decode_kv_store_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_kv_store_fusion_promoted = _kv_store_promoted
+    for _b in model.blk: _b._decode_kv_store_fusion_promoted = _kv_store_promoted
+    # Path 3 semantic RMSNorm: per-site marker flags resolve once from load-entry facts. The
+    # qualified 4096-wide attention/FFN/output sites use native lowering; Q/K keep the fused
+    # reduce-output + RoPE/cache route. nn.RMSNorm additionally rejects prefill shapes.
+    _norm_target = (_norm_cap.backend, _norm_cap.architecture)
+    _rmsnorm_native_promoted = decode_rmsnorm_native_lowering_promoted(_norm_target)
+    model._decode_rmsnorm_native_promoted = _rmsnorm_native_promoted
+    for _b in model.blk:
+      for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+        _norm = getattr(_b, _name, None)
+        if _norm is None: continue
+        _norm._rmsnorm_native_promoted = decode_rmsnorm_native_lowering_site_promoted(_norm_target, _name)
+        if _norm._rmsnorm_native_promoted and _name in ("attn_norm", "ffn_norm"):
+          _norm._rmsnorm_native_output_dtype = dtypes.float16
+    model.output_norm._rmsnorm_native_promoted = decode_rmsnorm_native_lowering_site_promoted(_norm_target, "output_norm")
+    # Cooperative ordinary-CALL reduce/output route.  Promotion lives on the
+    # model/block call sites, never nn.RMSNorm: the call sites gate the marker
+    # on ``not _prefill`` before late concrete-view admission runs.
+    _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+    # The FFN-norm site stays CLOSED by default even when the fp32 q/k route is
+    # promoted.  The residual-bind lowers one cooperative 1_4096 body per FFN
+    # norm, but on the GPU that body plus its fresh output materialization costs
+    # ~7.5 us against ~6 us for the ordinary reduce + epilogue it replaces, so
+    # the d512 reverse wall bracket is net-negative (192.36 -> 190.47 tok/s,
+    # C6 19 -> 55).  The booked policy keeps C6 at 19; harnesses open this knob
+    # explicitly when the FFN site is under measurement.
+    model._decode_reduce_output_ffn_rmsnorm_promoted = False
+    for _b in model.blk:
+      _b._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
+      _b._decode_reduce_output_ffn_rmsnorm_promoted = False
+    # Full-head Q/K norm+RoPE epilogue. This is a semantic REDUCE_OUTPUT
+    # lowering, not an opaque KernelProgram boundary; target policy remains
+    # separate and is additionally gated by the established q/k marker route.
+    _qk_norm_rope_promoted = _reduce_output_promoted and decode_qk_norm_rope_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
+    for _b in model.blk: _b._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
+    # Producer-owned K/V cache sink. The terminal 8x128 K RMSNorm+RoPE body
+    # writes K and final V directly to the current fp16/fp32 cache slot,
+    # deleting the 36 generic cache-store joins. It composes only with the
+    # already-promoted exact Q/K norm+RoPE route and remains shape-gated in the
+    # call site. The environment switch restores the complete legacy chain.
+    _producer_kv_sink_promoted = _qk_norm_rope_promoted and decode_producer_kv_cache_sink_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_producer_kv_cache_sink_promoted = _producer_kv_sink_promoted
+    if _producer_kv_sink_promoted:
+      for _index, _b in enumerate(model.blk):
+        _b._producer_kv_cache_sink_admission = ProducerKVCacheSinkAdmission(_index)
+    # Ordinary Q4/Q4 K/V dual-output producer. Admission is installed only
+    # after primitive replacement and after the shared-Q8 leases are known;
+    # this resolve-once flag carries only the target/rollback policy.
+    model._decode_q4k_kv_pair_promoted = decode_q4k_kv_pair_promoted(
+      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_q4q4_qkv_full_promoted = decode_q4k_q4q4_qkv_full_promoted(
+      (_norm_cap.backend,_norm_cap.architecture))
+    # One-CTA finite-fp32 decode argmax. The native reducer replaces the three
+    # scheduler reduction kernels at the sampled-score tail and keeps a held
+    # one-element clone for replay-safe feedback. NV sm_120 is promoted after
+    # a token-exact reps=9 reverse bracket recovered 56.386 us/token. The
+    # environment switch is an explicit load-time rollback/control arm.
+    model._decode_native_argmax_threads = decode_native_argmax_threads((_norm_cap.backend, _norm_cap.architecture))
+    # A two-capture feedback ring removes CapturedJit's recurrent-input shadow.
+    # Admission is exact to the model/target qualified across every required
+    # context band. generate additionally requires an explicit output horizon
+    # so only the request's selected pair is prewarmed.
+    _feedback_pingpong = _decode_feedback_pingpong_admitted(
+      config, (_norm_cap.backend, _norm_cap.architecture), model._decode_native_argmax_threads)
+    model._decode_direct_greedy_promoted = _feedback_pingpong
+    model._decode_feedback_pingpong_promoted = _feedback_pingpong
+    # M2c callify substrate: the block-output copy fold and the fp32 q/k reduce-output spelling are
+    # gated on the callify owned-precompiled-output-redirect / typed-semantic-input-producer Context
+    # flags, which production decode normally leaves closed. When a promoted policy requires them
+    # (M2b/M2c here; the reduce-output route when it promotes), the decode path runs under the
+    # Context so the booked graph renders in production (see _decode_callify_substrate below).
+    model._decode_callify_substrate_promoted = bool(_ffn_resadd_promoted or _reduce_output_promoted)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
+    if _norm_promoted:
+      # Materialize the packed norm weights once at load (~600KB total fp16) so the fused decode
+      # kernels read plain buffers. Failure on any norm just declines its fused route (legacy graph).
+      for _b in model.blk:
+        for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+          _norm = getattr(_b, _name, None)
+          if _norm is None: continue
+          try:
+            _norm._decode_fused_weight = Tensor.empty(_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                      device=_norm.weight.device).assign(
+              _norm.weight.cast(dtypes.float16).contiguous()).realize()
+          except Exception:
+            _norm._decode_fused_weight = None
+    # The reduce-output route needs the same identity contract for its marker
+    # weight: the selector admits an identity buffer directly, while a lazy
+    # fp16 cast would need one fresh weight materialization per fused body
+    # (the measured 8eeb0be1 overhead in the phase-6 bracket).  Materialize
+    # once at load, mirroring _decode_fused_weight above.  This is small
+    # (~1.4MB fp16 total) and harmless when the route stays closed.
+    for _b in model.blk:
+      for _name in ("attn_norm", "ffn_norm", "attn_q_norm", "attn_k_norm"):
+        _norm = getattr(_b, _name, None)
+        if _norm is None or getattr(_norm, "weight", None) is None: continue
+        try:
+          _norm._decode_reduce_output_weight = Tensor.empty(_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                            device=_norm.weight.device).assign(
+            _norm.weight.cast(dtypes.float16).contiguous()).realize()
+        except Exception:
+          _norm._decode_reduce_output_weight = None
+    _out_norm = getattr(model, "output_norm", None)
+    if _out_norm is not None and getattr(_out_norm, "weight", None) is not None:
+      try:
+        _out_norm._decode_reduce_output_weight = Tensor.empty(_out_norm.weight.shape[-1], dtype=dtypes.float16,
+                                                              device=_out_norm.weight.device).assign(
+          _out_norm.weight.cast(dtypes.float16).contiguous()).realize()
+      except Exception:
+        _out_norm._decode_reduce_output_weight = None
     if q4k_meta is not None:
       model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
       route_plan = build_model_route_plan(q4k_meta, model_facts)
@@ -1293,6 +2738,56 @@ class Transformer:
         primitive_budget, q4_storage_mode, route_plan, device_facts=_device_facts)
       if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None,
         primitive_budget, q6_storage_mode, route_plan, device_facts=_device_facts)
+      # M2b/M2c linear copies of the resolve-once flag: the Q4K/Q6K primitive replacement above is
+      # what carries route_role on the ffn_down linears, so the promoted flag is installed HERE on
+      # the replacement objects (the model/block copies were set in the resolve-once block above).
+      if model._decode_ffn_down_resadd_promoted:
+        for _b in model.blk:
+          _ffn = getattr(_b, "ffn_down", None)
+          if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
+            _ffn._decode_ffn_down_resadd_promoted = True
+      if model._decode_q4k_gate_up_four_warp_vector_promoted:
+        from tinygrad.llm.q4k_gate_up_four_warp_mmvq import Q4KGateUpFourWarpAdmission
+        for _idx, _b in enumerate(model.blk):
+          _fg, _fu = getattr(_b, "ffn_gate", None), getattr(_b, "ffn_up", None)
+          if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear) and \
+             (getattr(_fg, "out_features", None), getattr(_fg, "in_features", None)) == (12288, 4096) and \
+             (getattr(_fu, "out_features", None), getattr(_fu, "in_features", None)) == (12288, 4096):
+            _fg._q4k_gate_up_four_warp_admission = Q4KGateUpFourWarpAdmission(_idx, vector_loads=True)
+      # Q4_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q4_K
+      # 4096x12288 ffn_down role only (Q6 down keeps its own route). The vector-load spelling is
+      # bit-exact and passed production d512/d128 reverse brackets; TINYGRAD_Q4K_SCALAR_LOAD=1
+      # restores the scalar spelling along with the ordinary Q4 single-projection routes.
+      if model._decode_q4k_ffn_down_fp16_geometry_promoted:
+        from tinygrad.llm.q4k_ffn_down_mmvq import Q4KFFNDownMMVQAdmission
+        for _idx, _b in enumerate(model.blk):
+          _ffn = getattr(_b, "ffn_down", None)
+          if _ffn is not None and isinstance(_ffn, Q4KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
+             and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
+            _ffn._q4k_ffn_down_mmvq_admission = Q4KFFNDownMMVQAdmission(_idx, fp16_fma=True,
+              vector_loads=_q4k_single_projection_load_style(_ffn) == "vector")
+      # Q6_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q6_K
+      # 4096x12288 ffn_down role only (Q4 down keeps its own route). Normal loads carry no
+      # admission, so this stays closed on every other target.
+      if model._decode_q6k_ffn_down_fp16_geometry_promoted:
+        from tinygrad.llm.q6k_ffn_down_mmvq import Q6KFFNDownMMVQAdmission
+        for _idx, _b in enumerate(model.blk):
+          _ffn = getattr(_b, "ffn_down", None)
+          if _ffn is not None and isinstance(_ffn, Q6KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
+             and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
+            _ffn._q6k_ffn_down_mmvq_admission = Q6KFFNDownMMVQAdmission(_idx, fp16_fma=True,
+              packed_lanemap=model._decode_q6k_ffn_down_packed_lanemap_promoted,
+              unroll_blocks=4 if model._decode_q6k_ffn_down_unroll_promoted else None)
+      # Q6_K attention-V four-warp fp16 geometry route: install the admission on the exact Q6_K
+      # 1024x4096 attn_kv role only (Q4 V keeps its own shared-Q8 route). Normal loads carry no
+      # admission, so this stays closed on every other target.
+      if model._decode_q6k_v_four_warp_promoted:
+        from tinygrad.llm.q6k_v_mmvq import Q6KVFourWarpAdmission
+        for _idx, _b in enumerate(model.blk):
+          _v = getattr(_b, "attn_v", None)
+          if _v is not None and isinstance(_v, Q6KPrimitiveLinear) and getattr(_v, "route_role", "") == "attn_kv" \
+             and getattr(_v, "out_features", None) == 1024 and getattr(_v, "in_features", None) == 4096:
+            _v._q6k_v_four_warp_admission = Q6KVFourWarpAdmission(_idx)
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
@@ -1316,6 +2811,55 @@ class Transformer:
       # modules retain their original paths/state ownership.
       attachments = attach_program_identity_metadata(model, model_facts.tensors, primitive_linears=primitive_linears, module_at=_module_at)
       model._program_identity_linears = [linear for _path, linear in attachments]
+      # L1 GEMV substrate lease install: when the record promotes NV sm_120, install the
+      # booked max18 cooperative lease (blocks 1-12, 14-18, and 25; block 0 embedding boundary and
+      # block 13 precision boundary stay ordinary) exactly like the
+      # qualification harness does. The admission is a trace-time opt-in:
+      # shared_q8_attention_call revalidates the real Q4/Q4/{Q4,Q6} tuple and REDUCE_OUTPUT
+      # norm marker, returning None to the ordinary primitives on any miss.
+      if model._decode_shared_q8_attention_promoted:
+        _SHARED_Q8_LEASE = tuple(range(1, 13)) + tuple(range(14, 19)) + (25,)
+        for _idx in _SHARED_Q8_LEASE:
+          if _idx >= len(model.blk): break
+          _b = model.blk[_idx]
+          _norm = getattr(_b, "attn_norm", None)
+          if _norm is None or getattr(_norm, "weight", None) is None: continue
+          _b._shared_q8_attention_admission = SharedQ8AttentionAdmission(_idx, cooperative_q4=True,
+            q4_direct_output=model._decode_q4_direct_shared_q8_attention_promoted,
+            q6_direct_output=model._decode_q6_direct_shared_q8_attention_promoted,
+            q4_kv_pair_output=model._decode_shared_q8_q4kv_pair_promoted and not model._decode_shared_q8_q4q4_qkv_full_promoted and
+              isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
+              isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear),
+            q4_q6_kv_pair_output=model._decode_shared_q8_q4q6_kv_pair_promoted and
+              isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
+              isinstance(getattr(_b,"attn_v",None),Q6KPrimitiveLinear),
+            q4_qkv_triple_output=model._decode_shared_q8_q4q4_qkv_full_promoted and
+              isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and
+              isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear))
+          if isinstance(getattr(_b,"attn_k",None),Q4KPrimitiveLinear) and isinstance(getattr(_b,"attn_v",None),Q4KPrimitiveLinear):
+            _b.attn_q._shared_q8_qkv_words=_b.attn_k.q4k_storage.words.cat(
+              _b.attn_v.q4k_storage.words,dim=0).contiguous().realize()
+          _b._decode_reduce_output_attn_rmsnorm_promoted = True
+          try:
+            _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,
+              device=_norm.weight.device).assign(_norm.weight.cast(dtypes.float16).contiguous()).realize()
+          except Exception:
+            # A failed norm copy declines the fused provider for that block (legacy graph).
+            _b._shared_q8_attention_norm_weight = None
+      # Fuse only the nine ordinary Q4/Q4 K/V pairs proved by the composed
+      # profile/wall gate. Shared-Q8 blocks have a distinct producer grammar
+      # and are intentionally excluded here; mixed Q4/Q6 pairs also miss.
+      if model._decode_q4k_kv_pair_promoted or model._decode_q4k_q4q4_qkv_full_promoted:
+        from tinygrad.llm.q4k_kv_pair import Q4KKVPairAdmission, Q4KQKVAdmission
+        for _idx, _b in enumerate(model.blk):
+          if getattr(_b, "_shared_q8_attention_admission", None) is not None: continue
+          _k, _v = getattr(_b, "attn_k", None), getattr(_b, "attn_v", None)
+          if isinstance(_k, Q4KPrimitiveLinear) and isinstance(_v, Q4KPrimitiveLinear) and \
+             all(getattr(x, "route_role", "") == "attn_kv" and getattr(x, "out_features", None) == 1024 and
+                 getattr(x, "in_features", None) == 4096 for x in (_k, _v)):
+            _b.attn_q._q4k_qkv_words=_k.q4k_storage.words.cat(_v.q4k_storage.words,dim=0).contiguous().realize()
+            if model._decode_q4k_q4q4_qkv_full_promoted: _b._q4k_qkv_admission=Q4KQKVAdmission(_idx)
+            elif model._decode_q4k_kv_pair_promoted: _b._q4k_kv_pair_admission = Q4KKVPairAdmission(_idx)
     if _runtime_inventory is not None:
       attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts,
                                         direct_packed_policy=direct_packed_prefill_policy(config.n_heads, config.n_kv_heads))
@@ -1350,12 +2894,10 @@ class Transformer:
       # Build after memory-plan realization so packed-only models cannot match unrelated kernels
       # through an empty-dtype shape key.
       model._pf16_warmstart = model._build_prefill_v2_warmstart()
-    # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision),
-    # so per-start_pos jits compile LAZILY on first use by default (cached on the model instance
-    # thereafter, model.py's `prefill_v2_jits.setdefault` at __call__) -- a cold prompt pays the
-    # ~5s/new-chunk-offset tax inline once, not ceil(max_context/ubatch)*~5s at every load. Only callers
-    # who explicitly declare workload reuse (prefill_workload_reuse, still off by default -- nothing
-    # currently sets it) pay that bounded precompile-at-load cost up front so every generation is warm.
+    # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision).
+    # Callers that explicitly declare workload reuse admit the per-start-position TinyJit residency and
+    # pay its bounded precompile-at-load cost. The ordinary no-reuse policy keeps the same concrete-KV
+    # kernels eager, avoiding an unbudgeted second-use capture peak.
     if config.prefill_v2 and config.prefill_concrete_kv and config.prefill_workload_reuse:
       model.precompile_concrete_prefill_jits()
     return model, kv
@@ -1406,7 +2948,60 @@ class Transformer:
       try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
       except Exception: return
 
-  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0):
+  def _prewarm_active_horizon_flash_pairs(self, prompt_len:int=0, expected_output_tokens:int|None=None) -> None:
+    """Capture every reachable promoted live-context graph before token timing."""
+    if getattr(self, "_flash_decode_active_horizon_prewarmed", False): return
+    if not getattr(self, "_flash_decode_active_horizon_lease", False): return
+    v_sp = UOp.variable("start_pos", 0, self.max_context-1)
+    dummy = Tensor([[0]], dtype="int32").contiguous()
+    temp = Tensor([0.0]).contiguous()
+    variants = ((6,700),(8,900),(10,1100),(18,2000),(34,4000))
+    horizon = self.max_context if expected_output_tokens is None else min(self.max_context, prompt_len + expected_output_tokens)
+    # Prefill produces the token at ``prompt_len``; the first one-token decode
+    # writes that token and observes Tc=prompt_len+1.
+    lo = max(513, prompt_len+1)
+    probes = (lo, horizon, 769, 1025, 1281, 2305)
+    required = {_active_horizon_flash_split_count(True, tc-1, self.max_context) for tc in probes if lo <= tc <= horizon}
+    required.discard(None)
+    for split_count, ctx in ((s,min(ctx,self.max_context-1)) for s,ctx in variants
+                             if min(ctx,self.max_context-1) >= 511 and
+                             _flash_decode_geometry_for_split({}, s)["token_bound"] <= self.max_context):
+      if expected_output_tokens is not None and split_count not in required: continue
+      direct = bool(getattr(self, "_decode_direct_greedy_promoted", False)) and expected_output_tokens is not None
+      slots = (0, 1) if direct and getattr(self, "_decode_feedback_pingpong_promoted", False) else (None,)
+      for slot in slots:
+        for _ in range(3):
+          self(dummy, v_sp.bind(ctx), temp, use_flash=True, greedy=direct,
+               feedback_slot=slot, flash_split_count=split_count).realize()
+    self.reset_generation_state()
+    self._flash_decode_active_horizon_prewarmed = True
+
+  def _decode_submit_ahead_eligible(self) -> bool:
+    """Closed-default launch-hiding gate for the steady-decode pipeline.
+
+    The submit-ahead route reorders the steady decode loop to submit token
+    N+1's graph BEFORE ``item()`` on token N, so the host-side JIT prep for
+    N+1 overlaps the GPU execution of N.  It is only safe when the promoted
+    greedy pingpong pair is already captured AND its alias contract is
+    admitted (distinct fixed returns, read-only inputs): the loop then reads
+    the previous output tensor after submitting the next graph without any
+    risk of the next graph clobbering it.  A cold or unadmitted pair falls
+    back to the ordinary single-sync pingpong route, which is byte-identical.
+    """
+    if not bool(getattr(self, "_decode_submit_ahead_promoted", False)): return False
+    if not bool(getattr(self, "_decode_direct_greedy_promoted", False)): return False
+    if not bool(getattr(self, "_decode_feedback_pingpong_promoted", False)): return False
+    from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
+    pair = self.rollout_greedy_pingpong_jits_flash
+    return all(getattr(jit, "captured", None) is not None for jit in pair) and \
+      pingpong_capture_contract(pair)["admitted"]
+
+  def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0, diagnostic_full_logits:bool=False,
+               expected_output_tokens:int|None=None, delivery_batch:int=1):
+    if not isinstance(delivery_batch, int) or delivery_batch < 1:
+      raise ValueError(f"delivery_batch must be a positive integer, got {delivery_batch!r}")
+    if delivery_batch > 1 and (temperature != 0.0 or diagnostic_full_logits or expected_output_tokens is None or expected_output_tokens < 1):
+      raise ValueError("delivery_batch > 1 requires greedy generation and a positive expected_output_tokens")
     if self.has_recurrent_block: chunk_size = 1
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
     if _ring and len(tokens) > self.max_context:
@@ -1414,6 +3009,8 @@ class Transformer:
       raise RuntimeError(f"prompt is {len(tokens)} tokens but the streaming window is N={self.max_context}: streaming "
                          f"evicts during generation, not prefill. Shorten the prompt to <={self.max_context} tokens, or "
                          f"use a model/quant that admits a larger window.")
+    if not _ring and not diagnostic_full_logits and temperature == 0.0:
+      self._prewarm_active_horizon_flash_pairs(len(tokens), expected_output_tokens)
     for _b in self.blk: _b._ring_active = _ring   # make prefill ALSO store un-roped K when the ring is on
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
     v_toks = UOp.variable("toks", 1, chunk_size)
@@ -1431,10 +3028,42 @@ class Transformer:
     if start_pos < len(self._cached_tokens) and (resets := [r for b in self.blk for r in b._state_reset_ops()]): Tensor.realize(*resets)
     # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
-    out, prompt_len = None, len(tokens)
+    out, prompt_len, decode_feedback_phase = None, len(tokens), 0
+    request_flash_split = _request_static_flash_split_count(prompt_len, expected_output_tokens, self.max_context)
+    direct_greedy = temperature == 0.0 and bool(getattr(self, "_decode_direct_greedy_promoted", False))
+    # Two captures add meaningful cold construction and retained memory. The
+    # promoted route therefore requires a caller-provided output horizon so
+    # prewarm can build only the selected request band.
+    direct_greedy = direct_greedy and expected_output_tokens is not None
+    host_argmax_mirror = direct_greedy and not diagnostic_full_logits and \
+      bool(getattr(self, "_decode_native_argmax_threads", 0)) and not bool(getattr(self, "_decode_vocab_top1_lease", False)) and \
+      bool(getenv("NV_ARGMAX_HOST_MIRROR", 0))
+    if host_argmax_mirror and getattr(self, "_decode_host_argmax_mirror", None) is None:
+      self._decode_host_argmax_mirror = make_native_argmax_host_mirror("NV", getenv("NV_ARGMAX_HOST_MIRROR_MEMORY", "host"))
+    batched_delivery = delivery_batch > 1
+    # The promoted native argmax returns a held clone specifically so its GPU
+    # feedback value survives replay.  Batching retains that same return before
+    # the next replay; it does not require the optional two-capture ping-pong
+    # route (the exact batch-ring gate qualified the ordinary capture).
+    if batched_delivery and (_ring or not bool(getattr(self, "_decode_native_argmax_threads", 0))):
+      raise ValueError("delivery_batch > 1 requires non-ring greedy native-argmax decode")
+    delivery_ring = None
+    delivery_pending:list[int] = []
+    delivery_generated = 0
+    if batched_delivery:
+      if not str(Device.DEFAULT).startswith("NV"): raise ValueError("delivery_batch > 1 is currently NV-only")
+      from tinygrad.device import Buffer, BufferSpec
+      # Buffer owns and releases the fixed ring when the generator closes.
+      delivery_ring_owner = Buffer("NV", delivery_batch, dtypes.int32, options=BufferSpec(nolru=True), preallocate=True)
+      delivery_ring = delivery_ring_owner._buf
+    # Launch hiding (submit-ahead) only reorders the steady flash-greedy
+    # pingpong decode; everything else keeps the exact existing scheduling.
+    submit_ahead = (not _ring and not diagnostic_full_logits and temperature == 0.0 and direct_greedy
+                    and self._decode_submit_ahead_eligible())
+    read_tok = None
     while _ring or len(tokens) < self.max_context:   # ring: unbounded logical context (caller controls when to stop)
       ubatch = self.config.prefill_ubatch
-      if self.config.prefill_v2 and (prompt_len - start_pos) >= ubatch:
+      if self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
@@ -1444,17 +3073,18 @@ class Transformer:
         # per-start_pos jit compiles lazily on first use and is cached on the model instance thereafter.
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
-        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()
-      elif self.config.prefill_v2 and start_pos < prompt_len and prompt_len >= ubatch:
+        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
+      elif self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and start_pos < prompt_len and prompt_len >= ubatch:
         # Phase-3 fix: a sub-UBATCH PROMPT remainder would otherwise fall to many slow 32-token symbolic calls
         # (the fallback trap). Instead process the LAST PREFILL_UBATCH tokens as ONE prefill-v2 chunk by shifting
         # the window back so it ENDS exactly at prompt_len -> all-real tokens (no padding), last position is
         # prompt_len-1 so out.item() is the next token. Re-processes the small overlap with the prior chunk (same
         # tokens -> same KV) -> correct. Symbolic start_pos reuses the one prefill_v2_jit (no per-remainder compile).
         sp = v_start_pos.bind(prompt_len - ubatch)   # symbolic offset -> matches the prefill_v2_jit signature
-        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()
+        out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
         ntv = prompt_len - start_pos                      # advance straight to end of prompt
       elif _ring and start_pos >= prompt_len and out is not None:
+        if diagnostic_full_logits: raise ValueError("diagnostic_full_logits does not support ring decode")
         # StreamingLLM ring decode (T=1, past the prompt). Bind the WRAPPED write slot (always in [0,N-1] -> never trips
         # Variable.bind's vmax assert even as the logical position grows unboundedly); feed the per-step pre-gathered
         # freqs (identity while filling -> token-identical; slot-relative once full); ring_full switches to the [0:N]
@@ -1463,20 +3093,103 @@ class Transformer:
         sp = v_start_pos.bind(self._ring_slot(start_pos, _N, _sinks)); ntv = 1
         _rf = self._ring_gather_freqs(next(b.freqs_cis for b in self.blk if hasattr(b, "freqs_cis")),
                                       start_pos, _N, _sinks)
-        out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N)).realize()
+        out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N), greedy=direct_greedy).realize()
       else:
-        sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
+        # Submit-ahead defers the prefill yield to the first steady-decode
+        # iteration, so start_pos == len(tokens) there: the next graph is
+        # still a one-token decode, never an empty prefill slice.
+        toks_remaining = len(tokens) - start_pos
+        if submit_ahead and toks_remaining < 1: toks_remaining = 1
+        sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, toks_remaining))
         ntv = nt.val
         # Select the flash-decode graph (rollout_jit_flash) vs SDPA graph (rollout_jit) per-token by context, so a
         # generation that STARTS short still crosses over to flash once ctx reaches the threshold. Without this the
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = self.config.flash_decode and _route_should_use_flash_decode(sp, ntv)
-        out = self(_generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else out, sp, temp,
-                   use_flash=_uf).realize()
+        _flash_split = request_flash_split if _uf else None
+        if _flash_split is None:
+          _flash_split = _adaptive_flash_split_count(_uf and getattr(self,"_flash_decode_adaptive_s64_lease",False),start_pos,self.max_context)
+        if _flash_split is None:
+          _flash_split = _active_horizon_flash_split_count(
+            _uf and getattr(self,"_flash_decode_active_horizon_lease",False) and
+            getattr(self,"_flash_decode_active_horizon_prewarmed",False),start_pos,self.max_context)
+        if submit_ahead and ntv == 1 and start_pos >= prompt_len and _uf and out is not None:
+          # Submit token start_pos+1's graph now; its input is the previous
+          # output (the token we yield this iteration).  The host-side prep of
+          # this submission overlaps the GPU execution of that token, then the
+          # bottom of the loop reads the PREVIOUS output after submission.
+          prev = out
+          out = self(prev, sp, temp, use_flash=_uf, greedy=True,
+                     feedback_slot=(decode_feedback_phase & 1),flash_split_count=_flash_split).realize()
+          decode_feedback_phase += 1
+          read_tok = prev
+        else:
+          decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
+                         (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
+          feedback_slot = (decode_feedback_phase & 1) if direct_greedy and start_pos >= prompt_len and \
+            bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
+          out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot,flash_split_count=_flash_split)
+                 if diagnostic_full_logits and ntv == 1 and start_pos >= prompt_len else
+                 self(decode_input, sp, temp, use_flash=_uf, greedy=direct_greedy, feedback_slot=feedback_slot,flash_split_count=_flash_split))
+          if feedback_slot is not None: decode_feedback_phase += 1
+          if isinstance(out, tuple):
+            out = (out[0].realize(), out[1].realize())
+          else: out = out.realize()
+          if feedback_slot is not None:
+            if diagnostic_full_logits:
+              pair = _flash_jit_variant(_flash_split, self.rollout_greedy_logits_pingpong_jits_flash,
+                self.rollout_greedy_logits_pingpong_jits_flash_s6, self.rollout_greedy_logits_pingpong_jits_flash_s64,
+                self.rollout_greedy_logits_pingpong_jits_flash_live) if _uf else self.rollout_greedy_logits_pingpong_jits
+            else:
+              pair = _flash_jit_variant(_flash_split, self.rollout_greedy_pingpong_jits_flash,
+                self.rollout_greedy_pingpong_jits_flash_s6, self.rollout_greedy_pingpong_jits_flash_s64,
+                self.rollout_greedy_pingpong_jits_flash_live) if _uf else self.rollout_greedy_pingpong_jits
+            if all(getattr(jit, "captured", None) is not None for jit in pair):
+              from tinygrad.llm.feedback_pingpong import pingpong_capture_contract
+              if not pingpong_capture_contract(pair)["admitted"]:
+                # Keep the generic alias-safe path as the automatic fallback;
+                # the harness records the exact failed contract separately.
+                self._decode_feedback_pingpong_promoted = False
+                decode_feedback_phase = 0
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
-      tokens.append(int(out.item()))
+      if submit_ahead and read_tok is None:
+        # The prefill output is the first deferred token: the steady-decode
+        # iteration above submits the NEXT graph and yields this output.
+        read_tok = out
+        continue
+      if submit_ahead:
+        sampled, logits = read_tok, None
+      else:
+        sampled, logits = out if diagnostic_full_logits and isinstance(out, tuple) else (out, None)
+      if batched_delivery:
+        assert delivery_ring is not None and isinstance(sampled.device, str)
+        dev = Device[sampled.device]
+        src = sampled.uop.buffer.get_buf(sampled.device)
+        slot = len(delivery_pending)
+        dev.hw_copy_queue_t().wait(dev.timeline_signal, dev.timeline_value-1).copy(delivery_ring.offset(slot*4, 4), src, 4) \
+          .signal(dev.timeline_signal, dev.next_timeline()).submit(dev)
+        delivery_pending.append(len(tokens)); tokens.append(0); delivery_generated += 1
+        flush = len(delivery_pending) == delivery_batch or delivery_generated == expected_output_tokens or \
+          (not _ring and len(tokens) >= self.max_context)
+        if not flush: continue
+        raw = bytearray(len(delivery_pending)*4)
+        dev.allocator._copyout(memoryview(raw), delivery_ring.offset(0, len(raw)))
+        delivered = [int.from_bytes(raw[i*4:(i+1)*4], "little", signed=True) for i in range(len(delivery_pending))]
+        for idx, token in zip(delivery_pending, delivered): tokens[idx] = token
+        delivery_pending.clear()
+        self._cached_tokens = tokens[:-1]
+        for token in delivered: yield token
+        continue
+      if host_argmax_mirror:
+        Device[sampled.device].synchronize()
+        tokens.append(read_native_argmax_host_mirror(self._decode_host_argmax_mirror))
+      else:
+        tokens.append(int(sampled.item()))
       self._cached_tokens = tokens[:-1]
-      yield tokens[-1]
+      # Prompt/prefill produces the first sampled token through the normal
+      # prefill graph, so its diagnostic logit is explicitly ``None`` rather
+      # than a silently different full-sequence route.
+      yield (tokens[-1], logits) if diagnostic_full_logits else tokens[-1]

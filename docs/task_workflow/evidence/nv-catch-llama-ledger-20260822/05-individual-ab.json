@@ -1,0 +1,81 @@
+{
+  "schema": "tinygrad.nv_catch_llama_ledger.individual_ab.v1",
+  "phase": 3,
+  "status": "COMPLETE",
+  "rule": "a candidate is promoted only if it is faster than each bracketing control median and clears max(10us, 3x control MAD)",
+  "rows": [
+    {
+      "package": "WP-D1 gate/up",
+      "candidate": "none promoted",
+      "verdict": "GATE_UP_NO_GO_WALL",
+      "device_body_us": 40.93,
+      "llama_body_us": 38.46,
+      "counter_delta_us": 2.47,
+      "wall_delta_us": null,
+      "evidence": "04-row-authority.json and phase2-row-counters.json",
+      "reason": "identical 56.64 MiB real bytes and 78.49% DRAM utilization; no kernel geometry candidate can cover the deficit without reducing bytes or raising bandwidth, and no such candidate passed the isolated gate"
+    },
+    {
+      "package": "WP-D2 Q projection",
+      "candidate": "none promoted",
+      "verdict": "NO_GO_WALL_BODY",
+      "counter_delta_us": 2.27,
+      "wall_delta_us": null,
+      "evidence": "04-row-authority.json",
+      "reason": "launch/occupancy-bound main GEMV; the comparable full-semantic row deficit is +84.412us and the completion nodes were not shown to move wall in the retained prior brackets"
+    },
+    {
+      "package": "WP-D3 O and down epilogue",
+      "candidate": "none promoted",
+      "verdict": "NO_GO_WALL_BODY",
+      "counter_delta_us": 1.72,
+      "wall_delta_us": null,
+      "evidence": "04-row-authority.json",
+      "reason": "residual epilogue is already absorbed; O/down main bodies are launch/occupancy or DRAM-bound and near oracle"
+    },
+    {
+      "package": "WP-D4 vocab top-1 chain",
+      "candidate": "none promoted",
+      "verdict": "NO_GO_WALL_BODY",
+      "counter_delta_us": 22.63,
+      "wall_delta_us": null,
+      "evidence": "04-row-authority.json",
+      "reason": "DRAM-bound at 88.42%; the 4.66 MiB extra read is real and requires a byte or top-k selection change that was not implemented in this session"
+    },
+    {
+      "package": "WP-D5 flash combine and score",
+      "candidate": "none promoted",
+      "verdict": "NO_GO_WALL_BODY / UNMEASURED_WALL",
+      "combine_counter_delta_us": 3.07,
+      "score_isolated_delta_us": -0.32,
+      "score_installed_residual_us": 49.56,
+      "wall_delta_us": null,
+      "evidence": "04-row-authority.json and nv-third-party-theory-audit-result-20260822.md",
+      "reason": "score isolated body is faster than llama; the residual is launch/L2/timeline and has no isolated wall A/B yet"
+    },
+    {
+      "package": "WP-D6 K and V",
+      "candidate": "four-warp K route already landed; no new candidate promoted",
+      "verdict": "NO_GO_WALL_BODY",
+      "wall_delta_us": null,
+      "evidence": "nv-q4k-k-four-warp-route-result-20260822.md",
+      "reason": "prior exact four-warp K was wall-neutral and the ready-placement pin already captures the small available overlap; removing it regresses"
+    },
+    {
+      "package": "Phase 5 concurrency candidate",
+      "candidate": "NV_SPLIT_PHASE=1 edge-aware PDL arm, trigger=end, wait=entry, 2 queues",
+      "verdict": "WALL_NEUTRAL",
+      "control_a_us": 4720.438,
+      "candidate_us": 4735.083,
+      "control_b_us": 4774.622,
+      "control_bracket_median_us": 4747.530,
+      "wall_delta_vs_control_a_us": 14.645,
+      "wall_delta_vs_bracket_median_us": -12.447,
+      "token_sha256_identical": true,
+      "evidence": "phase5/control-A.json, phase5/candidate.json, phase5/control-B.json",
+      "reason": "candidate is slower than control A, so it fails the per-control rule even though it is faster than the bracket median; it sits inside the 54.2us control spread"
+    }
+  ],
+  "promoted_count": 0,
+  "wall_promotion_note": "no individual change cleared both bracketing controls, so the cumulative production stack remains the fresh control"
+}

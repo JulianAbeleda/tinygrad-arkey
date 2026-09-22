@@ -69,7 +69,7 @@ class Ops(FastEnum):
   MEMORY_SEMANTIC = auto()
   # Scheduler-only logical element with explicit owner-axis mapping. It is
   # consumed by a stateful reduction before program lowering.
-  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); AMD_ROW_SOFTMAX_REPACK = auto(); AMD_ROW_SOFTMAX_SLOT = auto(); AMD_PV_C_LANE = auto(); AMD_PACKED_FRAGMENT_LOAD = auto(); AMD_ATTENTION_LOOP_STATE = auto(); AMD_ATTENTION_OUTPUT_DRAIN = auto(); AMD_ATTENTION_STATS_DRAIN = auto()
+  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); NATIVE_ROW_SOFTMAX_REPACK = auto(); ROW_SOFTMAX_SLOT = auto(); AMD_PV_C_LANE = auto(); PACKED_FRAGMENT_LOAD = auto(); PACKED_ACTIVATION_CARRIER = auto(); ATTENTION_LOOP_STATE = auto(); ATTENTION_OUTPUT_DRAIN = auto(); AMD_ATTENTION_STATS_DRAIN = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 
@@ -105,13 +105,13 @@ class Ops(FastEnum):
 
   # UnaryOps
   CAST = auto(); BITCAST = auto(); EXP2 = auto(); LOG2 = auto(); SIN = auto()
-  SQRT = auto(); RECIPROCAL = auto(); NEG = auto(); TRUNC = auto()
+  SQRT = auto(); RECIPROCAL = auto(); NEG = auto(); TRUNC = auto(); ROUND_AWAY = auto()
 
   # BinaryOps
   ADD = auto(); MUL = auto(); SHL = auto(); SHR = auto(); CDIV = auto(); MAX = auto(); CMOD = auto()
   CMPLT = auto(); CMPNE = auto(); CMPEQ = auto()
   XOR = auto(); OR = auto(); AND = auto()
-  THREEFRY = auto(); SUB = auto(); FDIV = auto(); POW = auto()
+  THREEFRY = auto(); SUB = auto(); FDIV = auto(); PRECISE_DIV = auto(); POW = auto()
   FLOORDIV = auto(); FLOORMOD = auto()
 
   # TernaryOps
@@ -155,6 +155,15 @@ class Ops(FastEnum):
   # semantic attention boundary. This is tensor-graph only and is lowered by
   # rangeify either to a fused implementation or its explicit fallback src.
   ATTENTION = auto()
+  # semantic RMSNorm boundary. Same contract as ATTENTION: src[0] is the
+  # ordinary fallback graph and rangeify lowers the marker fail-closed.
+  RMSNORM = auto()
+  # Default-off cooperative reduction/output boundary. src[0] is the ordinary
+  # fallback, src[1:] are explicit logical inputs. A scheduler may replace the
+  # enclosing STORE with one ordinary CALL only when every input is already a
+  # concrete index-preserving buffer view.
+  REDUCE_OUTPUT = auto()
+  COOPERATIVE_TILE_LOAD = auto(); COOPERATIVE_STAGE_BEGIN = auto()
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()
@@ -171,9 +180,9 @@ class Ops(FastEnum):
   UNROLL = auto(); CONTRACT = auto(); VCAT = auto(); PTRCAT = auto()
 
 class GroupOp:
-  Unary = {Ops.EXP2, Ops.LOG2, Ops.SIN, Ops.SQRT, Ops.RECIPROCAL, Ops.NEG, Ops.TRUNC}
+  Unary = {Ops.EXP2, Ops.LOG2, Ops.SIN, Ops.SQRT, Ops.RECIPROCAL, Ops.NEG, Ops.TRUNC, Ops.ROUND_AWAY}
   Binary = {Ops.ADD, Ops.MUL, Ops.CDIV, Ops.MAX, Ops.CMOD, Ops.CMPLT, Ops.CMPNE, Ops.CMPEQ,
-            Ops.XOR, Ops.SHL, Ops.SHR, Ops.OR, Ops.AND, Ops.THREEFRY, Ops.SUB, Ops.FDIV, Ops.POW, Ops.FLOORDIV, Ops.FLOORMOD}
+            Ops.XOR, Ops.SHL, Ops.SHR, Ops.OR, Ops.AND, Ops.THREEFRY, Ops.SUB, Ops.FDIV, Ops.PRECISE_DIV, Ops.POW, Ops.FLOORDIV, Ops.FLOORMOD}
   Ternary = {Ops.WHERE, Ops.MULACC}
   ALU = set.union(Unary, Binary, Ternary)
   Broadcastable = set.union(Binary, Ternary, {Ops.GROUP})

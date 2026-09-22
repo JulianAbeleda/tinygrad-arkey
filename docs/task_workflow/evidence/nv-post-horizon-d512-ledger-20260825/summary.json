@@ -1,0 +1,23 @@
+{
+  "schema": "tinygrad.nv_post_horizon_d512_ledger_summary.v1",
+  "unprofiled_precliff": {
+    "depth": 512,
+    "timed_tokens": 192,
+    "median_ms_per_token": 4.2614710625,
+    "tok_s": 234.66074404719378,
+    "remaining_to_240_us": 94.80439583333312,
+    "remaining_to_llama_us": 213.14606250000032
+  },
+  "profile_domain": {
+    "wall_us": 5578.488,
+    "kernel_union_us": 4109.5,
+    "overlap_us": 3.364,
+    "warning": "profiled wall and union are not an unprofiled wall decomposition"
+  },
+  "marker_light": {
+    "device_window_us": 4264.256,
+    "clean_wall_minus_device_window_us": -2.7849375000002765,
+    "conclusion": "clean short-context wall is device-critical-path bound"
+  },
+  "decision": "SHORT_CONTEXT_DEVICE_WALL_CONFIRMED__NEXT_GATE_QO_KV_RATE_CAUSAL_CENSUS"
+}

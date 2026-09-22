@@ -1,0 +1,66 @@
+{
+  "schema": "tinygrad.nv_llama_packed_q4k_model_arm.v1",
+  "arm": "candidate",
+  "status": "FAIL",
+  "token": 198,
+  "compiler_gate": {
+    "producer": 0,
+    "main": 0,
+    "identity": "llama-single-role"
+  },
+  "final_row_prune": {
+    "enabled": false,
+    "requested_row": null,
+    "last_down_type": "Q6KPrimitiveLinear"
+  },
+  "replay": {
+    "finite": true,
+    "same_activation_exact": true,
+    "distinct_activation_output": true
+  },
+  "census": {
+    "producer": 72,
+    "q4_main_total": 216,
+    "q4_fixup_total": 216,
+    "q6_down_producer": 18,
+    "q6_main_total": 36,
+    "q6_fixup_total": 36,
+    "q4_down_producer": 18,
+    "qkv_ds4_producer": 36,
+    "qkv_d4_producer": 18,
+    "o_producer": 36,
+    "compiler_o_producer": 0,
+    "gate_up_epilogue": 0,
+    "flash_mma_pp512": 36,
+    "roles": {
+      "compiler_gate": {
+        "producer": 0,
+        "main": 0
+      },
+      "llama_up": {
+        "main": 36,
+        "fixup": 36
+      },
+      "llama_other_q4": {
+        "main": 144,
+        "fixup": 144
+      }
+    }
+  },
+  "wall": {
+    "samples_ms": [
+      35.372554,
+      35.440913,
+      35.474116,
+      35.745887,
+      35.725959,
+      35.750055,
+      35.771535,
+      35.665766,
+      35.51379
+    ],
+    "min_ms": 35.372554,
+    "median_ms": 35.665766,
+    "tok_s": 14474.499070663656
+  }
+}

@@ -6,7 +6,7 @@ registers.
 
 Purpose: decide whether simdgroup_multiply_accumulate is a separate matrix unit (fp16 FMA peak
 should then sit far below R) or lowers onto the same ALUs that plain FMA uses (fp16 FMA peak
-should then land within noise of R). See docs/what-makes-a-token-fast-20260731.md sec 5/10.
+should then land within noise of R). See docs/what-makes-inference-fast.md sec 5/10.
 
 THREE variants, because simdgroup_float8x8 accumulates fp16x fp16 -> fp32, not fp16 -> fp16 --
 comparing R against a pure-fp16 loop alone would risk a dtype artifact masquerading as an
@@ -52,7 +52,7 @@ Root cause of an earlier, retracted run of this file (numbers like 10^6 GFLOPS, 
 `iters` was chosen too small relative to `blocks` (grid), so measured wall time was dominated by
 fixed host-side dispatch/synchronize round-trip overhead (~0.3-0.7ms, present regardless of actual
 kernel work) rather than GPU compute time -- the same failure family as
-docs/what-makes-a-token-fast-20260731.md sec 9.6 ("timing enqueue instead of execution"), just
+docs/what-makes-inference-fast.md sec 9.6 ("timing enqueue instead of execution"), just
 reached through undersized `iters` rather than a missing synchronize(). Fixed here via
 `calibrate_iters`: for each config, measure once, then pick `iters` so real wall time sits solidly
 (>=100x) above the measured per-dispatch floor before trusting a GFLOPS number.

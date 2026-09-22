@@ -1,0 +1,948 @@
+{
+  "depth": 1024,
+  "max_context": 1536,
+  "schema": "nv-p9-jit-retained-memory.v1",
+  "snapshots": [
+    {
+      "global_mem_used": 19005016896,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2572",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "69.60",
+        "power.draw.instant": "70.08",
+        "pstate": "P0",
+        "temperature.gpu": "42",
+        "temperature.gpu.tlimit": "48",
+        "temperature.memory": "N/A"
+      },
+      "graph_cache_entries": 0,
+      "jit_union_allocations": 0,
+      "jit_union_bytes": 0,
+      "jits": {
+        "prefill_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring_full": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        }
+      },
+      "stage": "after_load"
+    },
+    {
+      "global_mem_used": 21751898216,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2535",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "80.62",
+        "power.draw.instant": "74.32",
+        "pstate": "P0",
+        "temperature.gpu": "45",
+        "temperature.gpu.tlimit": "46",
+        "temperature.memory": "N/A"
+      },
+      "graph_cache_entries": 4,
+      "jit_union_allocations": 331,
+      "jit_union_bytes": 5265857620,
+      "jits": {
+        "prefill_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_jits[(0, False)]": {
+          "captured": false,
+          "cnt": 1
+        },
+        "prefill_v2_jits[(512, False)]": {
+          "captured": false,
+          "cnt": 1
+        },
+        "rollout_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[10]": {
+          "captured": true,
+          "cnt": 3,
+          "linear_calls": 4,
+          "unique_base_allocations": 331,
+          "unique_base_bytes": 5265857620,
+          "written_input_shadow_bytes": 0,
+          "written_input_shadows": {}
+        },
+        "rollout_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring_full": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        }
+      },
+      "stage": "after_prefill_first_yield"
+    },
+    {
+      "global_mem_used": 21751898220,
+      "gpu_state": {
+        "clocks.mem": "14001",
+        "clocks.sm": "2535",
+        "clocks_event_reasons.hw_slowdown": "Not Active",
+        "clocks_event_reasons.hw_thermal_slowdown": "Not Active",
+        "clocks_event_reasons.sw_power_cap": "Not Active",
+        "clocks_event_reasons.sw_thermal_slowdown": "Not Active",
+        "power.draw.average": "80.62",
+        "power.draw.instant": "74.32",
+        "pstate": "P0",
+        "temperature.gpu": "45",
+        "temperature.gpu.tlimit": "44",
+        "temperature.memory": "N/A"
+      },
+      "graph_cache_entries": 4,
+      "jit_union_allocations": 331,
+      "jit_union_bytes": 5265857620,
+      "jits": {
+        "prefill_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "prefill_v2_jits[(0, False)]": {
+          "captured": false,
+          "cnt": 1
+        },
+        "prefill_v2_jits[(512, False)]": {
+          "captured": false,
+          "cnt": 1
+        },
+        "rollout_greedy_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_logits_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[10][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[18][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[34][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_live[8][1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s64[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[0]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_greedy_pingpong_jits_flash_s6[1]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[10]": {
+          "captured": true,
+          "cnt": 6,
+          "linear_calls": 4,
+          "unique_base_allocations": 331,
+          "unique_base_bytes": 5265857620,
+          "written_input_shadow_bytes": 4,
+          "written_input_shadows": {
+            "0": {
+              "bytes": 4,
+              "device": "NV",
+              "initialized": true
+            }
+          }
+        },
+        "rollout_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_jit_ring_full": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[10]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[18]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[34]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_live[8]": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s6": {
+          "captured": false,
+          "cnt": 0
+        },
+        "rollout_logits_jit_flash_s64": {
+          "captured": false,
+          "cnt": 0
+        }
+      },
+      "stage": "after_three_decode_warm_tokens"
+    }
+  ]
+}

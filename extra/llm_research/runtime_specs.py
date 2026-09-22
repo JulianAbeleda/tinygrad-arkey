@@ -5,6 +5,7 @@ import hashlib
 import json
 from types import MappingProxyType
 from typing import Any, Callable
+from tinygrad.dtype import dtypes
 from tinygrad.llm.roles import PROGRAM_WORKLOAD_ROLES, normalize_program_role
 
 OP_FAMILIES = ("QuantizedLinear", "DenseLinear", "FlashAttention", "KVCache", "ActivationFusion")
@@ -42,17 +43,143 @@ class FullKernelCapability:
   instruction_family: str = "wmma_f32_16x16x16_f16"
   fragment_layout: str = "rdna3_wmma_f32_16x16x16_f16_lds2_static"
   transport: str = "lds"
+  # --- C-class declared emitter contracts (T2, target-schedule-derivation-scope-20260801.md) ---
+  # Vocabulary the typed schedule carries verbatim: each field names an existing lowering, never
+  # computed. Containers are tuples so the frozen row stays hashable; derive_target_schedule
+  # converts them to the v1 JSON shapes. The target_contracts.py table pins values and citations.
+  lane_ownership: str = "rdna3_wmma_f32_16x16x16_f16_lds2_static"
+  cooperative_lane_mapping: str = "cooperative_row_stride_64_b128"
+  lds_banks: int = 32
+  lds_padding: int = 16
+  accumulator_ownership: str = "wmma_accum_wm_x_wn_8_vgprs"
+  waitcnt: tuple[tuple[str, int | None], ...] = (("vm", 0), ("lgkm", 0))
+  dependency_barriers: tuple[str, ...] = ("before_fragment_load", "after_wmma_before_slot_reuse")
+  epoch_graph: tuple[tuple[str, Any], ...] = (
+    ("epoch", "body"), ("slot", 0), ("produce", ("a", "b")), ("wait", ("global", "lds")),
+    ("barrier", "before_fragment_load"), ("consume", ("a", "b")))
+  epilogue_lane_mapping: str = "wmma_accumulator_scalar_b16"
+  epilogue_vector_width: int = 1
+  residency_preload: tuple[str, ...] = ("a", "b")
+  residency_resident: tuple[str, ...] = ("accumulator",)
+  residency_reuse: tuple[tuple[str, int], ...] = (("a", 4), ("b", 2))
+  numerical_mode: str = "ieee_fp16_acc_fp32"
+  max_vgpr_per_thread: int = 256
+  allow_spill: bool = False
 
 GFX1100_SINGLE_BUFFER_CAPABILITY = FullKernelCapability()
 GFX1100_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.wmma_lds.two_buffer_stage1.v1", buffer_count=2, stage_count=1)
 GFX1100_REGISTER_RESIDENT_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.wmma_register.two_stage.v1", buffer_count=1, stage_count=2,
-  fragment_layout="rdna3_wmma_f32_16x16x16_f16_register_static", transport="direct_l2")
+  fragment_layout="rdna3_wmma_f32_16x16x16_f16_register_static", transport="direct_l2",
+  cooperative_lane_mapping="wave_contiguous_b128")
 GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.q4k_q8.direct_physical_ds4.v1", max_lds_bytes=0,
   buffer_count=0, stage_count=0, vector_bytes=16, instruction_family="wmma_i32_16x16x16_iu8",
   fragment_layout="rdna3_wave32_signed_i8_direct_global", transport="direct_global")
+
+def _wave_size_for_arch(arch: str) -> int:
+  """Declared wave size by arch: 64 on CDNA parts, else 32 (HIPRenderer, cstyle.py:598)."""
+  return 64 if arch.split(":")[0] in {"gfx942", "gfx950"} else 32
+
+def _tensor_core_family(backend: str, arch: str) -> list:
+  """The tensor-core family a real Renderer uses for this target, by name:
+  ``tc.get_amd`` for HIPRenderer (cstyle.py:595), ``tc.get_cuda`` for CUDARenderer (cuda.py:19),
+  ``tc.metal`` for MetalRenderer (cstyle.py:486). A new backend is a new row, never new logic.
+  """
+  from tinygrad.codegen.opt import tc
+  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "METAL": lambda arch: tc.metal}[backend.upper()](arch)
+
+def _instruction_family_for(backend: str, arch: str, dtype_in, dtype_out) -> str:
+  """instruction_family is a hardware fact, so it is derived at load from the target's own
+  tensor-core descriptor (dims + dtypes), never declared from another target's numbers.
+  AMD gfx1100's (half, float) descriptor derives to the historical literal below, which is
+  what makes that literal a declaration that can be falsified rather than a default.
+  """
+  descriptor = next(tc for tc in _tensor_core_family(backend, arch)
+                    if tc.dtype_in == dtype_in and tc.dtype_out == dtype_out)
+  return f"wmma_f{dtype_out.itemsize*8}_{descriptor.dims[0]}x{descriptor.dims[1]}x{descriptor.dims[2]}_f{dtype_in.itemsize*8}"
+
+# Declared per-target capability rows. The table is keyed by (backend, arch) x schedule shape:
+# the target selects the hardware facts, the schedule selects the pipeline/transport row within
+# that target. ``wave_size`` is derived from arch (``_wave_size_for_arch``) and is asserted by
+# the existing three-way ``capability_target`` equality check; it is not part of the key.
+# ``fragment_layout`` names this repo's emitter contract, not hardware -- it stays a declared
+# literal cited to the emitter that implements it (AMD: cstyle.py rdna3 packed-WMMA branch;
+# CUDA: cuda.py ``mma.sync`` lowering; Metal: cstyle.py ``simdgroup_multiply_accumulate``).
+NV_SM120_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm120.prefill.wmma_lds.single_buffer.v1", backend="CUDA", arch="sm120",
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16,
+  instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm120.prefill.wmma_lds.two_buffer_stage1.v1", backend="CUDA", arch="sm120",
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2,
+  stage_count=1,
+  instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+# tinygrad's live NV renderer reports the target as NV:sm_120, while retained
+# CUDA compiler artifacts use CUDA:sm120.  Keep both exact spellings typed:
+# admission remains fail-closed and the hardware facts are identical.
+NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm_120.prefill.wmma_lds.single_buffer.runtime.v1", backend="NV", arch="sm_120",
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16,
+  instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+NV_SM_120_RUNTIME_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm_120.prefill.wmma_lds.two_buffer_stage1.runtime.v1", backend="NV", arch="sm_120",
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2, stage_count=1,
+  instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+METAL_M4_10C_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="apple.m4_10c.prefill.wmma_lds.single_buffer.v1", backend="Metal", arch="m4_10c",
+  wave_size=_wave_size_for_arch("m4_10c"), max_lds_bytes=32768, vector_bytes=16,
+  instruction_family=_instruction_family_for("Metal", "m4_10c", dtypes.half, dtypes.float),
+  fragment_layout="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static", transport="lds",
+  lane_ownership="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+  waitcnt=(("vm", None), ("lgkm", None)))
+METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="apple.m4_10c.prefill.wmma_lds.two_buffer_stage1.v1", backend="Metal", arch="m4_10c",
+  wave_size=_wave_size_for_arch("m4_10c"), max_lds_bytes=32768, vector_bytes=16, buffer_count=2,
+  stage_count=1,
+  instruction_family=_instruction_family_for("Metal", "m4_10c", dtypes.half, dtypes.float),
+  fragment_layout="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static", transport="lds",
+  lane_ownership="metal_simdgroup_matrix_f32_8x8x8_f16_lds2_static",
+  waitcnt=(("vm", None), ("lgkm", None)))
+
+_CAPABILITY_ROWS: dict[tuple[str, str], dict[str, "FullKernelCapability"]] = {
+  ("AMD", "gfx1100"): {
+    "single_buffer": GFX1100_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": GFX1100_TWO_BUFFER_STAGE1_CAPABILITY,
+    "register_resident": GFX1100_REGISTER_RESIDENT_CAPABILITY,
+    "q4k_q8_five_buffer": GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY,
+  },
+  ("CUDA", "sm120"): {
+    "single_buffer": NV_SM120_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+  ("NV", "sm_120"): {
+    "single_buffer": NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": NV_SM_120_RUNTIME_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+  ("Metal", "m4_10c"): {
+    "single_buffer": METAL_M4_10C_SINGLE_BUFFER_CAPABILITY,
+    "two_buffer_stage1": METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
+  },
+}
+
+def _schedule_shape(payload: dict[str, Any]) -> str:
+  """The schedule-shape selector inside a target: storage/family/pipeline -> row name."""
+  family = payload.get("schedule", {}).get("family")
+  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return "q4k_q8_five_buffer"
+  if candidate_storage_kind(payload) == "global_register_resident": return "register_resident"
+  pipeline = payload.get("schedule", {}).get("pipeline", {})
+  return "two_buffer_stage1" if \
+    (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else "single_buffer"
 @dataclass(frozen=True)
 class Q4KQ8FiveBufferEmitterPlan:
   tile: tuple[int,int,int] = (16,16,256)
@@ -82,14 +209,23 @@ def capability_transport(capability: "FullKernelCapability") -> str:
   return capability.transport
 
 def full_kernel_candidate_capability(payload:dict[str,Any]) -> "FullKernelCapability":
-  """Resolve the frozen hardware capability from typed schedule facts in one place."""
-  family = payload.get("schedule", {}).get("family")
-  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
-  if candidate_storage_kind(payload) == "global_register_resident": return GFX1100_REGISTER_RESIDENT_CAPABILITY
-  pipeline = payload.get("schedule", {}).get("pipeline", {})
-  return GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if \
-    (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else GFX1100_SINGLE_BUFFER_CAPABILITY
+  """Resolve the declared per-target capability from the payload's own target and schedule shape.
 
+  The target selects the hardware row, the schedule selects the pipeline/transport row within
+  that target. A payload whose target has no declared row (or a schedule shape the target does
+  not express) fails closed here instead of inheriting another target's numbers.
+  """
+  target = payload.get("workload", {}).get("target", {})
+  backend, arch = target.get("backend"), target.get("arch")
+  rows = _CAPABILITY_ROWS.get((backend, arch))
+  if rows is None:
+    raise FullKernelAdmissionError("capability_target", f"no declared capability row for target {backend}:{arch}")
+  shape = _schedule_shape(payload)
+  row = rows.get(shape)
+  if row is None:
+    raise FullKernelAdmissionError("capability_target",
+      f"schedule shape {shape!r} is not declared for target {backend}:{arch}")
+  return row
 @dataclass(frozen=True)
 class FullKernelAdmission:
   canonical_identity: str
@@ -362,7 +498,7 @@ def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> Adm
     role,m,n,k,backend,arch,wave_size=entry.exact_key
     admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=full_kernel_workload(entry.payload).profile,role=role,
       shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},
-      capability=full_kernel_candidate_capability(entry.payload)))
+      capability=full_kernel_candidate_capability(entry.payload),device=backend))
   return AdmittedFullKernelCandidateSet(candidate_set,tuple(admissions))
 
 def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identity:str) -> FullKernelCandidateSet:
@@ -380,11 +516,14 @@ def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identi
 # row per backend, not a branch: a new backend is a new row, never new logic here.
 def _tensor_core_family_by_device() -> dict[str, Callable[[str], list]]:
   from tinygrad.codegen.opt import tc
-  return {"AMD": tc.get_amd, "METAL": lambda arch: tc.metal}
+  return {"AMD": tc.get_amd, "CUDA": tc.get_cuda, "NV": tc.get_cuda, "METAL": lambda arch: tc.metal}
 
 def _resolve_tensor_core(device:str, arch:str, dtype_in, dtype_out):
   """Device-aware replacement for the old hardcoded `from tinygrad.codegen.opt.tc import amd_rdna3` import."""
-  family_for_arch = _tensor_core_family_by_device().get(device)
+  # Normalize the device spelling exactly like the load-time `_tensor_core_family`
+  # does (`.upper()`): the declared rows use "Metal"/"CUDA"/"AMD" while tinygrad
+  # Device names are uppercase, and both must resolve to the same family.
+  family_for_arch = _tensor_core_family_by_device().get(device.split(":")[0].upper())
   if family_for_arch is None:
     raise FullKernelAdmissionError("capability_device", f"no declared tensor-core family for device {device!r}")
   family = family_for_arch(arch)
@@ -446,12 +585,15 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     raise FullKernelAdmissionError("capability_tc", "tensor-core descriptor is unsupported")
   if schedule["wmma"]["fragment_layout"] != capability.fragment_layout:
     raise FullKernelAdmissionError("capability_tc", "tensor-core descriptor is unsupported")
+  itemsize = dtypes.half.itemsize  # fp16 transport was enforced by the capability_dtype check above
+  expected_vector_width = capability.vector_bytes // itemsize
   if (storage_kind != "global_register_resident" and
-      any(schedule["lds"][x] != 8 for x in ("store_vector_width","load_vector_width"))) or \
-     any(schedule["cooperative_load"][r]["vector_width"]*2 != capability.vector_bytes or
+      any(schedule["lds"][x] != expected_vector_width for x in ("store_vector_width","load_vector_width"))) or \
+     any(schedule["cooperative_load"][r]["vector_width"]*itemsize != capability.vector_bytes or
          schedule["cooperative_load"][r]["alignment"] != capability.vector_bytes for r in ("a","b")):
-    raise FullKernelAdmissionError("capability_vector", "only aligned b128 fp16 transport is supported")
-  expected_lane_mapping = "wave_contiguous_b128" if storage_kind == "global_register_resident" else "cooperative_row_stride_64_b128"
+    raise FullKernelAdmissionError("capability_vector",
+      f"only aligned b{capability.vector_bytes*8} fp16 transport is supported")
+  expected_lane_mapping = capability.cooperative_lane_mapping
   if any(schedule["cooperative_load"][r]["lane_mapping"] != expected_lane_mapping for r in ("a","b")):
     raise FullKernelAdmissionError("capability_lane_map", f"{storage_kind} requires {expected_lane_mapping}")
   from extra.llm_research.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
@@ -476,7 +618,6 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     raise FullKernelAdmissionError("capability_lds", "active LDS exceeds a declared limit")
   try:
     from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors, derive_precontract_shape_factors
-    from tinygrad.dtype import dtypes
     tc = _resolve_tensor_core(device, target["arch"], dtypes.half, dtypes.float)
     plan = (derive_precontract_shape_factors(geometry, tc) if storage_kind == "global_register_resident" else
             derive_precontract_factors(geometry, tc))

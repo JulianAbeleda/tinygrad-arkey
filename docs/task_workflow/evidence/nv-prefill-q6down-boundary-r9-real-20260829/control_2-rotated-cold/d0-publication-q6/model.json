@@ -1,0 +1,6139 @@
+{
+  "authority": {
+    "clocks_session": "graphics=435 MHz, sm=435 MHz, memory=7001 MHz, P3; flock GPU session",
+    "driver": "595.84",
+    "environment": {
+      "HCQ_NUM_COMPUTE": "2",
+      "HCQ_NV_MULTI_QUEUE_CUT_POLICY": "combined-flash-direct-deps-cut-v2.json",
+      "HCQ_NV_READY_PLACEMENT": "0",
+      "PROFILE": "0"
+    },
+    "gpu": "NVIDIA GeForce RTX 5090, sm_120",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "prompt": "inline:(i*7)%1000"
+  },
+  "census": {
+    "observed": {
+      "roles": 18,
+      "selected_boundary": "publication",
+      "unknown": 0
+    },
+    "predicted": {
+      "main": 18,
+      "partial_workspace_bytes": 0,
+      "producer": 18,
+      "publication": 18,
+      "residual": 18,
+      "roles": 18,
+      "unknown": 0,
+      "weight_copy": 0
+    }
+  },
+  "correctness": {
+    "G0": "PASS",
+    "G1": "PASS",
+    "complete_output": true,
+    "finite": true,
+    "read_only_input_hashes": "retained",
+    "tolerance": "frozen D0.1",
+    "unwritten_sentinels": 0
+  },
+  "cut": {
+    "arm": "q6",
+    "boundary": "publication",
+    "correction": "paired-K16-exact",
+    "count": 18,
+    "observer_installation": "construction/submission only",
+    "roles": [
+      "blk.0.ffn_down",
+      "blk.1.ffn_down",
+      "blk.2.ffn_down",
+      "blk.3.ffn_down",
+      "blk.4.ffn_down",
+      "blk.5.ffn_down",
+      "blk.6.ffn_down",
+      "blk.7.ffn_down",
+      "blk.8.ffn_down",
+      "blk.9.ffn_down",
+      "blk.10.ffn_down",
+      "blk.11.ffn_down",
+      "blk.12.ffn_down",
+      "blk.13.ffn_down",
+      "blk.14.ffn_down",
+      "blk.15.ffn_down",
+      "blk.16.ffn_down",
+      "blk.17.ffn_down"
+    ],
+    "selected_cumulative_boundary_only": true,
+    "temperature": "rotated-cold"
+  },
+  "decision": "No performance decision; D0.2 forced-cut executability and G0/G1 only.",
+  "next_packet": "D0.3",
+  "observer": {
+    "capabilities": {
+      "allocations": "UNAVAILABLE",
+      "copies": "UNAVAILABLE",
+      "device_timestamps": "UNAVAILABLE",
+      "materializations": "UNAVAILABLE"
+    },
+    "enabled": [
+      "BUFFER_OBSERVER",
+      "HCQ_SUBMISSION_OBSERVER_JSON"
+    ]
+  },
+  "packet": "D0.2",
+  "raw_service": [
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 0,
+      "service_ms": 0.01078,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 1,
+      "service_ms": 0.054963,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 2,
+      "service_ms": 0.00546,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 3,
+      "service_ms": 0.012323,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 4,
+      "service_ms": 0.007895,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 5,
+      "service_ms": 0.009708,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 6,
+      "service_ms": 0.009888,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 7,
+      "service_ms": 0.012974,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 8,
+      "service_ms": 0.009989,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    }
+  ],
+  "samples": [
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 0,
+      "service_ms": 0.01078,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 1,
+      "service_ms": 0.054963,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 2,
+      "service_ms": 0.00546,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 3,
+      "service_ms": 0.012323,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 4,
+      "service_ms": 0.007895,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 5,
+      "service_ms": 0.009708,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 6,
+      "service_ms": 0.009888,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 1,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 7,
+      "service_ms": 0.012974,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    },
+    {
+      "arm": "q6",
+      "boundary": "publication",
+      "packet": "D0.2",
+      "roles": [
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 0,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.0.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 1,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.1.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 2,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.2.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 3,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.3.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 4,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.4.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 5,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.5.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 6,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.6.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 7,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.7.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 8,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.8.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 9,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.9.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 10,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.10.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 11,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.11.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 12,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.12.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 13,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.13.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 14,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.14.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 15,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.15.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 16,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.16.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        },
+        {
+          "buffer_generation": 0,
+          "correction": "paired-K16-exact",
+          "input_shape": [
+            512,
+            12288
+          ],
+          "layer": 17,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "role": "blk.17.ffn_down",
+          "weight_shape": [
+            4096,
+            12288
+          ]
+        }
+      ],
+      "sample": 8,
+      "service_ms": 0.009989,
+      "synchronize_after": true,
+      "synchronize_before": true,
+      "temperature": "rotated-cold"
+    }
+  ],
+  "schema": "tinygrad.nv_prefill_q6down_boundary_r9.v1",
+  "status": "PASS"
+}

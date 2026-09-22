@@ -1,0 +1,60 @@
+{
+  "schema": "tinygrad.nv_q6k_tc_sweep_matrix.v1",
+  "status": "PASS",
+  "choices": [
+    {
+      "select": -1,
+      "opt": 0,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    },
+    {
+      "select": -1,
+      "opt": 1,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    },
+    {
+      "select": -1,
+      "opt": 2,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    },
+    {
+      "select": 8,
+      "opt": 0,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    },
+    {
+      "select": 8,
+      "opt": 1,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    },
+    {
+      "select": 8,
+      "opt": 2,
+      "status": "PASS",
+      "program_identity": null,
+      "dedupe_key": "same compiler asset/program identity"
+    }
+  ],
+  "unique_runtime_candidates": 1,
+  "runtime_matrix": {
+    "oracle_artifact": "q6-1/oracle/down.json",
+    "correctness": "PASS",
+    "compiler_median_ms": 0.69781,
+    "llama_median_ms": 0.293461,
+    "delta_ms": 0.404349,
+    "r1_exact": true,
+    "r3_samples": 9,
+    "r9_top2": null,
+    "promotion": "FAIL: compiler slower; no candidate-specific R9 warranted"
+  }
+}

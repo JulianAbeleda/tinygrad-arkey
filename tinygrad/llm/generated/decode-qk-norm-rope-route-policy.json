@@ -1,0 +1,8 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "route": "decode_qk_norm_rope",
+  "description": "Semantic Q/K REDUCE_OUTPUT norm+RoPE epilogue promotion. On RTX 5090 sm_120 at depth 512, three fresh control/candidate/control brackets produced -46.568, -44.898, and -40.557 us/token with frozen token SHA f25083e5 in every arm. The final authority retained P0 and equal 2790/14001 MHz clocks. PROFILE=1 measured node count 596 -> 560 and device union -112.625 us/token; the opaque route materializations are absent. The principal explicitly accepted the conservative 40.557 us/token result below the normal +50 us promotion bar on 2026-08-23.",
+  "promoted_targets": [
+    {"backend": "NV", "architecture": "sm_120"}
+  ]
+}

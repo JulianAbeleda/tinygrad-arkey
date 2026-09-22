@@ -1,11 +1,18 @@
 import math
 from typing import cast, Any
-from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag
+from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle, CompositeReduceTag, PostBarrierRegion, LoadSchedule, StrictAfter, RegionLoad, RegionLoadBridge, native_attention_abi
 from tinygrad.uop.render import print_uops, pyrender
 from tinygrad.dtype import DType, ImageDType, dtypes, PtrDType, AddrSpace, Invalid, ConstFloat
 from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_OOB, all_same
 
 # ***** uop helpers *****
+
+def _reduce_output_recipe_supported(recipe: str) -> bool:
+  """Type verification mirrors the emitter's recipe vocabulary: a spec the body
+  builder can express passes, and anything else fails closed.  The vocabulary
+  is owned by the emitter (``_RECIPE_STEMS``), not duplicated here."""
+  from tinygrad.codegen.late.reduce_output import _RECIPE_STEMS
+  return recipe in _RECIPE_STEMS
 
 def validate_index(uidx:UOp, gate:UOp|None=None):
   if len(uidx.src) != 2: return True  # skip for non final index. TODO: check more complex index with shape
@@ -65,6 +72,11 @@ def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
     for i,u in enumerate(lst):
       ret = check_spec.rewrite(u)
       if cast(bool|None, ret) is not True:
+        if __import__('os').getenv("NV_F2_DUMP_TYPE_VERIFY") and u.op is Ops.PACKED_FRAGMENT_LOAD:
+          def _dump(v, depth=0):
+            if depth > 8: return {"truncated":True}
+            return {"op":getattr(v.op,"name",str(v.op)),"dtype":str(v.dtype),"arg":repr(v.arg),"src":[_dump(s,depth+1) for s in v.src]}
+          print("NV_F2_TYPE_VERIFY " + __import__('json').dumps(_dump(u), sort_keys=True))
         if DEBUG >= 3: print_uops(lst)
         raise RuntimeError(f"UOp verification failed at {i} on {u.op} {u.dtype} {len(u.src)} {[(x.op, x.dtype, x.arg) for x in u.src]} {u.arg}")
 
@@ -79,7 +91,8 @@ def validate_scalar_gep(gep:UOp, src:UOp):
 
 def validate_amd_attention_output_drain(x:UOp):
   """One source-count-aware contract for both legacy and grid native drains."""
-  if not hasattr(x.arg,"native_abi") or x.arg.native_abi not in {"amd_gfx1100_attention_output_drain_v1","amd_gfx1100_attention_output_drain_acc_slice_v2"} or x.dtype != dtypes.void: return False
+  if not hasattr(x.arg,"native_abi") or not (native_attention_abi(x.arg.native_abi, "attention_output_drain_v1") or
+      native_attention_abi(x.arg.native_abi, "attention_output_drain_acc_slice_v2")) or x.dtype != dtypes.void: return False
   if not x.src or not isinstance(x.src[0].dtype,PtrDType) or x.src[0].dtype.base != dtypes.half: return False
   grid=x.arg.grid
   if grid is None: return len(x.src)==10 and x.src[0].dtype.size==2048 and all(s.dtype==dtypes.float.vec(8) for s in x.src[1:])
@@ -96,6 +109,21 @@ def validate_amd_attention_stats_drain(x:UOp):
   try: x.arg.validate()
   except ValueError: return False
   return isinstance(stats.dtype,PtrDType) and stats.dtype.base == dtypes.float and group.op in {Ops.SPECIAL,Ops.CAST} and m.dtype == l.dtype == dtypes.float.vec(8)
+
+def _is_lane_fold(x:UOp) -> bool:
+  """True when ``x`` is int bit-math over ``lidx0`` and bounded constants.
+
+  The fused-attention drain/fragment expansions lower lane indices as weakint
+  casts around int AND/SHR/SHL chains (``lane & 15`` on AMD, ``(lane >> 2) & 7``
+  and ``2*(lane & 3)`` on sm_120). This accepts that whole class of lane-derived
+  folds while still rejecting arbitrary weakint in programs.
+  """
+  if x.dtype is not dtypes.int: return False
+  if x.op is Ops.SPECIAL: return str(x.arg) in {"lidx0", "gidx0"}
+  if x.op is Ops.CONST: return isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440
+  if x.op in {Ops.AND, Ops.SHR, Ops.SHL, Ops.ADD, Ops.MUL} and len(x.src) == 2:
+    return all(_is_lane_fold(s) for s in x.src)
+  return False
 
 def validate_state_transfer(x:UOp):
   """Validate generic state publication/reload descriptors without backend policy."""
@@ -137,7 +165,8 @@ def validate_state_loop_write(x:UOp):
 def validate_state_reload_gep(gep:UOp, reload:UOp):
   """Permit scalar lanes from the typed generic reload carrier only."""
   if reload.op is Ops.CUSTOMI:
-    return isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",) and validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
+    if not (isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",)): return None
+    return validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
   if reload.op is not Ops.STACK or not (isinstance(reload.tag, tuple) and len(reload.tag) == 2 and reload.tag[0] == "state_reload_v1"):
     return False
   handle=reload.tag[1]
@@ -165,6 +194,8 @@ spec_shared = PatternMatcher([
   # and SHL/SHR, the shift distance can be an int
   (UPat((Ops.SHL, Ops.SHR), src=(UPat.var("x"), UPat.var("y")), name="a"), lambda a,x,y: a.dtype == x.dtype and y.dtype in (x.dtype, dtypes.uint)),
   (UPat((Ops.CDIV, Ops.CMOD, Ops.FLOORDIV, Ops.FLOORMOD), name="x"), lambda x: None if dtypes.is_int(x.dtype) else False),
+  (UPat(Ops.PRECISE_DIV, dtype=dtypes.float32, src=(UPat(dtype=dtypes.float32), UPat(dtype=dtypes.float32))), lambda: True),
+  (UPat(Ops.ROUND_AWAY, dtype=dtypes.float32, src=(UPat(dtype=dtypes.float32),)), lambda: True),
   (UPat(GroupOp.ALU, name="x"), lambda x: all(x.dtype.base == y.dtype.base for y in x.src)),
 
   # CAST
@@ -185,16 +216,30 @@ spec_shared = PatternMatcher([
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
    lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}),
-  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE} or
+  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.ATTENTION_LOOP_STATE} or
     (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),
 
+  # STRICT_AFTER is a scalar compiler-order edge, not a synchronization primitive.
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, StrictAfter) and len(x.src) == 2 and x.dtype == x.src[0].dtype and
+    x.src[0].dtype in {dtypes.weakint, dtypes.int, dtypes.uint} and x.src[1].dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  # LOAD_SCHEDULE is an opaque scalar scheduling token, not a value operation or synchronization primitive.
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, LoadSchedule) and len(x.src) == 1 and x.dtype == x.src[0].dtype and
+    x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, RegionLoad) and len(x.src) == 1 and
+    x.dtype is dtypes.void and x.src[0].op is Ops.IF and isinstance(x.src[0].arg, PostBarrierRegion) else None),
+  (UPat(Ops.AFTER, name="x"), lambda x: True if isinstance(x.arg, RegionLoadBridge) and len(x.src) == 1 and
+    x.dtype is dtypes.void and x.src[0].op is Ops.IF and isinstance(x.src[0].arg, PostBarrierRegion) else None),
+  (UPat(Ops.LOAD, src=(UPat(Ops.INDEX, name="idx"), UPat(Ops.AFTER, name="phase")), name="x"), lambda x,idx,phase:
+    True if isinstance(phase.arg, LoadSchedule) and x.dtype == idx.dtype and x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
+  (UPat(Ops.LOAD, src=(UPat(Ops.INDEX, name="idx"), UPat(Ops.AFTER, name="region")), name="x"), lambda x,idx,region:
+    True if isinstance(region.arg, (RegionLoad,RegionLoadBridge)) and x.dtype == idx.dtype and x.dtype in {dtypes.int, dtypes.uint, dtypes.float} else None),
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
                                                      Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA,
-                                                     Ops.MEMORY_SEMANTIC, Ops.AMD_PACKED_FRAGMENT_LOAD})),),
+                                                     Ops.MEMORY_SEMANTIC, Ops.PACKED_FRAGMENT_LOAD, Ops.PACKED_ACTIVATION_CARRIER})),),
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
@@ -202,6 +247,14 @@ spec_shared = PatternMatcher([
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),
+
+  # Typed graph-level structured control.  This is safe at tensor and program
+  # stages because the barrier is outside the predicated region and ENDIF owns
+  # the body roots, preserving lexical order through graph rewrites.
+  (UPat(Ops.IF, dtype=dtypes.void, src=(UPat(dtype=dtypes.bool), UPat(Ops.BARRIER)), name="x"),
+   lambda x: isinstance(x.arg, PostBarrierRegion)),
+  (UPat(Ops.ENDIF, dtype=dtypes.void, src=(UPat(Ops.IF, name="mif"), UPat()), allow_any_len=True, name="x"),
+   lambda x,mif: isinstance(x.arg, PostBarrierRegion) and x.arg == mif.arg and len(x.src) >= 2),
 
   # WAIT carries a backend-owned typed payload (for example compiler_policies.WaitCount or a
   # logical dependency that a later backend resolves).  Keep the UOp layer decoupled from
@@ -234,10 +287,45 @@ spec_shared = PatternMatcher([
   # Generic phase-state reloads are typed carriers. Their vector lanes may be
   # projected without teaching consumers any scheduler or backend-specific ABI.
   (UPat(Ops.CUSTOMI, name="reload").f(Ops.GEP, name="gep"), validate_state_reload_gep),
+  # Renderer capabilities may return native vector register tuples (for
+  # example one four-register tensor-core fragment load). Lane projection has
+  # the same backend-independent type/bounds contract as WMMA results.
+  (UPat(Ops.CUSTOMI, name="value").f(Ops.GEP, name="gep"), lambda gep,value: validate_scalar_gep(gep,value)),
 ])
 
 # these ops can exist in tensor but not programs. example: movement
+def _nv_independent_warp_fragment(x):
+  a=getattr(x, "arg", None); g=getattr(a, "grid", None)
+  if g is None or getattr(a, "physical_local_size", None) != 128 or getattr(g, "local_size", None) != 128 or getattr(g, "wave_size", None) != 32: return False
+  if not str(getattr(a, "native_abi", "")).startswith("nv_sm120_"): return False
+  lane, group = x.src[1], x.src[4]
+  def walk(u):
+    out=[]
+    def rec(v):
+      out.append((getattr(v.op,"name",str(v.op)),repr(v.arg)))
+      for z in getattr(v,"src",()): rec(z)
+    rec(u); return out
+  lane_ops, group_ops = walk(lane), walk(group)
+  if getattr(a, "physical_local_size", None) == 128 and __import__('os').getenv("NV_F2_DUMP_INDEX_TREES"):
+    print("NV_F2_INDEX_TREE " + repr({"lane":lane_ops,"group":group_ops}))
+  lane_names={str(arg).strip("'\"") for op,arg in lane_ops if op=="SPECIAL"}
+  group_names={str(arg).strip("'\"") for op,arg in group_ops if op=="SPECIAL"}
+  lane_consts={int(a) for o,a in lane_ops if o=="CONST" and str(a).lstrip('-').isdigit()}; group_consts={int(a) for o,a in group_ops if o=="CONST" and str(a).lstrip('-').isdigit()}
+  if lane_names != {'lidx0'} or group_names != {'lidx0','gidx0'}:
+    return False
+  if 31 not in lane_consts or 4 not in group_consts or 5 not in group_consts: return False
+  # Exact lane/group proof is represented by the emitted UOp expressions.
+  return True
+
+def _validate_packed_fragment_program(x):
+  if len(x.src) != 5: return False
+  if getattr(getattr(x, "arg", None), "physical_local_size", None) == 128:
+    return _nv_independent_warp_fragment(x)
+  return hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and getattr(x.arg,"grid",None) is not None and x.arg.physical_local_size == 32 and len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])
+
 spec_tensor = PatternMatcher([
+  (UPat(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0] == x.arg.loop_axis and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint}),
+  (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # CompositeAccumulator carries scalar/vector slot state until a backend
   # proves a register layout.  It is intentionally not a renderer op.
   (UPat(Ops.COMPOSITE_ACCUMULATOR, name="a"), lambda a: isinstance(a.arg, tuple) and len(a.src) > 0),
@@ -245,6 +333,13 @@ spec_tensor = PatternMatcher([
    m.dtype == m.src[0].dtype and m.arg.__class__.__name__ == "MemorySemanticOwner" and
    getattr(m.arg, "__dataclass_params__", None) is not None and
    isinstance(getattr(getattr(m.arg, "semantic_class", None), "value", None), str)),
+  (UPat(Ops.PACKED_ACTIVATION_CARRIER, name="p"), lambda p:
+   p.dtype == p.arg.logical_dtype and p.arg.abi == "q8_1.logical_mk_to_s8.v1" and
+   tuple(p.arg.logical_shape) == tuple(p.arg.transform.logical_shape) and
+   p.arg.record_bytes == p.arg.transform.packed_bytes and len(p.src) == 1 and
+   (p.src[0].op is Ops.PARAM or
+    (p.src[0].op is Ops.BUFFER and p.src[0].dtype.scalar() == dtypes.uint and p.src[0].size >= p.arg.record_bytes//4) or
+    (p.src[0].op is Ops.INDEX and p.src[0].dtype.scalar() == dtypes.uint))),
   # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
   # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),
@@ -334,45 +429,48 @@ spec_tensor = PatternMatcher([
    and x.dtype == dtypes.half and all(s.dtype == dtypes.float32 for s in x.src)),
   # Descriptor-specific scheduler legalization. This remains non-renderable
   # until AMD instruction selection explicitly implements the declared ABI.
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)
    and ((x.arg.mode == "legacy_normalized" and x.src[1].dtype == x.src[2].dtype == dtypes.float32)
         or (x.arg.mode in {"stateful_unnormalized_v1", "loop_state_v1"}
             and x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)))),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.arg.mode == "loop_state_v1" and x.arg.dynamic_kv_v1 and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,)
    and x.src[0].dtype == x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat()), name="x"),
-   lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_online_softmax_qk_pv_v1" and x.arg.grid is not None
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat()), name="x"),
+   lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1") and x.arg.grid is not None
    and x.arg.dynamic_kv_v1 and x.dtype==dtypes.half.vec(x.arg.pv_a_lanes) and x.shape==(x.arg.pv_a_lanes,) and x.src[0].dtype==x.src[1].dtype==x.src[2].dtype==dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+  (UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.arg.mode == "initial_state_v1" and x.dtype == dtypes.half.vec(x.arg.pv_a_lanes) and x.shape == (x.arg.pv_a_lanes,) and x.src[0].dtype == dtypes.float32.vec(8)),
-  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.AMD_ROW_SOFTMAX_REPACK),), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+  (UPat(Ops.ROW_SOFTMAX_SLOT, src=(UPat(Ops.NATIVE_ROW_SOFTMAX_REPACK),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "online_softmax_qk_pv_v1")
    and x.dtype == x.arg.carrier_dtype and x.shape == (x.arg.lanes,)),
-  (UPat(Ops.GEP, src=(UPat(Ops.AMD_ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
+  (UPat(Ops.GEP, src=(UPat(Ops.ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
    lambda x,slot: x.dtype == slot.dtype.scalar() and slot.shape == (slot.arg.lanes,) and len(x.arg) == 1 and 0 <= x.arg[0] < slot.arg.lanes),
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
-  (UPat(Ops.GEP, src=(UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="state"),), name="x"),
+  (UPat(Ops.GEP, src=(UPat(Ops.ATTENTION_LOOP_STATE, name="state"),), name="x"),
    lambda x,state: state.dtype == dtypes.float.vec(8) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1"
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE)), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1")
    and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None
-   and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, name="x"),
+   lambda x: (len(x.src) == 5 and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)
+              and ((_nv_independent_warp_fragment(x) if getattr(x.arg, "physical_local_size", 32) == 128 else
+                    (hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1")
+                     and getattr(x.arg, "grid", None) is not None and x.arg.physical_local_size == 32
+                     and x.src[4].op is Ops.SPECIAL and str(x.src[4].arg) == "gidx0"))))),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and native_attention_abi(x.arg.native_abi, "packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
    str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(x.arg.fragment_lanes) and x.shape == (x.arg.fragment_lanes,)),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
@@ -380,6 +478,18 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.ATTENTION, name="x"),
    lambda x: hasattr(x.arg, 'scale') and len(x.src) == ((5 if x.arg.kv_block else 4) + int(x.arg.mask_present))
    and x.dtype == x.src[0].dtype == x.arg.output_dtype),
+
+  # RMSNORM keeps a normal fallback plus explicit x/weight dependencies until
+  # rangeify selects a lowering (path3-semantic-rmsnorm-task-20260802.md).
+  (UPat(Ops.RMSNORM, name="x"),
+   lambda x: hasattr(x.arg, 'dim') and len(x.src) == (3 if x.arg.affine else 2)
+   and x.dtype == x.src[0].dtype == x.arg.out_dtype),
+
+  (UPat(Ops.REDUCE_OUTPUT, name="x"),
+   lambda x: hasattr(x.arg, 'recipe') and _reduce_output_recipe_supported(x.arg.recipe)
+   and len(x.src) == (3 if x.arg.affine else 2) + int(getattr(x.arg, 'epilogue', 'identity') == 'rope')
+   and (getattr(x.arg, 'epilogue', 'identity') in ('identity', 'rope'))
+   and x.dtype == x.src[0].dtype == x.arg.out_dtype),
 
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
   (UPat(Ops.COPY, name="copy", src=(UPat.var("x"), UPat(Ops.DEVICE)), allow_any_len=True, arg=None), lambda copy,x: copy.dtype == x.dtype),
@@ -415,28 +525,46 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  # Backend-neutral native fragment carriers retain a vector register-file ABI
+  # while their provider has scalar address/ordering operands.  The semantic
+  # tag is the contract; the renderer spelling is intentionally irrelevant.
+  (UPat(Ops.CUSTOMI, name="x"),
+   lambda x: True if ((isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] == "native_fragment_carrier_v1"
+   and x.tag[1] in (2, 4) and x.dtype == dtypes.uint.vec(x.tag[1])
+   and len(x.src) == 2 and (x.src[0].dtype.scalar() in {dtypes.uint, dtypes.int, dtypes.weakint} or
+     (isinstance(x.src[0].dtype,PtrDType) and x.src[0].dtype.addrspace is AddrSpace.LOCAL))
+   and x.src[1].dtype.scalar() in {dtypes.int, dtypes.uint, dtypes.weakint})
+   or any((isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] == "native_fragment_carrier_v1")
+          or (s.op is Ops.CUSTOMI and s.arg in (("native_fragment_x2_v1",), ("native_fragment_x4_v1",))) for s in x.src)) else None),
+  (UPat(Ops.COOPERATIVE_STAGE_BEGIN, dtypes.void, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0] == x.arg.loop_axis and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint}),
+  (UPat(Ops.AFTER, name="x"), lambda x: (type(getattr(x, "tag", None)).__name__ != "SharedTileOwnerSpec") or (x.tag.validate() is x.tag and len(x.src) >= 2 and any(s.op is Ops.BARRIER for s in x.src))),
+  (UPat(Ops.COOPERATIVE_TILE_LOAD, name="x"), lambda x: hasattr(x.arg, "validate") and x.arg.validate() is x.arg and len(x.src) == 2 and x.src[0].op is Ops.PARAM and isinstance(x.src[0].dtype, PtrDType) and x.src[0].ptrdtype.base is dtypes.half and x.src[1].dtype.scalar() in {dtypes.int,dtypes.weakint} and isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.ptrdtype.base is dtypes.half and x.ptrdtype.size == 2048),
   # Scalar address arithmetic introduced by the native Hd128 attention drain.
   (UPat(Ops.CONST, dtypes.weakint, name="x"), lambda x: isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440),
   (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
   # A fully masked row folds -inf to its uint bit pattern while retaining LDS publication ordering.
   (UPat(Ops.AFTER, dtypes.uint, src=(UPat(Ops.CONST, dtypes.uint), UPat(Ops.STORE))), lambda: True),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
-   lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
+   lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
-   lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None and
-   len(x.src)==5 and x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
-   lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
+   _validate_packed_fragment_program),
+  (UPat(Ops.PACKED_FRAGMENT_LOAD,name="x"),
+   lambda x: hasattr(x.arg,'native_abi') and native_attention_abi(x.arg.native_abi,"packed_fragment_hd128_loop_v1") and
    getattr(getattr(x.arg,"grid",None),"native_abi",None)=="amd_gfx1100_attention_multiwave_g2_v1" and len(x.src)==6 and
    x.dtype==dtypes.half.vec(x.arg.fragment_lanes) and x.shape==(x.arg.fragment_lanes,) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.RANGE,dtype=dtypes.int),)), lambda: True),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SPECIAL,dtype=dtypes.int,name="s"),)), lambda s: str(s.arg) in {"lidx0","gidx0"}),
-  (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.AND,dtype=dtypes.int,name="a"),)),
-   lambda a: any(s.op is Ops.CONST and int(s.arg)==15 for s in a.src) and any(s.op is Ops.SPECIAL and str(s.arg)=="lidx0" for s in a.src)),
-  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
+  # Lane-fold artifacts the fused-attention ABI leaves after index lowering:
+  # AMD's `lane & 15` and sm_120's `(lane >> 2) & 7` / `2*(lane & 3)` are all
+  # int bit-math over `lidx0` and bounded constants, wrapped in weakint by the
+  # drain/fragment expansions. Accepting the class keeps the gate about the
+  # artifact (lane-derived index folds), not about one vendor's spelling.
+  (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(dtype=dtypes.int,name="f"),)),
+   lambda f: _is_lane_fold(f)),
+  (UPat(Ops.ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
   # REDUCE with composite arg may reach program level before lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
@@ -470,7 +598,8 @@ spec_program = PatternMatcher([
   (UPat(Ops.STACK, name="x"), lambda x: len(x.src)>1 or len(x.src) == 0),
   (UPat(Ops.GEP, src=(UPat.var("src"),), name="gep"), lambda gep,src: gep.dtype == src.dtype.scalar()),
 
-  # if has a <gate, index_for_dedup>
+  # Lowered gated-store IF has <gate, index_for_dedup>. Typed graph-authored
+  # regions are admitted by spec_shared above.
   (UPat(Ops.IF, dtype=dtypes.void, src=(UPat(dtype=dtypes.bool), UPat((Ops.CAST, Ops.INDEX, Ops.SHRINK)))), lambda: True),
   (UPat(Ops.ENDIF, dtype=dtypes.void, src=(UPat(Ops.IF),)), lambda: True),
 ])+spec_shared

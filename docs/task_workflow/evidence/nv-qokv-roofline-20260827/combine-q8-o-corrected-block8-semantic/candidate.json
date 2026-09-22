@@ -1,0 +1,25 @@
+{
+  "arm": "candidate",
+  "blocks": 8,
+  "count": 11,
+  "depth": 512,
+  "finite": true,
+  "schema": "tinygrad.nv_flash_combine_q8_o_qualification.v1",
+  "shape": [
+    11,
+    151936
+  ],
+  "tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876,
+    38835,
+    34208,
+    13,
+    279,
+    3974
+  ]
+}

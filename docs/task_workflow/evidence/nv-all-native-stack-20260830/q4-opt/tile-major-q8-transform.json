@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "transform": {
+    "abi": "q8_1.logical_mk_to_s8.v1",
+    "rows": 512,
+    "k": 4096,
+    "group_elems": 32,
+    "block_bytes": 36,
+    "tail_bytes": 18432,
+    "packed_bytes": 2377728
+  },
+  "logical_shape": [
+    512,
+    4096
+  ],
+  "abi": "q8_1.logical_mk_to_s8.v1"
+}

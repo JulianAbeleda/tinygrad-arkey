@@ -1,0 +1,177 @@
+{
+  "candidate_us": 74.84108,
+  "commit": "39ddaa2356378b576656e0459a26b602334d54dc",
+  "control_midpoint_us": 119.30363,
+  "dtype": "float32",
+  "exact": [
+    {
+      "control": 17,
+      "gpu": 17,
+      "mirror": 17,
+      "pass": true,
+      "want": 17
+    },
+    {
+      "control": 7936,
+      "gpu": 7936,
+      "mirror": 7936,
+      "pass": true,
+      "want": 7936
+    },
+    {
+      "control": 15855,
+      "gpu": 15855,
+      "mirror": 15855,
+      "pass": true,
+      "want": 15855
+    },
+    {
+      "control": 23774,
+      "gpu": 23774,
+      "mirror": 23774,
+      "pass": true,
+      "want": 23774
+    },
+    {
+      "control": 31693,
+      "gpu": 31693,
+      "mirror": 31693,
+      "pass": true,
+      "want": 31693
+    },
+    {
+      "control": 39612,
+      "gpu": 39612,
+      "mirror": 39612,
+      "pass": true,
+      "want": 39612
+    },
+    {
+      "control": 47531,
+      "gpu": 47531,
+      "mirror": 47531,
+      "pass": true,
+      "want": 47531
+    },
+    {
+      "control": 55450,
+      "gpu": 55450,
+      "mirror": 55450,
+      "pass": true,
+      "want": 55450
+    },
+    {
+      "control": 63369,
+      "gpu": 63369,
+      "mirror": 63369,
+      "pass": true,
+      "want": 63369
+    },
+    {
+      "control": 71288,
+      "gpu": 71288,
+      "mirror": 71288,
+      "pass": true,
+      "want": 71288
+    },
+    {
+      "control": 79207,
+      "gpu": 79207,
+      "mirror": 79207,
+      "pass": true,
+      "want": 79207
+    },
+    {
+      "control": 87126,
+      "gpu": 87126,
+      "mirror": 87126,
+      "pass": true,
+      "want": 87126
+    },
+    {
+      "control": 95045,
+      "gpu": 95045,
+      "mirror": 95045,
+      "pass": true,
+      "want": 95045
+    },
+    {
+      "control": 102964,
+      "gpu": 102964,
+      "mirror": 102964,
+      "pass": true,
+      "want": 102964
+    },
+    {
+      "control": 110883,
+      "gpu": 110883,
+      "mirror": 110883,
+      "pass": true,
+      "want": 110883
+    },
+    {
+      "control": 118802,
+      "gpu": 118802,
+      "mirror": 118802,
+      "pass": true,
+      "want": 118802
+    },
+    {
+      "control": 126721,
+      "gpu": 126721,
+      "mirror": 126721,
+      "pass": true,
+      "want": 126721
+    }
+  ],
+  "medians_us": {
+    "candidate": 74.84108,
+    "control_a": 119.69206,
+    "control_c": 118.9152
+  },
+  "pass": true,
+  "recovery_us": 44.46254999999999,
+  "replays": 50,
+  "reps": 9,
+  "samples_us": {
+    "candidate": [
+      77.08467999999999,
+      75.55482,
+      75.46122,
+      74.7467,
+      74.84108,
+      74.66854000000001,
+      74.12172,
+      75.81228,
+      74.52628
+    ],
+    "control_a": [
+      120.62020000000001,
+      120.69414,
+      121.35737999999999,
+      119.42236000000001,
+      119.02941999999999,
+      119.99842000000001,
+      119.69206,
+      118.45392,
+      119.27647999999999
+    ],
+    "control_c": [
+      121.72506,
+      120.15672,
+      118.19544,
+      118.38860000000001,
+      119.86276,
+      118.95026,
+      118.52668,
+      118.63828,
+      118.9152
+    ]
+  },
+  "schema": "tinygrad.nv_native_argmax_host_mirror_gate.v1",
+  "shape": [
+    1,
+    151936
+  ],
+  "speedup_pct": 59.40928431283994
+}

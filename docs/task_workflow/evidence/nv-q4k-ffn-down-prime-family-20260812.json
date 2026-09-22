@@ -1,0 +1,46 @@
+{
+  "date": "2026-08-12",
+  "branch": "nvidia-bringup-20260731",
+  "source_log": "/tmp/tg_debug_probe_20260812.log",
+  "family": "q4k_g3_lanemap_gemv_epi_ffnresadd_4096_12288",
+  "n_kernels": 18,
+  "rows": [
+    {"kernel_id": 1620, "us": 31.84},
+    {"kernel_id": 1638, "us": 26.34},
+    {"kernel_id": 1673, "us": 27.23},
+    {"kernel_id": 1691, "us": 26.21},
+    {"kernel_id": 1726, "us": 26.53},
+    {"kernel_id": 1744, "us": 27.20},
+    {"kernel_id": 1776, "us": 26.72},
+    {"kernel_id": 1794, "us": 26.82},
+    {"kernel_id": 1829, "us": 26.40},
+    {"kernel_id": 1847, "us": 26.37},
+    {"kernel_id": 1879, "us": 26.40},
+    {"kernel_id": 1894, "us": 26.78},
+    {"kernel_id": 1924, "us": 27.04},
+    {"kernel_id": 1939, "us": 26.46},
+    {"kernel_id": 1969, "us": 26.40},
+    {"kernel_id": 1984, "us": 26.69},
+    {"kernel_id": 2014, "us": 26.43},
+    {"kernel_id": 2029, "us": 27.01}
+  ],
+  "stats": {
+    "sum_us": 484.9,
+    "mean_us": 26.937,
+    "median_us": 26.61,
+    "min_us": 26.21,
+    "max_us": 31.84
+  },
+  "llama_floor": {
+    "us_per_node": 11.776,
+    "n_nodes": 18,
+    "sum_us": 211.968
+  },
+  "ratio_vs_llama_floor": 2.287,
+  "audit_census": {
+    "us_per_kernel_median": 26.75,
+    "n_kernels": 18,
+    "sum_us": 481.50,
+    "source": "/tmp/m1_costgate_ab_fixed.json"
+  }
+}

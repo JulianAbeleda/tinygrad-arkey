@@ -1,0 +1,43 @@
+{
+  "schema": "tinygrad.nv_llama_q6k_vocab_model_bracket.v1",
+  "status": "PASS",
+  "runs": {
+    "candidate_1_ms": 38.475373,
+    "control_ms": 41.064352,
+    "candidate_2_ms": 38.470494
+  },
+  "candidate_mean_ms": 38.472933499999996,
+  "recovery_ms": 2.591418500000003,
+  "recovery_fraction_of_prior_vocab_debt": 0.9940613372204546,
+  "control_tok_s": 12516.088796565351,
+  "candidate_mean_tok_s": 13308.057208582759,
+  "token": {
+    "control": 198,
+    "candidate_1": 198,
+    "candidate_2": 198
+  },
+  "arrays": {
+    "logits": {
+      "shape": [
+        1,
+        151936
+      ],
+      "candidate_finite": true,
+      "candidate2_finite": true,
+      "control_candidate_max_abs": 0.2091817855834961,
+      "control_candidate_mean_abs": 0.03225911781191826,
+      "candidate_repeat_max_abs": 0.0,
+      "allclose_atol_0p5_rtol_0p02": true
+    },
+    "token": {
+      "shape": [],
+      "candidate_finite": true,
+      "candidate2_finite": true,
+      "control_candidate_max_abs": 0.0,
+      "control_candidate_mean_abs": 0.0,
+      "candidate_repeat_max_abs": 0.0,
+      "allclose_atol_0p5_rtol_0p02": true
+    }
+  },
+  "decision": "PROMOTE"
+}

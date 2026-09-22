@@ -1,0 +1,26 @@
+{
+  "schema": "tinygrad.nv.post_flash_ledger.v1",
+  "date": "2026-08-30",
+  "wall": {
+    "pre_flash_control_mean_ms": 38.687355,
+    "promoted_flash_ms": 37.307464,
+    "llama_median_ms": 35.019399,
+    "remaining_gap_to_llama_median_ms": 2.288065
+  },
+  "recovery": {
+    "flash_wall_ms": 1.379891,
+    "flash_category_debt_ms": 1.716985,
+    "measured_debt_recovered_pct": 80.3671,
+    "throughput_gain_pct": 3.6987
+  },
+  "correctness": {
+    "token": 198,
+    "native_call_census": 36,
+    "full_logits_allclose_rtol_0p02_atol_0p5": true,
+    "candidate_replay_exact": true,
+    "control_rollback_exact": true
+  },
+  "decision": "promote_whole_tile_mma_flash_pp512",
+  "rollback": "NV_LLAMA_FATTN_MMA_PP512=0",
+  "next": "remeasure_cross_runtime_regions_on_the_new_promoted_graph"
+}

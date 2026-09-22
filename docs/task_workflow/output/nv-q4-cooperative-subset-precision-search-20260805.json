@@ -1,0 +1,45 @@
+{
+  "schema": "tinygrad.nv_q4_cooperative_subset_precision_search.v1",
+  "baseline": {"id": "g0", "indices": []},
+  "settled_base": {"id": "g12", "indices": [1,2,3,4,5,6,7,8,9,10,11,12], "relative_l2": 0.0008369634170055909},
+  "single_extra_rows": [
+    {"block": 13, "relative_l2": 0.0009372535147184073, "semantic_pass": true},
+    {"block": 14, "relative_l2": 0.0008683529193971811, "semantic_pass": true},
+    {"block": 15, "relative_l2": 0.0008896632566861630, "semantic_pass": true},
+    {"block": 16, "relative_l2": 0.0006821522723551410, "semantic_pass": true},
+    {"block": 17, "relative_l2": 0.0008692342733208228, "semantic_pass": true},
+    {"block": 18, "relative_l2": 0.0010582779177680842, "semantic_pass": false}
+  ],
+  "gpu_validated_combinations": [
+    {"extra_blocks": [14,15,16], "relative_l2": 0.0007459002609969515, "semantic_pass": true},
+    {"extra_blocks": [14,16,17], "relative_l2": 0.0008115801210174358, "semantic_pass": true},
+    {"extra_blocks": [15,16,17], "relative_l2": 0.0009631958099352387, "semantic_pass": true},
+    {"extra_blocks": [16,17,18], "relative_l2": 0.0009293883520309264, "semantic_pass": true},
+    {"extra_blocks": [14,15,16,17], "relative_l2": 0.0007167016776224585, "semantic_pass": true},
+    {"extra_blocks": [13,14,15,16,17], "relative_l2": 0.0010022397568027655, "semantic_pass": false},
+    {"extra_blocks": [14,15,16,17,18], "relative_l2": 0.0008992186142133194, "semantic_pass": true}
+  ],
+  "selected": {
+    "indices": [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18],
+    "excluded_from_g18": [13],
+    "relative_l2": 0.0008992186142133194,
+    "max_abs": 0.021239042282104492,
+    "perturbation_vs_min_margin": 0.03482247701903367,
+    "tokens_equal": true,
+    "argmax_equal": true,
+    "top_k_sets_equal": true,
+    "top_k_order_equal": true,
+    "providers": 34,
+    "cooperative_q4_consumers": 86,
+    "legacy_q4_consumers": 0,
+    "semantic_pass": true
+  },
+  "boundary": {
+    "add_block_13_relative_l2": 0.0010022397568027655,
+    "add_block_13_semantic_pass": false,
+    "cumulative_g18_relative_l2": 0.0012714405,
+    "cumulative_g18_semantic_pass": false
+  },
+  "method": "six singleton GPU arms, exhaustive 64-subset additive CPU ranking, adaptive GPU validation of the predicted boundary",
+  "default_enabled": false
+}

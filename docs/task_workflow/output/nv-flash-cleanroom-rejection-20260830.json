@@ -1,0 +1,12 @@
+{
+  "schema": "tinygrad.nv.flash_cleanroom_rejection.v1",
+  "status": "REJECTED_CLEAN_ROOM_FLASH",
+  "hcq_numerical": "exact_fp16",
+  "device_us_per_layer": 1337.344,
+  "whole_model_ms": 84.924811,
+  "architecture": "one_query_cta",
+  "production_seam": "removed",
+  "promotion": "not_retained",
+  "remaining_measured_lever_ge_0_5ms": false,
+  "decision": "new_abi_and_matched_full_model_gate_required"
+}

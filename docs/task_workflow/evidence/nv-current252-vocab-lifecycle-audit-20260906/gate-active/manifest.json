@@ -1,0 +1,50 @@
+{
+  "arch": "sm_120",
+  "programs": {
+    "main": {
+      "name": "q4_qo_streamk",
+      "source_sha256": "4faeb919579dc3fa8b6a63c722a3c2d30af26db3005c32d84f8723cdbfbeea30",
+      "binary_sha256": "c00117d1d9338ed63e74daf6e94c68c2370d79b6f0a6baccf50a6ff7a9a6396b",
+      "outs": [
+        0,
+        1,
+        2
+      ],
+      "ins": [
+        3,
+        4
+      ],
+      "globals": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "vals": []
+    },
+    "fixup": {
+      "name": "q4k_imma_fixup_active",
+      "source_sha256": "be14ebcb32feec51c96cf7df770ad0fd591c38809f9cb84de95679b841368499",
+      "binary_sha256": "4064815cfa2fb7aa3ffc35c41db80051ab542708631103358cb5a7e37dcefb29",
+      "outs": [
+        0
+      ],
+      "ins": [
+        1,
+        2,
+        3
+      ],
+      "globals": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "vals": [
+        512,
+        12288
+      ]
+    }
+  }
+}

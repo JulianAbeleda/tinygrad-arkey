@@ -1,0 +1,45 @@
+{
+  "accepted_attention_max17": false,
+  "accepted_samples_ms_per_token": [
+    5.15991135,
+    5.16608945,
+    5.16172825
+  ],
+  "attention_indices": [],
+  "callify_owned_precompiled_output_redirect": 0,
+  "composed": false,
+  "external_contention_high_limit_ms": 5.41172825,
+  "included_cost": true,
+  "indices": [
+    16
+  ],
+  "median_ms_per_token": 5.16172825,
+  "owned_input_boundary": true,
+  "prelude_token": 13876,
+  "rejected_high_samples_ms_per_token": [],
+  "reps": 3,
+  "samples_ms_per_token": [
+    5.15991135,
+    5.16608945,
+    5.16172825
+  ],
+  "schema": "tinygrad.q4k_ffn_down_mmvq_timing.v1",
+  "settled_continuous": true,
+  "timed_token_count": 60,
+  "token_hashes": [
+    "55f7a13b620816570f19e2f5786d86743b141cc2c72cdcef8cb5019af59f3aec",
+    "07937084f49cd06bd5f39802d47c4ae2cd30a169aa1597bea96969d4ca4ecd74",
+    "89cc19818149976e02ec6cd2655db5487559094f2be21e3bfcbeec99844a9d41"
+  ],
+  "token_stream_hash": "6700c07ac628c8d6758a1b16144602fe55b82feae49741c4a3133ab10a091aa6",
+  "tokens_per_rep": 20,
+  "warmup_decode_calls": 6,
+  "warmup_tokens": [
+    38835,
+    34208,
+    13,
+    279,
+    3974,
+    13876
+  ]
+}

@@ -1,4 +1,7 @@
 import json
+import os
+
+import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program_cache
@@ -12,6 +15,7 @@ from test.unit.test_runtime_specs import _single_buffer_anchor_candidate, _stric
 from extra.llm_research.runtime_specs import admit_full_kernel_candidate
 
 
+@pytest.mark.skipif(not os.path.exists("/dev/kfd"), reason="AMD KFD is unavailable")
 def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
   """Compile the production-shaped register/L2 path without ever realizing it."""
   payload = json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))

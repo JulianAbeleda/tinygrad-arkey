@@ -1,0 +1,141 @@
+{
+  "schema": "tinygrad.nv_q6_const_restrict_region_panel1_gate13.v1",
+  "date": "2026-09-01",
+  "verdict": "REJECT_SOURCE_SASS",
+  "promotion_eligible": false,
+  "commit_ready": false,
+  "frozen": {
+    "anchor_main_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "all_partials_fixup_sha256": "483de2ee3eed3597932a8632f9892377ce054e77bfe34c2420fe5a5d54ff5514",
+    "anchor_r31_us": 256.256,
+    "target_arch": "sm_120",
+    "launch_bounds": 256
+  },
+  "focused_source": {
+    "passed": 26,
+    "failed": 0,
+    "elapsed_s": 25.93,
+    "q8_parameter": "const unsigned int *__restrict__ data2_1769472",
+    "only_qualifier_source_delta": true,
+    "gate12_unqualified_region_source_sha256": "206ebe0ea6214fccfa6c389c19e6b4e6f1d9e0fcc38557495552710555e90017",
+    "candidate_source_sha256": "5bfae489edd748d376c3e134d2b0eaf44296bbfc2dd1928c2f62f38c5cd44c2d",
+    "direct_assignments": 18,
+    "source_barriers": 4,
+    "no_q8_stores": true,
+    "semantic": {
+      "regions": 1,
+      "markers": 1,
+      "loads": 18,
+      "publications": 18,
+      "publication_roots": 18,
+      "qualified_params": 1,
+      "qualified_is_region_owner": true,
+      "qualified_written": false
+    }
+  },
+  "fresh_compile": {
+    "artifact_reuse": false,
+    "anchor_elapsed_s": 0.8761748718097806,
+    "candidate_elapsed_s": 0.6886059059761465,
+    "compile_bound_s": 240,
+    "anchor_rebuild_sha256": "6eb663b3a3fd628e3394a0ce8f8780e108e47f40b887b0a75a0756dcf33e9137",
+    "candidate_cubin_sha256": "9639ffce4be40b6bc736c96ecac2709e00e52de8e67b82901937ae6b52e7c390",
+    "candidate_source_sha256": "5bfae489edd748d376c3e134d2b0eaf44296bbfc2dd1928c2f62f38c5cd44c2d",
+    "candidate_symbol": "nv_q6_oracle_broad_cta_prefetch_region_copy_q8_panel1_combined_publish_oracle_publisher_trusted_fp16_packed_ws_segments_in_cta_streamk_s0"
+  },
+  "sass": {
+    "instruction_total": 5152,
+    "panel1_loads": 18,
+    "panel1_stores": 18,
+    "panel1_constant_loads": 18,
+    "panel1_first_load_pc": "0x6410",
+    "panel1_first_load_ordinal": 1601,
+    "panel1_first_store_pc": "0xaaa0",
+    "panel1_first_store_ordinal": 2730,
+    "panel1_first_load_to_first_store_span_instructions": 1129,
+    "panel1_load_pcs": ["0x6410", "0x6550", "0x68d0", "0x6b50", "0x7540", "0x7590", "0x7700", "0x7730", "0x7820", "0x7a70", "0x7b50", "0x8290", "0x8370", "0x8450", "0x8540", "0x8740", "0x87a0", "0x87d0"],
+    "panel1_load_opcode": "LDG.E.CONSTANT",
+    "barrier_pcs": ["0x2f60", "0xaa40", "0xabc0", "0x109f0"],
+    "barrier_ordinals": [758, 2724, 2748, 4255],
+    "llama_barrier_shape": true,
+    "q8_loads": 36,
+    "q8_stores": 36
+  },
+  "census": {
+    "IMMA": 256,
+    "LDSM": 32,
+    "LDS": 184,
+    "LDG": 109,
+    "STS": 73,
+    "STG": 64,
+    "BAR": 4,
+    "I2FP": 1024,
+    "FMUL": 1544,
+    "FADD": 1024,
+    "FFMA": 0,
+    "LOP3": 212,
+    "anchor_LOP3": 211,
+    "MEMBAR": 0,
+    "ATOM": 0,
+    "LDL": 0,
+    "STL": 0
+  },
+  "resources": {
+    "registers": 255,
+    "stack_bytes": 0,
+    "local_static_bytes": 0,
+    "shared_static_bytes": 1024
+  },
+  "gates": {
+    "focused_source_26_26": true,
+    "anchor_byte_identical": true,
+    "semantic_exact": true,
+    "panel_exact_18_18": true,
+    "panel_LDG_E_CONSTANT_18": true,
+    "llama_barrier_shape": true,
+    "span_le_160": false,
+    "LDS_176": false,
+    "LDG_STS_109_73": true,
+    "IMMA_LDSM_256_32": true,
+    "STG_BAR_64_4": true,
+    "arithmetic_unchanged": true,
+    "instruction_le_5144": false,
+    "stack_local_LDL_STL_zero": true,
+    "scheduling_LOP3_anchor": false,
+    "MEMBAR_ATOM_zero": true,
+    "registers_le_255": true
+  },
+  "correctness": {
+    "run": false,
+    "reason": "Static SASS gates failed.",
+    "trusted_direct_wide": "not_run",
+    "partial_uint32_identity": "not_run",
+    "final_uint32_identity": "not_run",
+    "gpu_cpu_fixup_identity": "not_run"
+  },
+  "timing": {
+    "run": false,
+    "rounds": 0,
+    "reason": "Static SASS gates failed before GPU work."
+  },
+  "gpu_lock": {
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "wait_bound_s": 1200,
+    "held_for_focused_and_compile": true,
+    "gpu_work_started": false,
+    "released": true,
+    "release_check_exit_code": 0
+  },
+  "repair_accounting": {
+    "kernel_integration_repairs": 1,
+    "repair": "Use the typed PostBarrierRegion as the publication root and plain LOCAL store destinations; no arithmetic, ownership, barrier, or source-load change.",
+    "post_release_changes": "Gate13-only assertions adopted pointer_base_params and the generated-kernel signature regex after explicit authorization.",
+    "further_candidate_repairs": 0
+  },
+  "commands": {
+    "focused": "timeout --signal=INT --kill-after=10s 180s flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env PYTHONPATH=. .venv/bin/python -m pytest -q test/unit/test_cuda_const_restrict_pointer.py test/unit/test_lexical_load_region.py test/unit/test_nv_q6_region_load_panel1.py test/unit/test_nv_q6_region_copy_panel1.py test/unit/test_nv_q6_const_restrict_region_panel1.py",
+    "compile_sass": "timeout --signal=INT --kill-after=10s 520s flock -w 1200 /tmp/nv-q6-oracle-gpu.lock env NV_Q6_GPU_LOCK_HELD=1 PYTHONPATH=. DEV=NV .venv/bin/python extra/llm_research/prefill/bench_nv_q6_oracle_const_restrict_region_panel1.py --phase static --out docs/task_workflow/evidence/nv-q6-const-restrict-region-panel1-gate13-20260901/pre-sass.json --artifacts docs/task_workflow/evidence/nv-q6-const-restrict-region-panel1-gate13-20260901/fresh-artifacts --ledger docs/task_workflow/input/nv-q6-const-restrict-region-panel1-gate13-decision-20260901.md --compile-bound 240",
+    "lock_release": "flock -n /tmp/nv-q6-oracle-gpu.lock true"
+  },
+  "causal_result": "const/restrict is sufficient to select LDG.E.CONSTANT and to move panel1 loads before the overwrite barrier, but it does not create llama's narrow late-live interval. ptxas hoisted the 18 loads across 1129 normalized instructions, retained LDS=184 and LOP3=212, and exceeded the instruction gate. The qualifier removed Gate12's stack/LDL/STL spills, but the candidate remains ineligible."
+}

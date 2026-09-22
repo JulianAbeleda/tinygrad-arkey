@@ -1,0 +1,33 @@
+{
+  "schema": "tinygrad.nv_q6_oracle_single_body_decision.v1",
+  "decision": "INCONCLUSIVE_GEOMETRY",
+  "promote": false,
+  "gpu_lock": {
+    "path": "/tmp/nv-q6-oracle-gpu.lock",
+    "used": true
+  },
+  "correctness": {
+    "active_partials_baseline_exact": true,
+    "fixup_baseline_exact": true,
+    "gpu_fixup_cpu_exact": true,
+    "reference_max_abs": 0.1871337890625,
+    "reference_mean_abs": 0.01368770468980074
+  },
+  "timing_r31": {
+    "baseline_grid": [170, 1, 1],
+    "candidate_grid": [170, 2, 1],
+    "baseline_main_median_us": 284.32,
+    "candidate_main_median_us": 413.696,
+    "paired_recovery_median_us": -131.424,
+    "candidate_wins": 0,
+    "candidate_pair_median_us": 446.048
+  },
+  "sass": {
+    "baseline": {"instructions": 8328, "registers": 255, "stack_bytes": 288, "ldl": 251, "stl": 377, "imma": 512, "ldsm": 64, "bar": 11},
+    "candidate": {"instructions": 3992, "registers": 255, "stack_bytes": 264, "ldl": 129, "stl": 194, "imma": 256, "ldsm": 32, "bar": 5}
+  },
+  "missing_substrate": {
+    "operation": "nested runtime segment RANGE around dynamic epoch RANGE with register lifecycle reuse",
+    "failure": "KeyError on Ops.END in simplify_merge_adjacent before source rendering"
+  }
+}

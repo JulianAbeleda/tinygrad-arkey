@@ -1,0 +1,12 @@
+{
+  "allocation_count": 21,
+  "arm": "ffn",
+  "prefix_names": [
+    "q4k_gate_up_four_warp_vec_fp16_12288_4096",
+    "q6k_fp16_packed_lanemap_u4_4096_12288_epi_ffnresadd"
+  ],
+  "reps": 9,
+  "schema": "tinygrad.nv_flash_entry_hop_cuda.v1",
+  "target": "flash_vec_llama_score_pv_32_128_8_widekv16",
+  "verdict": "CUDA_SEQUENCE_OK"
+}
