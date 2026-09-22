@@ -189,7 +189,7 @@ def test_prepared_cache_builds_once_and_reuses_same_object(monkeypatch):
   assert adapter._prepared(payload) is fake and adapter._prepared(payload) is fake and len(builds)==1
 
 
-# CUDA/NV flash adapter ------------------------------------------------------
+# Flash adapter (any GPU) and CUDA primitive-plan adapter ----------------------
 _FLASH_TARGET = {"target_id": "nvidia_sm120", "backend": "CUDA", "arch": "sm_120", "subgroup_size": 32,
                  "resolved_target_hash": "b" * 64}
 
@@ -213,14 +213,74 @@ def _nv_facts(**overrides):
   return facts
 
 
-def _flash_payload(document=None, facts=None, **tile_kwargs):
-  """The request BoltBeam sends: the canonical document with its hash beside it, plus the caller's target facts."""
+def _gpu(*, live_backend=False, compile_fn=None, check_fn=None, measure_fn=None, **overrides):
+  """A flash adapter whose GPU reports the given facts, as the device scan would; no GPU is opened."""
+  facts = {k: v for k, v in {**_nv_facts(backend="CUDA", architecture="sm_120"), **overrides}.items() if v is not None}
+  return provider.FlashAdapter(facts_fn=lambda _device: (facts, "test gpu"), live_backend=live_backend,
+                               compile_fn=compile_fn, check_fn=check_fn, measure_fn=measure_fn)
+
+
+def _flash_payload(document=None, **tile_kwargs):
+  """The request BoltBeam sends: the canonical document with its hash beside it. The facts come from the GPU."""
   schema = provider._flash_schema()
   document = document if document is not None else _flash_document(**tile_kwargs)
   try: candidate_hash = schema.FlashDecodeCandidate.from_dict(document).candidate_hash
   except ValueError: candidate_hash = "0" * 64  # an invalid geometry has no identity; admit must reject it first
-  return {"candidate": document, "candidate_hash": candidate_hash,
-          "target_facts": facts if facts is not None else _nv_facts()}
+  return {"candidate": document, "candidate_hash": candidate_hash}
+
+
+def test_flash_facts_are_the_device_scan_spelled_boltbeams_way():
+  from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
+  from tinygrad.llm.flash_decode_attention import FlashDecodeCapability
+  probe = ProbeRecord("tinygrad-device + Metal device", "2026-09-22T00:00:00+00:00")
+  scan = DeviceFacts("METAL", "METAL", "Apple9", None, None,
+                     DeviceCapabilities(wave_size=32, max_workgroup_threads=1024, lds_bytes=32768), probe, probe)
+  facts = provider._flash_facts_from_scan(scan, FlashDecodeCapability(True, True))
+  assert facts == {"backend": "METAL", "architecture": "Apple9", "subgroup_size": 32, "max_threads_per_threadgroup": 1024,
+                   "max_threadgroup_memory_bytes": 32768, "shuffle_supported": True, "fdot2_supported": True}
+  # A fact the GPU does not report is left out, never defaulted; BoltBeam then names it missing.
+  bare = DeviceFacts("CPU", "CPU", None, None, None, DeviceCapabilities(lds_bytes=32768), probe, probe)
+  assert provider._flash_facts_from_scan(bare, FlashDecodeCapability()) == {"backend": "CPU", "max_threadgroup_memory_bytes": 32768}
+
+
+def test_flash_describe_reports_the_gpu_facts_and_reads_them_once():
+  reads = []
+  facts = _nv_facts(backend="CUDA", architecture="sm_120")
+  adapter = provider.FlashAdapter(device="NV", facts_fn=lambda device: (reads.append(device) or facts, "test gpu"))
+  out = provider.process(request("describe", {"candidate": _flash_document()}), adapter=adapter)
+  assert out["status"] == "ok"
+  assert out["result"]["target"] == facts and out["result"]["facts_source"] == "test gpu"
+  assert out["result"]["backend_live"] is False
+  provider.process(request("admit", _flash_payload()), adapter=adapter)
+  assert reads == ["NV"]
+
+
+def test_flash_fails_closed_when_the_gpu_reports_no_subgroup_or_cannot_be_opened():
+  no_subgroup = provider.process(request("describe"), adapter=_gpu(subgroup_size=None))
+  assert no_subgroup["error"]["code"] == "hardware_absent"
+  def absent(_device): raise provider.ProtocolError("hardware_absent", "the GPU could not be opened")
+  closed = provider.process(request("admit", _flash_payload()), adapter=provider.FlashAdapter(facts_fn=absent))
+  assert closed["error"]["code"] == "hardware_absent"
+  malformed = provider.process(request("admit", _flash_payload()), adapter=_gpu(fdot2_supported="yes"))
+  assert malformed["error"]["code"] == "admission_rejected"
+
+
+def test_flash_admit_names_a_limit_the_gpu_did_not_report():
+  out = provider.process(request("admit", _flash_payload()), adapter=_gpu(max_threads_per_threadgroup=None))
+  assert out["error"]["code"] == "resource_limit"
+  assert out["error"]["details"]["violations"] == ["missing_fact:max_threads_per_threadgroup"]
+
+
+def test_flash_admit_refuses_a_candidate_built_for_another_gpu():
+  metal = provider.process(request("admit", _flash_payload()), adapter=_gpu(backend="METAL", architecture="Apple9"))
+  assert metal["error"]["code"] == "identity_mismatch"
+  assert metal["error"]["details"] == {"field": "backend", "candidate": "CUDA", "target": "METAL"}
+
+
+def test_flash_admit_refuses_a_gpu_whose_compiler_lacks_shuffle_or_fdot2():
+  out = provider.process(request("admit", _flash_payload()), adapter=_gpu(fdot2_supported=False))
+  assert out["error"]["code"] == "unsupported_plan"
+  assert out["error"]["details"] == {"missing": ["fdot2_supported"]}
 
 
 def test_cuda_describe_supplies_caller_supplied_target_facts():
@@ -240,12 +300,28 @@ def test_cuda_describe_and_admit_fail_closed_without_facts():
   adapter = provider.CudaAdapter()
   blocked = provider.process(request("describe"), adapter=adapter)
   assert blocked["error"]["code"] == "hardware_absent"
-  payload = _flash_payload()
+  payload = _primitive_ds4_payload()
   payload.pop("target_facts")
   admitted = provider.process(request("admit", payload), adapter=adapter)
   assert admitted["error"]["code"] == "hardware_absent"
-  malformed = provider.process(request("admit", _flash_payload(facts={"subgroup_size": "wide"})), adapter=adapter)
+  malformed = provider.process(request("admit", {**_primitive_ds4_payload(), "target_facts": {"subgroup_size": "wide"}}),
+                               adapter=adapter)
   assert malformed["error"]["code"] == "admission_rejected"
+
+
+def test_cuda_adapter_no_longer_serves_flash_candidates():
+  out = provider.process(request("admit", {**_flash_payload(), "target_facts": _nv_facts()}), adapter=provider.CudaAdapter())
+  assert out["error"]["code"] == "admission_rejected"
+
+
+def test_router_sends_flash_candidates_to_the_flash_adapter_and_the_rest_to_the_backend():
+  router = provider.DeviceRouter(flash=MockAdapter(), native=provider.UnsupportedAdapter("native"))
+  flash = provider.process(request("admit", _flash_payload()), adapter=router)
+  assert flash["status"] == "ok" and flash["result"]["phase"] == "admit"
+  other = provider.process(request("admit", {"candidate": {"schema_version": "boltbeam.full_kernel_candidate.v3"}}), adapter=router)
+  assert other["error"]["code"] == "backend_unavailable" and other["error"]["message"] == "native"
+  described = provider.process(request("describe"), adapter=router)
+  assert described["result"]["provider_revision"] == "protocol-shell"
 
 
 def _primitive_ds4_payload(records_per_cta=4):
@@ -284,8 +360,8 @@ def test_cuda_adapter_admits_and_preserves_generated_primitive_plan_identity():
   assert measured["result"]["samples_ns"]
 
 
-def test_cuda_admit_validates_geometry_against_supplied_facts():
-  adapter = provider.CudaAdapter()
+def test_flash_admit_validates_geometry_against_the_gpu_facts():
+  adapter = _gpu()
   out = provider.process(request("admit", _flash_payload()), adapter=adapter)
   assert out["status"] == "ok"
   geometry = out["result"]["flash_geometry"]
@@ -296,8 +372,8 @@ def test_cuda_admit_validates_geometry_against_supplied_facts():
   assert out["result"]["plan_hash"] == out["result"]["candidate_hash"]
 
 
-def test_cuda_admit_rejects_over_threads_over_local_memory_and_cross_subgroup_lanes():
-  adapter = provider.CudaAdapter()
+def test_flash_admit_rejects_over_threads_over_local_memory_and_cross_subgroup_lanes():
+  adapter = _gpu()
   over_threads = provider.process(request("admit", _flash_payload(warps=64)), adapter=adapter)
   assert over_threads["error"]["code"] == "resource_limit"
   over_local = provider.process(request("admit", _flash_payload(token_block=512)), adapter=adapter)
@@ -308,8 +384,8 @@ def test_cuda_admit_rejects_over_threads_over_local_memory_and_cross_subgroup_la
     [["over_threads"], ["over_local_memory"], ["lane_width_not_in_subgroup"]]
 
 
-def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes():
-  adapter = provider.CudaAdapter()
+def test_flash_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes():
+  adapter = _gpu()
   invalid = provider.process(request("admit", _flash_payload(reduce_structure="recursive")), adapter=adapter)
   assert invalid["error"]["code"] == "admission_rejected"
   payload = _flash_payload()
@@ -317,11 +393,11 @@ def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes
   forged = provider.process(request("admit", payload), adapter=adapter)
   assert forged["error"]["code"] == "identity_mismatch"
   wrong_schema = provider.process(request("admit", {"candidate": {"schema_version": "other.v1"},
-                                                    "candidate_hash": "f" * 64, "target_facts": _nv_facts()}), adapter=adapter)
+                                                    "candidate_hash": "f" * 64}), adapter=adapter)
   assert wrong_schema["error"]["code"] == "admission_rejected"
   # The retired fork schema (flat tile/combine, flash_decode_candidate.v1) is no longer read.
   retired = {"schema_version": "flash_decode_candidate.v1", "tile": _flash_document()["descriptor"]["tile"], "combine": None}
-  old_shape = provider.process(request("admit", {"candidate": retired, "candidate_hash": "f" * 64, "target_facts": _nv_facts()}),
+  old_shape = provider.process(request("admit", {"candidate": retired, "candidate_hash": "f" * 64}),
                                adapter=adapter)
   assert old_shape["error"]["code"] == "admission_rejected"
   inner = _flash_payload()
@@ -329,36 +405,37 @@ def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes
   assert provider.process(request("admit", inner), adapter=adapter)["error"]["code"] == "identity_mismatch"
 
 
-def test_cuda_admit_rejects_a_candidate_built_for_another_subgroup_size():
+def test_flash_admit_rejects_a_candidate_built_for_another_subgroup_size():
   # BoltBeam's legality reads the subgroup size from the candidate's target, so admit binds that target to the facts.
   payload = _flash_payload(document=_flash_document(target={**_FLASH_TARGET, "subgroup_size": 64}))
-  out = provider.process(request("admit", payload), adapter=provider.CudaAdapter())
+  out = provider.process(request("admit", payload), adapter=_gpu())
   assert out["error"]["code"] == "identity_mismatch"
-  assert out["error"]["details"] == {"candidate": 64, "target": 32}
+  assert out["error"]["details"] == {"field": "subgroup_size", "candidate": 64, "target": 32}
 
 
-def test_cuda_admits_the_payload_boltbeam_sends_for_a_boltbeam_built_candidate():
-  from boltbeam.search.tinygrad_flash_provider import FlashDecodeSearchProviderWorker
+def test_flash_admits_the_payload_boltbeam_sends_for_a_boltbeam_built_candidate():
   schema = provider._flash_schema()
+  worker = pytest.importorskip("boltbeam.search.tinygrad_flash_provider",
+                               reason="BoltBeam's flash worker lives on its exp branch")
   candidate = schema.FlashDecodeCandidate(_flash_document())
-  # BoltBeam's own request builder; the caller adds the target facts this adapter never autodetects.
-  payload = {**FlashDecodeSearchProviderWorker(command=("unused",))._base_payload(candidate), "target_facts": _nv_facts()}
-  out = provider.process(request("admit", payload), adapter=provider.CudaAdapter())
+  # BoltBeam's own request builder, unchanged: the facts come from the GPU, never from the request.
+  payload = worker.FlashDecodeSearchProviderWorker(command=("unused",))._base_payload(candidate)
+  out = provider.process(request("admit", payload), adapter=_gpu())
   assert out["status"] == "ok" and out["result"]["admitted"] is True
   assert out["result"]["candidate_hash"] == candidate.candidate_hash
 
 
 @pytest.mark.parametrize("action", ["compile", "check", "measure"])
-def test_cuda_compile_check_measure_fail_closed_without_live_backend(action):
-  adapter = provider.CudaAdapter()
+def test_flash_compile_check_measure_fail_closed_without_live_backend(action):
+  adapter = _gpu()
   out = provider.process(request(action, _flash_payload()), adapter=adapter)
   assert out["status"] == "blocked"
   assert out["error"]["code"] == "backend_unavailable"
   assert out["error"]["details"]["action"] == action
 
 
-def test_cuda_canned_success_path_is_deterministic_and_needs_no_gpu():
-  adapter = provider.CudaAdapter(live_backend=True)
+def test_flash_canned_success_path_is_deterministic_and_needs_no_gpu():
+  adapter = _gpu(live_backend=True)
   payload = _flash_payload()
   first = provider.process(request("compile", payload), adapter=adapter)
   second = provider.process(request("compile", payload), adapter=adapter)
@@ -376,13 +453,13 @@ def test_cuda_canned_success_path_is_deterministic_and_needs_no_gpu():
   assert checked["result"]["oracle"].startswith("canned flash reference")
 
 
-def test_cuda_adapter_accepts_injected_backend_hooks_and_preserves_envelope_errors():
+def test_flash_adapter_accepts_injected_backend_hooks_and_preserves_envelope_errors():
   def fake_compile(_payload, descriptor):
     return {"compiler": "fake_cubin", "source_sha256": descriptor["tile"]["Hd"] * "d"}
   def fake_measure(_payload, descriptor):
     return {"timing_mode": "fake", "samples_ns": [11, 22, 33], "summary_ns": {"min": 11},
             "work_bytes": {"status": "exact", "provenance": "fake hook", "operations": 1, "bytes": 2}}
-  adapter = provider.CudaAdapter(live_backend=True, compile_fn=fake_compile, measure_fn=fake_measure)
+  adapter = _gpu(live_backend=True, compile_fn=fake_compile, measure_fn=fake_measure)
   compiled = provider.process(request("compile", _flash_payload()), adapter=adapter)
   assert compiled["result"]["compiler"] == "fake_cubin"
   assert compiled["result"]["source_sha256"] == "d" * 128

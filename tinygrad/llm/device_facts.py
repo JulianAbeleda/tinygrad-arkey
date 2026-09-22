@@ -243,6 +243,9 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
     "global_allocation_granularity": getattr(getattr(opened, "allocator", None), "allocation_granularity", None),
   }
   provenance = "tinygrad-device"
+  if capabilities["max_workgroup_threads"] is None:
+    threads, source = _device_max_workgroup_threads(opened, backend, device)
+    if threads is not None: capabilities["max_workgroup_threads"], provenance = threads, provenance + source
   if backend == "AMD":
     try:
       proc = subprocess.run(["rocminfo"], capture_output=True, text=True, timeout=10, check=True)
@@ -254,6 +257,27 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
     except (FileNotFoundError, subprocess.SubprocessError, ValueError, IndexError):
       pass
   return {"backend": backend, "architecture": arch, "queue_mode": queue_mode, **capabilities, "provenance": provenance}
+
+
+def _device_max_workgroup_threads(opened: Any, backend: str, device: str) -> tuple[int | None, str]:
+  """Threads per workgroup as the opened GPU reports them, when its renderer does not publish the limit.
+
+  Same discipline as the rocminfo augmentation below: an observation from the device or its driver, never an
+  architecture table. Metal reports it on the device; NV and CUDA report it through the CUDA driver's device
+  attribute (read only, no context is created). Anything else, or a failed read, stays unknown.
+  """
+  try:
+    if backend == "METAL": return int(opened.sysdevice.maxThreadsPerThreadgroup().width), " + Metal device"
+    if backend in ("NV", "CUDA"):
+      import ctypes
+      from tinygrad.runtime.autogen import cuda
+      handle, value = cuda.CUdevice(), ctypes.c_int()
+      ordinal = int(device.split(":", 1)[1]) if ":" in device else 0
+      if cuda.cuInit(0) == 0 and cuda.cuDeviceGet(ctypes.byref(handle), ordinal) == 0 and \
+         cuda.cuDeviceGetAttribute(ctypes.byref(value), cuda.CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, handle) == 0:
+        return value.value, " + CUDA driver attribute"
+  except Exception: pass
+  return None, ""
 
 
 def _parse_rocminfo_gpu_capabilities(output: str, ordinal: int) -> dict[str, Any]:

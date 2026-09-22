@@ -613,9 +613,10 @@ class MetalAdapter:
             "thermal_status": "unavailable_no_authoritative_api"}
 
 
-# CUDA/NV flash adapter ------------------------------------------------------
+# Flash adapter (any GPU) and CUDA primitive-plan adapter ----------------------
 _NV_FACT_KEYS = ("subgroup_size", "max_threads_per_threadgroup", "max_threadgroup_memory_bytes",
                  "shuffle_supported", "fdot2_supported")
+_FLASH_SCHEMA_PREFIX = "boltbeam.flash_decode_candidate."
 
 
 def _flash_schema():
@@ -644,7 +645,7 @@ def _primitive_plan_schema():
 
 
 def _nv_facts(payload: Mapping[str, Any]) -> dict[str, Any]:
-  """Read and validate caller-supplied target facts; this adapter never autodetects a device."""
+  """Read and validate caller-supplied target facts for DS4 primitive plans; flash facts come from the GPU."""
   value = payload.get("target_facts")
   if not isinstance(value, Mapping):
     raise ProtocolError("hardware_absent",
@@ -662,7 +663,68 @@ def _nv_facts(payload: Mapping[str, Any]) -> dict[str, Any]:
   return facts
 
 
-def _canned_cuda_compile(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+def _flash_facts_from_scan(scan: Any, capability: Any) -> dict[str, Any]:
+  """One device scan and flash capability, spelled BoltBeam's way.
+
+  tinygrad/llm/device_facts.py is the one facts authority and flash_decode_capability_from_renderer the one
+  flash capability authority; this only renames their fields (BoltBeam's target_fact_keys: a provider's
+  spelling is "translated in its adapter, never by an alias list"). A fact the GPU does not report is left
+  out, so BoltBeam's legality names it missing instead of passing.
+  """
+  caps = scan.capabilities
+  facts = {"backend": scan.backend, "architecture": scan.architecture, "subgroup_size": caps.wave_size,
+           "max_threads_per_threadgroup": caps.max_workgroup_threads, "max_threadgroup_memory_bytes": caps.lds_bytes,
+           "shuffle_supported": capability.supports_warp_shfl_xor, "fdot2_supported": capability.supports_fdot2}
+  return {key: value for key, value in facts.items() if value is not None}
+
+
+def _scanned_flash_facts(device: str | None) -> tuple[dict[str, Any], str]:
+  """The flash facts of the GPU tinygrad opens (``None`` = its default device), and where they came from."""
+  from tinygrad.device import Device
+  from tinygrad.llm.device_facts import scan_device_facts
+  from tinygrad.llm.flash_decode_attention import flash_decode_capability_from_renderer
+  scan = scan_device_facts(device)
+  if scan.target_probe.state == "error":
+    raise ProtocolError("hardware_absent", "the GPU could not be opened",
+                        details={"device": scan.selected_device, "error": scan.target_probe.error})
+  capability = flash_decode_capability_from_renderer(getattr(Device[scan.selected_device], "renderer", None))
+  return _flash_facts_from_scan(scan, capability), scan.target_probe.source
+
+
+def _flash_facts(value: Any) -> dict[str, Any]:
+  """The subgroup size is required, since every candidate binds to it; a present capability must be a bool.
+  Thread and shared-memory limits are checked by BoltBeam, which reports a missing one by name."""
+  if not isinstance(value, Mapping): raise ProtocolError("hardware_absent", "the GPU reported no facts")
+  facts = dict(value)
+  subgroup = facts.get("subgroup_size")
+  if isinstance(subgroup, bool) or not isinstance(subgroup, int) or subgroup <= 0:
+    raise ProtocolError("hardware_absent", "the GPU did not report a positive subgroup size", details={"facts": sorted(facts)})
+  for key in ("shuffle_supported", "fdot2_supported"):
+    if key in facts and not isinstance(facts[key], bool):
+      raise ProtocolError("admission_rejected", f"target_facts.{key} must be a bool")
+  return facts
+
+
+def _flash_candidate(payload: Mapping[str, Any]) -> tuple[Any, dict[str, Any], Any]:
+  """Read payload.candidate with BoltBeam's schema; its hash must equal every hash the request claims."""
+  schema = _flash_schema()
+  candidate = payload.get("candidate")
+  if not isinstance(candidate, Mapping):
+    raise ProtocolError("admission_rejected", "payload.candidate must be an object")
+  if candidate.get("schema_version") != schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION:
+    raise ProtocolError("admission_rejected", f"candidate must use {schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION}")
+  try:
+    flash = schema.FlashDecodeCandidate.from_dict({key: value for key, value in candidate.items() if key != "candidate_hash"})
+  except ValueError as exc:
+    raise ProtocolError("admission_rejected", f"flash candidate is invalid: {exc}") from exc
+  # BoltBeam sends the hash beside the document; an envelope may also carry it inside. Both must match.
+  for claimed in (payload.get("candidate_hash"), candidate.get("candidate_hash", flash.candidate_hash)):
+    if claimed != flash.candidate_hash:
+      raise ProtocolError("identity_mismatch", "candidate_hash does not match the canonical flash candidate document")
+  return schema, flash.descriptor, flash
+
+
+def _canned_flash_compile(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
   """Deterministic fake compile result bound to the canonical descriptor; never touches a GPU.
 
   ``descriptor`` is the BoltBeam candidate's canonical ``{"tile", "combine"}``;
@@ -680,7 +742,7 @@ def _canned_cuda_compile(payload: Mapping[str, Any], descriptor: Mapping[str, An
           "candidate_plan_hash": payload["candidate_hash"]}
 
 
-def _canned_cuda_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+def _canned_flash_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
   del payload
   tile = descriptor["tile"]
   return {"correct": True, "oracle": "canned flash reference (deterministic fake backend, no GPU)",
@@ -689,7 +751,7 @@ def _canned_cuda_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]
           "tolerance": {"atol": 1e-3, "rtol": 1e-3}}
 
 
-def _canned_cuda_measure(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
+def _canned_flash_measure(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
   """Deterministic fake timing keyed by the candidate hash; repeatable across runs and processes."""
   samples, warmups = payload.get("samples", 3), payload.get("warmups", 1)
   if not isinstance(samples, int) or not isinstance(warmups, int) or not (1 <= samples <= 20 and 0 <= warmups <= 10):
@@ -710,80 +772,53 @@ def _canned_cuda_measure(payload: Mapping[str, Any], descriptor: Mapping[str, An
 
 
 @dataclass(frozen=True)
-class CudaAdapter:
-  """Generic facts-driven NV/CUDA adapter for BoltBeam flash decode candidates and DS4 primitive plans.
+class FlashAdapter:
+  """One flash decode adapter for whatever GPU tinygrad opens: Metal, NV, CUDA, or a later backend.
 
-  describe() and admit() are pure facts validation: nothing is autodetected and
-  no GPU is touched. Flash candidates are BoltBeam documents
-  (boltbeam.flash_decode_candidate.v1: descriptor/target/provenance); BoltBeam's
-  schema, reached through the checkout loader, owns their identity and legality
-  rules, and BoltBeam promotion policy is never imported.
-  compile/check/measure fail closed unless ``live_backend`` is claimed, and
-  their canned default implementations return deterministic results so the
-  success path can be exercised by CPU-only unit tests.  Real compiler/runtime
-  wiring replaces the ``*_fn`` hooks; each hook receives (payload, descriptor),
-  where a flash descriptor is the candidate's canonical ``{"tile", "combine"}``.
+  Its facts are derived from the GPU (``facts_fn``, by default the fork's one device scan) and read once per
+  worker; the caller never supplies them and no table types them in. Candidates are BoltBeam documents
+  (boltbeam.flash_decode_candidate.v1: descriptor/target/provenance); BoltBeam's schema, reached through the
+  checkout loader, owns their identity and legality rules, and a candidate built for another GPU is refused.
+  BoltBeam promotion policy is never imported. compile/check/measure fail closed unless ``live_backend`` is
+  claimed; their canned defaults are deterministic so CPU-only tests exercise the success path, and real
+  compiler/runtime wiring replaces the ``*_fn`` hooks, each called with (payload, descriptor), where the
+  descriptor is the candidate's canonical ``{"tile", "combine"}``.
   """
+  device: str | None = None
+  facts_fn: Callable[[str | None], tuple[Mapping[str, Any], str]] = _scanned_flash_facts
   live_backend: bool = False
   compile_fn: Callable[..., Mapping[str, Any]] | None = None
   check_fn: Callable[..., Mapping[str, Any]] | None = None
   measure_fn: Callable[..., Mapping[str, Any]] | None = None
+  _read: dict[str, Any] = field(default_factory=dict, init=False, repr=False, compare=False)
 
-  def _flash_candidate(self, payload: Mapping[str, Any]) -> tuple[Any, dict[str, Any], Any]:
-    """Read payload.candidate with BoltBeam's schema; its hash must equal every hash the request claims."""
-    schema = _flash_schema()
-    candidate = payload.get("candidate")
-    if not isinstance(candidate, Mapping):
-      raise ProtocolError("admission_rejected", "payload.candidate must be an object")
-    if candidate.get("schema_version") != schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION:
-      raise ProtocolError("admission_rejected", f"candidate must use {schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION}")
-    try:
-      flash = schema.FlashDecodeCandidate.from_dict({key: value for key, value in candidate.items() if key != "candidate_hash"})
-    except ValueError as exc:
-      raise ProtocolError("admission_rejected", f"flash candidate is invalid: {exc}") from exc
-    # BoltBeam sends the hash beside the document; an envelope may also carry it inside. Both must match.
-    for claimed in (payload.get("candidate_hash"), candidate.get("candidate_hash", flash.candidate_hash)):
-      if claimed != flash.candidate_hash:
-        raise ProtocolError("identity_mismatch", "candidate_hash does not match the canonical flash candidate document")
-    return schema, flash.descriptor, flash
-
-  def _cuda_candidate(self, payload: Mapping[str, Any]) -> tuple[str, Any, Any, Any]:
-    candidate = payload.get("candidate")
-    if isinstance(candidate, Mapping) and candidate.get("schema_version") == "boltbeam.full_kernel_candidate.v3":
-      schema = _primitive_plan_schema()
-      try: descriptor = schema.validate(candidate, payload.get("candidate_hash"))
-      except schema.PlanError as exc: raise ProtocolError("admission_rejected", f"primitive plan is invalid: {exc}") from exc
-      return "primitive", schema, descriptor, dict(candidate)
-    schema, descriptor, candidate = self._flash_candidate(payload)
-    return "flash", schema, descriptor, candidate
+  def facts(self) -> tuple[dict[str, Any], str]:
+    if not self._read:
+      facts, source = self.facts_fn(self.device)
+      self._read.update(facts=_flash_facts(facts), source=source)
+    return dict(self._read["facts"]), self._read["source"]
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    facts = _nv_facts(payload)
-    return {"provider_revision": _revision(), "target": facts, "backend_live": self.live_backend,
+    del payload
+    facts, source = self.facts()
+    return {"provider_revision": _revision(), "target": facts, "facts_source": source, "backend_live": self.live_backend,
             "supported_plan_kinds": ["tinygrad_primitive_graph.v1"], "compiler_transforms": [],
             "limitations": ["flash geometry legality is fact-driven; this adapter owns no compiler Opt transforms",
                             "no model execution or route promotion"]}
 
   def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _pinned_identity(payload)
-    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
-    facts = _nv_facts(payload)
-    if kind == "primitive":
-      threads = descriptor.workgroup[0] * descriptor.workgroup[1] * descriptor.workgroup[2]
-      if threads > facts["max_threads_per_threadgroup"]:
-        raise ProtocolError("resource_limit", "primitive workgroup threads exceed target limit",
-                            details={"threads":threads, "limit":facts["max_threads_per_threadgroup"]})
-      shared = candidate["static_constraints"].get("max_workgroup_memory_bytes") or 0
-      if shared > facts["max_threadgroup_memory_bytes"]:
-        raise ProtocolError("resource_limit", "primitive shared-memory footprint exceeds target capacity",
-                            details={"shared_bytes":shared, "limit":facts["max_threadgroup_memory_bytes"]})
-      return {"admitted":True, "target":facts, "candidate_hash":schema.candidate_hash(candidate),
-              "plan_hash":schema.candidate_hash(candidate), "primitive_geometry":{"dispatch":list(descriptor.dispatch),
-              "workgroup":list(descriptor.workgroup), **dict(descriptor.parameters)}}
-    # BoltBeam's legality reads the subgroup size from the candidate's own target, so that target must be this one.
-    if candidate.target["subgroup_size"] != facts["subgroup_size"]:
-      raise ProtocolError("identity_mismatch", "candidate target subgroup_size does not match the supplied target facts",
-                          details={"candidate": candidate.target["subgroup_size"], "target": facts["subgroup_size"]})
+    schema, _descriptor, candidate = _flash_candidate(payload)
+    facts, _source = self.facts()
+    # A candidate is built from what this GPU reported, so its target block must repeat those facts.
+    for name, fact in (("backend", "backend"), ("arch", "architecture"), ("subgroup_size", "subgroup_size")):
+      if fact in facts and candidate.target[name] != facts[fact]:
+        raise ProtocolError("identity_mismatch", f"candidate target {name} does not match this GPU",
+                            details={"field": name, "candidate": candidate.target[name], "target": facts[fact]})
+    lacking = [key for key in ("shuffle_supported", "fdot2_supported") if facts.get(key) is not True]
+    if lacking:
+      raise ProtocolError("unsupported_plan", "this GPU's compiler cannot lower the flash kernels' shuffle and fdot2",
+                          details={"missing": lacking})
     try:
       violations = schema.flash_legality_violations(candidate, facts)
       launches = candidate.launch_local_memory_bytes(_flash_reserved_bytes(facts))
@@ -800,44 +835,132 @@ class CudaAdapter:
                                "local_memory_bytes": max(launches.values()), "launch_local_memory_bytes": launches,
                                "reduce_structure": tile.reduce_structure}}
 
+  def _live(self, action: str) -> None:
+    if not self.live_backend:
+      raise ProtocolError("backend_unavailable", f"no live flash backend is claimed; {action} fails closed",
+                          details={"action": action})
+
+  def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    self._live("compile")
+    admitted = self.admit(payload)
+    _schema, descriptor, _candidate = _flash_candidate(payload)
+    return {**admitted, **dict((self.compile_fn or _canned_flash_compile)(payload, descriptor))}
+
+  def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    self._live("check")
+    self.admit(payload)
+    _schema, descriptor, _candidate = _flash_candidate(payload)
+    return dict((self.check_fn or _canned_flash_check)(payload, descriptor))
+
+  def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    self._live("measure")
+    compiled = self.compile(payload)
+    _schema, descriptor, _candidate = _flash_candidate(payload)
+    return {**compiled, **dict((self.measure_fn or _canned_flash_measure)(payload, descriptor))}
+
+
+@dataclass(frozen=True)
+class CudaAdapter:
+  """Facts-driven CUDA adapter for DS4 primitive plans (boltbeam.full_kernel_candidate.v3).
+
+  describe() and admit() validate caller-supplied facts; nothing is autodetected and no GPU is touched.
+  compile/check/measure fail closed unless ``live_backend`` is claimed; without hooks they return
+  deterministic canned results, and ``--live-generated`` wires the generated DS4 compile/check/measure.
+  Flash candidates are not served here: the flash adapter serves them on any GPU.
+  """
+  live_backend: bool = False
+  compile_fn: Callable[..., Mapping[str, Any]] | None = None
+  check_fn: Callable[..., Mapping[str, Any]] | None = None
+  measure_fn: Callable[..., Mapping[str, Any]] | None = None
+
+  def _primitive_candidate(self, payload: Mapping[str, Any]) -> tuple[Any, Any, dict[str, Any]]:
+    candidate = payload.get("candidate")
+    if not isinstance(candidate, Mapping) or candidate.get("schema_version") != "boltbeam.full_kernel_candidate.v3":
+      raise ProtocolError("admission_rejected", "the CUDA adapter admits boltbeam.full_kernel_candidate.v3 primitive plans")
+    schema = _primitive_plan_schema()
+    try: descriptor = schema.validate(candidate, payload.get("candidate_hash"))
+    except schema.PlanError as exc: raise ProtocolError("admission_rejected", f"primitive plan is invalid: {exc}") from exc
+    return schema, descriptor, dict(candidate)
+
+  def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    facts = _nv_facts(payload)
+    return {"provider_revision": _revision(), "target": facts, "backend_live": self.live_backend,
+            "supported_plan_kinds": ["tinygrad_primitive_graph.v1"], "compiler_transforms": [],
+            "limitations": ["DS4 primitive plans only; flash candidates are served by the flash adapter",
+                            "no model execution or route promotion"]}
+
+  def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    _pinned_identity(payload)
+    schema, descriptor, candidate = self._primitive_candidate(payload)
+    facts = _nv_facts(payload)
+    threads = descriptor.workgroup[0] * descriptor.workgroup[1] * descriptor.workgroup[2]
+    if threads > facts["max_threads_per_threadgroup"]:
+      raise ProtocolError("resource_limit", "primitive workgroup threads exceed target limit",
+                          details={"threads":threads, "limit":facts["max_threads_per_threadgroup"]})
+    shared = candidate["static_constraints"].get("max_workgroup_memory_bytes") or 0
+    if shared > facts["max_threadgroup_memory_bytes"]:
+      raise ProtocolError("resource_limit", "primitive shared-memory footprint exceeds target capacity",
+                          details={"shared_bytes":shared, "limit":facts["max_threadgroup_memory_bytes"]})
+    return {"admitted":True, "target":facts, "candidate_hash":schema.candidate_hash(candidate),
+            "plan_hash":schema.candidate_hash(candidate), "primitive_geometry":{"dispatch":list(descriptor.dispatch),
+            "workgroup":list(descriptor.workgroup), **dict(descriptor.parameters)}}
+
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; compile fails closed",
                           details={"action": "compile"})
-    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
+    schema, descriptor, candidate = self._primitive_candidate(payload)
     admitted = self.admit(payload)
-    if kind == "primitive" and self.compile_fn is None:
+    if self.compile_fn is None:
       canonical = schema.canonical_json(candidate)
       return {**admitted, "compiler":"canned_fake_backend", "source_sha256":_sha256("tinygrad-plan:"+canonical),
               "binary_sha256":_sha256("tinygrad-binary:"+canonical), "candidate_plan_hash":schema.candidate_hash(candidate)}
-    fn = self.compile_fn if self.compile_fn is not None else _canned_cuda_compile
-    return {**admitted, **dict(fn(payload, descriptor))}
+    return {**admitted, **dict(self.compile_fn(payload, descriptor))}
 
   def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; check fails closed",
                           details={"action": "check"})
-    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
+    schema, descriptor, candidate = self._primitive_candidate(payload)
     self.admit(payload)
-    if kind == "primitive" and self.check_fn is None:
+    if self.check_fn is None:
       return {"correct":True, "oracle":"canned_fake_backend_no_gpu", "candidate_plan_hash":schema.candidate_hash(candidate)}
-    fn = self.check_fn if self.check_fn is not None else _canned_cuda_check
-    return dict(fn(payload, descriptor))
+    return dict(self.check_fn(payload, descriptor))
 
   def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     if not self.live_backend:
       raise ProtocolError("backend_unavailable", "no live NV/CUDA backend is available; measure fails closed",
                           details={"action": "measure"})
-    kind, schema, descriptor, candidate = self._cuda_candidate(payload)
+    schema, descriptor, candidate = self._primitive_candidate(payload)
     compiled = self.compile(payload)
-    if kind == "primitive" and self.measure_fn is None:
+    if self.measure_fn is None:
       base = 1000 + int(schema.candidate_hash(candidate)[:6], 16) % 1000
       return {**compiled, "timing_mode":"canned_fake_backend_deterministic_no_gpu", "samples_ns":[base,base+17,base+31],
               "summary_ns":{"min":base,"mean":base+16,"max":base+31,"range":31},
               "work_bytes":{"status":"estimated","provenance":"DS4 logical payload bytes; physical traffic unobserved",
                             "bytes":candidate["memory_budget"]["bytes"]}}
-    fn = self.measure_fn if self.measure_fn is not None else _canned_cuda_measure
-    return {**compiled, **dict(fn(payload, descriptor))}
+    return {**compiled, **dict(self.measure_fn(payload, descriptor))}
+
+
+@dataclass(frozen=True)
+class DeviceRouter:
+  """The worker for one opened GPU: flash candidates go to the flash adapter, every other request to the
+  backend's own adapter. The candidate's schema chooses, never a backend name, so flash is served on any GPU.
+  A describe may name only the schema, ``{"candidate": {"schema_version": ...}}``: that asks for the facts the
+  family is admitted against, which is how a caller learns the GPU before it builds any candidate."""
+  flash: ProviderAdapter
+  native: ProviderAdapter
+
+  def _adapter(self, payload: Mapping[str, Any]) -> ProviderAdapter:
+    candidate = payload.get("candidate")
+    is_flash = isinstance(candidate, Mapping) and str(candidate.get("schema_version", "")).startswith(_FLASH_SCHEMA_PREFIX)
+    return self.flash if is_flash else self.native
+
+  def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).describe(payload)
+  def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).admit(payload)
+  def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).compile(payload)
+  def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).check(payload)
+  def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).measure(payload)
 
 
 def _response(*, request_id: str | None, action: str | None, status: str,
@@ -881,15 +1004,26 @@ def serve(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout, 
   return 0
 
 
+def _native_adapter(backend: str, live_generated: bool) -> ProviderAdapter:
+  """The adapter for the backend's own candidate kinds; flash candidates never reach it."""
+  if backend == "METAL": return MetalAdapter()
+  if backend == "CUDA" and live_generated:
+    generated = _primitive_plan_schema()
+    return CudaAdapter(live_backend=True, compile_fn=generated.compile_ds4, check_fn=generated.check_ds4, measure_fn=generated.measure_ds4)
+  if backend == "CUDA": return CudaAdapter()
+  return UnsupportedAdapter(f"no adapter is registered for {backend} candidates other than flash")
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(description="tinygrad target-neutral search provider")
-  parser.add_argument("--backend", choices=("METAL", "CUDA"), help="registered provider backend; omitted is fail-closed")
+  parser.add_argument("--backend", help="tinygrad device to serve, e.g. METAL, NV, CUDA; omitted = the GPU tinygrad opens by default")
   parser.add_argument("--live-generated", action="store_true", help="enable live tinygrad primitive-plan compile/check/measure")
   args = parser.parse_args()
-  if args.backend == "CUDA" and args.live_generated:
-    generated = _primitive_plan_schema()
-    adapter = CudaAdapter(live_backend=True, compile_fn=generated.compile_ds4, check_fn=generated.check_ds4, measure_fn=generated.measure_ds4)
-  else: adapter = MetalAdapter() if args.backend == "METAL" else CudaAdapter() if args.backend == "CUDA" else UnsupportedAdapter()
-  return serve(adapter=adapter)
+  device = args.backend
+  if device is None:
+    from tinygrad.device import Device
+    device = Device.DEFAULT
+  native = _native_adapter(device.split(":", 1)[0].upper(), args.live_generated)
+  return serve(adapter=DeviceRouter(flash=FlashAdapter(device), native=native))
 
 if __name__ == "__main__": raise SystemExit(main())

@@ -115,6 +115,24 @@ def test_metal_wave_size_flows_through_the_probe(monkeypatch):
   assert facts["backend"] == "METAL" and facts["wave_size"] == 32
 
 
+def test_the_thread_limit_comes_from_the_device_when_the_renderer_does_not_publish_it(monkeypatch):
+  """Metal's renderer publishes no workgroup thread limit; the opened device reports it, and the probe records
+  where it came from. A device that reports nothing stays unknown, never a defaulted number."""
+  sysdevice = SimpleNamespace(maxThreadsPerThreadgroup=lambda: SimpleNamespace(width=1024))
+  devices = {"METAL": SimpleNamespace(renderer=_metal(), is_aql=None, sysdevice=sysdevice),
+             "CPU": SimpleNamespace(renderer=_cpu(), is_aql=None)}
+
+  class FakeDevices:
+    def __getitem__(self, device): return devices[device]
+
+  import tinygrad.device
+  monkeypatch.setattr(tinygrad.device, "Device", FakeDevices())
+  metal = _tinygrad_target_probe("METAL")
+  assert metal["max_workgroup_threads"] == 1024 and metal["provenance"] == "tinygrad-device + Metal device"
+  cpu = _tinygrad_target_probe("CPU")
+  assert cpu["max_workgroup_threads"] is None and cpu["provenance"] == "tinygrad-device"
+
+
 # ---- Fact 3: max_indirect_buffer_offset, reusing METAL_ICB_OFFSET_MAX, not restating the literal -----------
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Metal runtime constant is only importable on macOS")
