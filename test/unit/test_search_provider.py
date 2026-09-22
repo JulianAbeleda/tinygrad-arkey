@@ -190,12 +190,20 @@ def test_prepared_cache_builds_once_and_reuses_same_object(monkeypatch):
 
 
 # CUDA/NV flash adapter ------------------------------------------------------
-def _flash_descriptor(**tile_kwargs):
-  from extra.llm_research import flash_candidate_schema as schema
-  defaults = {"Hq": 8, "Hd": 128, "Hkv": 8, "MAXC": 4096, "split_count": 1}
-  defaults.update(tile_kwargs)
-  # Build without validating so invalid-geometry fixtures reach the adapter.
-  return {"schema_version": schema.SCHEMA_VERSION, "tile": schema.tile_fields(**defaults), "combine": None}
+_FLASH_TARGET = {"target_id": "nvidia_sm120", "backend": "CUDA", "arch": "sm_120", "subgroup_size": 32,
+                 "resolved_target_hash": "b" * 64}
+
+
+def _flash_document(target=None, **tile_kwargs):
+  """A BoltBeam flash decode candidate document (descriptor/target/provenance), built without validating
+  so invalid-geometry fixtures reach the adapter."""
+  schema = provider._flash_schema()
+  tile = {"Hq": 8, "Hd": 128, "Hkv": 8, "MAXC": 4096, "split_count": 1}
+  tile.update(tile_kwargs)
+  return {"schema_version": schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION, "descriptor": {"tile": tile, "combine": None},
+          "target": dict(target or _FLASH_TARGET),
+          "provenance": {"generator_id": "test", "generator_revision": "test",
+                         "schema_revision": schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION}}
 
 
 def _nv_facts(**overrides):
@@ -205,11 +213,13 @@ def _nv_facts(**overrides):
   return facts
 
 
-def _flash_payload(descriptor=None, facts=None, **tile_kwargs):
-  from extra.llm_research import flash_candidate_schema as schema
-  descriptor = descriptor if descriptor is not None else _flash_descriptor(**tile_kwargs)
-  envelope = schema.candidate_envelope(descriptor)
-  return {"candidate": envelope, "candidate_hash": envelope["candidate_hash"],
+def _flash_payload(document=None, facts=None, **tile_kwargs):
+  """The request BoltBeam sends: the canonical document with its hash beside it, plus the caller's target facts."""
+  schema = provider._flash_schema()
+  document = document if document is not None else _flash_document(**tile_kwargs)
+  try: candidate_hash = schema.FlashDecodeCandidate.from_dict(document).candidate_hash
+  except ValueError: candidate_hash = "0" * 64  # an invalid geometry has no identity; admit must reject it first
+  return {"candidate": document, "candidate_hash": candidate_hash,
           "target_facts": facts if facts is not None else _nv_facts()}
 
 
@@ -281,6 +291,7 @@ def test_cuda_admit_validates_geometry_against_supplied_facts():
   geometry = out["result"]["flash_geometry"]
   assert geometry["lane_width"] == 32 and geometry["threads"] == 32
   assert geometry["local_memory_bytes"] == 2 * 16 * 128 * 2
+  assert geometry["launch_local_memory_bytes"] == {"tile": 2 * 16 * 128 * 2}
   assert len(out["result"]["candidate_hash"]) == 64
   assert out["result"]["plan_hash"] == out["result"]["candidate_hash"]
 
@@ -293,6 +304,8 @@ def test_cuda_admit_rejects_over_threads_over_local_memory_and_cross_subgroup_la
   assert over_local["error"]["code"] == "resource_limit"
   cross_subgroup = provider.process(request("admit", _flash_payload(lane_width=64)), adapter=adapter)
   assert cross_subgroup["error"]["code"] == "resource_limit"
+  assert [out["error"]["details"]["violations"] for out in (over_threads, over_local, cross_subgroup)] == \
+    [["over_threads"], ["over_local_memory"], ["lane_width_not_in_subgroup"]]
 
 
 def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes():
@@ -306,6 +319,33 @@ def test_cuda_admit_rejects_bad_geometry_and_hash_mismatch_with_classified_codes
   wrong_schema = provider.process(request("admit", {"candidate": {"schema_version": "other.v1"},
                                                     "candidate_hash": "f" * 64, "target_facts": _nv_facts()}), adapter=adapter)
   assert wrong_schema["error"]["code"] == "admission_rejected"
+  # The retired fork schema (flat tile/combine, flash_decode_candidate.v1) is no longer read.
+  retired = {"schema_version": "flash_decode_candidate.v1", "tile": _flash_document()["descriptor"]["tile"], "combine": None}
+  old_shape = provider.process(request("admit", {"candidate": retired, "candidate_hash": "f" * 64, "target_facts": _nv_facts()}),
+                               adapter=adapter)
+  assert old_shape["error"]["code"] == "admission_rejected"
+  inner = _flash_payload()
+  inner["candidate"] = {**inner["candidate"], "candidate_hash": "e" * 64}
+  assert provider.process(request("admit", inner), adapter=adapter)["error"]["code"] == "identity_mismatch"
+
+
+def test_cuda_admit_rejects_a_candidate_built_for_another_subgroup_size():
+  # BoltBeam's legality reads the subgroup size from the candidate's target, so admit binds that target to the facts.
+  payload = _flash_payload(document=_flash_document(target={**_FLASH_TARGET, "subgroup_size": 64}))
+  out = provider.process(request("admit", payload), adapter=provider.CudaAdapter())
+  assert out["error"]["code"] == "identity_mismatch"
+  assert out["error"]["details"] == {"candidate": 64, "target": 32}
+
+
+def test_cuda_admits_the_payload_boltbeam_sends_for_a_boltbeam_built_candidate():
+  from boltbeam.search.tinygrad_flash_provider import FlashDecodeSearchProviderWorker
+  schema = provider._flash_schema()
+  candidate = schema.FlashDecodeCandidate(_flash_document())
+  # BoltBeam's own request builder; the caller adds the target facts this adapter never autodetects.
+  payload = {**FlashDecodeSearchProviderWorker(command=("unused",))._base_payload(candidate), "target_facts": _nv_facts()}
+  out = provider.process(request("admit", payload), adapter=provider.CudaAdapter())
+  assert out["status"] == "ok" and out["result"]["admitted"] is True
+  assert out["result"]["candidate_hash"] == candidate.candidate_hash
 
 
 @pytest.mark.parametrize("action", ["compile", "check", "measure"])

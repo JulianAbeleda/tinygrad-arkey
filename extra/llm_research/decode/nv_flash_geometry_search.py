@@ -28,8 +28,8 @@ from tinygrad.uop.ops import UOp
 from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
                                          execute_research_program)
-from extra.llm_research.flash_candidate_schema import candidate_hash, tile_fields, to_spec_dict
 from extra.llm_research.bubblebeam_futuresight import build_flash_legality, build_flash_static_priority
+from extra.llm_research.decode.nv_flash_geometry_population import SM120_IDENTITY, SM120_TARGET_ID, candidate_target, flash_candidate
 
 SCHEMA = "tinygrad.nv_flash_geometry_search.v1"
 Hq, Hkv, Hd, MAXC, Tc = 32, 8, 128, 4608, 513
@@ -77,8 +77,10 @@ def _combine_program(spec, name: str) -> KernelProgram:
 
 
 def build_population(target_facts: dict | None = None, shape: dict | None = None) -> dict:
+  """Rows carry BoltBeam flash candidates; ``row["tile"]`` is the descriptor tile the emitter mapping reads."""
   target_facts = dict(target_facts or SM120_FACTS)
   shape = dict(shape or {"Hq": Hq, "Hkv": Hkv, "Hd": Hd, "MAXC": MAXC, "Tc": Tc})
+  target = candidate_target(SM120_TARGET_ID, {**SM120_IDENTITY, **target_facts})
   legality = build_flash_legality({}, target_facts)
   priority = build_flash_static_priority(target_facts)
   rows = []
@@ -88,18 +90,18 @@ def build_population(target_facts: dict | None = None, shape: dict | None = None
         for stage_width in (1, 2, 4, 8):
           for reduce_structure in ("staged", "inline"):
             for dot_pair_width in (2, 4):
-              tile = tile_fields(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC=MAXC, split_count=split_count,
-                                 staging="KV_BOTH", quant=False, rope=False, token_block=token_block,
-                                 lane_width=lane_width, score_group_width=None, warps=None,
-                                 query_group_size=None, stage_width=stage_width,
-                                 reduce_structure=reduce_structure, dot_pair_width=dot_pair_width)
-              descriptor = to_spec_dict(tile=tile)
-              envelope = {"schema_version": "flash_decode_candidate.v1", "tile": tile, "combine": None,
-                          "candidate_hash": candidate_hash(descriptor)}
+              candidate = flash_candidate(
+                {"Hq": Hq, "Hd": Hd, "Hkv": Hkv, "MAXC": MAXC, "split_count": split_count, "staging": "KV_BOTH",
+                 "quant": False, "rope": False, "token_block": token_block, "lane_width": lane_width,
+                 "score_group_width": None, "warps": None, "query_group_size": None, "stage_width": stage_width,
+                 "reduce_structure": reduce_structure, "dot_pair_width": dot_pair_width},
+                target, "tinygrad-arkey." + SCHEMA, SCHEMA)
+              envelope = candidate.envelope()
               reason = legality(envelope)
               score, why = priority(envelope)
-              row = {"candidate_hash": candidate_hash(descriptor), "tile": tile,
-                     "legality": reason, "priority_score": score, "priority_reason": why}
+              row = {"candidate_hash": candidate.candidate_hash, "tile": candidate.descriptor["tile"],
+                     "candidate": candidate.to_dict(), "legality": reason, "priority_score": score,
+                     "priority_reason": why}
               if reason is None:
                 try:
                   spec = _spec(split_count, token_block=token_block, lane_width=lane_width,
@@ -115,7 +117,7 @@ def build_population(target_facts: dict | None = None, shape: dict | None = None
   rows.sort(key=lambda r: (-r["priority_score"], r["candidate_hash"]))
   for i, row in enumerate(rows):
     row["deterministic_order"] = i
-  return {"schema": SCHEMA + ".population", "target_facts": target_facts, "shape": shape,
+  return {"schema": SCHEMA + ".population", "target_facts": target_facts, "candidate_target": target, "shape": shape,
           "control_tile_name": CONTROL_NAME, "candidates": rows}
 
 

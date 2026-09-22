@@ -5,6 +5,15 @@ Repo: `/home/ubuntu/tinygrad-arkey`
 HEAD: `d14e6964ee211f286b867616abe1daa9a137db5b`
 Status: **read-only audit. No code or GPU work.**
 
+> **Note (2026-09-22): retired fork schema.** The `candidate_hash` values in this
+> search's evidence, `docs/task_workflow/evidence/nv-flash-geometry-search-20260819.json`
+> (23 hashes), are identities in the retired fork schema `flash_decode_candidate.v1`
+> (`extra/llm_research/flash_candidate_schema.py`, now deleted). They are kept
+> unchanged as a record. Flash candidates now use BoltBeam's one schema,
+> `boltbeam.flash_decode_candidate.v1` (descriptor/target/provenance), so new
+> hashes do not match these. The file and line references below describe the
+> code at the HEAD named above.
+
 This audit maps the current BubbleBeam/search substrate to the NV flash decode
 gaps named in `nv-fuse-hide-eliminate-ledger-20260818.md` rows L3 and E1. It is
 limited to the four search modules, the flash emitter, and the ledger/search

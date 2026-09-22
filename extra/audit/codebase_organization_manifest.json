@@ -679,6 +679,41 @@
       ]
     },
     {
+      "allowed_dependency_domains": [],
+      "authority_keys": [
+        "boltbeam_checkout.require_boltbeam"
+      ],
+      "classification_confidence": "high",
+      "default_path": false,
+      "deletion_confidence": "retain_active",
+      "disposition": "keep",
+      "domain": "tooling",
+      "duplication_group": null,
+      "evidence": [
+        "research only: imported by extra/llm_research/bubblebeam_futuresight.py, decode/nv_flash_geometry_population.py and, lazily for flash requests, search_provider.py (the worker BoltBeam launches with only the tinygrad root on PYTHONPATH); no tinygrad/ file imports it (test/unit/test_bubblebeam_futuresight.py::test_production_tinygrad_never_imports_the_shim_or_the_loader)",
+        "lookup order BOLTBEAM_ROOT, then an importable boltbeam, then <repository parent>/BoltBeam; the sibling path is the same root extra/llm_research/boltbeam_authority.py uses for BOLTBEAM_SOURCE_LEDGER",
+        "test_missing_boltbeam_names_every_place_tried and test_a_wrong_boltbeam_root_fails_the_research_import_loudly pin the failure message"
+      ],
+      "path": "extra/llm_research/boltbeam_checkout.py",
+      "promotion_target": null,
+      "public_surface": [
+        "SIBLING_ROOT",
+        "require_boltbeam"
+      ],
+      "purpose": "Locates the BoltBeam checkout that research code imports BoltBeam modules from (BOLTBEAM_ROOT, then an importable boltbeam, then the sibling checkout) and raises ImportError naming every place tried.",
+      "responsibilities": [
+        "resolve the BoltBeam checkout for research imports",
+        "fail loudly, naming every place tried, when BoltBeam is absent or lacks a module"
+      ],
+      "retention_criterion": "needed while any extra/llm_research module imports BoltBeam modules",
+      "reusable_assets": [],
+      "role": "integration",
+      "status": "active_research",
+      "surface": "off_default",
+      "test_role": "not_test_like",
+      "workflow_ids": []
+    },
+    {
       "allowed_dependency_domains": [
         "codegen_lowering",
         "quant_mmq",
@@ -689,18 +724,34 @@
       "classification_confidence": "high",
       "default_path": false,
       "deletion_confidence": "investigate_owner",
-      "disposition": "investigate",
+      "disposition": "keep",
       "domain": "search_promotion",
       "duplication_group": null,
       "evidence": [
-        "no grep hit for should_route_q4k_lane_partition or q4k_g3_manifest_shape outside this file and the route_ops.py lazy-attr adapter \u2014 the adapter itself has zero callers in the tree",
-        "tinygrad/llm/route_ops.py:45-46 re-exports via extra.llm_research._attr lazy import but nothing imports route_ops.should_route_q4k_lane_partition",
+        "policy names, including build_flash_legality and build_flash_static_priority, are BoltBeam objects re-exported from boltbeam/search/bubblebeam.py and boltbeam/search/futuresight.py through extra/llm_research/boltbeam_checkout.py; test/unit/test_bubblebeam_futuresight.py::test_policy_names_are_the_boltbeam_objects checks identity",
+        "no tinygrad/ file imports this module (static import graph and a runtime import of every tinygrad/llm module, 2026-09-22); test_production_tinygrad_never_imports_the_shim_or_the_loader enforces it",
+        "research importers: decode/nv_flash_geometry_population.py and decode/nv_flash_geometry_search.py (flash builders on BoltBeam flash candidates), semantic_campaign_export.py, semantic_population_assess.py, scratchpad/campaign_ffn_gate_up_precontract.py (policy); the fork flash schema extra/llm_research/flash_candidate_schema.py was deleted when its users moved to boltbeam/search/flash_decode_candidate.py",
+        "the Q4_K wrapper has no caller outside test/unit/test_bubblebeam_futuresight.py; the tinygrad/llm/route_ops.py lazy re-export was deleted in ab6092a39",
         "docs/moe-fast-design-scope-20260722.md:23,44 and docs/flash-prefill-wmma-mvp-scope-20260721.md:75,211,215 cite this file as the intended geometry-search tool for future/MVP-deferred work, not a shipped default",
         "imports extra.llm_research.route_manifest.ROUTES directly to read decode_q4k_g3_generated shape_guards, so it is a consumer of route_manifest, not an authority for it"
       ],
       "path": "extra/llm_research/bubblebeam_futuresight.py",
       "promotion_target": null,
       "public_surface": [
+        "propose_legal_dimensions",
+        "dimension_mapping",
+        "LegalDimensionProposal",
+        "ScheduleVocabulary",
+        "target_schedule_vocabulary",
+        "build_static_legality",
+        "build_static_priority",
+        "classify_candidates",
+        "apply_coupled_row",
+        "classify_coupled_rows",
+        "rank_static_candidates",
+        "candidate_report",
+        "build_flash_legality",
+        "build_flash_static_priority",
         "score_candidate",
         "rank_candidates",
         "q4k_lane_partition_candidates",
@@ -709,12 +760,13 @@
         "q4k_g3_manifest_shape",
         "should_route_q4k_lane_partition"
       ],
-      "purpose": "Ranks candidate GPU lane-index expressions by memory-coalescing quality (unit-stride scoring) for the Q4_K lane-partition layout, and exposes a manifest-gated selector deciding whether that layout applies to a given (N,K) shape.",
+      "purpose": "Fork-side names for BoltBeam's BubbleBeam/FutureSight policy, including the flash decode legality and priority builders: re-exports them from BoltBeam and keeps the historical Q4_K lane-map coalescing wrapper.",
       "responsibilities": [
-        "static coalescing scoring/ranking of candidate index expressions",
+        "re-export BoltBeam's BubbleBeam dimension proposals and FutureSight static legality/ordering (flash builders included) under the fork's names",
+        "static coalescing scoring/ranking of candidate index expressions (Q4_K wrapper)",
         "Q4_K route-manifest-shape-gated selector (should_route_q4k_lane_partition)"
       ],
-      "retention_criterion": "stops being needed once the MoE/expert-shape geometry search it's cited as backing (docs/moe-fast-design-scope-20260722.md) is actually implemented and its selector is wired into a real call site, or is formally dropped from those design docs",
+      "retention_criterion": "the BoltBeam re-exports stay while fork callers import these names; the Q4_K wrapper stays while test/unit/test_bubblebeam_futuresight.py covers it",
       "reusable_assets": [
         "route-spec"
       ],

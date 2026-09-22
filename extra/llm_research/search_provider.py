@@ -619,9 +619,24 @@ _NV_FACT_KEYS = ("subgroup_size", "max_threads_per_threadgroup", "max_threadgrou
 
 
 def _flash_schema():
-  """Lazy import keeps the standalone worker script free of the extra package at import time."""
-  from extra.llm_research import flash_candidate_schema as flash_schema
-  return flash_schema
+  """BoltBeam's one flash decode candidate schema, reached through the BoltBeam checkout loader.
+
+  Imported lazily, so the worker starts without BoltBeam and only flash requests
+  need it. A missing or stale checkout fails closed as backend_unavailable, with
+  the loader's message naming every place it tried.
+  """
+  from extra.llm_research.boltbeam_checkout import require_boltbeam
+  try: require_boltbeam("boltbeam.search.flash_decode_candidate", "boltbeam.search.target_fact_keys")
+  except ImportError as exc:
+    raise ProtocolError("backend_unavailable", str(exc), details={"missing": "boltbeam.search.flash_decode_candidate"}) from exc
+  from boltbeam.search import flash_decode_candidate
+  return flash_decode_candidate
+
+
+def _flash_reserved_bytes(facts: Mapping[str, Any]) -> int | None:
+  """The target's per-launch shared-memory reservation, read by BoltBeam's one reader of target facts."""
+  from boltbeam.search.target_fact_keys import read_target_limits
+  return read_target_limits(facts).reserved_local_memory
 
 def _primitive_plan_schema():
   from extra.llm_research import generated_kernel_plan
@@ -648,10 +663,13 @@ def _nv_facts(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _canned_cuda_compile(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
-  """Deterministic fake compile result bound to the canonical descriptor; never touches a GPU."""
-  schema = _flash_schema()
-  canonical = schema.canonical_json(descriptor)
-  threads = schema.derived_threads(descriptor["tile"])
+  """Deterministic fake compile result bound to the canonical descriptor; never touches a GPU.
+
+  ``descriptor`` is the BoltBeam candidate's canonical ``{"tile", "combine"}``;
+  the plan identity is the candidate hash admit already verified.
+  """
+  canonical = json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+  threads = _flash_schema().FlashDecodeTileSpec.from_dict(descriptor["tile"]).threads
   return {"compiler": "canned_fake_backend", "source_sha256": _sha256(canonical),
           "cubin_sha256": _sha256("canned:" + canonical),
           "launch": {"global_size": [descriptor["tile"]["Hq"] * descriptor["tile"]["split_count"]],
@@ -659,7 +677,7 @@ def _canned_cuda_compile(payload: Mapping[str, Any], descriptor: Mapping[str, An
           "pipeline": {"max_total_threads_per_threadgroup": threads},
           "representative_tile": {"token_block": descriptor["tile"]["token_block"],
                                   "lane_width": descriptor["tile"]["lane_width"]},
-          "candidate_plan_hash": _sha256(canonical)}
+          "candidate_plan_hash": payload["candidate_hash"]}
 
 
 def _canned_cuda_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
@@ -673,11 +691,10 @@ def _canned_cuda_check(payload: Mapping[str, Any], descriptor: Mapping[str, Any]
 
 def _canned_cuda_measure(payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
   """Deterministic fake timing keyed by the candidate hash; repeatable across runs and processes."""
-  schema = _flash_schema()
   samples, warmups = payload.get("samples", 3), payload.get("warmups", 1)
   if not isinstance(samples, int) or not isinstance(warmups, int) or not (1 <= samples <= 20 and 0 <= warmups <= 10):
     raise ProtocolError("admission_rejected", "samples must be 1..20 and warmups 0..10")
-  digest = schema.candidate_hash(descriptor)
+  digest = payload["candidate_hash"]
   base = 3000 + int(digest[:8], 16) % 500000
   samples_ns = [base + (i * 37) % 97 for i in range(samples)]
   tile = descriptor["tile"]
@@ -694,36 +711,43 @@ def _canned_cuda_measure(payload: Mapping[str, Any], descriptor: Mapping[str, An
 
 @dataclass(frozen=True)
 class CudaAdapter:
-  """Generic facts-driven NV/CUDA adapter for flash_decode_candidate.v1 payloads.
+  """Generic facts-driven NV/CUDA adapter for BoltBeam flash decode candidates and DS4 primitive plans.
 
-  describe() and admit() are pure facts validation: nothing is autodetected,
-  no GPU is touched, and BoltBeam types/promotion policy are never imported.
+  describe() and admit() are pure facts validation: nothing is autodetected and
+  no GPU is touched. Flash candidates are BoltBeam documents
+  (boltbeam.flash_decode_candidate.v1: descriptor/target/provenance); BoltBeam's
+  schema, reached through the checkout loader, owns their identity and legality
+  rules, and BoltBeam promotion policy is never imported.
   compile/check/measure fail closed unless ``live_backend`` is claimed, and
   their canned default implementations return deterministic results so the
   success path can be exercised by CPU-only unit tests.  Real compiler/runtime
-  wiring replaces the ``*_fn`` hooks; each hook receives (payload, descriptor).
+  wiring replaces the ``*_fn`` hooks; each hook receives (payload, descriptor),
+  where a flash descriptor is the candidate's canonical ``{"tile", "combine"}``.
   """
   live_backend: bool = False
   compile_fn: Callable[..., Mapping[str, Any]] | None = None
   check_fn: Callable[..., Mapping[str, Any]] | None = None
   measure_fn: Callable[..., Mapping[str, Any]] | None = None
 
-  def _flash_candidate(self, payload: Mapping[str, Any]) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+  def _flash_candidate(self, payload: Mapping[str, Any]) -> tuple[Any, dict[str, Any], Any]:
+    """Read payload.candidate with BoltBeam's schema; its hash must equal every hash the request claims."""
     schema = _flash_schema()
     candidate = payload.get("candidate")
     if not isinstance(candidate, Mapping):
       raise ProtocolError("admission_rejected", "payload.candidate must be an object")
-    if candidate.get("schema_version") != schema.SCHEMA_VERSION:
-      raise ProtocolError("admission_rejected", f"candidate must use {schema.SCHEMA_VERSION}")
+    if candidate.get("schema_version") != schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION:
+      raise ProtocolError("admission_rejected", f"candidate must use {schema.FLASH_DECODE_CANDIDATE_SCHEMA_VERSION}")
     try:
-      descriptor = schema.validate(candidate)
-    except schema.SchemaError as exc:
-      raise ProtocolError("admission_rejected", f"flash descriptor is invalid: {exc}") from exc
-    if payload.get("candidate_hash") != schema.candidate_hash(candidate):
-      raise ProtocolError("identity_mismatch", "candidate_hash does not match canonical flash descriptor bytes")
-    return schema, descriptor, candidate
+      flash = schema.FlashDecodeCandidate.from_dict({key: value for key, value in candidate.items() if key != "candidate_hash"})
+    except ValueError as exc:
+      raise ProtocolError("admission_rejected", f"flash candidate is invalid: {exc}") from exc
+    # BoltBeam sends the hash beside the document; an envelope may also carry it inside. Both must match.
+    for claimed in (payload.get("candidate_hash"), candidate.get("candidate_hash", flash.candidate_hash)):
+      if claimed != flash.candidate_hash:
+        raise ProtocolError("identity_mismatch", "candidate_hash does not match the canonical flash candidate document")
+    return schema, flash.descriptor, flash
 
-  def _cuda_candidate(self, payload: Mapping[str, Any]) -> tuple[str, Any, Any, dict[str, Any]]:
+  def _cuda_candidate(self, payload: Mapping[str, Any]) -> tuple[str, Any, Any, Any]:
     candidate = payload.get("candidate")
     if isinstance(candidate, Mapping) and candidate.get("schema_version") == "boltbeam.full_kernel_candidate.v3":
       schema = _primitive_plan_schema()
@@ -756,23 +780,25 @@ class CudaAdapter:
       return {"admitted":True, "target":facts, "candidate_hash":schema.candidate_hash(candidate),
               "plan_hash":schema.candidate_hash(candidate), "primitive_geometry":{"dispatch":list(descriptor.dispatch),
               "workgroup":list(descriptor.workgroup), **dict(descriptor.parameters)}}
-    tile = descriptor["tile"]
-    threads = schema.derived_threads(tile)
-    if threads > facts["max_threads_per_threadgroup"]:
-      raise ProtocolError("resource_limit", "flash workgroup threads exceed target limit",
-                          details={"threads": threads, "limit": facts["max_threads_per_threadgroup"]})
-    local = schema.local_memory_bytes(descriptor)
-    if local > facts["max_threadgroup_memory_bytes"]:
-      raise ProtocolError("resource_limit", "flash local-memory footprint exceeds target capacity",
-                          details={"local_bytes": local, "limit": facts["max_threadgroup_memory_bytes"]})
-    if schema.ladder_spans_lanes(tile) and facts["subgroup_size"] % tile["lane_width"]:
-      raise ProtocolError("resource_limit", "lane_width does not divide subgroup_size; a shuffle ladder would cross physical subgroups",
-                          details={"lane_width": tile["lane_width"], "subgroup_size": facts["subgroup_size"]})
-    return {"admitted": True, "target": facts, "candidate_hash": schema.candidate_hash(candidate),
-            "plan_hash": _sha256(schema.canonical_json(descriptor)),
-            "flash_geometry": {"lane_width": tile["lane_width"], "group_width": schema.derived_group_width(tile),
-                               "warps": schema.derived_warps(tile), "threads": threads,
-                               "local_memory_bytes": local, "reduce_structure": tile["reduce_structure"]}}
+    # BoltBeam's legality reads the subgroup size from the candidate's own target, so that target must be this one.
+    if candidate.target["subgroup_size"] != facts["subgroup_size"]:
+      raise ProtocolError("identity_mismatch", "candidate target subgroup_size does not match the supplied target facts",
+                          details={"candidate": candidate.target["subgroup_size"], "target": facts["subgroup_size"]})
+    try:
+      violations = schema.flash_legality_violations(candidate, facts)
+      launches = candidate.launch_local_memory_bytes(_flash_reserved_bytes(facts))
+    except ValueError as exc:
+      raise ProtocolError("admission_rejected", f"target_facts are invalid: {exc}") from exc
+    if violations:
+      raise ProtocolError("resource_limit", "; ".join(message for _code, message in violations),
+                          details={"violations": [code for code, _message in violations]})
+    tile = candidate.tile
+    return {"admitted": True, "target": facts, "candidate_hash": candidate.candidate_hash,
+            "plan_hash": candidate.candidate_hash,
+            "flash_geometry": {"lane_width": tile.lane_width, "group_width": tile.group_width,
+                               "warps": tile.resolved_warps, "threads": tile.threads,
+                               "local_memory_bytes": max(launches.values()), "launch_local_memory_bytes": launches,
+                               "reduce_structure": tile.reduce_structure}}
 
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     if not self.live_backend:
