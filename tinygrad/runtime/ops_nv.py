@@ -869,12 +869,27 @@ class NVDevice(HCQCompiled[NVSignal]):
 
   def hw_copy_queues(self): return super().hw_copy_queues() + ([("NVDEC:0", NVVideoQueue)] if hasattr(self, 'vid_gpfifo') else [])
 
+  # The driver call below writes back but does not evict. Measured on an RTX 5090 (96 MiB L2, 2026-09-22): after it,
+  # a 64 MiB working set still read at 2.03 TB/s, above the card's DRAM rate, so it was still in L2. A 256 MiB copy
+  # on the copy engine changed nothing either (it streams past L2), while a store kernel over 128 MiB brought the
+  # same read down to 1.62 TB/s, the DRAM rate. So the flush also runs a store kernel over this much, larger than
+  # any NVIDIA L2 (GB202 reports 100,663,296 bytes), and a cold-cache measurement is cold. Same shape as Metal's.
+  L2_SCRUB_BYTES = 256 << 20
+  invalidate_caches_mode = "driver_write_back_then_store_scrub_256MiB"
+  _SCRUB_SRC = 'extern "C" __global__ void cache_scrub(unsigned int* p, unsigned int v) { p[(unsigned long long)blockIdx.x * 1024ull + threadIdx.x] = v; }'
+
   def invalidate_caches(self):
     if self.is_nvd(): self.iface.rm_control(self.subdevice, nv_gpu.NV2080_CTRL_CMD_INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR, None)
     else:
       self.iface.rm_control(self.subdevice, nv_gpu.NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE, nv_gpu.NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS(
         flags=((nv_gpu.NV2080_CTRL_FB_FLUSH_GPU_CACHE_FLAGS_WRITE_BACK_YES << 2) | (nv_gpu.NV2080_CTRL_FB_FLUSH_GPU_CACHE_FLAGS_INVALIDATE_YES << 3) |
               (nv_gpu.NV2080_CTRL_FB_FLUSH_GPU_CACHE_FLAGS_FLUSH_MODE_FULL_CACHE << 4))))
+    if not hasattr(self, "_scrub"):
+      self._scrub = self.allocator._alloc(self.L2_SCRUB_BYTES, BufferSpec())
+      self._scrub_prg, self._scrub_pass = NVProgram(self, "cache_scrub", self.compiler.compile(self._SCRUB_SRC)), 0
+    self._scrub_pass += 1  # a fresh value each pass, so no pass is a repeat of the last
+    self._scrub_prg(self._scrub, global_size=(self.L2_SCRUB_BYTES // 4 // 1024, 1, 1), local_size=(1024, 1, 1),
+                    vals=(self._scrub_pass & 0xffffffff,), wait=True)
 
   def on_device_hang(self):
     # Prepare fault report.
