@@ -126,3 +126,21 @@ def test_bind_wraps_projections_shares_the_padded_buffer_and_falls_back(monkeypa
   calls = []
   wrapped.fallback = lambda x: calls.append(x.shape) or x
   assert wrapped(Tensor.ones(3, 4)).shape == (3, 4) and calls == [(3, 4)]   # no route for K=4: fallback
+
+
+def test_bind_projection_stays_out_of_the_state_dict_and_routes_hilo(monkeypatch):
+  from tinygrad import nn
+  from tinygrad.nn.state import get_state_dict
+  lin = nn.Linear(1024, 256, bias=False)
+  lin.weight = original = Tensor.empty(256, 1024, dtype=dtypes.bfloat16)
+  monkeypatch.setattr(dense, "_routes_for", lambda device: None)
+  assert dense.bind_projection(lin, "r") is None and dense.route_bound(lin, Tensor.ones(20, 1024)) is None
+  monkeypatch.setattr(dense, "_routes_for", lambda device: _fake_routes((64,)))
+  binding = dense.bind_projection(lin, "r")
+  assert binding.padded is original and lin.weight is original            # tile-aligned: shared, no copy
+  assert set(get_state_dict(lin)) == {"weight"}                             # the binding adds no state
+  seen = []
+  monkeypatch.setattr(dense, "route_dense_bf16", lambda x, w, role, n, *, min_rows=1: seen.append((x.shape, role, n, min_rows)) or
+                      Tensor.zeros(x.shape[0], n))
+  assert dense.route_bound(lin, Tensor.ones(1, 20, 1024), min_rows=17).shape == (1, 20, 256)
+  assert seen == [((40, 1024), "r", 256, 34)]                               # hi and lo rows stacked

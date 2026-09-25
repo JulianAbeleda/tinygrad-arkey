@@ -157,6 +157,34 @@ def route_dense_bf16_hilo(x: Tensor, weight: Tensor, role: str, n_out: int, *, m
   return None if out is None else (out[:rows] + out[rows:]).reshape(*x.shape[:-1], n_out)
 
 
+class CandidateBinding:
+  """A projection's route binding: role plus the tile-padded weight.  ``__slots__`` (no ``__dict__``) keeps it out of
+  get_state_dict, so binding never adds parameters or state-dict keys to the model."""
+  __slots__ = ("role", "padded")
+  def __init__(self, role: str, padded: Tensor): self.role, self.padded = role, padded
+
+
+def bind_projection(lin, role: str) -> CandidateBinding | None:
+  """Attach a route binding to a bias-free bf16 projection when its device has promoted routes.
+
+  A weight whose rows are not tile-aligned is padded once and ``lin.weight`` becomes the unpadded prefix view of
+  that buffer, so the plain path and the routed path share one allocation."""
+  weight = getattr(lin, "weight", None)
+  if weight is None or getattr(lin, "bias", None) is not None or weight.dtype != dtypes.bfloat16: return None
+  if not isinstance(weight.device, str) or _routes_for(weight.device) is None: return None
+  padded = pad_weight(weight)
+  if padded is not weight: lin.weight = padded[:weight.shape[0]]
+  lin._candidate = binding = CandidateBinding(role, padded)
+  return binding
+
+
+def route_bound(lin, x: Tensor, *, min_rows: int = 1) -> Tensor | None:
+  """The hi/lo routed product for a projection bound by ``bind_projection``, or None to decline."""
+  binding = getattr(lin, "_candidate", None)
+  if binding is None: return None
+  return route_dense_bf16_hilo(x, binding.padded, binding.role, lin.weight.shape[0], min_rows=min_rows)
+
+
 class CandidateLinear:
   """A bias-free bf16 projection that routes through promoted candidates and otherwise calls ``fallback``.
 
@@ -176,7 +204,7 @@ class CandidateLinear:
     return self.fallback(x) if self.fallback is not None else x.linear(self.weight.transpose())
 
 
-__all__ = ["DENSE_BF16_ARTIFACT", "NEMOTRON_H_ROLES", "CandidateLinear", "DenseRoute", "bind_candidate_linears", "dense_bf16_routes",
+__all__ = ["DENSE_BF16_ARTIFACT", "NEMOTRON_H_ROLES", "CandidateBinding", "CandidateLinear", "DenseRoute", "bind_projection", "route_bound", "bind_candidate_linears", "dense_bf16_routes",
            "device_target", "load_routes", "pad_weight", "plan_rows", "route_dense_bf16", "route_dense_bf16_hilo"]
 
 
