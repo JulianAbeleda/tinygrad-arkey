@@ -26,24 +26,28 @@ from tinygrad import Tensor, dtypes
 PRECISIONS = ("float", "split", "bf16")
 
 
-def _mm(a: Tensor, b: Tensor, precision: str) -> Tensor:
-  """``a @ b`` with float32 accumulation at the chosen operand precision.
+def _side(value: Tensor, precision: str, order: str, dim: int, materialize: bool = True) -> Tensor:
+  """One matmul operand at the chosen precision, contracted along `dim`.
 
-  "split": ``a_hi b_hi + a_lo b_hi + a_hi b_lo`` as one bf16 matmul over a threefold K
-  (``[a_hi | a_lo | a_hi] @ [b_hi ; b_hi ; b_lo]``), so one kernel writes the output once.
+  "split" writes the operand as bf16 hi = bf16(v) and lo = bf16(v - hi), concatenated along the
+  contracted axis in `order`: an "hlh" operand against an "hhl" one gives hi*hi + lo*hi + hi*lo,
+  about 2**-16 relative, as one bf16 x bf16 -> float32 tensor-core matmul over a threefold K.
+  Inputs (x, C) are "hlh" so one split copy serves both matmuls that read them.
   """
   if precision == "float":
-    return a.float() @ b.float()
-  a_hi, b_hi = a.cast(dtypes.bfloat16), b.cast(dtypes.bfloat16)
+    return value.float()
+  hi = value.cast(dtypes.bfloat16)
   if precision == "bf16":
-    return a_hi.matmul(b_hi, dtype=dtypes.float)
+    return hi
   if precision != "split":
     raise ValueError(f"precision must be one of {PRECISIONS}")
-  a_lo = (a.float() - a_hi.float()).cast(dtypes.bfloat16)
-  b_lo = (b.float() - b_hi.float()).cast(dtypes.bfloat16)
-  left = a_hi.cat(a_lo, a_hi, dim=-1).contiguous()
-  right = b_hi.cat(b_hi, b_lo, dim=-2).contiguous()
-  return left.matmul(right, dtype=dtypes.float)
+  parts = {"h": hi, "l": (value.float() - hi.float()).cast(dtypes.bfloat16)}
+  out = parts[order[0]].cat(*(parts[o] for o in order[1:]), dim=dim)
+  return out.contiguous() if materialize else out
+
+
+def _dot(a: Tensor, b: Tensor) -> Tensor:
+  return a.matmul(b, dtype=dtypes.float)
 
 
 def _segment_sums(values: Tensor) -> Tensor:
@@ -93,20 +97,23 @@ def ssd_scan(x_dt: Tensor, b: Tensor, c: Tensor, log_a: Tensor, state: Tensor, *
   positions = Tensor.arange(chunk)
   causal = positions.reshape(chunk, 1) >= positions.reshape(1, chunk)
   decay = causal.where(cumulative.unsqueeze(-1) - cumulative.unsqueeze(-2), float("-inf")).exp()
-  scores = _mm(cs, bs.transpose(-1, -2), precision).contiguous()  # (batch, groups, chunks, Q, Q)
+  x_side = _side(xs, precision, "hlh", -2)  # (batch, heads, chunks, Q', P), Q' = Q or 3Q
+  c_side = _side(cs, precision, "hlh", -1)  # (batch, groups, chunks, Q, N')
+  scores = _dot(c_side, _side(bs, precision, "hhl", -1).transpose(-1, -2)).contiguous()  # (batch, groups, chunks, Q, Q)
   weights = per_head(scores) * decay
-  diagonal = _mm(weights, xs, precision).contiguous()  # (batch, heads, chunks, Q, P)
+  diagonal = _dot(_side(weights, precision, "hhl", -1, materialize=False), x_side).contiguous()  # (batch, heads, chunks, Q, P)
 
   # 2. chunk states, all chunks at once
   last = cumulative[..., -1:]
   to_end = (last - cumulative).exp()  # (batch, heads, chunks, Q)
-  local = _mm(xs.transpose(-1, -2), per_head(bs) * to_end.unsqueeze(-1), precision).contiguous()  # (batch, heads, chunks, P, N)
+  local = _dot(x_side.transpose(-1, -2), _side(per_head(bs) * to_end.unsqueeze(-1), precision, "hhl", -2)).contiguous()
+  # local: (batch, heads, chunks, P, N)
 
   # 3. state passing: entering[c] = sum_{j<c} exp(A[j+1..c-1]) local[j] + exp(A[0..c-1]) state
   totals = last.squeeze(-1)  # (batch, heads, chunks)
   # prepend the initial state as chunk -1 with zero decay, then segment sums over chunks + 1 entries
   padded_totals = totals.pad((None, None, (1, 0)))
-  carry = _segment_sums(padded_totals).exp()  # [c, j'] = exp(sum totals[j' .. c-1])
+  carry = _segment_sums(padded_totals).exp().contiguous()  # [c, j'] = exp(sum totals[j' .. c-1])
   # entering[c] = sum_{j'<=c} carry[c, j'] source[j'] for c in 0..chunks (c = chunks is the final state),
   # with source[0] the initial state and source[j'] = local[j'-1]
   sources = state.float().reshape(batch, heads, 1, width * size).cat(
@@ -119,7 +126,7 @@ def ssd_scan(x_dt: Tensor, b: Tensor, c: Tensor, log_a: Tensor, state: Tensor, *
   # side by side, (Q, N) @ (N, repeats * P), instead of per head against an expanded C
   grouped = entering.reshape(batch, groups, repeats, chunks, width, size).permute(0, 1, 3, 5, 2, 4)
   grouped = grouped.reshape(batch, groups, chunks, size, repeats * width)
-  previous = _mm(cs, grouped, precision).contiguous().reshape(batch, groups, chunks, chunk, repeats, width)
+  previous = _dot(c_side, _side(grouped, precision, "hhl", -2)).contiguous().reshape(batch, groups, chunks, chunk, repeats, width)
   previous = previous.permute(0, 1, 4, 2, 3, 5).reshape(batch, heads, chunks, chunk, width)
   previous = previous * cumulative.exp().unsqueeze(-1)
   y = (diagonal + previous).permute(0, 2, 3, 1, 4).reshape(batch, chunks * chunk, heads, width)

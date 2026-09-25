@@ -101,6 +101,21 @@ class TestNemotronHFusedPrefill(unittest.TestCase):
     # graphs are keyed (piece, -1 - block): one per 512-token block, shared by every piece in it
     self.assertEqual(sorted(prefill.graphs), [(16, -3), (64, -3), (128, -3), (256, -3), (512, -2), (512, -1)])
 
+  def test_piece_larger_than_a_block_runs_one_flash_call_per_block(self):
+    model = flash_geometry_model()
+    prefill = NemotronHPrefill(model, capacity=1500, piece=1024, ssd_precision="split")
+    prompt = [int(v) for v in np.random.default_rng(4).integers(0, 64, 1488)]
+    hidden = prefill(prompt).numpy()
+    expected, caches = model.prefix(prompt, through=len(model.blk) - 1)
+    np.testing.assert_allclose(hidden, expected.numpy()[:, -1:], rtol=2e-2, atol=2e-2)
+    for key in ("k", "v"):
+      np.testing.assert_allclose(prefill.buffers[1][key].numpy()[:, :, :len(prompt)], caches[1][key].numpy(),
+                                 rtol=2e-2, atol=2e-2)
+    for key in ("conv", "state"):
+      np.testing.assert_allclose(prefill.buffers[0][key].numpy(), caches[0][key].numpy(), rtol=1e-3, atol=1e-3)
+    # pieces 1024 (blocks 0-1 in one graph), then 256, 128, 64, 16 in block 2
+    self.assertEqual(sorted(prefill.graphs), [(16, -3), (64, -3), (128, -3), (256, -3), (1024, -1)])
+
 
 if __name__ == "__main__":
   unittest.main()
