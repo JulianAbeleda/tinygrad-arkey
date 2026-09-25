@@ -176,7 +176,13 @@ def _compact_artifact_for_target(backend: str, arch: str, wave_size: int) -> Pat
 
 @cache
 def promoted_candidate_set(backend: str, arch: str, wave_size: int) -> CandidateSet:
-  raw = json.loads(_compact_artifact_for_target(backend, arch, wave_size).read_text())
+  return expand_compact_candidate_set(json.loads(_compact_artifact_for_target(backend, arch, wave_size).read_text()),
+                                      backend, arch, wave_size, row_count=4)
+
+
+def expand_compact_candidate_set(raw: Mapping[str, Any], backend: str, arch: str, wave_size: int, *,
+                                 row_count: int | None = None) -> CandidateSet:
+  """Expand and identity-check one compact artifact already selected for (backend, arch, wave_size)."""
   _strict_dict(raw, {"schema", "route_id", "candidate_set_identity", "profile", "target", "template", "entries"}, "compact artifact")
   if raw["schema"] != COMPACT_SCHEMA or raw["route_id"] != ROUTE_ID: raise ValueError("compact artifact identity drifted")
   target = _strict_dict(raw["target"], {"backend", "arch", "wave_size"}, "compact target")
@@ -202,7 +208,8 @@ def promoted_candidate_set(backend: str, arch: str, wave_size: int) -> Candidate
   template = _strict_dict(raw["template"], {"schema_version", "dtypes", "layout", "schedule", "static_constraints"}, "candidate template")
   if template["schema_version"] != CANDIDATE_SCHEMA: raise ValueError("candidate schema drifted")
   rows = raw["entries"]
-  if not isinstance(rows, list) or len(rows) != 4: raise ValueError("promoted candidate set must contain four rows")
+  if not isinstance(rows, list) or not rows or (row_count is not None and len(rows) != row_count):
+    raise ValueError(f"promoted candidate set must contain {row_count or 'at least one'} rows")
   entries = []
   for row in rows:
     _strict_dict(row, {"role", "shape", "canonical_identity", "legacy_identity"}, "candidate row")
@@ -228,7 +235,10 @@ def promoted_candidate_set(backend: str, arch: str, wave_size: int) -> Candidate
 
 @cache
 def promoted_candidate_registry(backend: str, arch: str, wave_size: int) -> CandidateRegistry:
-  candidate_set = promoted_candidate_set(backend, arch, wave_size)
+  return candidate_registry(promoted_candidate_set(backend, arch, wave_size))
+
+
+def candidate_registry(candidate_set: CandidateSet) -> CandidateRegistry:
   admissions, exact = [], {}
   for entry in candidate_set.entries:
     workload, schedule = entry.payload["workload"], entry.payload["schedule"]
@@ -349,6 +359,7 @@ def decode_prefill_graph_candidate_set(value: Mapping[str, Any]) -> CandidateReg
   return promoted_candidate_registry(backend, arch, wave_size)
 
 
-__all__ = ["ARTIFACT", "NV_ARTIFACT", "ROUTE_ID", "CandidateRegistry", "canonical_candidate_set_identity",
+__all__ = ["ARTIFACT", "NV_ARTIFACT", "ROUTE_ID", "CandidateRegistry", "canonical_candidate_set_identity", "candidate_registry",
+           "expand_compact_candidate_set",
            "decode_prefill_graph_candidate_set", "promoted_candidate_registry", "promoted_candidate_set",
            "automatic_promoted_prefill_graph_policy", "promoted_prefill_graph_targets"]

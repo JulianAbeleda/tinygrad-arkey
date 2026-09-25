@@ -50,11 +50,55 @@ _COMPACT_TARGETS = {
   "gfx1100": ({"backend": "AMD", "arch": "gfx1100", "wave_size": 32}, "gfx1100"),
   "sm120": ({"backend": "NV", "arch": "sm_120", "wave_size": 32}, "sm120"),
 }
+# Dense bf16 reuse: the promoted NV sm_120 schedule stamped verbatim onto Nemotron-H 4B BF16's exact projections
+# ((N, K) from the GGUF; N padded up to the 128-row tile) at every padded row chunk the router emits.
+_NV_PROMOTED_SET = _PROMOTED_SET.with_name("prefill_sm120_lds_dbuf_candidate_set.json")
+_DENSE_BF16_ARTIFACT = _PROMOTED_SET.with_name("dense_bf16_sm120_candidate_set.json")
+_DENSE_BF16_PROFILE = "nemotron_h_4b_bf16_sm120"
+_DENSE_BF16_ROLES = (("ssm_in", 17504, 3136), ("ssm_out", 3136, 7680), ("attn_q", 5120, 3136), ("attn_kv", 1024, 3136),
+                     ("attn_o", 3136, 5120), ("ffn_up", 12544, 3136), ("ffn_down", 3136, 12544), ("output", 131072, 3136))
+_DENSE_BF16_ROWS = (128, 256, 384, 512)
+# Rows that lost to the safe tensor-core path in the promotion gate (32 CTAs on 170 SMs); left unpromoted.
+_DENSE_BF16_LOSERS = {("attn_kv", 128), ("attn_kv", 256), ("attn_kv", 384)}
 _ROLES_SHAPES = (("attn_kv", (512, 1024, 4096)), ("attn_qo", (512, 4096, 4096)),
                  ("ffn_down", (512, 4096, 12288)), ("ffn_gate_up", (512, 12288, 4096)))
 
 
+def _compact(profile:str, target:dict, template:dict, roles_shapes) -> dict:
+  compact = {"schema": "tinygrad.prefill_wmma_lds_compact.v1", "route_id": ROUTE_ID, "candidate_set_identity": "unset",
+             "profile": profile, "target": dict(target), "template": template, "entries": []}
+  expanded = {"schema": "boltbeam.full_kernel_candidate_set.v1", "entries": []}
+  for role, (m, n, k) in roles_shapes:
+    payload = {"schema_version": template["schema_version"],
+               "workload": {"profile": profile, "role": role, "shape": {"m": m, "n": n, "k": k},
+                            "dtypes": dict(template["dtypes"]), "layout": dict(template["layout"]), "target": dict(target)},
+               "schedule": json.loads(json.dumps(template["schedule"])),
+               "static_constraints": dict(template["static_constraints"]),
+               "applicability": {"exact_shape": True, "profiles": [profile], "roles": [role],
+                                 "targets": [f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"]}}
+    canonical, legacy = _candidate_identity(payload), _legacy_candidate_identity(payload)
+    compact["entries"].append({"role": role, "shape": {"m": m, "n": n, "k": k},
+                               "canonical_identity": canonical, "legacy_identity": legacy})
+    expanded["entries"].append({"canonical_identity": canonical, "payload": payload})
+  compact["candidate_set_identity"] = canonical_candidate_set_identity(expanded)
+  return compact
+
+
+def mint_dense_bf16() -> dict:
+  """Reuse, not search: the promoted NV schedule and constraints verbatim, only the workload dtypes and shapes change."""
+  nv = json.loads(_NV_PROMOTED_SET.read_text())
+  template = {**json.loads(json.dumps(nv["template"])), "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"}}
+  tile_m, tile_n = template["schedule"]["tile"]["m"], template["schedule"]["tile"]["n"]
+  assert all(rows % tile_m == 0 for rows in _DENSE_BF16_ROWS)
+  roles_shapes = [(role, (rows, -(-n // tile_n) * tile_n, k)) for role, n, k in _DENSE_BF16_ROLES for rows in _DENSE_BF16_ROWS
+                  if (role, rows) not in _DENSE_BF16_LOSERS]
+  return _compact(_DENSE_BF16_PROFILE, nv["target"], template, roles_shapes)
+
+
 def main() -> int:
+  if sys.argv[1:] == ["--dense-bf16"]:
+    _DENSE_BF16_ARTIFACT.write_text(json.dumps(mint_dense_bf16(), indent=2, sort_keys=True) + "\n")
+    return 0
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("target", choices=tuple(_TARGET_ROWS), help="capability row to derive from")
   parser.add_argument("--out", required=True, help="write the typed schedule template JSON here")
