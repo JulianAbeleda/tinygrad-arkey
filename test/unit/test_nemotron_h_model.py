@@ -38,5 +38,23 @@ class TestNemotronH(unittest.TestCase):
     np.testing.assert_allclose(joined, full, rtol=1e-4, atol=1e-4)
 
 
+class TestNemotronHBatchSampler(unittest.TestCase):
+  def test_batched_jit_logprobs_match_sequential_recompute(self):
+    from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
+    model = tiny_model()
+    prompt = [3, 17, 5, 42, 9, 11, 2]
+    sampler = NemotronHBatchSampler(model, batch=3, capacity=32)
+    rollouts = sampler.generate(prompt, steps=6, temperature=1.0)
+    self.assertEqual(len(rollouts), 3)
+    for tokens, logprobs in rollouts:
+      _, caches = model.prefix(prompt, through=len(model.blk) - 1)
+      hidden = model.prefix(prompt, through=len(model.blk) - 1)[0][:, -1:]
+      if len(tokens) > 1:
+        hidden = hidden.cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+      reference = model.output(model.output_norm(hidden))[0].float().log_softmax(-1).numpy()
+      expected = reference[np.arange(len(tokens)), tokens]
+      np.testing.assert_allclose(np.asarray(logprobs), expected, rtol=1e-4, atol=1e-4)
+
+
 if __name__ == "__main__":
   unittest.main()
