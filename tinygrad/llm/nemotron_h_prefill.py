@@ -72,7 +72,8 @@ class NemotronHPrefill:
         q = block.attn_q(normed).reshape(1, length, heads, width).transpose(1, 2)
         for key, layer in (("k", block.attn_k), ("v", block.attn_v)):
           new = layer(normed).reshape(1, length, kv_heads, width).transpose(1, 2)
-          buffer[key][:, :, position:position + length].assign(new.cast(buffer[key].dtype)).realize()
+          # rounded to the key projection dtype, as the model and the sampler store keys and values
+          buffer[key][:, :, position:position + length].assign(new.cast(layer.weight.dtype).cast(buffer[key].dtype)).realize()
         if flash_block is not None:
           attended = fused_attention.fused_prefill_attention(q, buffer["k"], buffer["v"], self.tile, position, length,
                                                              flash_block)

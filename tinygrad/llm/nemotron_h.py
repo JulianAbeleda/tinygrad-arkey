@@ -17,7 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import pathlib
 
-from tinygrad import Tensor, dtypes, nn
+from tinygrad import Device, Tensor, dtypes, nn
+from tinygrad.llm.dense_candidate_gemm import NEMOTRON_H_ROLES, bind_projection, route_bound
 from tinygrad.llm.gguf import gguf_load
 from tinygrad.nn.state import load_state_dict
 
@@ -119,6 +120,10 @@ class _Linear(nn.Linear):
             rows *= size
         if not (isinstance(rows, int) and rows > self.MATVEC_MAX_ROWS):
             return super().__call__(x)
+        # searched tensor-core routes for decode batches; prefill pieces (256 rows) keep the
+        # generic path, whose per-layer route buffers would stay resident in the captured graph
+        if (routed := route_bound(self, x, max_rows=128)) is not None:
+            return routed
         flat = x.reshape(rows, width).cast(dtypes.float)
         hi = flat.cast(self.weight.dtype)
         lo = (flat - hi.cast(dtypes.float)).cast(self.weight.dtype)
@@ -314,6 +319,28 @@ class NemotronHMamba2:
         return self.ssm_out(normalized.cast(hidden.dtype)), {"conv": conv_tail, "state": state}
 
 
+def _attention(q: Tensor, k: Tensor, v: Tensor, mask: Tensor) -> Tensor:
+    """Causal GQA attention with the batched sampler's rounding points.
+
+    The query (scaled), keys, values and unnormalized softmax weights are
+    rounded to the key projection's storage dtype (bf16 for the checkpoint)
+    and every product accumulates in float32, as in
+    ``nemotron_h_attention._partials`` and FlashAttention. Training and the
+    full recompute then see the numbers the sampler sampled from. q:
+    `[B, heads, L, hd]`, k/v: `[B, kv_heads, S, hd]` in that dtype, mask:
+    additive `[1, 1, L, S]`. Returns float32 `[B, heads, L, hd]`.
+    """
+    batch, heads, length, width = q.shape
+    kv_heads, dtype = k.shape[1], k.dtype
+    group = heads // kv_heads
+    # operands are rounded, products are exact: a bf16 x bf16 multiply off the tensor core rounds each product
+    q = (q.float() * (1.0 / width ** 0.5)).cast(dtype).float().reshape(batch, kv_heads, group, length, width)
+    scores = q.dot(k.float().unsqueeze(2).transpose(-1, -2)) + mask.float().unsqueeze(2)
+    weights = (scores - scores.max(-1, keepdim=True)).exp().cast(dtype).float()
+    out = weights.dot(v.float().unsqueeze(2)) / weights.sum(-1, keepdim=True)
+    return out.reshape(batch, heads, length, width)
+
+
 class NemotronHAttention:
     def __init__(self, config: NemotronHConfig, layer: int):
         self.config = config
@@ -327,8 +354,9 @@ class NemotronHAttention:
     def __call__(self, hidden: Tensor, *, retain_graph: bool = True) -> Tensor:
         batch, length, _ = hidden.shape
         q = self.attn_q(hidden).reshape(batch, length, self.n_heads, -1).transpose(1, 2)
-        k = self.attn_k(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2)
-        v = self.attn_v(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2)
+        kv_dtype = self.attn_k.weight.dtype
+        k = self.attn_k(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).cast(kv_dtype)
+        v = self.attn_v(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).cast(kv_dtype)
         if not retain_graph:
             q, k, v = q.realize(), k.realize(), v.realize()
         # A 10k-token GameTerm envelope would materialize a multi-gigabyte
@@ -344,9 +372,7 @@ class NemotronHAttention:
             k_pos = Tensor.arange(stop).to(hidden.device).reshape(1, -1)
             allowed = (q_pos >= k_pos).reshape(1, 1, stop - start, stop)
             mask = allowed.where(0.0, float("-inf")).cast(hidden.dtype)
-            attended = q_chunk.scaled_dot_product_attention(
-                k_prefix, v_prefix, attn_mask=mask, enable_gqa=True
-            )
+            attended = _attention(q_chunk, k_prefix, v_prefix, mask)
             chunks.append(attended if retain_graph else attended.realize())
         attended = chunks[0]
         for chunk in chunks[1:]:
@@ -356,8 +382,9 @@ class NemotronHAttention:
     def cached(self, hidden: Tensor, cache: dict | None = None) -> tuple[Tensor, dict]:
         batch, length, _ = hidden.shape
         q = self.attn_q(hidden).reshape(batch, length, self.n_heads, -1).transpose(1, 2).realize()
-        new_k = self.attn_k(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).realize()
-        new_v = self.attn_v(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).realize()
+        kv_dtype = self.attn_k.weight.dtype
+        new_k = self.attn_k(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).cast(kv_dtype).realize()
+        new_v = self.attn_v(hidden).reshape(batch, length, self.n_kv_heads, -1).transpose(1, 2).cast(kv_dtype).realize()
         prefix = 0 if cache is None else cache["k"].shape[2]
         k = new_k if cache is None else cache["k"].cat(new_k, dim=2).realize()
         v = new_v if cache is None else cache["v"].cat(new_v, dim=2).realize()
@@ -371,9 +398,7 @@ class NemotronHAttention:
             k_pos = Tensor.arange(key_stop).to(hidden.device).reshape(1, -1)
             allowed = (q_pos >= k_pos).reshape(1, 1, stop - start, key_stop)
             mask = allowed.where(0.0, float("-inf")).cast(hidden.dtype)
-            chunks.append(q_chunk.scaled_dot_product_attention(
-                k[:, :, :key_stop], v[:, :, :key_stop], attn_mask=mask, enable_gqa=True
-            ).realize())
+            chunks.append(_attention(q_chunk, k[:, :, :key_stop], v[:, :, :key_stop], mask).realize())
         attended = chunks[0]
         for chunk in chunks[1:]:
             attended = attended.cat(chunk, dim=2)
@@ -503,6 +528,13 @@ def load_state(metadata: dict, state: dict[str, Tensor], *, max_context: int | N
     from tinygrad.nn.state import get_parameters
     for weight in get_parameters(model):
         weight.replace(weight.contiguous().realize())
+    for block in model.blk:
+        for attr, role in NEMOTRON_H_ROLES.items():
+            if isinstance(lin := getattr(block, attr, None), _Linear):
+                bind_projection(lin, role)
+    bind_projection(model.output, "output")
+    # the lazy GGUF decodes replaced above stay in the allocator's cache (~8 GB) unless released
+    if hasattr(allocator := Device[Device.DEFAULT].allocator, "free_cache"): allocator.free_cache()
     return model
 
 
