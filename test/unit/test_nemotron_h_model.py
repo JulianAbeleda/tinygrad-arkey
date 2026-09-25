@@ -86,6 +86,25 @@ class TestNemotronHBatchSampler(unittest.TestCase):
       expected = reference[np.arange(len(tokens)), tokens]
       np.testing.assert_allclose(np.asarray(logprobs), expected, rtol=1e-4, atol=1e-4)
 
+  def test_step_reads_each_projection_weight_once(self):
+    # a lazily chained residual stream makes every consumer of a block's output recompute its projection
+    from tinygrad.nn.state import get_parameters
+    from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
+    from tinygrad.uop.ops import Ops
+    model = tiny_model()
+    for weight in get_parameters(model): weight.replace(weight.contiguous().realize())
+    sampler = NemotronHBatchSampler(model, batch=2, capacity=32)
+    sampler.generate([3, 17, 5, 42], steps=4)
+    calls = [c for c in sampler.step.captured.linear.toposort() if c.op is Ops.CALL]
+    def buffer_of(u):
+      try: return u.buffer
+      except Exception: return None
+    def readers(weight: Tensor) -> int:
+      return sum(1 for c in calls if any(buffer_of(x) is weight.uop.buffer for x in c.src[1:]))
+    for weight in (model.output.weight, model.token_embd.weight, model.blk[1].ffn_up.weight, model.blk[1].ffn_down.weight,
+                   model.blk[2].attn_output.weight):
+      self.assertEqual(readers(weight), 1)
+
 
 if __name__ == "__main__":
   unittest.main()

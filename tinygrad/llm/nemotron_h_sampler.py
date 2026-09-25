@@ -59,7 +59,9 @@ class NemotronHBatchSampler:
     return hidden[:, -1:].expand(self.batch, 1, hidden.shape[-1]).contiguous().realize()
 
   def _sample(self, hidden: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor]:
-    logits = self.model.output(self.model.output_norm(hidden))[:, 0].float() + self.bias
+    # contiguous: the vocab projection reads the whole embedding table; left lazy, every consumer of the logits
+    # (max, sum, argmax, gather) recomputes it
+    logits = (self.model.output(self.model.output_norm(hidden))[:, 0].float() + self.bias).contiguous()
     logprobs = (logits / temperature).log_softmax(-1)
     gumbel = -(-(Tensor.rand_like(logprobs).maximum(1e-12)).log()).log()
     token = (logprobs + gumbel).argmax(-1)
@@ -70,7 +72,9 @@ class NemotronHBatchSampler:
     return self._sample(hidden, Tensor([temperature]))
 
   def _step(self, tokens: Tensor, position: UOp, temperature: Tensor) -> tuple[Tensor, Tensor]:
-    hidden = self.model.token_embd(tokens.reshape(self.batch, 1)).float()
+    # Materialize the residual stream at every block boundary. Left lazy, a block's output feeds several kernels
+    # (the next norm, the residual add) and each one recomputes the producing projection or embedding lookup.
+    hidden = self.model.token_embd(tokens.reshape(self.batch, 1)).float().contiguous()
     for block, buffer in zip(self.model.blk, self.buffers):
       if block.block_type == "attention":
         normed = block.attn_norm(hidden)
@@ -90,6 +94,7 @@ class NemotronHBatchSampler:
           buffer[key].assign(state).realize()
       else:
         hidden, _ = block.cached(hidden, None, keep_graph=True)
+      hidden = hidden.contiguous()
     return self._sample(hidden, temperature)
 
   def generate(self, prompt: list[int], steps: int, temperature: float = 1.0, stop: set[int] | None = None):
