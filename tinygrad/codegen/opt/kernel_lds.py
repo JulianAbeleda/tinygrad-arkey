@@ -633,8 +633,11 @@ def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:Precon
       (threads.lane.op, threads.lane.vmax + 1, threads.lane.arg[-1]) !=
       (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
     raise ValueError(f"{context} thread axes do not match derived wave geometry")
-  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax + 1 != factors.subtiles_m or
-      subtile_n.op is not Ops.RANGE or subtile_n.vmax + 1 != factors.subtiles_n):
+  # The same CONST 0 collapse applies to a single subtile per warp.
+  def _subtile_ok(subtile:UOp, count:int) -> bool:
+    if count == 1 and subtile.op is Ops.CONST: return subtile.arg == 0
+    return subtile.op is Ops.RANGE and subtile.vmax + 1 == count
+  if not _subtile_ok(subtile_m, factors.subtiles_m) or not _subtile_ok(subtile_n, factors.subtiles_n):
     raise ValueError(f"{context} subtile axes do not match derived geometry")
 
 @dataclass(frozen=True)

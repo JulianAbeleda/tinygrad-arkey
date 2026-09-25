@@ -531,8 +531,11 @@ class Scheduler:
             try: candidate_contract = PrecontractCandidateContract.create(self.ast.arg.candidate_context, tc)
             except ValueError as exc: raise KernelOptError(str(exc)) from exc
             factors = candidate_contract.factors
-            axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
-            axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
+            # One subtile per warp is a constant for the same reason: no size-one RANGE.
+            if factors.subtiles_n == 1: subtile_n = UOp.const(dtypes.weakint, 0)
+            else: axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
+            if factors.subtiles_m == 1: subtile_m = UOp.const(dtypes.weakint, 0)
+            else: axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
             # A constant gives wave-private schedules cross-wave ownership without an unsupported size-one RANGE.
             if factors.waves_m == 1: wave_m = UOp.const(dtypes.weakint, 0)
             else: axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)

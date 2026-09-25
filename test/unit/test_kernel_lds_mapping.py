@@ -199,3 +199,20 @@ def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():
   uneven = KernelTileGeometry((64, 64, 32), (4, 4), 512, 32,
     (KernelLDSWindow("A", 0, 5120, 80), KernelLDSWindow("B", 5120, 10240, 80)))
   with pytest.raises(ValueError, match="divide evenly"): derive_precontract_factors(uneven, _tc())
+
+
+def test_single_subtile_per_warp_collapses_to_const_zero_like_a_single_wave():
+  """A (16, 64, 32) tile with one warp in m owns one m16 subtile: the scheduler emits CONST 0 rather than a
+  size-one RANGE (which breaks substitution), and the thread-axis validator accepts exactly that collapse."""
+  from tinygrad.codegen.opt.kernel_lds import PrecontractFactors, PrecontractThreadAxes, validate_precontract_thread_axes
+  from tinygrad.uop.ops import UOp, AxisType
+  geometry = KernelTileGeometry((16, 64, 32), (1, 2), 64, 32,
+    (KernelLDSWindow("A", 0, 1280, 80), KernelLDSWindow("B", 1280, 6400, 80)))
+  factors = PrecontractFactors(1, 4, 1, 2, 2, 4, 1, 4)
+  zero = UOp.const(dtypes.weakint, 0)
+  threads = PrecontractThreadAxes(zero, UOp.range(2, 90, AxisType.LOCAL), UOp.range(32, 91, AxisType.WARP))
+  validate_precontract_thread_axes(geometry, factors, threads, zero, UOp.range(4, 92, AxisType.UPCAST))
+  with pytest.raises(ValueError, match="subtile axes"):
+    validate_precontract_thread_axes(geometry, factors, threads, zero, zero)   # 4 subtiles in n cannot collapse
+  with pytest.raises(ValueError, match="subtile axes"):
+    validate_precontract_thread_axes(geometry, factors, threads, UOp.const(dtypes.weakint, 1), UOp.range(4, 92, AxisType.UPCAST))
