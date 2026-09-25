@@ -148,3 +148,31 @@ def test_bind_projection_stays_out_of_the_state_dict_and_routes_hilo(monkeypatch
   assert dense.route_bound(lin, Tensor.ones(1, 20, 1024), min_rows=17).shape == (1, 20, 256)
   assert seen == [((40, 1024), "r", 256, 34)]                               # hi and lo rows stacked
   assert dense.route_bound(lin, Tensor.ones(1, 20, 1024), max_rows=16) is None and len(seen) == 1
+
+
+@pytest.mark.parametrize("split", [1, 2])
+def test_route_scratch_shares_buffers_and_matches_the_unshared_route(monkeypatch, split):
+  import numpy as np
+  from tinygrad import Device
+  monkeypatch.setattr(dense, "_install", lambda *args: None)
+  monkeypatch.setattr(dense, "_routes_for", lambda device: {("r", 8, 32, 16): dense.DenseRoute("r", 8, 32, 16, split, None)})
+  monkeypatch.setattr(dense, "_SCRATCH_BUFFERS", {})
+  rng = np.random.default_rng(0)
+  w1, w2 = (Tensor(rng.standard_normal((32, 16), dtype=np.float32)).cast(dtypes.bfloat16).realize() for _ in range(2))
+  x = Tensor(rng.standard_normal((1, 4, 16), dtype=np.float32)).realize()
+  unshared = [dense.route_dense_bf16_hilo(x, w, "r", 30).numpy() for w in (w1, w2)]
+  assert dense._SCRATCH_BUFFERS == {}                         # off by default
+  with dense.route_scratch():
+    shared = [dense.route_dense_bf16_hilo(x, w, "r", 30).numpy() for w in (w1, w2)]
+  assert len(dense._SCRATCH_BUFFERS) == 2                      # one operand + one product buffer for both projections
+  for a, b in zip(unshared, shared): np.testing.assert_array_equal(a, b)
+
+
+def test_route_scratch_lifts_the_row_cap(monkeypatch):
+  seen = []
+  monkeypatch.setattr(dense, "route_dense_bf16_hilo", lambda x, w, role, n, *, min_rows=1: seen.append(x.shape) or x)
+  class Lin: pass
+  lin = Lin(); lin.weight = Tensor.empty(8, 4); lin._candidate = dense.CandidateBinding("r", lin.weight)
+  assert dense.route_bound(lin, Tensor.ones(200, 4), max_rows=128) is None and seen == []
+  with dense.route_scratch(): assert dense.route_bound(lin, Tensor.ones(200, 4), max_rows=128) is not None
+  assert seen == [(200, 4)]

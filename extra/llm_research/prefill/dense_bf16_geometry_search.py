@@ -21,10 +21,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 ROLES = (("ssm_in", 17536, 3136), ("ssm_out", 3200, 7680), ("attn_q", 5120, 3136), ("attn_kv", 1024, 3136),
          ("attn_o", 3200, 5120), ("ffn_up", 12544, 3136), ("ffn_down", 3200, 12544), ("output", 131072, 3136))
 ROWS = (16, 32, 64, 128, 256, 512)
+# Prefill chunks: hi/lo routes stack two bf16 rows per token, so 8192-token chunks are 16384 GEMM rows.
+LARGE_ROWS = (1024, 2048, 4096, 8192, 16384)
 # (tile_m, tile_n, tile_k, warps_m, warps_n)
 GEOMETRIES = ((128, 128, 32, 4, 2), (128, 64, 32, 4, 2), (64, 128, 32, 2, 2), (64, 64, 32, 2, 2), (64, 64, 64, 2, 2),
               (128, 32, 32, 4, 1), (64, 32, 32, 2, 1), (32, 64, 32, 1, 2), (32, 128, 32, 1, 4), (32, 32, 32, 1, 2),
-              (16, 64, 32, 1, 2), (16, 64, 64, 1, 2), (16, 128, 64, 1, 4), (32, 64, 32, 2, 2))
+              (16, 64, 32, 1, 2), (16, 64, 64, 1, 2), (16, 128, 64, 1, 4), (32, 64, 32, 2, 2),
+              # round 3: deeper K stages and 1-warp / wide-N tiles (vLLM's small-M choice is 1-warp 16-row CTAs)
+              (32, 128, 64, 1, 4), (128, 32, 64, 4, 1), (32, 64, 64, 1, 2), (64, 32, 64, 2, 1), (16, 256, 32, 1, 4),
+              (32, 256, 32, 1, 4), (16, 64, 64, 1, 1), (16, 128, 64, 1, 1), (16, 32, 64, 1, 1), (32, 64, 64, 2, 1))
 SPLITS = (1, 2, 3, 4, 6, 8)
 MAX_LDS = 49152
 
@@ -41,7 +46,7 @@ def feasible(geom, split, m, n, k) -> bool:
   return True
 
 
-def run_config(geom, split, reps: int) -> None:
+def run_config(geom, split, reps: int, rows=ROWS) -> None:
   from tinygrad import Tensor, Context, GlobalCounters, dtypes
   from tinygrad.codegen.opt import Opt, OptOps
   from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
@@ -55,8 +60,8 @@ def run_config(geom, split, reps: int) -> None:
                                    KernelStage1PipelinePlan(2, geometry.lds_bytes, 1))
   weights = {}
   for role, n, k in ROLES:
-    for m in ROWS:
-      if not feasible(geom, split, m, n, k): continue
+    for m in rows:
+      if not feasible(geom, split, m, n, k) or split * m * n * 4 > 2 << 30: continue   # fp32 output/partials <= 2 GiB
       ks = k // split
       key = pr.warmstart_key({m, n} | ({split} if split > 1 else set()), ks)
       pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}
@@ -114,6 +119,7 @@ def main() -> int:
                       help="write the selection (JSON) from search rows and ordinary-path control rows (role, m, median_us)")
   parser.add_argument("--reps", type=int, default=7)
   parser.add_argument("--config", help=argparse.SUPPRESS)
+  parser.add_argument("--large", action="store_true", help="search the prefill LARGE_ROWS instead of ROWS")
   args = parser.parse_args()
   if args.select:
     rows = [json.loads(line) for line in Path(args.select[0]).read_text().splitlines() if line.strip()]
@@ -125,7 +131,7 @@ def main() -> int:
     return 0
   if args.config:
     geom, split = json.loads(args.config)
-    run_config(tuple(geom), split, args.reps)
+    run_config(tuple(geom), split, args.reps, LARGE_ROWS if args.large else ROWS)
     return 0
   with open(args.out, "a") as f:
     for geom in GEOMETRIES:

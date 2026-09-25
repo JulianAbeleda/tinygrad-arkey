@@ -13,6 +13,8 @@ route declines to the ordinary linear path.  Minted by ``extra/llm_research/mint
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import cache
 import json, math
 from pathlib import Path
@@ -145,14 +147,64 @@ def route_dense_bf16(x: Tensor, weight: Tensor, role: str, n_out: int, *, min_ro
   return out.reshape(*x.shape[:-1], n_out)
 
 
+# Shared route scratch for sequential, captured forward passes (chunked prefill). Every projection of a given
+# shape writes its stacked hi/lo operand and fp32 product into the same persistent buffers, so a captured graph
+# holds one set per shape instead of one per layer. Opt-in: the owner must realize each projection before the next
+# one of the same shape is issued, which the route does itself while the context is active.
+_ROUTE_SCRATCH: ContextVar[bool] = ContextVar("dense_route_scratch", default=False)
+_SCRATCH_BUFFERS: dict[tuple, Tensor] = {}
+
+
+@contextmanager
+def route_scratch():
+  """Share route scratch across layers and lift callers' ``max_rows`` caps for the duration (see route_bound)."""
+  token = _ROUTE_SCRATCH.set(True)
+  try: yield
+  finally: _ROUTE_SCRATCH.reset(token)
+
+
+def _scratch(device: str, tag: str, shape: tuple[int, ...], dtype) -> Tensor:
+  key = (device, tag, shape, dtype)
+  if (buf := _SCRATCH_BUFFERS.get(key)) is None:
+    buf = _SCRATCH_BUFFERS[key] = Tensor.empty(*shape, dtype=dtype, device=device).contiguous().realize()
+  return buf
+
+
+def _hilo_scratch(flat: Tensor, weight: Tensor, role: str, n_out: int) -> Tensor | None:
+  """One exact single-chunk unsplit route through shared scratch, or None when the shape does not qualify."""
+  routes = _routes_for(flat.device)
+  rows, k = flat.shape
+  n_pad = weight.shape[0]
+  route = routes.get((role, 2 * rows, n_pad, k)) if routes is not None else None
+  if route is None: return None
+  m, split = 2 * rows, route.split_k
+  hi = flat.cast(dtypes.bfloat16)
+  stacked = _scratch(flat.device, "a", (m, k), dtypes.bfloat16)
+  stacked.assign(hi.cat((flat - hi.float()).cast(dtypes.bfloat16))).realize()
+  product = _scratch(flat.device, "p", (split, m, n_pad), dtypes.float)
+  if split == 1:
+    _install(route.admission, {m, n_pad}, k)
+    product.assign(stacked.dot(weight.T, dtype=dtypes.float).reshape(1, m, n_pad)).realize()
+  else:
+    ks = k // split
+    _install(route.admission, {split, m, n_pad}, ks)
+    a3, w3 = stacked.reshape(m, split, ks).permute(1, 0, 2), weight.reshape(n_pad, split, ks).permute(1, 0, 2)
+    product.assign(a3.dot(w3.transpose(1, 2), dtype=dtypes.float)).realize()
+  summed = product.sum(0) if split > 1 else product[0]
+  return (summed[:rows, :n_out] + summed[rows:, :n_out]).contiguous().realize()
+
+
 def route_dense_bf16_hilo(x: Tensor, weight: Tensor, role: str, n_out: int, *, min_rows: int = 1) -> Tensor | None:
   """Near-float32 activations on the bf16 candidates: x = hi + lo + O(2**-17 |x|), both halves stacked as rows of one
   routed GEMM (the weight is read once, each bf16 x bf16 product is exact in fp32), then summed."""
   if not all(isinstance(s, int) for s in x.shape) or x.ndim < 2: return None
   flat = x.reshape(-1, x.shape[-1]).float()
+  rows = flat.shape[0]
+  if _ROUTE_SCRATCH.get() and isinstance(flat.device, str) and rows >= min_rows and \
+     (shared := _hilo_scratch(flat, weight, role, n_out)) is not None:
+    return shared.reshape(*x.shape[:-1], n_out)
   hi = flat.cast(dtypes.bfloat16)
   lo = (flat - hi.float()).cast(dtypes.bfloat16)
-  rows = flat.shape[0]
   out = route_dense_bf16(hi.cat(lo), weight, role, n_out, min_rows=2 * min_rows)
   # Materialize the sum: fusing the strided, padded partials into a consumer's reduction (the Mamba scan) hits a
   # lowering KeyError on NV, and one M x N elementwise pass is cheap next to the GEMM.
@@ -189,10 +241,12 @@ def route_bound(lin, x: Tensor, *, min_rows: int = 1, max_rows: int | None = Non
   """The hi/lo routed product for a projection bound by ``bind_projection``, or None to decline.
 
   ``max_rows`` lets a caller keep large row counts (e.g. prefill pieces, whose per-layer route buffers stay
-  resident in a captured graph) on its own path."""
+  resident in a captured graph) on its own path; inside ``route_scratch()`` the cap is lifted, because shared
+  scratch removes that residency."""
   binding = getattr(lin, "_candidate", None)
   if binding is None: return None
-  if max_rows is not None and all(isinstance(s, int) for s in x.shape) and math.prod(x.shape[:-1]) > max_rows: return None
+  if max_rows is not None and not _ROUTE_SCRATCH.get() and all(isinstance(s, int) for s in x.shape) and \
+     math.prod(x.shape[:-1]) > max_rows: return None
   return route_dense_bf16_hilo(x, binding.padded, binding.role, lin.weight.shape[0], min_rows=min_rows)
 
 
@@ -216,7 +270,7 @@ class CandidateLinear:
 
 
 __all__ = ["DENSE_BF16_ARTIFACT", "NEMOTRON_H_ROLES", "CandidateBinding", "CandidateLinear", "DenseRoute", "bind_projection", "route_bound", "bind_candidate_linears", "dense_bf16_routes",
-           "device_target", "load_routes", "pad_weight", "plan_rows", "route_dense_bf16", "route_dense_bf16_hilo"]
+           "device_target", "load_routes", "pad_weight", "plan_rows", "route_dense_bf16", "route_dense_bf16_hilo", "route_scratch"]
 
 
 # Nemotron-H projection attribute -> promoted role.  Every bf16 projection of the 4B release is covered.
