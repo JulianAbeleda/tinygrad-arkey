@@ -14,3 +14,16 @@ Ceilings (this session): mma.sync m16n8k16 bf16 248.6-251.8 TF, f16 247.4-251.4 
 
 Whole-model effect (`prefix()`, L=512, PROFILE GPU time): stock 1101 ms -> candidates 118 ms of kernel time; the
 non-JIT `prefix()` wall is host-bound (~6.0 s both), so the win needs the TinyJit prefill path.
+
+## v2: offline geometry x split-K search (2026-09-25)
+
+`search-r1.jsonl`: `extra/llm_research/prefill/dense_bf16_geometry_search.py`, one process per (geometry, split-K),
+exclusive GPU (`gpu-run time`), median of 7. `ordinary-controls.jsonl`: the ordinary heuristic path on the same
+shapes (bf16 activations with TC, and fp32 activations x bf16 weight), median of 9. Selection
+(`extra/llm_research/prefill/dense_bf16_sm120_selection.json`) = fastest finite row per (role, rows) that beats the
+fastest control; the mint derives each geometry's schedule from the NV capability row exactly as the promoted Qwen
+schedule is derived (the 128x128 geometry reproduces it byte-for-byte).
+
+`gate-v2-correctness.json`: all 32 routes through the production chunk executor, shared-GPU correctness pass
+(timings there are not measurements): finite, max relative error vs fp32 oracle <= 1.7e-5; split_k == 1 rows
+bit-exact vs the safe TC path; split-K rows reassociate the K sum and are held to the oracle bound.

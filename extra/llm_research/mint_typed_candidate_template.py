@@ -50,16 +50,12 @@ _COMPACT_TARGETS = {
   "gfx1100": ({"backend": "AMD", "arch": "gfx1100", "wave_size": 32}, "gfx1100"),
   "sm120": ({"backend": "NV", "arch": "sm_120", "wave_size": 32}, "sm120"),
 }
-# Dense bf16 reuse: the promoted NV sm_120 schedule stamped verbatim onto Nemotron-H 4B BF16's exact projections
-# ((N, K) from the GGUF; N padded up to the 128-row tile) at every padded row chunk the router emits.
+# Dense bf16 promotion: the NV sm_120 precontract family (same capability row and derivation as the promoted Qwen
+# schedule) at the geometry and split-K factor the offline search selected per exact Nemotron-H 4B BF16 row.
 _NV_PROMOTED_SET = _PROMOTED_SET.with_name("prefill_sm120_lds_dbuf_candidate_set.json")
 _DENSE_BF16_ARTIFACT = _PROMOTED_SET.with_name("dense_bf16_sm120_candidate_set.json")
+_DENSE_BF16_SELECTION = Path(__file__).resolve().parent / "prefill" / "dense_bf16_sm120_selection.json"
 _DENSE_BF16_PROFILE = "nemotron_h_4b_bf16_sm120"
-_DENSE_BF16_ROLES = (("ssm_in", 17504, 3136), ("ssm_out", 3136, 7680), ("attn_q", 5120, 3136), ("attn_kv", 1024, 3136),
-                     ("attn_o", 3136, 5120), ("ffn_up", 12544, 3136), ("ffn_down", 3136, 12544), ("output", 131072, 3136))
-_DENSE_BF16_ROWS = (128, 256, 384, 512)
-# Rows that lost to the safe tensor-core path in the promotion gate (32 CTAs on 170 SMs); left unpromoted.
-_DENSE_BF16_LOSERS = {("attn_kv", 128), ("attn_kv", 256), ("attn_kv", 384)}
 _ROLES_SHAPES = (("attn_kv", (512, 1024, 4096)), ("attn_qo", (512, 4096, 4096)),
                  ("ffn_down", (512, 4096, 12288)), ("ffn_gate_up", (512, 12288, 4096)))
 
@@ -84,15 +80,36 @@ def _compact(profile:str, target:dict, template:dict, roles_shapes) -> dict:
   return compact
 
 
-def mint_dense_bf16() -> dict:
-  """Reuse, not search: the promoted NV schedule and constraints verbatim, only the workload dtypes and shapes change."""
+def mint_dense_bf16(selection: list[dict] | None = None) -> dict:
+  """One compact set per selected geometry (schedule derived like the promoted one), plus the route table."""
+  if selection is None: selection = json.loads(_DENSE_BF16_SELECTION.read_text())["rows"]
   nv = json.loads(_NV_PROMOTED_SET.read_text())
-  template = {**json.loads(json.dumps(nv["template"])), "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"}}
-  tile_m, tile_n = template["schedule"]["tile"]["m"], template["schedule"]["tile"]["n"]
-  assert all(rows % tile_m == 0 for rows in _DENSE_BF16_ROWS)
-  roles_shapes = [(role, (rows, -(-n // tile_n) * tile_n, k)) for role, n, k in _DENSE_BF16_ROLES for rows in _DENSE_BF16_ROWS
-                  if (role, rows) not in _DENSE_BF16_LOSERS]
-  return _compact(_DENSE_BF16_PROFILE, nv["target"], template, roles_shapes)
+  base = nv["template"]
+  groups: dict[tuple, list] = {}
+  for row in selection:
+    tm, tn, tk, wm, wn = row["geometry"]
+    groups.setdefault((tm, tn, tk, wm, wn), []).append(row)
+  sets, routes = [], []
+  for (tm, tn, tk, wm, wn), rows in sorted(groups.items()):
+    geometry = {"tile": {"m": tm, "n": tn, "k": tk}, "waves": {"m": wm, "n": wn},
+                "buffer_count": base["schedule"]["pipeline"]["buffer_count"], "stage_count": base["schedule"]["pipeline"]["stage_count"]}
+    first = rows[0]
+    derived = derive_target_schedule(NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, geometry,
+      {"m": first["m"], "n": first["n"], "k": first["k"] // first["split_k"], "dtypes": dict(base["dtypes"])})
+    template = {"schema_version": base["schema_version"], "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"},
+                "layout": dict(base["layout"]), "schedule": derived["schedule"], "static_constraints": derived["static_constraints"]}
+    ordered = sorted(rows, key=lambda r: (r["role"], r["m"], r["n"], r["k"]))
+    compact = _compact(_DENSE_BF16_PROFILE, nv["target"], template,
+                       [(r["role"], (r["m"], r["n"], r["k"] // r["split_k"])) for r in ordered])
+    sets.append(compact)
+    for r, entry in zip(ordered, compact["entries"]):
+      routes.append({"role": r["role"], "m": r["m"], "n": r["n"], "k": r["k"], "split_k": r["split_k"],
+                     "canonical_identity": entry["canonical_identity"]})
+  # The runtime keys warmstart schedules by (output dims, reduce size); two routes may never share a key.
+  keys = [(frozenset({r["m"], r["n"]} | ({r["split_k"]} if r["split_k"] > 1 else set())), r["k"] // r["split_k"]) for r in selection]
+  if len(set(keys)) != len(keys): raise ValueError("dense bf16 selection has colliding warmstart keys")
+  return {"schema": "tinygrad.dense_bf16_candidate_routes.v1", "profile": _DENSE_BF16_PROFILE, "target": dict(nv["target"]),
+          "sets": sets, "routes": sorted(routes, key=lambda r: (r["role"], r["m"]))}
 
 
 def main() -> int:

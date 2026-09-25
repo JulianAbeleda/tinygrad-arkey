@@ -1,0 +1,549 @@
+{
+ "schema": "dense-bf16-geometry-selection.v1",
+ "rows": [
+  {
+   "role": "attn_kv",
+   "m": 64,
+   "n": 1024,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 35.36,
+   "search_tflops": 11.62,
+   "ordinary_median_us": 174.53
+  },
+  {
+   "role": "attn_kv",
+   "m": 128,
+   "n": 1024,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 37.25,
+   "search_tflops": 22.07,
+   "ordinary_median_us": 180.19
+  },
+  {
+   "role": "attn_kv",
+   "m": 256,
+   "n": 1024,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 40.96,
+   "search_tflops": 40.14,
+   "ordinary_median_us": 182.59
+  },
+  {
+   "role": "attn_kv",
+   "m": 512,
+   "n": 1024,
+   "k": 3136,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 65.54,
+   "search_tflops": 50.18,
+   "ordinary_median_us": 186.53
+  },
+  {
+   "role": "attn_o",
+   "m": 64,
+   "n": 3200,
+   "k": 5120,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 4,
+   "search_median_us": 68.99,
+   "search_tflops": 30.4,
+   "ordinary_median_us": 291.9
+  },
+  {
+   "role": "attn_o",
+   "m": 128,
+   "n": 3200,
+   "k": 5120,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 4,
+   "search_median_us": 104.74,
+   "search_tflops": 40.05,
+   "ordinary_median_us": 334.69
+  },
+  {
+   "role": "attn_o",
+   "m": 256,
+   "n": 3200,
+   "k": 5120,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 149.95,
+   "search_tflops": 55.94,
+   "ordinary_median_us": 412.8
+  },
+  {
+   "role": "attn_o",
+   "m": 512,
+   "n": 3200,
+   "k": 5120,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 256.86,
+   "search_tflops": 65.32,
+   "ordinary_median_us": 533.66
+  },
+  {
+   "role": "attn_q",
+   "m": 64,
+   "n": 5120,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 43.23,
+   "search_tflops": 47.54,
+   "ordinary_median_us": 178.66
+  },
+  {
+   "role": "attn_q",
+   "m": 128,
+   "n": 5120,
+   "k": 3136,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 69.28,
+   "search_tflops": 59.33,
+   "ordinary_median_us": 189.12
+  },
+  {
+   "role": "attn_q",
+   "m": 256,
+   "n": 5120,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 96.48,
+   "search_tflops": 85.21,
+   "ordinary_median_us": 243.49
+  },
+  {
+   "role": "attn_q",
+   "m": 512,
+   "n": 5120,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 173.06,
+   "search_tflops": 95.01,
+   "ordinary_median_us": 458.27
+  },
+  {
+   "role": "ffn_down",
+   "m": 64,
+   "n": 3200,
+   "k": 12544,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 4,
+   "search_median_us": 154.88,
+   "search_tflops": 33.17,
+   "ordinary_median_us": 696.06
+  },
+  {
+   "role": "ffn_down",
+   "m": 128,
+   "n": 3200,
+   "k": 12544,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 236.06,
+   "search_tflops": 43.53,
+   "ordinary_median_us": 712.16
+  },
+  {
+   "role": "ffn_down",
+   "m": 256,
+   "n": 3200,
+   "k": 12544,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 348.96,
+   "search_tflops": 58.9,
+   "ordinary_median_us": 891.71
+  },
+  {
+   "role": "ffn_down",
+   "m": 512,
+   "n": 3200,
+   "k": 12544,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 594.18,
+   "search_tflops": 69.18,
+   "ordinary_median_us": 1246.21
+  },
+  {
+   "role": "ffn_up",
+   "m": 64,
+   "n": 12544,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 114.85,
+   "search_tflops": 43.84,
+   "ordinary_median_us": 241.22
+  },
+  {
+   "role": "ffn_up",
+   "m": 128,
+   "n": 12544,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 163.9,
+   "search_tflops": 61.44,
+   "ordinary_median_us": 350.59
+  },
+  {
+   "role": "ffn_up",
+   "m": 256,
+   "n": 12544,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 258.66,
+   "search_tflops": 77.87,
+   "ordinary_median_us": 548.8
+  },
+  {
+   "role": "ffn_up",
+   "m": 512,
+   "n": 12544,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 433.7,
+   "search_tflops": 92.88,
+   "ordinary_median_us": 1157.02
+  },
+  {
+   "role": "output",
+   "m": 64,
+   "n": 131072,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 1073.54,
+   "search_tflops": 49.01,
+   "ordinary_median_us": 1779.74
+  },
+  {
+   "role": "output",
+   "m": 128,
+   "n": 131072,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 1139.26,
+   "search_tflops": 92.36,
+   "ordinary_median_us": 3283.2
+  },
+  {
+   "role": "output",
+   "m": 256,
+   "n": 131072,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 2143.78,
+   "search_tflops": 98.17,
+   "ordinary_median_us": 6413.47
+  },
+  {
+   "role": "output",
+   "m": 512,
+   "n": 131072,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 4118.3,
+   "search_tflops": 102.2,
+   "ordinary_median_us": 12658.08
+  },
+  {
+   "role": "ssm_in",
+   "m": 64,
+   "n": 17536,
+   "k": 3136,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 170.66,
+   "search_tflops": 41.25,
+   "ordinary_median_us": 443.49
+  },
+  {
+   "role": "ssm_in",
+   "m": 128,
+   "n": 17536,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 181.66,
+   "search_tflops": 77.5,
+   "ordinary_median_us": 469.79
+  },
+  {
+   "role": "ssm_in",
+   "m": 256,
+   "n": 17536,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 1,
+   "search_median_us": 332.35,
+   "search_tflops": 84.72,
+   "ordinary_median_us": 700.51
+  },
+  {
+   "role": "ssm_in",
+   "m": 512,
+   "n": 17536,
+   "k": 3136,
+   "geometry": [
+    128,
+    128,
+    32,
+    4,
+    2
+   ],
+   "split_k": 2,
+   "search_median_us": 585.73,
+   "search_tflops": 96.14,
+   "ordinary_median_us": 1418.37
+  },
+  {
+   "role": "ssm_out",
+   "m": 64,
+   "n": 3200,
+   "k": 7680,
+   "geometry": [
+    64,
+    64,
+    32,
+    2,
+    2
+   ],
+   "split_k": 3,
+   "search_median_us": 75.1,
+   "search_tflops": 41.88,
+   "ordinary_median_us": 434.27
+  },
+  {
+   "role": "ssm_out",
+   "m": 128,
+   "n": 3200,
+   "k": 7680,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 3,
+   "search_median_us": 112.32,
+   "search_tflops": 56.01,
+   "ordinary_median_us": 496.51
+  },
+  {
+   "role": "ssm_out",
+   "m": 256,
+   "n": 3200,
+   "k": 7680,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 3,
+   "search_median_us": 206.91,
+   "search_tflops": 60.81,
+   "ordinary_median_us": 607.97
+  },
+  {
+   "role": "ssm_out",
+   "m": 512,
+   "n": 3200,
+   "k": 7680,
+   "geometry": [
+    128,
+    64,
+    32,
+    4,
+    2
+   ],
+   "split_k": 4,
+   "search_median_us": 370.18,
+   "search_tflops": 67.98,
+   "ordinary_median_us": 787.78
+  }
+ ]
+}
