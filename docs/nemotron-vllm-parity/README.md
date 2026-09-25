@@ -86,6 +86,7 @@ File ownership and full detail: `status-board-20260925.md`, `nemotron_checklist.
 
 | File | Contents |
 |---|---|
+| `commit-log-20260924-25.md` | Commit-by-commit log of the 37 non-merge commits 09-24→09-25 (sampler/prefill/codegen), grouped by area, with measured trajectory tables |
 | `nemotron-vllm-gap-audit.md` | Full gap audit vs. vLLM/SGLang/TRT-LLM/llama.cpp; CALC floor tables; build plan W1-W10; dead ends |
 | `vllm-nemotron-baseline.md` | Measured vLLM baseline: throughput tables, per-step kernel breakdown, code citations |
 | `vllm-code-notes.md` | Detailed vLLM source-code notes backing the baseline (file:line citations) |
