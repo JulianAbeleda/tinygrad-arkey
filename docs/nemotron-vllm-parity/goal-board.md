@@ -10,13 +10,16 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 - Results go into the repo (commit + push to `exp`), never only into /tmp.
 - Method: reverse engineer -> test -> solve. Every number is measured.
 
+## Priority (2026-09-25 ~14:45)
+1. I1 real-model smoke owns the GPU. 2. W8 lands if passing, then parks. 3. fp16 diagnosis resumes after the smoke. R5 gate stays exactly as predeclared.
+
 ## Workstreams (2026-09-25 afternoon)
 
 | ID | Item | Owner | Files | Status | Gate |
 |---|---|---|---|---|---|
-| T0 | Profile one RLOO update; which tinygrad the trainer uses | profiler agent | none (scratchpad only) | running | stage table + ranked levers |
+| T0 | Profile one RLOO update; which tinygrad the trainer uses | profiler agent | none (scratchpad only) | measured: trainer = DayCare vendored tinygrad; ~20 min/update (1x8): features 443 s, server 228 s, sample 228 s, 10k prefix 186 s, update 115 s | stage table + ranked levers |
 | W8 | Continuous batching / slot refill in the sampler | sampler agent | `tinygrad/llm/nemotron_h_sampler.py`, `test/unit/test_nemotron_h_sampler*.py` | starting | >=90% active slots on a skewed length mix; parity holds |
-| I1 | One-stack RLOO loop: tinygrad sampler -> recompute -> LoRA update in place -> sample | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | starting | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
+| I1 | One-stack RLOO loop: tinygrad sampler -> recompute -> LoRA update in place -> sample; + TIS (C=2); predeclare `research/rloo-tinygrad-countdown.md` | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; loop committed DayCare 8d6e7ff; real-model smoke next | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
 | R3 | Smoke on the llama.cpp loop | after T0 | `~/DayCare` | pending | R3 in rloo-llama-countdown.md |
 | F16 | Why fp16 fails the consistency gate; mixed fp16/hi-lo scheme | fp16 agent | `~/scratchpad/fp16/` (no product code) | running | same-numerics sampler vs recompute mean <=1e-3, max <=1e-2 |
 | RS | How vLLM/verl/NeMo-RL correct rollout/trainer mismatch (TIS etc.) | research agent | none | running | ranked fixes + hypotheses |
