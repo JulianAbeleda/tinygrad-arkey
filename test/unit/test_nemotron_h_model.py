@@ -136,5 +136,34 @@ class TestNemotronHBatchSampler(unittest.TestCase):
       self.assertEqual(readers(weight), 1)
 
 
+class TestNemotronHRolloutSampler(unittest.TestCase):
+  def _check(self, model, prompt, tokens, logprobs):
+    hidden, caches = model.prefix(prompt, through=len(model.blk) - 1)
+    hidden = hidden[:, -1:]
+    if len(tokens) > 1:
+      hidden = hidden.cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+    reference = model.output(model.output_norm(hidden))[0].float().log_softmax(-1).numpy()
+    np.testing.assert_allclose(np.asarray(logprobs), reference[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
+
+  def test_refilled_lanes_across_prompts_match_sequential_recompute(self):
+    from tinygrad.llm.nemotron_h_sampler import NemotronHRolloutSampler
+    model = tiny_model()
+    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4, 8, 19, 25], [11]]
+    # 3 lanes, 4 prompts x 2 rollouts, 2 prompt slots, a 4-step window over a 2-step ring: lanes are refilled
+    # mid-run with other prompts' rollouts, and generated keys wrap the 16-row ring
+    sampler = NemotronHRolloutSampler(model, batch=3, capacity=16, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                      window=4)
+    stats = {}
+    results = sampler.generate([(p, 2) for p in prompts], max_new=11, stop={0, 1, 2, 3}, stats=stats)
+    self.assertEqual([len(r) for r in results], [2, 2, 2, 2])
+    for prompt, rollouts in zip(prompts, results):
+      for tokens, logprobs in rollouts:
+        self.assertTrue(0 < len(tokens) <= 11)
+        self.assertTrue(len(tokens) == 11 or tokens[-1] in {0, 1, 2, 3})
+        self._check(model, prompt, tokens, logprobs)
+    self.assertGreater(stats["steps"], 11)
+    self.assertLessEqual(stats["active_lane_steps"], stats["lane_steps"])
+
+
 if __name__ == "__main__":
   unittest.main()

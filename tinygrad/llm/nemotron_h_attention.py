@@ -202,5 +202,98 @@ def decode_attention(block, normed: Tensor, layer: SharedPrefixKV, prefix_length
   return block.attn_output(attended.transpose(1, 2).reshape(batch, 1, -1))
 
 
-__all__ = ["SharedPrefixKV", "decode_attention", "load_prefix_from_prefill", "shared_kv_for_model", "suffix_bucket",
-           "suffix_buckets", "two_segment_attention"]
+# ---------------------------------------------------------------------------
+# Several shared prompts, continuously refilled lanes (RL rollout serving).
+#
+# G prompt slots each hold one prompt's keys/values, `[G, kv_heads, P, hd]`. A
+# lane (one sequence of the batch) belongs to one prompt slot and one of its R
+# rows; `lane_rows[g*R + j]` is the lane in row j of slot g and `lane_slot[b]` is
+# lane b's `g*R + j`. The prefix is attended per slot: the R lanes' queries are
+# gathered next to the GQA group, so each slot's prompt is read once for all of
+# its lanes (`[G, kv_heads, R*group, hd] x [hd, P]`), and the partials are
+# gathered back to lane order.
+#
+# Generated keys/values live in a per-lane ring of `C` rows written at one
+# shared row per step (`row = step % C`), so the write is a plain slice store for
+# the whole batch. Lanes start at different steps: lane b's own keys are the
+# `lengths[b]` most recent rows, i.e. ring rows whose age `(row - w) mod C` is
+# below its length; everything older (a previous occupant's) is masked.
+# ---------------------------------------------------------------------------
+
+class RolloutKV:
+  """One attention layer's prompt slots `[G, kv_heads, P, hd]` and per-lane generated-key ring `[B, kv_heads, C, hd]`."""
+
+  def __init__(self, batch: int, prompts: int, kv_heads: int, head_dim: int, prefix_capacity: int, ring: int,
+               dtype: DType = dtypes.bfloat16, chunk: int = 1024):
+    self.batch, self.prompts, self.prefix_capacity, self.ring, self.chunk = batch, prompts, prefix_capacity, ring, chunk
+    self.prefix = {key: _fresh((prompts, kv_heads, prefix_capacity, head_dim), dtype) for key in ("k", "v")}
+    self.suffix = {"k": _fresh((batch, kv_heads, ring, head_dim), dtype),
+                   "v": _fresh((batch, kv_heads, head_dim, ring), dtype)}
+
+  def load_prefix(self, slot: int, k: Tensor, v: Tensor):
+    """Copy a prompt's keys/values `[1, kv_heads, n, hd]` into prompt slot `slot`, rows [0, min(n, P))."""
+    for key, value in (("k", k), ("v", v)):
+      rows = min(value.shape[2], self.prefix_capacity)
+      self.prefix[key][slot:slot + 1, :, :rows].assign(value[:, :, :rows].cast(self.prefix[key].dtype)).realize()
+
+  def write(self, k: Tensor, v: Tensor, row: UOp | int):
+    """Store every lane's new key/value `[B, kv_heads, 1, hd]` at ring row `row`."""
+    self.suffix["k"][:, :, row:row + 1].assign(k.cast(self.suffix["k"].dtype)).realize()
+    self.suffix["v"][:, :, :, row:row + 1].assign(v.transpose(-1, -2).cast(self.suffix["v"].dtype)).realize()
+
+  def attend(self, q: Tensor, lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor,
+             row: UOp | int) -> Tensor:
+    return rollout_attention(q, self.prefix["k"], self.prefix["v"], self.suffix["k"], self.suffix["v"], lane_rows,
+                             lane_slot, prefix_lengths, lengths, row, self.chunk)
+
+
+def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
+                      lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor, row: UOp | int,
+                      chunk: int = 1024) -> Tensor:
+  """One decode query per lane against its prompt slot's prefix and its own ring of generated keys.
+
+  q `[B, heads, 1, hd]`; prefix_k/v `[G, kv_heads, P, hd]` with `prefix_lengths[g]` valid rows; suffix_k
+  `[B, kv_heads, C, hd]`, suffix_vt `[B, kv_heads, hd, C]` with the newest key at ring row `row` and `lengths[b]`
+  valid keys (>= 1). lane_rows `[G*R]`, lane_slot `[B]` (int32) map lanes to prompt-slot rows. Returns
+  `[B, heads, 1, hd]` float32, equal to causal softmax attention over `[prompt g_b, lane b's generated keys]`.
+  """
+  batch, heads, length, width = q.shape
+  prompts, kv_heads, span, _ = prefix_k.shape
+  if length != 1 or heads % kv_heads or lane_rows.shape[0] % prompts:
+    raise ValueError("expected one query per lane, whole GQA groups and R rows per prompt slot")
+  group, rows_per = heads // kv_heads, lane_rows.shape[0] // prompts
+  q = (q.float() * (1.0 / width ** 0.5)).cast(prefix_k.dtype).reshape(batch, kv_heads, group, width).contiguous()
+  # prefix: each slot's lanes gathered next to the group, one GEMM per (slot, key/value head)
+  rows = q[lane_rows].reshape(prompts, rows_per, kv_heads, group, width).permute(0, 2, 1, 3, 4)
+  rows = rows.reshape(prompts, kv_heads, rows_per * group, width).contiguous()
+  scores = rows.dot(prefix_k.transpose(-1, -2), dtype=dtypes.float)
+  valid = Tensor.arange(span).reshape(1, span) < prefix_lengths.reshape(prompts, 1)
+  scores = valid.reshape(prompts, 1, 1, span).where(scores, float("-inf"))
+  prefix = [t.reshape(prompts, kv_heads, t.shape[2], rows_per, group, t.shape[-1]).permute(0, 3, 1, 2, 4, 5)
+            .reshape(prompts * rows_per, kv_heads, t.shape[2], group, t.shape[-1])[lane_slot]
+            for t in _partials(scores, prefix_v, chunk)]
+  # generated keys: ring rows younger than the lane's length
+  ring = suffix_k.shape[2]
+  scores = q.dot(suffix_k.transpose(-1, -2), dtype=dtypes.float)
+  age = Tensor.arange(ring) * -1 + row
+  age = (age < 0).where(age + ring, age)
+  valid = age.reshape(1, ring) < lengths.reshape(batch, 1)
+  scores = valid.reshape(batch, 1, 1, ring).where(scores, float("-inf"))
+  suffix = _partials(scores, suffix_vt, chunk, keys_last=True)
+  peaks, sums, outs = (p.cat(s, dim=2) for p, s in zip(prefix, suffix))
+  peak = peaks.max(2, keepdim=True)
+  scale = (peaks - peak).exp()
+  out = (outs * scale).sum(2) / (sums * scale).sum(2)
+  return out.reshape(batch, heads, 1, width)
+
+
+def rollout_kv_for_model(model, batch: int, prompts: int, prefix_capacity: int, ring: int,
+                         dtype: DType | None = None, chunk: int = 1024) -> list[RolloutKV | None]:
+  """One `RolloutKV` per attention block, `None` elsewhere, aligned with `model.blk`."""
+  return [RolloutKV(batch, prompts, block.n_kv_heads, model.config.head_dim, prefix_capacity, ring,
+                    block.attn_k.weight.dtype if dtype is None else dtype, chunk)
+          if block.block_type == "attention" else None for block in model.blk]
+
+
+__all__ = ["RolloutKV", "SharedPrefixKV", "decode_attention", "load_prefix_from_prefill", "rollout_attention",
+           "rollout_kv_for_model", "shared_kv_for_model", "suffix_bucket", "suffix_buckets", "two_segment_attention"]

@@ -137,5 +137,31 @@ class TestSharedPrefixDecode(unittest.TestCase):
     self._decode_matches_full_recompute(use_prefill=True)
 
 
+class TestRolloutAttention(unittest.TestCase):
+  def test_matches_softmax_over_prompt_slot_and_own_ring_keys(self):
+    from tinygrad.llm.nemotron_h_attention import rollout_attention
+    rng = np.random.default_rng(0)
+    batch, heads, kv_heads, width, prompts, rows, span, ring = 5, 4, 2, 8, 3, 2, 16, 8
+    q = rng.standard_normal((batch, heads, 1, width)).astype(np.float32)
+    pk, pv = (rng.standard_normal((prompts, kv_heads, span, width)).astype(np.float32) for _ in range(2))
+    sk, sv = (rng.standard_normal((batch, kv_heads, ring, width)).astype(np.float32) for _ in range(2))
+    lane_prompt, prefix_lengths, lengths = [0, 1, 0, 1, 2], [5, 11, 7], [3, 1, 8, 5, 2]
+    lane_rows, lane_slot = [0, 2, 1, 3, 4, 0], [0, 2, 1, 3, 4]  # slot g row j -> lane; lane -> g*rows + j
+    for row, chunk in ((2, 4), (7, 16)):  # ring wrap-around, one and several key chunks
+      out = rollout_attention(Tensor(q), Tensor(pk), Tensor(pv), Tensor(sk), Tensor(sv.transpose(0, 1, 3, 2).copy()),
+                              Tensor(lane_rows, dtype=dtypes.int32), Tensor(lane_slot, dtype=dtypes.int32),
+                              Tensor(prefix_lengths, dtype=dtypes.int32), Tensor(lengths, dtype=dtypes.int32), row,
+                              chunk).numpy()
+      for b in range(batch):
+        g = lane_prompt[b]
+        own = [w for w in range(ring) if (row - w) % ring < lengths[b]]
+        keys = np.concatenate([pk[g, :, :prefix_lengths[g]], sk[b][:, own]], 1)
+        values = np.concatenate([pv[g, :, :prefix_lengths[g]], sv[b][:, own]], 1)
+        for h in range(heads):
+          scores = keys[h // (heads // kv_heads)] @ q[b, h, 0] / np.sqrt(width)
+          p = np.exp(scores - scores.max())
+          np.testing.assert_allclose(out[b, h, 0], p @ values[h // (heads // kv_heads)] / p.sum(), rtol=1e-4, atol=1e-5)
+
+
 if __name__ == "__main__":
   unittest.main()
