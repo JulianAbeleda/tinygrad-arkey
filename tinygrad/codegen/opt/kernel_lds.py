@@ -652,6 +652,7 @@ class PrecontractPipelineTemplate:
   subtile_n: UOp
   contracts: tuple[PrecontractContractSpec, ...]
   pipeline_plan: object
+  vector_global_loads: bool = False   # Renderer.precontract_vector_global_loads
 
   def __post_init__(self) -> None:
     factors = derive_precontract_factors(self.geometry, self.tc)
@@ -671,7 +672,7 @@ class PrecontractPipelineTemplate:
 
   def producer(self, epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
     return instantiate_precontract_producer(self.geometry, tc=self.tc, allocation=self.allocation,
-      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot)
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, vector_global_loads=self.vector_global_loads)
 
   def fragments(self, epoch:UOp, slot:UOp, ready:UOp, k_substep:int) -> PrecontractFragmentInstance:
     if not 0 <= k_substep < self.factors.k_substeps: raise ValueError("precontract K substep is out of range")
@@ -787,7 +788,7 @@ def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_byte
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                      operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
                                      epoch:UOp, slot:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
-                                     logical_k_block:UOp|None=None) -> PrecontractProducerInstance:
+                                     logical_k_block:UOp|None=None, vector_global_loads:bool=False) -> PrecontractProducerInstance:
   factors=derive_precontract_factors(geometry,tc)
   item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
   vector_elements = vector_bytes // item_bytes
@@ -810,8 +811,11 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
           if operand.fragment_provider is not None else \
           operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value
       else:
-        value = UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
-          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
+        coords = {operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k}
+        value = _dense_vector_load(operand, coords, tc.dtype_in, vector_elements) if vector_global_loads else None
+        if value is None:
+          value = UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
+            operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       # Keep lane ownership explicit.  A vector pointer with a vectorized
       # logical index can be lowered as INDEX(LOAD(ptr), lane); that turns the
@@ -824,6 +828,22 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
                                for elem in range(vector_elements))))
     role_nodes.append(UOp.group(*stores))
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
+
+def _dense_vector_load(operand, coords:dict, dtype, width:int) -> UOp|None:
+  """One b128 global load for a dense operand's ``width`` consecutive K elements, or None for the scalar fallback.
+
+  Admitted only for an ungated ``INDEX(PARAM, idx)`` whose address advances by exactly one element per K step and
+  whose first element address is provably width-aligned, so the vector covers exactly the scalar elements."""
+  src = operand.source
+  if src.op is not Ops.INDEX or len(src.src) != 2 or src.src[0].op is not Ops.PARAM or src.dtype != dtype: return None
+  idx = src.src[1]
+  if idx.dtype != dtypes.weakint or idx.get_valid().op is not Ops.CONST: return None
+  start = idx.substitute(coords).simplify()
+  step = (idx.substitute({**coords, operand.k_axis:coords[operand.k_axis]+1}) - start).simplify()
+  if step.op is not Ops.CONST or step.arg != 1: return None
+  if start.divides(width) is None or start.vmin < 0 or start.vmax + width > src.src[0].ptrdtype.size: return None
+  return src.src[0].index(start, dtype=dtype.vec(width)).load()
+
 
 def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, allocation:UOp, threads:PrecontractThreadAxes,
                                       k_substep:UOp, subtile_m:UOp, subtile_n:UOp,

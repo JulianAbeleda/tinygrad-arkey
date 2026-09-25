@@ -112,6 +112,11 @@ class Renderer:
   # distinct from `None` for this fact -- a target either declares the guarantee, citing the hardware
   # property it rests on, or it doesn't.
   lds_read_before_next_write_ordered: bool|None = None
+  # Whether a precontract pipeline's cooperative producer may fetch a dense operand's K run as one aligned b128
+  # global load instead of per-element loads (kernel_lds.py::_dense_vector_load). The load covers exactly the
+  # same elements (unit K stride and alignment are proven per load), so this is an optimization: default off, so
+  # no target's rendered kernels move without its own measurement.
+  precontract_vector_global_loads: bool = False
   pre_matcher: PatternMatcher|None = None
   extra_matcher: PatternMatcher|None = None
   code_for_op: dict[Ops, Callable] = {}

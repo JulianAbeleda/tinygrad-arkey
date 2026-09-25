@@ -317,6 +317,9 @@ class CUDARenderer(CStyleLanguage):
   barrier = "__syncthreads();"
   float4 = "make_float4"
   global_bf16_vector_widths = (8, 4, 2)
+  # sm_120, 2026-09-25: scalar LDG.E.U16 x8 per b128 vector -> one LDG.E.128; bf16 GEMM M=128 N=17536 K=3136
+  # 218 -> 149 us, bit-exact (extra/llm_research/prefill/dense_bf16_candidate_gate.py).
+  precontract_vector_global_loads = True
   gep_arr_threshold = 8
   code_for_workitem = {"g": lambda x: f"blockIdx.{chr(120+int(x))}", "l": lambda x: f"threadIdx.{chr(120+int(x))}",
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+int(x))}+threadIdx.{chr(120+int(x))})"}

@@ -608,7 +608,8 @@ class Scheduler:
                   storage_policy_from_stage1)
                 from tinygrad.codegen.opt.kernel_lds import binary_axis_count, fold_binary_axes
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
-                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
+                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline,
+                  vector_global_loads=self.ren.precontract_vector_global_loads)
                 factors=template.factors
                 def _produce(epoch,slot,reuse):
                   p=template.producer(epoch,slot)

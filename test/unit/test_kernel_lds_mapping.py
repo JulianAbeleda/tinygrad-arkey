@@ -216,3 +216,25 @@ def test_single_subtile_per_warp_collapses_to_const_zero_like_a_single_wave():
     validate_precontract_thread_axes(geometry, factors, threads, zero, zero)   # 4 subtiles in n cannot collapse
   with pytest.raises(ValueError, match="subtile axes"):
     validate_precontract_thread_axes(geometry, factors, threads, UOp.const(dtypes.weakint, 1), UOp.range(4, 92, AxisType.UPCAST))
+
+
+def test_dense_vector_load_admits_only_unit_stride_aligned_k_runs():
+  from types import SimpleNamespace
+  from tinygrad.codegen.opt.kernel_lds import _dense_vector_load
+  from tinygrad.uop.ops import UOp, Ops, AxisType
+  from tinygrad.renderer import Renderer
+  from tinygrad.renderer.cuda import CUDARenderer
+  assert Renderer.precontract_vector_global_loads is False and CUDARenderer.precontract_vector_global_loads is True
+  param = UOp.param(1, dtypes.bfloat16.ptr(4*64))
+  row, k = UOp.range(4, 80), UOp.range(64, 81, AxisType.REDUCE)
+  def operand(idx): return SimpleNamespace(source=param.index(idx), row_axis=row, k_axis=k)
+  tile_row = UOp.range(4, 82)
+  coords = {row: tile_row, k: UOp.const(dtypes.weakint, 16)}
+  ld = _dense_vector_load(operand(row*64+k), coords, dtypes.bfloat16, 8)
+  assert ld is not None and ld.op is Ops.LOAD and ld.dtype == dtypes.bfloat16.vec(8)
+  assert _dense_vector_load(operand(row*64+k*2), coords, dtypes.bfloat16, 8) is None                 # K stride 2
+  assert _dense_vector_load(operand(row*60+k), coords, dtypes.bfloat16, 8) is None                   # row start misaligned
+  assert _dense_vector_load(operand(row*64+k), {row: tile_row, k: UOp.const(dtypes.weakint, 20)}, dtypes.bfloat16, 8) is None
+  assert _dense_vector_load(operand(row*64+k), coords, dtypes.half, 8) is None                       # dtype mismatch
+  assert _dense_vector_load(operand(row*64+k), {row: UOp.const(dtypes.weakint, 3), k: UOp.const(dtypes.weakint, 60)},
+                            dtypes.bfloat16, 8) is None                                                # would read past the end
