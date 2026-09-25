@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from tinygrad.uop.ops import UOp
+from tinygrad.uop.ops import ATTENTION_MAX_KV_TOKENS, UOp
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,8 @@ class FlashPrefillAttentionSpec:
       raise ValueError(f"FlashPrefillAttentionSpec requires a positive 16-multiple head_dim <=128, got {self.Hd}")
     if self.q_tokens <= 0 or self.q_tokens % 16:
       raise ValueError(f"q_tokens must be a positive multiple of 16, got {self.q_tokens}")
-    if self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096:
-      raise ValueError(f"kv_tokens must be a positive multiple of 16 and <=4096, got {self.kv_tokens}")
+    if self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > ATTENTION_MAX_KV_TOKENS:
+      raise ValueError(f"kv_tokens must be a positive multiple of 16 and <={ATTENTION_MAX_KV_TOKENS}, got {self.kv_tokens}")
     if self.Hkv <= 0 or self.Hq <= 0 or self.Hq % self.Hkv:
       raise ValueError(f"Hq must be a positive multiple of Hkv, got Hq={self.Hq} Hkv={self.Hkv}")
     if self.acc_blocks not in {1, 2, 4, 8}:
