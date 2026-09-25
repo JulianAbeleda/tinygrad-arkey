@@ -3,6 +3,7 @@ import os
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, dedup, prod
+from tinygrad.codegen.opt.kernel_lds import AsyncCopyOps
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
 from tinygrad.uop.ops import LoadSchedule, Ops, PatternMatcher, RegionLoad, StrictAfter, UPat, UOp
 
@@ -320,6 +321,16 @@ class CUDARenderer(CStyleLanguage):
   # sm_120, 2026-09-25: scalar LDG.E.U16 x8 per b128 vector -> one LDG.E.128; bf16 GEMM M=128 N=17536 K=3136
   # 218 -> 149 us, bit-exact (extra/llm_research/prefill/dense_bf16_candidate_gate.py).
   precontract_vector_global_loads = True
+  # sm_80+ cp.async (16-byte, L2-only .cg) with commit/wait groups, as CUTLASS's multistage sm80 GEMMs use.
+  async_copy_ops = AsyncCopyOps(
+    copy16='asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" :: "r"((unsigned)__cvta_generic_to_shared({0})), "l"({1}) : "memory");',
+    commit='asm volatile("cp.async.commit_group;" ::: "memory");',
+    wait='asm volatile("cp.async.wait_group {n};" ::: "memory");')
+  # Static __shared__ is capped at 48 KB by ptxas; larger arenas are extern __shared__ sized at launch (NVProgram /
+  # CUDAProgram shared_mem). sm_120 allows 99 KB (101376 B) of shared memory per block.
+  max_static_local_bytes = 48 * 1024
+  max_runtime_local_bytes = 101376
+  runtime_local_launch_aux = True
   gep_arr_threshold = 8
   code_for_workitem = {"g": lambda x: f"blockIdx.{chr(120+int(x))}", "l": lambda x: f"threadIdx.{chr(120+int(x))}",
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+int(x))}+threadIdx.{chr(120+int(x))})"}

@@ -251,7 +251,8 @@ def candidate_registry(candidate_set: CandidateSet) -> CandidateRegistry:
     if any(shape[axis] % tile[index] for index,axis in enumerate(("m", "n", "k"))):
       raise ValueError("candidate workload is not exactly tile divisible")
     pipeline = KernelStage1PipelinePlan(schedule["pipeline"]["buffer_count"], geometry.lds_bytes,
-                                        schedule["pipeline"]["stage_count"])
+                                        schedule["pipeline"]["stage_count"],
+                                        async_copy=schedule["pipeline"].get("async_copy", False) is True)
     if pipeline.active_lds_bytes > entry.payload["static_constraints"]["max_lds_bytes"]:
       raise ValueError("candidate active LDS exceeds its declared limit")
     context = KernelCandidateContext(entry.payload["schema_version"], entry.canonical_identity, geometry, pipeline)

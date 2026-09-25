@@ -12,7 +12,8 @@ class StoragePolicy:
   kind: StorageKind; buffer_count: int = 1; slot_bytes: int = 0; roles: tuple[str,...] = ("A", "B")
   def __post_init__(self):
     if self.kind not in ("lds", "global_register_resident"): raise ValueError("unsupported storage kind")
-    if self.buffer_count not in (1,2): raise ValueError("buffer_count must be 1 or 2")
+    # LDS rings deeper than 2 exist only for async-copy pipelines (KernelStage1PipelinePlan.async_copy validates).
+    if self.buffer_count not in range(1, 9): raise ValueError("buffer_count must be in [1, 8]")
     if not isinstance(self.slot_bytes,int) or self.slot_bytes < 0: raise ValueError("slot_bytes must be non-negative")
     if self.kind == "lds" and self.slot_bytes <= 0: raise ValueError("LDS storage requires positive slot_bytes")
     if self.kind == "global_register_resident" and self.slot_bytes != 0: raise ValueError("register-resident storage cannot declare LDS slots")

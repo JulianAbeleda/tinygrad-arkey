@@ -2488,6 +2488,10 @@ class ScheduleHints:
     if self.name is not None and (not isinstance(self.name, str) or not self.name):
       raise ValueError("ScheduleHints.name must be None or a non-empty string")
 
+class RuntimeLocalBytes(int):
+  """Launch-sized workgroup-local bytes a program's arenas need (ProgramInfo.aux[0]), excluding any per-workgroup
+  bytes the runtime itself reserves; runtimes that reserve (NV: 1 KiB on sm_80+) add their own share."""
+
 @dataclass(frozen=True)
 class RuntimeLocalAllocation:
   """A workgroup-local arena whose storage is supplied by the launch ABI."""
