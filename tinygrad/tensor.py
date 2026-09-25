@@ -953,6 +953,13 @@ class Tensor(RandMixin):
     # backward fills .grad for every in-scope non-CONST float tensor
     tensors_need_grad: list[Tensor] = [t for tref in all_tensors if (t:=tref()) is not None and \
                                        t.uop in all_uops and t.is_floating_point() and t.uop.op is not Ops.CONST]
+    # tensors aliasing one base (e.g. Tensor(p.uop.base) or reshapes of a parameter) get ONE grad, on the tensor that already
+    # accumulates (else the oldest). Their grads are views of one computation, so they realize into one shared buffer and
+    # accumulating into each alias is an unordered double write (or a silently wrong sum).
+    by_base: dict[UOp, Tensor] = {}
+    for t in tensors_need_grad:
+      if (b:=t.uop.base) not in by_base or (t.grad is not None and by_base[b].grad is None): by_base[b] = t
+    tensors_need_grad = list(by_base.values())
     # clear contexts
     for t,g in zip(tensors_need_grad, self.gradient(*tensors_need_grad, gradient=gradient)):
       assert g.shape == t.shape, f"grad shape must match tensor shape, {g.shape!r} != {t.shape!r}"
