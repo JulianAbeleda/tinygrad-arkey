@@ -27,9 +27,9 @@ Interim/earlier targets: ≥5k tok/s aggregate at B=128; a 10k-token prime in ~1
 | Target | vLLM | Ours (latest measured) | Source (ours) |
 |---|---|---|---|
 | step @ B=1 | 5.2 ms | unknown | not found in scratchpad |
-| step @ B=8 | 6.6 ms | 7.25 ms | `status-board-20260925.md` (§ "Correction (2026-09-25, sampler agent)") |
-| step @ B=64 | 13.4 ms | 17.5 ms | `status-board-20260925.md` (same correction; also TC agent: 184.2→153.6 ms/step pre-fix in `tc-checklist.md` line 5, superseded) |
-| step @ B=128 | 22.3 ms | 29.85 ms | `status-board-20260925.md` (same correction) |
+| step @ B=8 | 6.6 ms | 7.1 ms | commit c736693a2 (P=200 chained, gpu-run time) |
+| step @ B=64 | 13.4 ms | 17.6–18.0 ms (c736693a2); 17.5 ms earlier | `status-board-20260925.md` (same correction; also TC agent: 184.2→153.6 ms/step pre-fix in `tc-checklist.md` line 5, superseded) |
+| step @ B=128 | 22.3 ms | 30.0–31.0 ms | commit c736693a2; 29.85 ms in status-board correction |
 | 10k prefill, warm | 0.37 s | 7.0 s (warm); ~88 s cold | `nemotron_checklist.md` item 6 (`prime stall`, unresolved `[-]`) |
 | 10k prefill (TC agent scratch-tree, patched) | 0.37 s | L=2048: 1.15 → 0.70 s; L=10000: OOM both arms | `tc-checklist.md` item 5 |
 
