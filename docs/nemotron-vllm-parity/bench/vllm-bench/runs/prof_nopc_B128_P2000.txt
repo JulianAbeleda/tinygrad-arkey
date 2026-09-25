@@ -1,0 +1,90 @@
+kernels captured: 109446  span 16070.7 ms  graphId column: True
+cudaGraphLaunch calls: 299
+kernels inside graph launches: 80341 / 109446
+kernels per graph launch (size:count): {269: 285, 273: 10, 227: 3, 265: 1}
+steady steps: 148  GPU step period: 23.006 ms  kernel-busy per step: 22.859 ms  (99.4% busy)
+kernels per step: 303.0  (in-graph: 269.0)
+
+kernel                                                                               class                       /step   us/step  share  grid/block/regs/smem
+_selective_scan_update_kernel                                                        ssm_state_update             21.0   13414.2  58.7%  (20,128,96)/(128,1,1) r35 s256
+flash_fwd_splitkv_kernel                                                             attention                     4.0    2790.4  12.2%  (1,128,8)/(128,1,1) r180 s49152
+Kernel2 grid16x4x3                                                                   GEMM                         42.0    2044.3   8.9%  (16,4,3)/(128,1,1) r158 s73728
+Kernel2 grid16x18x1                                                                  GEMM                         21.0    1872.6   8.2%  (16,18,1)/(128,1,1) r158 s73728
+Kernel2 grid16x7x3                                                                   GEMM                         17.0    1149.3   5.0%  (16,7,3)/(128,1,1) r230 s81920
+Kernel2 grid16x128x1                                                                 GEMM                          1.0     578.5   2.5%  (16,128,1)/(128,1,1) r158 s73728
+Kernel2 grid16x7x1                                                                   GEMM                          4.0     200.3   0.9%  (16,7,1)/(128,1,1) r158 s73728
+_causal_conv1d_update_kernel                                                         mamba_conv                   21.0     174.9   0.8%  (128,38,1)/(128,1,1) r36 s0
+splitKreduce_kernel grid98x8x1                                                       GEMM                         42.0     106.3   0.5%  (98,8,1)/(32,16,1) r42 s0
+_gumbel_sample_kernel                                                                sampling/reduce               1.0      86.5   0.4%  (128,128,1)/(128,1,1) r64 s32
+_topk_log_softmax_kernel                                                             sampling/reduce               1.0      81.7   0.4%  (128,1,1)/(128,1,1) r26 s16
+triton_red_fused__to_copy_add_mean_mul_pow_rsqrt_silu_view_0                         gated_rmsnorm(+silu gate)    21.0      60.7   0.3%  (512,1,1)/(256,1,1) r40 s32
+triton_red_fused_fused_add_rms_norm_1                                                norm/fused                   21.0      48.4   0.2%  (128,1,1)/(256,1,1) r34 s32
+gatherTopK                                                                           sampling/reduce               1.0      46.1   0.2%  (1024,1,1)/(256,1,1) r39 s1184
+computeBlockDigitCounts                                                              sampling/reduce               2.0      43.6   0.2%  (1024,1,1)/(256,1,1) r22 s1024
+triton_red_fused_fused_add_rms_norm_3                                                norm/fused                   13.0      25.7   0.1%  (128,1,1)/(512,1,1) r37 s64
+elementwise_kernel                                                                   other(elementwise/copy)      12.0      20.0   0.1%  (20,1,1)/(128,1,1) r18 s0
+triton_poi_fused_pow_relu_2                                                          relu2                        13.0      20.0   0.1%  (1568,1,1)/(128,1,1) r16 s0
+_ranks_kernel                                                                        sampling/reduce               1.0      10.5   0.0%  (128,1,1)/(128,1,1) r40 s16
+triton_red_fused_fused_add_rms_norm_0                                                norm/fused                    4.0      10.1   0.0%  (128,1,1)/(256,1,1) r34 s32
+triton_red_fused_fused_add_rms_norm_2                                                norm/fused                    4.0       9.0   0.0%  (128,1,1)/(512,1,1) r39 s64
+triton_poi_fused_pow_relu_1                                                          relu2                         4.0       7.4   0.0%  (3136,1,1)/(256,1,1) r16 s0
+reshape_and_cache_flash_kernel                                                       attention                     4.0       6.3   0.0%  (128,1,1)/(512,1,1) r48 s0
+index_elementwise_kernel                                                             other(elementwise/copy)       2.0       5.5   0.0%  (1,1,1)/(128,1,1) r48 s0
+_gather_block_tables_kernel                                                          sampling/reduce               1.0       5.4   0.0%  (7,128,1)/(128,1,1) r36 s0
+DeviceScanByKeyKernel                                                                other(elementwise/copy)       2.0       5.4   0.0%  (1,1,1)/(224,1,1) r72 s17936
+computeBlockwiseWithinKCounts                                                        sampling/reduce               2.0       4.6   0.0%  (1024,1,1)/(256,1,1) r16 s36
+triton_red_fused__to_copy_embedding_rms_norm_0                                       norm/fused                    1.0       3.9   0.0%  (128,1,1)/(256,1,1) r25 s32
+_combine_sampled_and_draft_tokens_kernel                                             sampling/reduce               1.0       3.1   0.0%  (128,1,1)/(128,1,1) r18 s0
+_get_num_sampled_and_rejected_kernel                                                 sampling/reduce               1.0       2.8   0.0%  (128,1,1)/(128,1,1) r16 s0
+reduce_kernel                                                                        sampling/reduce               1.0       2.8   0.0%  (8,1,1)/(32,16,1) r40 s16
+_compute_slot_mappings_kernel                                                        other(elementwise/copy)       1.0       2.6   0.0%  (7,129,1)/(128,1,1) r58 s0
+_post_update_kernel                                                                  other(elementwise/copy)       1.0       2.6   0.0%  (128,1,1)/(32,1,1) r30 s0
+computeDigitCumSum                                                                   sampling/reduce               2.0       2.2   0.0%  (128,1,1)/(256,1,1) r40 s1184
+vectorized_elementwise_kernel                                                        other(elementwise/copy)       3.0       1.8   0.0%  (1,1,1)/(128,1,1) r16 s0
+computeBlockwiseKthCounts                                                            sampling/reduce               1.0       1.6   0.0%  (1,1,1)/(256,1,1) r32 s0
+_scatter_gather_elementwise_kernel                                                   sampling/reduce               1.0       1.5   0.0%  (1,1,1)/(128,1,1) r28 s0
+vectorized_gather_kernel                                                             sampling/reduce               1.0       1.3   0.0%  (128,2,1)/(256,1,1) r24 s0
+DeviceScanByKeyInitKernel                                                            sampling/reduce               2.0       1.0   0.0%  (1,1,1)/(128,1,1) r16 s0
+_prepare_pos_seq_lens_kernel                                                         other(elementwise/copy)       1.0       1.0   0.0%  (129,1,1)/(128,1,1) r29 s0
+_scatter_num_accepted_kernel                                                         other(elementwise/copy)       1.0       0.9   0.0%  (128,1,1)/(128,1,1) r16 s0
+CatArrayBatchedCopy_alignedK_contig                                                  other(elementwise/copy)       1.0       0.9   0.0%  (1,2,1)/(128,1,1) r27 s0
+fill                                                                                 sampling/reduce               1.0       0.6   0.0%  (1,1,1)/(512,1,1) r16 s0
+elementwise_kernel_with_index                                                        other(elementwise/copy)       1.0       0.5   0.0%  (3,1,1)/(64,1,1) r16 s0
+
+class                       /step   us/step  share
+ssm_state_update             21.0   13414.2  58.7%
+GEMM                        127.0    5951.4  26.0%
+attention                     8.0    2796.6  12.2%
+sampling/reduce              20.0     295.4   1.3%
+mamba_conv                   21.0     174.9   0.8%
+norm/fused                   43.0      97.1   0.4%
+gated_rmsnorm(+silu gate)    21.0      60.7   0.3%
+other(elementwise/copy)      25.0      41.1   0.2%
+relu2                        17.0      27.4   0.1%
+
+full demangled names of top 25:
+- _selective_scan_update_kernel
+- void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)128, (int)64, (int)64, (int)4, (bool)0, (bool)0, cutlass::bfloat16_t, Flash_kernel_traits<(int)128, (int)64, (int)64, (int)4, cutlass::bfloat16_t>>, (bool)0, (bool)0, (bool)0, (bool)0, (bool)1, (bool)0, (bool)0, (bool)0>(flash::Flash_fwd_params)
+- void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)
+- void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)
+- void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)
+- void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)
+- void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)
+- _causal_conv1d_update_kernel
+- void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, (bool)0, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, (bool)1, (bool)0, (bool)0, (bool)0>(cublasLt::cublasSplitKParams<T6>, const T4 *, const T10 *, T9 *, T5 *, const T6 *, const T6 *, const T11 *, const T4 *, T11 *, void *, long, T6 *, int *, T6 *, T6 *, const T6 *, const T6 *, const T6 *
+- _gumbel_sample_kernel
+- _topk_log_softmax_kernel
+- triton_red_fused__to_copy_add_mean_mul_pow_rsqrt_silu_view_0
+- triton_red_fused_fused_add_rms_norm_1
+- void at::native::mbtopk::gatherTopK<c10::BFloat16, unsigned int, (int)2>(at::cuda::detail::TensorInfo<const T1, T2>, T2, T2, bool, unsigned int, T2, at::cuda::detail::TensorInfo<T1, T2>, T2, at::cuda::detail::TensorInfo<long, T2>, T2, unsigned int, unsigned int, T1 *, unsigned int *, unsigned int *, unsigned int)
+- void at::native::mbtopk::computeBlockDigitCounts<c10::BFloat16, unsigned int, unsigned int, (int)2>(at::cuda::detail::TensorInfo<const T1, T2>, unsigned int, unsigned int *, unsigned int, T2, int, int, unsigned int, T3, T3 *, short *)
+- triton_red_fused_fused_add_rms_norm_3
+- void at::native::elementwise_kernel<(int)128, (int)2, void at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase &)::[lambda() (instance 3)]::operator ()() const::[lambda() (instance 7)]::operator ()() const::[lambda(float) (instance 1)]>(at::TensorIteratorBase &, const T1 &)::[lambda(int) (instance 1)]>(int, T3)
+- triton_poi_fused_pow_relu_2
+- _ranks_kernel
+- triton_red_fused_fused_add_rms_norm_0
+- triton_red_fused_fused_add_rms_norm_2
+- triton_poi_fused_pow_relu_1
+- void vllm::reshape_and_cache_flash_kernel<__nv_bfloat16, __nv_bfloat16, (vllm::Fp8KVCacheDataType)0>(const T1 *, const T1 *, T2 *, T2 *, const long *, long, long, long, long, long, int, int, int, const float *, const float *, int)
+- void at::native::index_elementwise_kernel<(int)128, (int)4, void at::native::gpu_index_kernel<void at::native::index_kernel_impl<at::native::OpaqueType<(int)4>>(at::TensorIteratorBase &, c10::ArrayRef<long>, c10::ArrayRef<long>)::[lambda(char *, const char *, long) (instance 1)]>(at::TensorIteratorBase &, c10::ArrayRef<long>, c10::ArrayRef<long>, const T1 &, bool)::[lambda(int) (instance 1)]>(long
+- _gather_block_tables_kernel
