@@ -21,7 +21,7 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 | W8 | Slot refill: default slots 2*batch//rows+2 (~99% active while queued, CPU sim) | sampler agent | `nemotron_h_sampler.py`, `test_nemotron_h_sampler_refill.py` | parked uncommitted in ~/wt/w8; needs one GPU bench (B=32/64) |
 | I1 | One-stack RLOO loop + TIS (C=2) | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; DayCare 8d6e7ff loop, e691a13 TIS, c7f6955 predeclared; real-model smoke (R3) queued; watch backward cost | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
 | R3 | Smoke on the llama.cpp loop | after T0 | `~/DayCare` | pending | R3 in rloo-llama-countdown.md |
-| F16 | Why fp16 fails the consistency gate; mixed fp16/hi-lo scheme | fp16 agent | `~/scratchpad/fp16/` (no product code) | running | same-numerics sampler vs recompute mean <=1e-3, max <=1e-2 |
+| TIM | Localize train/inference reduction-order mismatch (Mamba scan vs recurrent step, split-KV attention, row-count kernel choice, RMSNorm); invariance plan | fp16 agent | `~/scratchpad/fp16/` -> docs/.../train-inference-mismatch-localization.md | after smoke | site table with gap reduction when unified |
 | RS | How vLLM/verl/NeMo-RL correct rollout/trainer mismatch (TIS etc.) | research agent | none | running | ranked fixes + hypotheses |
 | W5/W10 | Fusion, per-B graphs | - | - | parked | - |
 | P | 10k prefill 1.65 s vs vLLM 0.37 s | - | - | parked (about 10% of a group) | - |
