@@ -15,6 +15,7 @@ attention reads the buffer, and recurrent state is read before it is stored.
 from __future__ import annotations
 
 from tinygrad import Tensor, TinyJit, UOp, dtypes
+from tinygrad.llm.nemotron_h_decode import mamba_replay_buffers, mamba_replay_buffers_step, mamba_replay_flush
 
 
 def _fresh(value: Tensor) -> Tensor:
@@ -23,8 +24,8 @@ def _fresh(value: Tensor) -> Tensor:
 
 
 class NemotronHBatchSampler:
-  def __init__(self, model, batch: int, capacity: int, bias=None):
-    self.model, self.batch, self.capacity = model, batch, capacity
+  def __init__(self, model, batch: int, capacity: int, bias=None, ring: int = 16):
+    self.model, self.batch, self.capacity, self.ring = model, batch, capacity, ring
     config = model.config
     self.bias = _fresh(Tensor(bias) if bias is not None else Tensor.zeros(config.vocab_size))
     probe = model.token_embd(Tensor([[0] * config.conv_kernel])).float()
@@ -36,12 +37,13 @@ class NemotronHBatchSampler:
         self.buffers.append({key: _fresh(Tensor.zeros(batch, heads, capacity, width, dtype=cache[key].dtype))
                              for key in ("k", "v")})
       elif block.block_type == "mamba":
-        self.buffers.append({key: _fresh(Tensor.zeros(batch, *value.shape[1:], dtype=value.dtype))
-                             for key, value in cache.items()})
+        self.buffers.append(mamba_replay_buffers(block, *(Tensor.zeros(batch, *cache[key].shape[1:],
+                                                   dtype=cache[key].dtype) for key in ("conv", "state")), ring))
       else:
         self.buffers.append(None)
     self.position = UOp.variable("position", 0, capacity - 1)
-    self.step = TinyJit(self._step)
+    self.slot, self.count = UOp.variable("slot", 0, ring - 1), UOp.variable("count", 1, ring)
+    self.step, self.flush = TinyJit(self._step), TinyJit(self._flush)
 
   def prime(self, prompt: list[int]) -> Tensor:
     """Run the prompt once and broadcast its state; returns the last position's hidden state."""
@@ -54,7 +56,7 @@ class NemotronHBatchSampler:
           buffer[key][:, :, :len(prompt)] = cache[key].expand(self.batch, *cache[key].shape[1:])
           buffer[key].realize()
       elif block.block_type == "mamba":
-        for key, value in cache.items():
+        for key, value in cache.items():  # the ring starts empty: slot 0 masks every older entry
           buffer[key].assign(value.expand(self.batch, *value.shape[1:])).realize()
     return hidden[:, -1:].expand(self.batch, 1, hidden.shape[-1]).contiguous().realize()
 
@@ -71,7 +73,7 @@ class NemotronHBatchSampler:
   def first(self, hidden: Tensor, temperature: float = 1.0) -> tuple[Tensor, Tensor]:
     return self._sample(hidden, Tensor([temperature]))
 
-  def _step(self, tokens: Tensor, position: UOp, temperature: Tensor) -> tuple[Tensor, Tensor]:
+  def _step(self, tokens: Tensor, position: UOp, slot: UOp, temperature: Tensor) -> tuple[Tensor, Tensor]:
     # Materialize the residual stream at every block boundary. Left lazy, a block's output feeds several kernels
     # (the next norm, the residual add) and each one recomputes the producing projection or embedding lookup.
     hidden = self.model.token_embd(tokens.reshape(self.batch, 1)).float().contiguous()
@@ -88,14 +90,17 @@ class NemotronHBatchSampler:
         attended = q.scaled_dot_product_attention(buffer["k"], buffer["v"], attn_mask=mask, enable_gqa=True)
         hidden = (hidden + block.attn_output(attended.transpose(1, 2).reshape(self.batch, 1, -1)).cast(hidden.dtype))
       elif block.block_type == "mamba":
-        hidden, carried = block.cached(hidden, buffer, keep_graph=True)
-        hidden, *states = (hidden.contiguous().realize(), *(carried[key].contiguous().realize() for key in buffer))
-        for key, state in zip(buffer, states):
-          buffer[key].assign(state).realize()
+        hidden = mamba_replay_buffers_step(block, hidden, buffer, slot)
       else:
         hidden, _ = block.cached(hidden, None, keep_graph=True)
       hidden = hidden.contiguous()
     return self._sample(hidden, temperature)
+
+  def _flush(self, count: UOp) -> None:
+    """Fold the ring's first `count` tokens into every Mamba checkpoint state."""
+    for block, buffer in zip(self.model.blk, self.buffers):
+      if block.block_type == "mamba":
+        mamba_replay_flush(block, buffer, count)
 
   def generate(self, prompt: list[int], steps: int, temperature: float = 1.0, stop: set[int] | None = None):
     """Sample up to `steps` tokens for every sequence; returns (tokens, logprobs) as lists per sequence."""
@@ -108,8 +113,11 @@ class NemotronHBatchSampler:
     for step in range(1, steps):
       if all(finished):
         break
+      slot = (step - 1) % self.ring
       token, chosen = self.step(Tensor(tokens[-1], dtype=dtypes.int32).realize(),
-                                self.position.bind(len(prompt) + step - 1), rate)
+                                self.position.bind(len(prompt) + step - 1), self.slot.bind(slot), rate)
+      if slot == self.ring - 1:
+        self.flush(self.count.bind(self.ring))
       tokens.append(token.numpy().tolist())
       logprobs.append(chosen.numpy().tolist())
       finished = [done or (bool(stop) and t in stop) for done, t in zip(finished, tokens[-1])]

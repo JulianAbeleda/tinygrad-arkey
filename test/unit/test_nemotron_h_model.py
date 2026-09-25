@@ -101,7 +101,8 @@ class TestNemotronHBatchSampler(unittest.TestCase):
       except Exception: return None
     def readers(weight: Tensor) -> int:
       return sum(1 for c in calls if any(buffer_of(x) is weight.uop.buffer for x in c.src[1:]))
-    for weight in (model.output.weight, model.token_embd.weight, model.blk[1].ffn_up.weight, model.blk[1].ffn_down.weight,
+    for weight in (model.output.weight, model.token_embd.weight, model.blk[0].ssm_in.weight, model.blk[0].ssm_out.weight,
+                   model.blk[1].ffn_up.weight, model.blk[1].ffn_down.weight,
                    model.blk[2].attn_output.weight):
       self.assertEqual(readers(weight), 1)
 
