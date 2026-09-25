@@ -148,7 +148,7 @@ class TestNemotronHRolloutSampler(unittest.TestCase):
   def test_refilled_lanes_across_prompts_match_sequential_recompute(self):
     from tinygrad.llm.nemotron_h_sampler import NemotronHRolloutSampler
     model = tiny_model()
-    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4, 8, 19, 25], [11]]
+    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4, 8, 19, 25], [11, 4]]
     # 3 lanes, 4 prompts x 2 rollouts, 2 prompt slots, a 4-step window over a 2-step ring: lanes are refilled
     # mid-run with other prompts' rollouts, and generated keys wrap the 16-row ring
     sampler = NemotronHRolloutSampler(model, batch=3, capacity=16, prefix_capacity=8, prompts=2, rows=2, ring=2,
