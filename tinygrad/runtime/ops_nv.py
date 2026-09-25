@@ -22,10 +22,19 @@ nv_gpu = nv_570 # default to 570
 PMA = ContextVar("PMA", abs(VIZ.value)>=2)
 
 def _nv_relax_internal_membar(qmd:QMD) -> bool:
-  """Drop only the system membar on a Blackwell QMD that has a same-queue dependent successor."""
+  """Drop only the system membar on a Blackwell QMD that has a same-queue dependent successor.
+
+  Only this queue's dependent chain is ordered without it. A signal() makes the chain's writes visible to another
+  queue or the host, so it restores the membar on every QMD relaxed since the previous signal (_nv_restore_membars)
+  and a QMD carrying a release is never relaxed."""
   if qmd.ver < 5 or not int(os.environ.get("NV_RELAX_INTERNAL_QMD_MEMBAR", "1")): return False
+  if qmd.read("release0_enable") or qmd.read("release1_enable"): return False
   qmd.write(cwd_membar_type=nv_gpu.NVCEC0_QMDV05_00_CWD_MEMBAR_TYPE_L1_NONE)
   return True
+
+def _nv_restore_membars(relaxed:list[QMD]) -> None:
+  for qmd in relaxed: qmd.write(cwd_membar_type=nv_gpu.NVCEC0_QMDV05_00_CWD_MEMBAR_TYPE_L1_SYSMEMBAR)
+  relaxed.clear()
 
 # Programmatic dependent launch (PDL) wiring, env-gated and name-pinned.
 # Off by default: empty lists leave every QMD byte-identical to today's
@@ -134,6 +143,7 @@ class QMD:
 class NVCommandQueue(HWQueue[HCQSignal, 'NVDevice', 'NVProgram', 'NVArgsState']):
   def __init__(self):
     self.active_qmd = None
+    self.relaxed_qmds:list[QMD] = []  # relaxed-membar QMDs since the last signal
     super().__init__()
 
   def __del__(self):
@@ -236,7 +246,7 @@ class NVComputeQueue(NVCommandQueue):
       # A dependent QMD is ordered by the compute scheduler itself.  Keep the final grid's system membar for
       # host/device completion visibility, but allow internal same-queue edges to avoid paying a full L1
       # system barrier. NV_RELAX_INTERNAL_QMD_MEMBAR=0 is the qualified rollback.
-      _nv_relax_internal_membar(self.active_qmd)
+      if _nv_relax_internal_membar(self.active_qmd): self.relaxed_qmds.append(self.active_qmd)
       if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
         _nv_split_phase_arm(self.active_qmd, qmd, getattr(self, "nv_split_producer_plan", None), getattr(self, "nv_split_consumer_plan", None))
       elif self.active_prg_name is not None:
@@ -247,6 +257,7 @@ class NVComputeQueue(NVCommandQueue):
     return self
 
   def signal(self, signal:HCQSignal, value:sint=0):
+    _nv_restore_membars(self.relaxed_qmds)
     if self.active_qmd is not None:
       for i in range(2):
         if self.active_qmd.read(f'release{i}_enable') == 0:
