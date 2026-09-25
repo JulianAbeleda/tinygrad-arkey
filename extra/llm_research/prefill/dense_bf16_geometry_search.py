@@ -89,11 +89,16 @@ def run_config(geom, split, reps: int) -> None:
       print(json.dumps(row), flush=True)
 
 
+# Split-K partials live in the JIT's buffers for every layer of a captured graph; cap their extra footprint.
+MAX_SPLIT_EXTRA_BYTES = 16 << 20
+
+
 def select(search_rows: list[dict], controls: dict[tuple[str, int], float]) -> list[dict]:
-  """Per exact (role, rows): the fastest finite candidate that beats the ordinary path's measured time."""
+  """Per exact (role, rows): the fastest finite candidate within the split-K memory cap that beats the ordinary path."""
   best: dict[tuple[str, int], dict] = {}
   for row in search_rows:
     if "median_us" not in row or not row.get("finite") or row.get("max_rel_vs_unsplit", 0.0) > 1e-4: continue
+    if (row["split_k"] - 1) * row["m"] * row["n"] * 4 > MAX_SPLIT_EXTRA_BYTES: continue
     key = (row["role"], row["m"])
     if key in controls and row["median_us"] >= controls[key]: continue
     if key not in best or row["median_us"] < best[key]["median_us"]: best[key] = row

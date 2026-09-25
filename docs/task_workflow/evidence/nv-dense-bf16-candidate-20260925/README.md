@@ -27,3 +27,11 @@ schedule is derived (the 128x128 geometry reproduces it byte-for-byte).
 `gate-v2-correctness.json`: all 32 routes through the production chunk executor, shared-GPU correctness pass
 (timings there are not measurements): finite, max relative error vs fp32 oracle <= 1.7e-5; split_k == 1 rows
 bit-exact vs the safe TC path; split-K rows reassociate the K sum and are held to the oracle bound.
+
+## v3: 16-row tiles and a split-K memory cap
+
+`search-r2.jsonl` adds 16-row geometries (enabled by the single-subtile lowering fix) and split-K up to 8.
+Selection now caps split-K partials at 16 MiB of extra fp32 per call: in the chunked JIT prefill every layer's
+partials stay resident in the graph's buffers (3x L=2048 pieces: 20.3 GB -> 16.8 GB resident; base 11.1 GB).
+`gate-v3-correctness.json`: 48 routes (8 roles x rows 16..512), all finite, <= 8.2e-6 relative to the fp32 oracle,
+unsplit rows bit-exact to the safe TC path.

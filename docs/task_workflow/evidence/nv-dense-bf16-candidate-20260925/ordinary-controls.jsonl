@@ -102,3 +102,11 @@
 {"role": "ffn_up", "m": 16, "median_us": 619.62, "arm": "f32w"}
 {"role": "ffn_down", "m": 16, "median_us": 1958.72, "arm": "f32w"}
 {"role": "output", "m": 16, "median_us": 3462.69, "arm": "f32w"}
+{"role": "ssm_in", "m": 8, "median_us": 550.5, "arm": "f32w"}
+{"role": "ssm_out", "m": 8, "median_us": 1065.15, "arm": "f32w"}
+{"role": "attn_q", "m": 8, "median_us": 442.98, "arm": "f32w"}
+{"role": "attn_kv", "m": 8, "median_us": 438.5, "arm": "f32w"}
+{"role": "attn_o", "m": 8, "median_us": 713.09, "arm": "f32w"}
+{"role": "ffn_up", "m": 8, "median_us": 547.17, "arm": "f32w"}
+{"role": "ffn_down", "m": 8, "median_us": 1738.82, "arm": "f32w"}
+{"role": "output", "m": 8, "median_us": 3329.44, "arm": "f32w"}
