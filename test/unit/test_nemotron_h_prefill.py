@@ -76,6 +76,28 @@ class TestNemotronHPrefill(unittest.TestCase):
     want = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True).numpy()
     np.testing.assert_allclose(got, want, rtol=1e-2, atol=1e-2)
 
+  def test_template_binding_follows_the_bound_weights(self):
+    from tinygrad.llm.dense_candidate_gemm import CandidateBinding
+    model = tiny_model()
+    Tensor.manual_seed(3)
+    for index in (1, 3):  # the two MLP blocks share one block graph
+      for name in ("ffn_up", "ffn_down"):
+        layer = getattr(model.blk[index], name)
+        layer.weight = Tensor.randn(*layer.weight.shape).realize()
+        layer._candidate = CandidateBinding(name, layer.weight)
+    prefill = NemotronHPrefill(model, capacity=64, piece=8)
+    kind = prefill.kinds[3]
+    self.assertEqual(prefill.templates[kind], 1)
+    template = prefill._bind(kind, prefill.bases[3])
+    try:
+      for name in ("ffn_up", "ffn_down"):
+        np.testing.assert_array_equal(getattr(template, name)._candidate.padded.numpy(),
+                                      getattr(model.blk[3], name).weight.numpy())
+    finally:
+      prefill._bind(kind, None)
+    for name in ("ffn_up", "ffn_down"):
+      np.testing.assert_array_equal(getattr(template, name)._candidate.padded.numpy(), getattr(template, name).weight.numpy())
+
   def test_unadmitted_geometry_stays_on_sdpa(self):
     self.assertFalse(NemotronHPrefill(tiny_model(), capacity=64, piece=8).fused)
 

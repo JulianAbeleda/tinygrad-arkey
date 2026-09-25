@@ -5,13 +5,16 @@ offset, so each chunk is scheduled from scratch: about 11 ms of host time per
 prompt token even with every kernel compiled, which made a 10k-token prompt
 take many minutes. Here the prompt runs in fixed-size pieces through compiled
 graphs at a symbolic position, into fixed-capacity key/value buffers and
-fixed-shape Mamba state. Each piece runs one graph per segment (the blocks
-between two attention blocks, plus the attention projections) and one
-attention graph per attention block. Splitting at attention keeps a graph's
-captured intermediates to a segment (a whole-model graph at a 2048-token piece
-holds ~22 GB while capturing), and the segment graphs, which hold the big-M
-projections, depend only on the piece size, not on where attention's key
-bound or flash block falls. A length that is not a multiple
+fixed-shape Mamba state. Each piece runs one graph per block kind and weight
+geometry (every Mamba block shares one, every MLP block one, and every
+attention block one for its projections and one for its output projection),
+with the block's weights passed in as graph inputs, plus one attention graph
+per key bound or flash block. Per-block graphs keep captured intermediates to
+one block (a whole-model graph at a 2048-token piece holds ~22 GB while
+capturing; per-segment graphs ran out of VRAM at 1024-token pieces of a 10k
+prompt), and hidden states alternate between two persistent buffers per piece
+size. A routed projection's tile-padded weight lives in a binding outside the
+state dict, so binding a template block's weights rebinds that too. A length that is not a multiple
 of the piece size finishes with power-of-two pieces, so a prompt uses at most
 log2(piece) extra graphs, each compiled once and reused across prompts. Attention reads keys only up to
 a power-of-two bound past the piece's last position (one graph per bound), not
@@ -35,7 +38,8 @@ from __future__ import annotations
 import functools
 
 from tinygrad import Tensor, TinyJit, UOp, dtypes
-from tinygrad.llm.dense_candidate_gemm import route_scratch
+from tinygrad.nn.state import get_state_dict
+from tinygrad.llm.dense_candidate_gemm import CandidateBinding, route_scratch
 from tinygrad.llm import nemotron_h_prefill_attention as fused_attention
 from tinygrad.llm.nemotron_h_ssd import PRECISIONS, ssd_cached
 
@@ -46,7 +50,7 @@ def _fresh(value: Tensor) -> Tensor:
 
 
 class NemotronHPrefill:
-  def __init__(self, model, capacity: int, piece: int = 256, fused: bool | None = None, mamba: str = "ssd",
+  def __init__(self, model, capacity: int, piece: int = 1024, fused: bool | None = None, mamba: str = "ssd",
                ssd_chunk: int = 256, ssd_precision: str = "float"):
     if piece & (piece - 1) or piece % model.config.scan_chunk:
       raise ValueError("piece must be a power of two and a multiple of the scan chunk")
@@ -74,50 +78,92 @@ class NemotronHPrefill:
                                                                      if b.block_type == "attention")],
                                            config.head_dim) if self.fused else None
     self.position = UOp.variable("prefill_position", 0, capacity - 1)
-    # segments end at each attention block: [bounds[i], bounds[i+1]) holds Mamba/MLP blocks, then one attention block
-    attention = [i for i, b in enumerate(model.blk) if b.block_type == "attention"]
-    self.bounds = [0, *(i + 1 for i in attention), len(model.blk)]
+    # weights are graph inputs: one graph per block kind and weight geometry serves every block of that kind
+    # (a weight may be a view of a buffer, and blocks may share buffers: the graphs take the distinct buffers)
+    self.params = [sorted(get_state_dict(block).items()) for block in model.blk]
+    Tensor.realize(*(value for params in self.params for _, value in params))
+    self.bases, self.kinds = [], []
+    for block, params in zip(model.blk, self.params):
+      bases = list(dict.fromkeys(value.uop.base for _, value in params))
+      self.bases.append(tuple(Tensor(base) for base in bases))
+      self.kinds.append((block.block_type, tuple((name, value.shape, value.dtype, bases.index(value.uop.base))
+                                                 for name, value in params),
+                         tuple((base.shape, base.dtype) for base in bases)))
+    self.templates = {kind: index for index, kind in reversed(list(enumerate(self.kinds)))}
+    self.hidden = {}  # piece size -> two float32 (1, size, dim) buffers the block graphs alternate between
+    self.queries = {}  # piece size -> the attention query buffer
     self.graphs: dict[tuple[int, int], TinyJit] = {}  # attention, keyed (piece, key bound) or (piece, -1 - block)
-    self.segment_graphs: dict[tuple[int, int], TinyJit] = {}  # (segment, piece)
+    self.block_graphs: dict[tuple, TinyJit] = {}  # (kind, piece) and ("embed", piece), ("attn_out", kind, piece)
+    self.bindings = {}  # (template block, projection) -> its own route binding, restored after each graph
     self.flash_blocks: dict[int, bool] = {}
 
-  def _segment(self, index: int, inputs: Tensor, attended: Tensor | None, position: UOp) -> tuple[Tensor, ...]:
-    """One segment: the previous attention block's output projection, the Mamba/MLP blocks up to the next
-    attention block, and that block's projections (its key/value rows written into the cache).
+  def _bind(self, kind, bases: tuple[Tensor, ...] | None):
+    """Point the template block's weights at the same views of `bases` (None: its own); returns the block."""
+    index = self.templates[kind]
+    block = self.model.blk[index]
+    for (name, old), (_, _, _, slot) in zip(self.params[index], kind[1]):
+      value = old if bases is None else Tensor(old.uop.substitute({old.uop.base: bases[slot].uop}))
+      *path, leaf = name.split(".")
+      owner = block
+      for part in path:
+        owner = owner[part] if isinstance(owner, dict) else getattr(owner, part)
+      if isinstance(owner, dict): owner[leaf] = value
+      else: setattr(owner, leaf, value)
+    # a routed projection reads its tile-padded weight through a binding outside the state dict; `.weight` is a
+    # prefix view of that buffer, so the binding follows the weight's buffer too
+    for name, layer in vars(block).items():
+      if (binding := getattr(layer, "_candidate", None)) is None: continue
+      original = self.bindings.setdefault((index, name), binding)
+      if bases is None:
+        layer._candidate = original
+        continue
+      slot = next(slot for (key, _, _, slot) in kind[1] if key == f"{name}.weight")
+      padded = Tensor(original.padded.uop.substitute({original.padded.uop.base: bases[slot].uop}))
+      layer._candidate = CandidateBinding(original.role, padded)
+    return block
 
-    Returns the hidden state, then the next attention block's float32 query (1, heads, length, Hd); the last
-    segment returns only the last position's hidden state.
-    """
-    first, stop = self.bounds[index], self.bounds[index + 1]
-    if index == 0:
-      hidden = self.model.token_embd(inputs).float()
-    else:
-      hidden, block = inputs, self.model.blk[first - 1]
+  def _embed(self, tokens: Tensor, out: Tensor) -> None:
+    out.assign(self.model.token_embd(tokens).float()).realize()
+
+  def _block(self, kind, hidden: Tensor, out: Tensor, position: UOp, *tensors: Tensor):
+    """One Mamba or MLP block (hidden -> out), or an attention block's projections (hidden -> out: the query;
+    keys and values written into the cache rows at `position`). `tensors`: the carried state (key/value
+    cache or convolution tail and scan state; none for an MLP), then weights replacing the template block's."""
+    count = 0 if kind[0] == "mlp" else 2
+    state, bases = tensors[:count], tensors[count:]
+    block = self._bind(kind, bases)
+    try:
       length = hidden.shape[1]
-      hidden = hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype)
-    length = hidden.shape[1]
-    for block, buffer in zip(self.model.blk[first:stop], self.buffers[first:stop]):
-      if block.block_type == "attention":  # the segment's last block: projections only
+      if block.block_type == "attention":
         normed = block.attn_norm(hidden)
         heads, kv_heads, width = block.n_heads, block.n_kv_heads, self.model.config.head_dim
-        q = block.attn_q(normed).reshape(1, length, heads, width).transpose(1, 2)
-        for key, layer in (("k", block.attn_k), ("v", block.attn_v)):
+        out.assign(block.attn_q(normed).reshape(1, length, heads, width).transpose(1, 2)).realize()
+        for cache, layer in zip(state, (block.attn_k, block.attn_v)):
           new = layer(normed).reshape(1, length, kv_heads, width).transpose(1, 2)
           # rounded to the key projection dtype, as the model and the sampler store keys and values
-          buffer[key][:, :, position:position + length].assign(new.cast(layer.weight.dtype).cast(buffer[key].dtype)).realize()
-        return hidden.contiguous().realize(), q.contiguous().realize()
-      if block.block_type == "mamba":
+          cache[:, :, position:position + length].assign(new.cast(layer.weight.dtype).cast(cache.dtype)).realize()
+      elif block.block_type == "mamba":
+        carry = dict(zip(("conv", "state"), state))
         if self.mamba == "ssd":
-          hidden, carried = ssd_cached(block, hidden, buffer, chunk=self.ssd_chunk, precision=self.ssd_precision)
+          result, carried = ssd_cached(block, hidden, carry, chunk=self.ssd_chunk, precision=self.ssd_precision)
         else:
-          hidden, carried = block.cached(hidden, buffer, keep_graph=True)
-        hidden, *states = (hidden.contiguous().realize(), *(carried[key].contiguous().realize() for key in buffer))
-        for key, state in zip(buffer, states):
-          buffer[key].assign(state).realize()
+          result, carried = block.cached(hidden, carry, keep_graph=True)
+        result, *states = (result.contiguous().realize(), *(carried[key].contiguous().realize() for key in carry))
+        for buffer, value in zip(state, states):
+          buffer.assign(value).realize()
+        out.assign(result).realize()
       else:
-        hidden, _ = block.cached(hidden, None, keep_graph=True)
-        hidden = hidden.contiguous().realize()
-    return (hidden[:, -1:].contiguous().realize(),)
+        out.assign(block.cached(hidden, None, keep_graph=True)[0]).realize()
+    finally:
+      self._bind(kind, None)
+
+  def _attn_out(self, kind, hidden: Tensor, attended: Tensor, out: Tensor, *bases: Tensor) -> None:
+    block = self._bind(kind, bases)
+    try:
+      length = hidden.shape[1]
+      out.assign(hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype)).realize()
+    finally:
+      self._bind(kind, None)
 
   def _attend(self, q: Tensor, k: Tensor, v: Tensor, position: UOp, keys: int, flash_block: int | None = None) -> Tensor:
     """Causal attention of the piece's queries over the cache: float32 (1, heads, length, Hd)."""
@@ -154,6 +200,11 @@ class NemotronHPrefill:
         rest -= size
     return sizes
 
+  def _graph(self, key, function) -> TinyJit:
+    if key not in self.block_graphs:
+      self.block_graphs[key] = TinyJit(function)
+    return self.block_graphs[key]
+
   def reset(self):
     for buffer in self.buffers:
       if buffer is not None:
@@ -182,17 +233,28 @@ class NemotronHPrefill:
       if key not in self.graphs:
         self.graphs[key] = TinyJit(attend)
       position = self.position.bind(start)
-      out = (Tensor([prompt[start:start + size]], dtype=dtypes.int32).realize(),)
-      attended = None
+      if size not in self.hidden:
+        self.hidden[size] = [Tensor.empty(1, size, self.model.config.dim).contiguous().realize() for _ in range(2)]
+      current, spare = self.hidden[size]
+      tokens = Tensor([prompt[start:start + size]], dtype=dtypes.int32).realize()
       with route_scratch():
-        for index in range(len(self.bounds) - 1):
-          if (index, size) not in self.segment_graphs:
-            self.segment_graphs[(index, size)] = TinyJit(functools.partial(self._segment, index))
-          out = self.segment_graphs[(index, size)](out[0], attended, position)
-          if len(out) == 2:
-            buffer = self.buffers[self.bounds[index + 1] - 1]
-            attended = self.graphs[key](out[1], buffer["k"], buffer["v"], position)
-      hidden = out[0]
+        self._graph(("embed", size), self._embed)(tokens, current)
+        for index, (block, kind) in enumerate(zip(self.model.blk, self.kinds)):
+          weights = self.bases[index]
+          graph = self._graph((kind, size), functools.partial(self._block, kind))
+          if block.block_type == "attention":
+            k, v = self.buffers[index]["k"], self.buffers[index]["v"]
+            if size not in self.queries:
+              self.queries[size] = Tensor.empty(1, block.n_heads, size, self.model.config.head_dim).contiguous().realize()
+            graph(current, self.queries[size], position, k, v, *weights)
+            attended = self.graphs[key](self.queries[size], k, v, position)
+            self._graph(("attn_out", kind, size), functools.partial(self._attn_out, kind))(current, attended, spare, *weights)
+          elif block.block_type == "mamba":
+            graph(current, spare, position, self.buffers[index]["conv"], self.buffers[index]["state"], *weights)
+          else:
+            graph(current, spare, position, *weights)
+          current, spare = spare, current
+      hidden = current[:, -1:].contiguous().realize()
       start += size
     return hidden
 
