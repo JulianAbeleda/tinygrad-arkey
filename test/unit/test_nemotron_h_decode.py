@@ -73,13 +73,13 @@ class TestNemotronHDecode(unittest.TestCase):
     self.assertIsNotNone(step.captured)
     self._check(outs, states, ref_outs, ref_states)
 
-  def _replay(self, jit: bool):
-    steps = 2 * RING + 3
+  def _replay(self, jit: bool, ring: int = RING):
+    steps = 2 * ring + 3
     block, cache, inputs = _setup(steps)
     ref_outs, ref_states = _reference(block, cache, inputs)
-    buffer = mamba_replay_buffers(block, cache["conv"], cache["state"], RING)
+    buffer = mamba_replay_buffers(block, cache["conv"], cache["state"], ring)
     if jit:
-      slot_var, count_var = UOp.variable("slot", 0, RING - 1), UOp.variable("count", 1, RING)
+      slot_var, count_var = UOp.variable("slot", 0, ring - 1), UOp.variable("count", 1, ring)
       step_jit = TinyJit(lambda hidden, slot: mamba_replay_buffers_step(block, hidden, buffer, slot))
       flush_jit = TinyJit(lambda count: mamba_replay_flush(block, buffer, count))
       step = lambda hidden, slot: step_jit(hidden, slot_var.bind(slot))
@@ -89,18 +89,20 @@ class TestNemotronHDecode(unittest.TestCase):
       flush = lambda count: mamba_replay_flush(block, buffer, count)
     flushed = []
     for index, value in enumerate(inputs):
-      slot = index % RING
+      slot = index % ring
       out = step(Tensor(value).realize(), slot)
       np.testing.assert_allclose(out.numpy(), ref_outs[index], rtol=1e-5, atol=1e-5, err_msg=f"out step {index}")
       np.testing.assert_allclose(buffer["conv"].numpy(), ref_states[index][0], rtol=1e-6, atol=1e-7)
-      if slot == RING - 1 or index == steps - 1:
+      if slot == ring - 1 or index == steps - 1:
         flush(slot + 1)
         flushed.append(index)
         self.assertLessEqual(_rel(buffer["state"].numpy(), ref_states[index][1]), 1e-6, f"state after step {index}")
-    self.assertEqual(flushed, [RING - 1, 2 * RING - 1, steps - 1])
+    self.assertEqual(flushed, [ring - 1, 2 * ring - 1, steps - 1])
 
   def test_replay_matches_cached(self): self._replay(jit=False)
   def test_replay_jit_matches_cached(self): self._replay(jit=True)
+  # the flush unrolls one term per ring slot; cover a ring size that is not a power of two
+  def test_replay_jit_odd_ring_matches_cached(self): self._replay(jit=True, ring=3)
 
 
 if __name__ == "__main__":
