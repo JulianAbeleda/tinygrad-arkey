@@ -3,8 +3,29 @@ import unittest
 
 import numpy as np
 
+from tinygrad import Tensor
+from tinygrad.llm.nemotron_h import NemotronHConfig, NemotronHModel
 from tinygrad.llm.nemotron_h_prefill import NemotronHPrefill
+from tinygrad.llm.nemotron_h_prefill_attention import fused_prefill_supported
 from test.unit.test_nemotron_h_model import tiny_model
+
+
+def flash_geometry_model() -> NemotronHModel:
+  """Small widths, but the attention geometry of Nemotron 3 Nano (Hq=40, Hkv=8, Hd=128)."""
+  config = NemotronHConfig(num_blocks=3, dim=64, vocab_size=64, norm_eps=1e-5, max_context=2048,
+                           block_types=("mamba", "attention", "mlp"),
+                           head_counts=(0, 40, 0), kv_head_counts=(0, 8, 0), ffn_dims=(0, 0, 96),
+                           head_dim=128, ssm_inner=64, ssm_state=8, ssm_groups=2, ssm_heads=4,
+                           conv_kernel=4, scan_chunk=16)
+  Tensor.manual_seed(0)
+  model = NemotronHModel(config)
+  mamba = model.blk[0]
+  mamba.ssm_a = -(Tensor.rand(config.ssm_heads, 1) + 0.1)
+  mamba.ssm_d = Tensor.rand(config.ssm_heads, 1)
+  mamba.ssm_dt = {"bias": Tensor.rand(config.ssm_heads) - 0.5}
+  mamba.ssm_conv1d.weight = Tensor.randn(*mamba.ssm_conv1d.weight.shape) * 0.3
+  mamba.ssm_norm.weight = Tensor.ones(*mamba.ssm_norm.weight.shape)
+  return model
 
 
 class TestNemotronHPrefill(unittest.TestCase):
@@ -36,6 +57,32 @@ class TestNemotronHPrefill(unittest.TestCase):
         elif block.block_type == "mamba":
           for key in ("conv", "state"):
             np.testing.assert_allclose(buffer[key].numpy(), cache[key].numpy(), rtol=1e-4, atol=1e-4)
+
+
+  def test_unadmitted_geometry_stays_on_sdpa(self):
+    self.assertFalse(NemotronHPrefill(tiny_model(), capacity=64, piece=8).fused)
+
+
+@unittest.skipUnless(fused_prefill_supported(flash_geometry_model()), "fused flash prefill needs a promoted GPU target")
+class TestNemotronHFusedPrefill(unittest.TestCase):
+  def test_fused_attention_matches_cached_prefix_across_blocks(self):
+    model = flash_geometry_model()
+    prefill = NemotronHPrefill(model, capacity=1500, piece=512)
+    self.assertTrue(prefill.fused)
+    self.assertEqual(prefill.capacity, 1536)
+    rng = np.random.default_rng(3)
+    for _ in range(2):
+      # pieces 512, 512, 256, 128, 64, 16: two full blocks, then tails at offsets 0..496 of block 2
+      prompt = [int(v) for v in rng.integers(0, 64, 1488)]
+      hidden = prefill(prompt).numpy()
+      expected, caches = model.prefix(prompt, through=len(model.blk) - 1)
+      # the flash kernel reads fp16 Q/K/V
+      np.testing.assert_allclose(hidden, expected.numpy()[:, -1:], rtol=2e-2, atol=2e-2)
+      for key in ("k", "v"):
+        np.testing.assert_allclose(prefill.buffers[1][key].numpy()[:, :, :len(prompt)], caches[1][key].numpy(),
+                                   rtol=2e-2, atol=2e-2)
+    # graphs are keyed (piece, -1 - block): one per 512-token block, shared by every piece in it
+    self.assertEqual(sorted(prefill.graphs), [(16, -3), (64, -3), (128, -3), (256, -3), (512, -2), (512, -1)])
 
 
 if __name__ == "__main__":
