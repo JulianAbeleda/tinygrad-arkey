@@ -108,6 +108,12 @@ class TestNemotronHBatchSampler(unittest.TestCase):
     self.assertEqual([len(tokens) for tokens, _ in rollouts], [1, 1])
     self.assertEqual(calls, [0])  # every first sample is a stop token: the host check ends the loop at step 2
 
+  def test_long_capacities_round_up_to_whole_attention_chunks(self):
+    from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
+    sampler = NemotronHBatchSampler(tiny_model(), batch=1, capacity=1500, prefix_capacity=10000)
+    self.assertEqual((sampler.capacity, sampler.prefix_capacity), (2048, 10240))
+    self.assertEqual(NemotronHBatchSampler(tiny_model(), batch=1, capacity=300).capacity, 300)
+
   def test_step_reads_each_projection_weight_once(self):
     # a lazily chained residual stream makes every consumer of a block's output recompute its projection
     from tinygrad.nn.state import get_parameters

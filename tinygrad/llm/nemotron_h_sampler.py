@@ -28,12 +28,19 @@ def _fresh(value: Tensor) -> Tensor:
   return Tensor.empty(*value.shape, dtype=value.dtype).assign(value).realize()
 
 
+ATTENTION_CHUNK = 1024  # nemotron_h_attention's default split-K chunk
+
+
 class NemotronHBatchSampler:
   def __init__(self, model, batch: int, capacity: int, bias=None, ring: int = 16, prefix_capacity: int | None = None,
                min_bucket: int = 64):
     """`capacity` bounds the generated tokens per sequence; `prefix_capacity` (default `capacity`) the prompt."""
+    # Attention splits a key span into 1024-key chunks only when the chunk divides it; a span that does not
+    # (P=10000) is one serial reduction per output, ~5x slower. Round long capacities up to whole chunks.
+    def whole_chunks(n: int) -> int: return n if n <= ATTENTION_CHUNK else -(-n // ATTENTION_CHUNK) * ATTENTION_CHUNK
+    capacity = whole_chunks(capacity)
     self.model, self.batch, self.capacity, self.ring = model, batch, capacity, ring
-    self.prefix_capacity, self.min_bucket = prefix_capacity or capacity, min_bucket
+    self.prefix_capacity, self.min_bucket = whole_chunks(prefix_capacity or capacity), min_bucket
     config = model.config
     self.bias = _fresh(Tensor(bias) if bias is not None else Tensor.zeros(config.vocab_size))
     probe = model.token_embd(Tensor([[0] * config.conv_kernel])).float()
@@ -45,7 +52,7 @@ class NemotronHBatchSampler:
                                                    dtype=cache[key].dtype) for key in ("conv", "state")), ring))
       else:
         self.buffers.append(None)
-    self.attention = shared_kv_for_model(model, batch, self.prefix_capacity, capacity)
+    self.attention = shared_kv_for_model(model, batch, self.prefix_capacity, capacity, chunk=ATTENTION_CHUNK)
     self.prompt_length = 0
     self.prefix_length = UOp.variable("prefix_length", 1, self.prefix_capacity)
     self.position = UOp.variable("position", 0, capacity - 1)  # suffix row of the token being fed
