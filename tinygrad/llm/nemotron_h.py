@@ -457,6 +457,13 @@ def load_state(metadata: dict, state: dict[str, Tensor], *, max_context: int | N
     if "output.weight" not in state:
         state["output.weight"] = state["token_embd.weight"]
     load_state_dict(model, state, verbose=False, consume=True, realize=False)
+    # A GGUF tensor is a lazy decode of the file's bytes: left lazy, every
+    # kernel rebuilds each bf16 weight from two single-byte loads, which cannot
+    # coalesce (a decode matvec ran at ~3% of memory bandwidth). Materialize
+    # each weight once as its own buffer in its stored dtype.
+    from tinygrad.nn.state import get_parameters
+    for weight in get_parameters(model):
+        weight.replace(weight.contiguous().realize())
     return model
 
 

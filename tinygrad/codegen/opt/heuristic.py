@@ -57,6 +57,14 @@ def bounded_reduction_unroll(upcast_lanes:int, reduction_size:int, choices:tuple
     if _pressure_admits(accumulators=upcast_lanes*choice): return choice
   return None
 
+def _loaded(u):
+  """The load under a widening CAST (and the BITCAST that reads bf16 as 16-bit words), or the value itself."""
+  inner = u
+  while inner.op in (Ops.CAST, Ops.BITCAST) and inner.src:
+    inner = inner.src[0]
+  return inner if inner.op is Ops.INDEX and inner is not u else u
+
+
 def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   if _is_composite_landing(k): return k
 
@@ -135,8 +143,9 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   MV_BLOCKSIZE, MV_THREADS_PER_ROW, MV_ROWS_PER_THREAD = getenv("MV_BLOCKSIZE", 4), getenv("MV_THREADS_PER_ROW", 8), getenv("MV_ROWS_PER_THREAD", 4)
   if k.ren.has_local and getenv("MV",1) != 0 and (MV_BLOCKSIZE > 1 or MV_THREADS_PER_ROW > 1 or MV_ROWS_PER_THREAD > 1) and  \
     k.reduceop is not None and k.reduceop.arg[0] is Ops.ADD and len(k.full_shape) >= 2 and k.ren.has_shared and \
-    (mulop:=k.reduceop.src[0]).op is Ops.MUL and mulop.src[0].op is Ops.INDEX and mulop.src[1].op is Ops.INDEX:
-    idx0, idx1 = _buf_idx(mulop.src[0]), _buf_idx(mulop.src[1])
+    (mulop:=k.reduceop.src[0]).op is Ops.MUL and all(_loaded(x).op is Ops.INDEX for x in mulop.src):
+    # A widening CAST of a load (a bf16 weight read as fp32) is still a matvec operand.
+    idx0, idx1 = _buf_idx(_loaded(mulop.src[0])), _buf_idx(_loaded(mulop.src[1]))
     if idx0 is not None and idx1 is not None and k.ranges_of(AxisType.REDUCE):
       first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
       if any(u is first_reduce_rng for u in idx0.split_uop(Ops.ADD)) and all(r in idx1.ranges for r in idx0.ranges):

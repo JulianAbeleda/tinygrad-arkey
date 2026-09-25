@@ -38,6 +38,37 @@ class TestNemotronH(unittest.TestCase):
     np.testing.assert_allclose(joined, full, rtol=1e-4, atol=1e-4)
 
 
+def tiny_metadata(config: NemotronHConfig) -> dict:
+  arch = "nemotron_h"
+  return {"general.architecture": arch, "general.file_type": 32, f"{arch}.block_count": config.num_blocks,
+          f"{arch}.attention.head_count": list(config.head_counts),
+          f"{arch}.attention.head_count_kv": list(config.kv_head_counts),
+          f"{arch}.feed_forward_length": list(config.ffn_dims), f"{arch}.context_length": config.max_context,
+          f"{arch}.embedding_length": config.dim, "tokenizer.ggml.tokens": ["t"] * config.vocab_size,
+          f"{arch}.attention.layer_norm_rms_epsilon": config.norm_eps, f"{arch}.attention.key_length": config.head_dim,
+          f"{arch}.ssm.inner_size": config.ssm_inner, f"{arch}.ssm.state_size": config.ssm_state,
+          f"{arch}.ssm.group_count": config.ssm_groups, f"{arch}.ssm.time_step_rank": config.ssm_heads,
+          f"{arch}.ssm.conv_kernel": config.conv_kernel}
+
+
+class TestNemotronHLoad(unittest.TestCase):
+  def test_loaded_weights_are_realized_buffers(self):
+    # GGUF tensors arrive as lazy decodes of the file bytes; left lazy, every
+    # consumer kernel re-decodes them. load_state must materialize each one.
+    from tinygrad import dtypes
+    from tinygrad.llm.nemotron_h import load_state
+    from tinygrad.nn.state import get_parameters, get_state_dict
+    config = tiny_model().config
+    state = {name: (Tensor.ones(*value.shape) * 2).cast(dtypes.bfloat16)
+             for name, value in get_state_dict(NemotronHModel(config)).items()}
+    self.assertFalse(any(value.uop.is_realized for value in state.values()))
+    model = load_state(tiny_metadata(config), state)
+    for weight in get_parameters(model):
+      self.assertTrue(weight.uop.is_realized)
+      self.assertEqual(weight.dtype, dtypes.bfloat16)
+    self.assertEqual(model.blk[1].ffn_up.weight.float().numpy()[0, 0], 2.0)
+
+
 class TestNemotronHBatchSampler(unittest.TestCase):
   def test_batched_jit_logprobs_match_sequential_recompute(self):
     from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
