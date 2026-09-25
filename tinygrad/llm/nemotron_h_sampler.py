@@ -35,6 +35,8 @@ class NemotronHBatchSampler:
   def __init__(self, model, batch: int, capacity: int, bias=None, ring: int = 16, prefix_capacity: int | None = None,
                min_bucket: int = 64):
     """`capacity` bounds the generated tokens per sequence; `prefix_capacity` (default `capacity`) the prompt."""
+    if ring < 2:
+      raise ValueError("the Mamba replay ring needs at least 2 slots")  # 1 degenerates the slot/count variables
     # Attention splits a key span into 1024-key chunks only when the chunk divides it; a span that does not
     # (P=10000) is one serial reduction per output, ~5x slower. Round long capacities up to whole chunks.
     def whole_chunks(n: int) -> int: return n if n <= ATTENTION_CHUNK else -(-n // ATTENTION_CHUNK) * ATTENTION_CHUNK
@@ -62,6 +64,7 @@ class NemotronHBatchSampler:
     self.history = {"tokens": _fresh(Tensor.zeros(batch, capacity, dtype=dtypes.int32)),
                     "logprobs": _fresh(Tensor.zeros(batch, capacity))}
     self.flush = TinyJit(self._flush)
+    self.tokens = _fresh(Tensor.zeros(batch, dtype=dtypes.int32))
 
   def step(self, tokens: Tensor, index: int, temperature: Tensor) -> tuple[Tensor, Tensor]:
     """Feed each sequence's token at suffix row `index` (0 = first generated token); returns the next sample.
@@ -73,7 +76,12 @@ class NemotronHBatchSampler:
     bucket = suffix_bucket(index, self.capacity, self.min_bucket)
     graph = self.graphs.setdefault(bucket, TinyJit(self._step))
     slot = index % self.ring
-    out = graph(tokens, self.prefix_length.bind(self.prompt_length), self.position.bind(index), self.slot.bind(slot),
+    # The graph reads its input tokens from `self.tokens` and writes the sample back there. A caller feeding the
+    # returned tokens straight back passes that same buffer and nothing moves; handing a graph its own output as a
+    # TinyJit input would force a shadow copy outside the graph every step.
+    if tokens is not self.tokens:
+      self.tokens.assign(tokens.cast(dtypes.int32)).realize()
+    out = graph(self.prefix_length.bind(self.prompt_length), self.position.bind(index), self.slot.bind(slot),
                 temperature, bucket)
     if slot == self.ring - 1:
       self.flush(self.count.bind(self.ring))
@@ -112,8 +120,9 @@ class NemotronHBatchSampler:
   def first(self, hidden: Tensor, temperature: float = 1.0) -> tuple[Tensor, Tensor]:
     return self._sample(hidden, Tensor([temperature]))
 
-  def _step(self, tokens: Tensor, prefix_length: UOp, position: UOp, slot: UOp, temperature: Tensor,
+  def _step(self, prefix_length: UOp, position: UOp, slot: UOp, temperature: Tensor,
             bucket: int) -> tuple[Tensor, Tensor]:
+    tokens = self.tokens
     # Materialize the residual stream at every block boundary. Left lazy, a block's output feeds several kernels
     # (the next norm, the residual add) and each one recomputes the producing projection or embedding lookup.
     hidden = self.model.token_embd(tokens.reshape(self.batch, 1)).float().contiguous()
@@ -128,7 +137,8 @@ class NemotronHBatchSampler:
       hidden = hidden.contiguous()
     token, chosen = self._sample(hidden, temperature)
     self._record(token, chosen, position + 1)
-    return token, chosen
+    self.tokens.assign(token).realize()
+    return self.tokens, chosen
 
   def _record(self, token: Tensor, chosen: Tensor, column: UOp | int):
     for key, value in (("tokens", token), ("logprobs", chosen)):
@@ -184,8 +194,8 @@ class NemotronHRolloutSampler:
 
   def __init__(self, model, batch: int, capacity: int, prefix_capacity: int, prompts: int | None = None, rows: int = 8,
                bias=None, ring: int = 16, window: int = 32, prefill=None):
-    if window % ring:
-      raise ValueError("the refill window must be a whole number of replay rings")
+    if ring < 2 or window % ring:
+      raise ValueError("the refill window must be a whole number of replay rings of at least 2 slots")
     def whole_chunks(n: int) -> int: return n if n <= ATTENTION_CHUNK else -(-n // ATTENTION_CHUNK) * ATTENTION_CHUNK
     self.model, self.batch, self.ring, self.window, self.prefill = model, batch, ring, window, prefill
     self.capacity, self.prefix_capacity = whole_chunks(capacity), whole_chunks(prefix_capacity)
@@ -211,6 +221,7 @@ class NemotronHRolloutSampler:
     self.lengths = _fresh(Tensor.zeros(batch, dtype=dtypes.int32))
     self.lane_rows = _fresh(Tensor.zeros(self.prompts * rows, dtype=dtypes.int32))
     self.lane_slot = _fresh(Tensor.zeros(batch, dtype=dtypes.int32))
+    self.tokens = _fresh(Tensor.zeros(batch, dtype=dtypes.int32))  # each step's input, overwritten by its sample
     self.history = {"tokens": _fresh(Tensor.zeros(batch, window, dtype=dtypes.int32)),
                     "logprobs": _fresh(Tensor.zeros(batch, window))}
     self.row = UOp.variable("ring_row", 0, self.capacity - 1)
@@ -222,9 +233,9 @@ class NemotronHRolloutSampler:
 
   # *** device graphs ***
 
-  def _step(self, tokens: Tensor, row: UOp, slot: UOp, column: UOp, temperature: Tensor) -> Tensor:
+  def _step(self, row: UOp, slot: UOp, column: UOp, temperature: Tensor) -> None:
     self.lengths.assign(self.lengths + 1).realize()
-    hidden = self.model.token_embd(tokens.reshape(self.batch, 1)).float().contiguous()
+    hidden = self.model.token_embd(self.tokens.reshape(self.batch, 1)).float().contiguous()
     for block, buffer, attention in zip(self.model.blk, self.buffers, self.attention):
       if block.block_type == "attention":
         normed = block.attn_norm(hidden)
@@ -243,7 +254,7 @@ class NemotronHRolloutSampler:
     token, chosen = self._sample(hidden, temperature)
     for key, value in (("tokens", token), ("logprobs", chosen)):
       self.history[key][:, column:column + 1].assign(value.reshape(self.batch, 1)).realize()
-    return token
+    self.tokens.assign(token).realize()
 
   _sample = NemotronHBatchSampler._sample
 
@@ -260,10 +271,11 @@ class NemotronHRolloutSampler:
           buffer[key][lane:lane + 1].assign(state[key][source:source + 1]).realize()
     self.lengths[lane:lane + 1].assign(Tensor.zeros(1, dtype=dtypes.int32)).realize()
 
-  def _start(self, tokens: Tensor, fresh: Tensor, lane_prompt: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+  def _start(self, fresh: Tensor, lane_prompt: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor]:
     """First tokens for every lane from its prompt's last hidden state; lanes flagged `fresh` switch to them."""
     token, chosen = self._sample(self.prompt_hidden[lane_prompt], temperature)
-    return fresh.where(token, tokens).contiguous().realize(), token, chosen
+    self.tokens.assign(fresh.where(token, self.tokens)).realize()
+    return token, chosen
 
   # *** host ***
 
@@ -302,12 +314,11 @@ class NemotronHRolloutSampler:
     slots: list[dict | None] = [None] * self.prompts  # request, rollouts left to start, running rows
     lanes: list[dict | None] = [None] * self.batch
     rate = Tensor([temperature]).realize()
-    tokens = _fresh(Tensor.zeros(self.batch, dtype=dtypes.int32))
     steps = active_lane_steps = 0
     prime_time = 0.0
 
     def refill() -> bool:
-      nonlocal tokens, prime_time
+      nonlocal prime_time
       started = []
       for lane in range(self.batch):
         if lanes[lane] is not None:
@@ -343,7 +354,7 @@ class NemotronHRolloutSampler:
         self.load_lane(self.lane.bind(lane), self.source.bind(lanes[lane]["slot"]))
       fresh = Tensor([lane in started for lane in range(self.batch)]).realize()
       lane_prompt = Tensor([0 if l is None else l["slot"] for l in lanes], dtype=dtypes.int32).realize()
-      tokens, first, chosen = self.start(tokens, fresh, lane_prompt, rate)
+      first, chosen = self.start(fresh, lane_prompt, rate)
       first, chosen = first.numpy().tolist(), chosen.numpy().tolist()
       for lane in started:
         lanes[lane]["tokens"].append(int(first[lane]))
@@ -367,8 +378,7 @@ class NemotronHRolloutSampler:
 
     while refill() or any(lane is not None for lane in lanes):
       for i in range(self.window):
-        tokens = self.step(tokens, self.row.bind(steps % self.capacity), self.slot.bind(steps % self.ring),
-                           self.column.bind(i), rate)
+        self.step(self.row.bind(steps % self.capacity), self.slot.bind(steps % self.ring), self.column.bind(i), rate)
         steps += 1
         if steps % self.ring == 0:
           self.flush(self.count.bind(self.ring))

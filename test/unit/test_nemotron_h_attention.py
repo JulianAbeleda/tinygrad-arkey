@@ -137,6 +137,13 @@ class TestSharedPrefixDecode(unittest.TestCase):
     self._decode_matches_full_recompute(use_prefill=True)
 
 
+class TestExactProducts(unittest.TestCase):
+  def test_bf16_operands_multiply_exactly(self):
+    from tinygrad.llm.nemotron_h_attention import _exact_dot
+    x = Tensor([[1.0078125]], dtype=dtypes.bfloat16)  # 1 + 2**-7: its square needs 15 mantissa bits, bf16 keeps 8
+    self.assertEqual(_exact_dot(x, x).numpy()[0, 0], np.float32(1.0078125) ** 2)
+
+
 class TestRolloutAttention(unittest.TestCase):
   def test_matches_softmax_over_prompt_slot_and_own_ring_keys(self):
     from tinygrad.llm.nemotron_h_attention import rollout_attention

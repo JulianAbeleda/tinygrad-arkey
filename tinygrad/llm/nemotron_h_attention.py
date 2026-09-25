@@ -52,6 +52,15 @@ def suffix_bucket(step: int, capacity: int, minimum: int = 64) -> int:
   return next(size for size in suffix_buckets(capacity, minimum) if size > step)
 
 
+def _exact_dot(a: Tensor, b: Tensor) -> Tensor:
+  """`a @ b` of rounded (bf16) operands with every product exact and accumulated in float32.
+
+  A bf16 x bf16 multiply off the tensor core rounds each product to bf16; widening the loaded operands first keeps
+  the products exact, the rounding points `nemotron_h._attention` (training, full recompute) uses.
+  """
+  return a.float().dot(b.float())
+
+
 def _partials(scores: Tensor, values: Tensor, chunk: int, keys_last: bool = False) -> tuple[Tensor, Tensor, Tensor]:
   """Per-chunk row max, sum of exponentials and unnormalized value sum of one masked key segment.
 
@@ -81,7 +90,7 @@ def _partials(scores: Tensor, values: Tensor, chunk: int, keys_last: bool = Fals
   else:
     values = values.reshape(*lead, splits, chunk, values.shape[-1])
   return (peak.transpose(-2, -3), weights.float().sum(-1, keepdim=True).contiguous(),
-          weights.dot(values, dtype=dtypes.float).contiguous())
+          _exact_dot(weights, values).contiguous())
 
 
 def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
@@ -108,13 +117,13 @@ def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_
   # GEMM that reads the shared keys once for the whole batch
   rows = q.permute(1, 0, 2, 3).reshape(1, kv_heads, batch * group, width).contiguous()
   span = prefix_k.shape[2]
-  scores = rows.dot(prefix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = _exact_dot(rows, prefix_k.transpose(-1, -2))
   scores = (Tensor.arange(span) < prefix_length).reshape(1, 1, 1, span).where(scores, float("-inf"))
   prefix = [t.reshape(kv_heads, -1, batch, group, t.shape[-1]).permute(2, 0, 1, 3, 4)
             for t in _partials(scores, prefix_v, chunk)]
   # suffix: each sequence's own keys, rows after `step` masked
   span = suffix_k.shape[2]
-  scores = q.cast(suffix_k.dtype).contiguous().dot(suffix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = _exact_dot(q.cast(suffix_k.dtype).contiguous(), suffix_k.transpose(-1, -2))
   scores = (Tensor.arange(span) <= step).reshape(1, 1, 1, span).where(scores, float("-inf"))
   suffix = _partials(scores, suffix_vt, chunk, keys_last=True)
   # log-sum-exp combine over every chunk of both segments; a fully masked chunk has max -inf and weight 0
@@ -266,7 +275,7 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
   # prefix: each slot's lanes gathered next to the group, one GEMM per (slot, key/value head)
   rows = q[lane_rows].reshape(prompts, rows_per, kv_heads, group, width).permute(0, 2, 1, 3, 4)
   rows = rows.reshape(prompts, kv_heads, rows_per * group, width).contiguous()
-  scores = rows.dot(prefix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = _exact_dot(rows, prefix_k.transpose(-1, -2))
   valid = Tensor.arange(span).reshape(1, span) < prefix_lengths.reshape(prompts, 1)
   scores = valid.reshape(prompts, 1, 1, span).where(scores, float("-inf"))
   prefix = [t.reshape(prompts, kv_heads, t.shape[2], rows_per, group, t.shape[-1]).permute(0, 3, 1, 2, 4, 5)
@@ -274,7 +283,7 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
             for t in _partials(scores, prefix_v, chunk)]
   # generated keys: ring rows younger than the lane's length
   ring = suffix_k.shape[2]
-  scores = q.dot(suffix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = _exact_dot(q, suffix_k.transpose(-1, -2))
   age = Tensor.arange(ring) * -1 + row
   age = (age < 0).where(age + ring, age)
   valid = age.reshape(1, ring) < lengths.reshape(batch, 1)
