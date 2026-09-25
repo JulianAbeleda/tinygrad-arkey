@@ -86,6 +86,18 @@ class TestNemotronHBatchSampler(unittest.TestCase):
       expected = reference[np.arange(len(tokens)), tokens]
       np.testing.assert_allclose(np.asarray(logprobs), expected, rtol=1e-4, atol=1e-4)
 
+  def test_buckets_and_ring_flushes_match_sequential_recompute(self):
+    from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
+    model = tiny_model()
+    prompt = [3, 17, 5, 42, 9]
+    sampler = NemotronHBatchSampler(model, batch=2, capacity=16, ring=4, prefix_capacity=8, min_bucket=4)
+    for tokens, logprobs in sampler.generate(prompt, steps=13, temperature=1.0):
+      hidden, caches = model.prefix(prompt, through=len(model.blk) - 1)
+      hidden = hidden[:, -1:].cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+      reference = model.output(model.output_norm(hidden))[0].float().log_softmax(-1).numpy()
+      np.testing.assert_allclose(np.asarray(logprobs), reference[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
+    self.assertEqual(sorted(sampler.graphs), [4, 8, 16])
+
   def test_step_reads_each_projection_weight_once(self):
     # a lazily chained residual stream makes every consumer of a block's output recompute its projection
     from tinygrad.nn.state import get_parameters
@@ -95,7 +107,8 @@ class TestNemotronHBatchSampler(unittest.TestCase):
     for weight in get_parameters(model): weight.replace(weight.contiguous().realize())
     sampler = NemotronHBatchSampler(model, batch=2, capacity=32)
     sampler.generate([3, 17, 5, 42], steps=4)
-    calls = [c for c in sampler.step.captured.linear.toposort() if c.op is Ops.CALL]
+    graph, = sampler.graphs.values()  # one suffix bucket covers these steps
+    calls = [c for c in graph.captured.linear.toposort() if c.op is Ops.CALL]
     def buffer_of(u):
       try: return u.buffer
       except Exception: return None
