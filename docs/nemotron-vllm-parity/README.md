@@ -15,9 +15,9 @@ state, prefix caching on, RL shape n=8 T=1 logprobs=1):
 | step @ B=8 | 6.6 ms | 7.1 ms (93%) | commit c736693a2 (P=200 chained, gpu-run time) |
 | step @ B=64 | 13.4 ms | 17.8 ms (75%) | commit c736693a2 (17.6–18.0) |
 | step @ B=128 | 22.3 ms | 30.5 ms (73%) | commit c736693a2 (30.0–31.0) |
-| 10k prefill, warm | 0.37 s | **2.15 s** (17%) | gpu-run time, 11:31: 256-token pieces + old scan, after the GEMM route, route-scratch and 16k key-limit fixes (4.9 s at 4d3a90a11) |
+| 10k prefill, warm | 0.37 s | **1.65 s** (22%) | commit 4aafc5e7c: piece 1024-2048, SSD scan, hi/lo, one graph per block kind (2.10 s at piece 256; previous code 1.80 s at piece 256, OOM at piece 1024) |
 
-10k prefill history: 92 s → 34 s (886a907ea) → 5.5 s (47ea79db6) → 4.9 s (4d3a90a11) → 2.15 s (11:31 measurement).
+10k prefill history: 92 s → 34 s (886a907ea) → 5.5 s (47ea79db6) → 4.9 s (4d3a90a11) → 2.15 s (11:31 measurement) → 1.65 s (4aafc5e7c).
 
 Projected 10k prefill (not yet measured end to end; the W9b sweep at larger chunks OOMed on VRAM at 10k):
 
@@ -93,6 +93,7 @@ File ownership and full detail: `status-board-20260925.md`, `nemotron_checklist.
 | `status-board-20260925.md` | Live goal/status board: file ownership, workstream table, agents, decisions, method |
 | `nemotron_checklist.md` | Sampler-agent checklist (main loop side) |
 | `tc-checklist.md` | TC-agent checklist (sm_120 GEMM schedule side) |
+| `fp16-vs-hilo-experiment.md` | Recovered fp16-vs-hi/lo test (Qi et al. arXiv 2510.26788): arms, GEMM speed, self-consistency numbers; status open, no decision |
 | `bench/vllm-bench/` | vLLM benchmark harness: `bench.py`, `analyze.py`, `prof*.py/sh`, `replay.sh`, `cfgsweep.sh`, `run.sh` |
 | `bench/vllm-bench/runs/` | Small (<200KB) result files: per-config json/log, per-shape kernel-breakdown txt, csv |
 | `bench/spec/` | Reverse-engineered measurement scripts: `ours_*.py/sh` (our sampler/prefill profiling), `vllm_ncu.py`/`vncu.sh` (vLLM ncu), `vprof64.sh` (vLLM nsys), plus small captured outputs (`vllm_B64_P2000.txt`, `vncu_dec128.log`, `vprof64.log`) |
