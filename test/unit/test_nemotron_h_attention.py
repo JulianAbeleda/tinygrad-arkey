@@ -66,7 +66,7 @@ class TestTwoSegmentAttention(unittest.TestCase):
       return layer.attend(q, prefix_length, step, bucket).realize()
 
     # every bucket is visited at several steps and two prompt lengths, so each graph captures and then replays
-    cases = [(prefix_length, step) for prefix_length in (11, 5) for step in (0, 1, 3, 4, 6, 7, 9, 15, 16, 24, 31)]
+    cases = [(prefix_length, step) for prefix_length in (11, 5, 2) for step in (0, 1, 3, 4, 6, 7, 9, 15, 16, 24, 31)]
     for prefix_length, step in cases:
       bucket = suffix_bucket(step, suffix_capacity, minimum)
       q = rng.standard_normal((batch, heads, 1, width)).astype(np.float32)
