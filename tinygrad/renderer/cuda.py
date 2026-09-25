@@ -316,6 +316,7 @@ class CUDARenderer(CStyleLanguage):
   smem_prefix_for_cast = False
   barrier = "__syncthreads();"
   float4 = "make_float4"
+  global_bf16_vector_widths = (8, 4, 2)
   gep_arr_threshold = 8
   code_for_workitem = {"g": lambda x: f"blockIdx.{chr(120+int(x))}", "l": lambda x: f"threadIdx.{chr(120+int(x))}",
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+int(x))}+threadIdx.{chr(120+int(x))})"}
