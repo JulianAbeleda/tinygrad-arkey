@@ -13,6 +13,12 @@ class TestNemotronHPrefill(unittest.TestCase):
     self.assertEqual(prefill.pieces(29), [8, 8, 8, 4, 1])
     self.assertEqual(prefill.pieces(16), [8, 8])
 
+  def test_attention_reads_a_power_of_two_key_bound_not_capacity(self):
+    prefill = NemotronHPrefill(tiny_model(), capacity=64, piece=8)
+    prefill(list(range(1, 22)))
+    # pieces 8, 8, 4, 1 end at 8, 16, 20, 21: key bounds 8, 16, 32, 32
+    self.assertEqual(sorted(prefill.graphs), [(1, 32), (4, 32), (8, 8), (8, 16)])
+
   def test_matches_cached_prefix_across_jit_replays(self):
     model = tiny_model()
     prefill = NemotronHPrefill(model, capacity=64, piece=8)

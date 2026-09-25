@@ -7,12 +7,16 @@ take many minutes. Here the prompt runs in fixed-size pieces through one
 compiled graph per piece size, at a symbolic position, into fixed-capacity
 key/value buffers and fixed-shape Mamba state. A length that is not a multiple
 of the piece size finishes with power-of-two pieces, so a prompt uses at most
-log2(piece) extra graphs, each compiled once and reused across prompts.
+log2(piece) extra graphs, each compiled once and reused across prompts. Attention reads keys only up to
+a power-of-two bound past the piece's last position (one graph per bound), not
+the whole capacity.
 
 Mamba and MLP blocks step through the model's own `cached(..., keep_graph=True)`
 path; only attention is written here, as in the batched sampler.
 """
 from __future__ import annotations
+
+import functools
 
 from tinygrad import Tensor, TinyJit, UOp, dtypes
 
@@ -41,9 +45,9 @@ class NemotronHPrefill:
       else:
         self.buffers.append(None)
     self.position = UOp.variable("prefill_position", 0, capacity - 1)
-    self.graphs: dict[int, TinyJit] = {}
+    self.graphs: dict[tuple[int, int], TinyJit] = {}
 
-  def _run(self, tokens: Tensor, position: UOp) -> Tensor:
+  def _run(self, tokens: Tensor, position: UOp, keys: int) -> Tensor:
     length = tokens.shape[1]
     hidden = self.model.token_embd(tokens).float()
     rows = (Tensor.arange(length) + position).reshape(length, 1)
@@ -55,9 +59,11 @@ class NemotronHPrefill:
         for key, layer in (("k", block.attn_k), ("v", block.attn_v)):
           new = layer(normed).reshape(1, length, kv_heads, width).transpose(1, 2)
           buffer[key][:, :, position:position + length].assign(new.cast(buffer[key].dtype)).realize()
-        allowed = (Tensor.arange(self.capacity).reshape(1, self.capacity) <= rows).reshape(1, 1, length, self.capacity)
+        # keys: a power-of-two bound on the positions this piece can see, not the full capacity
+        allowed = (Tensor.arange(keys).reshape(1, keys) <= rows).reshape(1, 1, length, keys)
         mask = allowed.where(0.0, float("-inf")).cast(hidden.dtype)
-        attended = q.scaled_dot_product_attention(buffer["k"], buffer["v"], attn_mask=mask, enable_gqa=True)
+        attended = q.scaled_dot_product_attention(buffer["k"][:, :, :keys], buffer["v"][:, :, :keys], attn_mask=mask,
+                                                  enable_gqa=True)
         hidden = (hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype))
         hidden = hidden.contiguous().realize()
       elif block.block_type == "mamba":
@@ -98,7 +104,10 @@ class NemotronHPrefill:
     self.reset()
     start, hidden = 0, None
     for size in self.pieces(len(prompt)):
-      graph = self.graphs.setdefault(size, TinyJit(self._run))
+      keys = min(self.capacity, max(self.piece, 1 << (start + size - 1).bit_length()))
+      graph = self.graphs.get((size, keys))
+      if graph is None:
+        graph = self.graphs[(size, keys)] = TinyJit(functools.partial(self._run, keys=keys))
       tokens = Tensor([prompt[start:start + size]], dtype=dtypes.int32).realize()
       hidden = graph(tokens, self.position.bind(start))
       start += size
