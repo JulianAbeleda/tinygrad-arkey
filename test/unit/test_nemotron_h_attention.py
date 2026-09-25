@@ -56,8 +56,8 @@ class TestTwoSegmentAttention(unittest.TestCase):
     prefix_k, prefix_v = (rng.standard_normal((1, kv_heads, prefix_capacity, width)).astype(np.float32) for _ in "kv")
     layer.load_prefix(Tensor(prefix_k), Tensor(prefix_v))
     suffix_k, suffix_v = (rng.standard_normal((batch, kv_heads, suffix_capacity, width)).astype(np.float32) for _ in "kv")
-    for key, value in (("k", suffix_k), ("v", suffix_v)):
-      layer.suffix[key].assign(Tensor(value)).realize()
+    layer.suffix["k"].assign(Tensor(suffix_k)).realize()
+    layer.suffix["v"].assign(Tensor(np.ascontiguousarray(suffix_v.transpose(0, 1, 3, 2)))).realize()
     prefix_var = UOp.variable("prefix_length", 1, prefix_capacity)
     step_var = UOp.variable("suffix_step", 0, suffix_capacity - 1)
     graphs: dict[int, TinyJit] = {}

@@ -52,40 +52,47 @@ def suffix_bucket(step: int, capacity: int, minimum: int = 64) -> int:
   return next(size for size in suffix_buckets(capacity, minimum) if size > step)
 
 
-def _partials(scores: Tensor, values: Tensor, chunk: int) -> tuple[Tensor, Tensor, Tensor]:
+def _partials(scores: Tensor, values: Tensor, chunk: int, keys_last: bool = False) -> tuple[Tensor, Tensor, Tensor]:
   """Per-chunk row max, sum of exponentials and unnormalized value sum of one masked key segment.
 
-  scores `[..., rows, N]` and values `[..., N, hd]` are split into `N // chunk`
-  key chunks (one when `chunk` does not divide N), the ordinary-Tensor form of
-  flash decode's split-K: every reduction runs over `chunk` keys and the
-  chunks are parallel work, instead of one serial reduction over the whole
-  segment per output. Returns `[..., splits, rows, 1]`, `[..., splits, rows, 1]`
-  and `[..., splits, rows, hd]`.
+  scores `[..., rows, N]` (float32) and values `[..., N, hd]` (or `[..., hd, N]`
+  with `keys_last`) are split into
+  `N // chunk` key chunks (one when `chunk` does not divide N), the
+  ordinary-Tensor form of flash decode's split-K: every reduction runs over
+  `chunk` keys and the chunks are parallel work, instead of one serial
+  reduction over the whole segment per output. Returns `[..., splits, rows, 1]`,
+  `[..., splits, rows, 1]` and `[..., splits, rows, hd]`, all float32.
 
-  Each partial is materialized once: left to fuse, the scheduler recomputes
-  the score product inside every later reduction. Scores and sums stay
-  float32; the probability-value product takes the values' storage dtype for
-  both operands and accumulates in float32, as the score product does, so
-  bf16 storage reaches the tensor cores.
+  Every operand of a product is a materialized buffer in the values' storage
+  dtype, so the scheduler sees plain loads (the matvec and tensor-core
+  schedules match only those) and never recomputes the score product inside a
+  later reduction. The probabilities are rounded to that dtype before both the
+  sum and the value product, so numerator and denominator see the same weights.
   """
   *lead, rows, span = scores.shape
   chunk = chunk if 0 < chunk < span and span % chunk == 0 else span
   splits = span // chunk
-  scores = scores.reshape(*lead, rows, splits, chunk).transpose(-2, -3).contiguous()
-  values = values.reshape(*lead, splits, chunk, values.shape[-1])
+  scores = scores.contiguous().reshape(*lead, rows, splits, chunk)
   peak = scores.max(-1, keepdim=True).contiguous()
   # a fully masked chunk (past the prompt or the step) has peak -inf: shift by 0 so its weights are 0, not NaN
-  weights = (scores - (peak == float("-inf")).where(0.0, peak)).exp()
-  return (peak, weights.sum(-1, keepdim=True).contiguous(),
-          weights.cast(values.dtype).dot(values, dtype=dtypes.float).contiguous())
+  weights = (scores - (peak == float("-inf")).where(0.0, peak)).exp().cast(values.dtype).contiguous().transpose(-2, -3)
+  if keys_last:  # [..., hd, N] -> [..., splits, chunk, hd] view: the reduce over keys stays contiguous in memory
+    values = values.reshape(*lead, values.shape[-2], splits, chunk).permute(*range(len(lead)), -2, -1, -3)
+  else:
+    values = values.reshape(*lead, splits, chunk, values.shape[-1])
+  return (peak.transpose(-2, -3), weights.float().sum(-1, keepdim=True).contiguous(),
+          weights.dot(values, dtype=dtypes.float).contiguous())
 
 
-def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_v: Tensor,
+def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
                           prefix_length: UOp | int, step: UOp | int, chunk: int = 256) -> Tensor:
   """One decode query per sequence against a shared prefix and its own suffix.
 
   q: `[B, heads, 1, hd]`. prefix_k/v: `[1, kv_heads, P, hd]`, rows `[0, prefix_length)`
-  valid. suffix_k/v: `[B, kv_heads, S, hd]`, rows `[0, step]` valid. Rows past
+  valid. suffix_k: `[B, kv_heads, S, hd]` and suffix_vt: `[B, kv_heads, hd, S]`
+  (values stored transposed, so the per-sequence probability-value product
+  reduces along contiguous memory, like the score product), rows/columns
+  `[0, step]` valid. Rows past
   those are masked, so both spans are static shapes and one compiled graph
   serves every prompt length and every step inside a suffix bucket. Returns
   `[B, heads, 1, hd]` in float32; head h reads key/value head
@@ -96,20 +103,20 @@ def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_
   if length != 1 or heads % kv_heads:
     raise ValueError("expected one query per sequence and a whole GQA group per key/value head")
   group = heads // kv_heads
-  q = (q.float() * (1.0 / width ** 0.5)).reshape(batch, kv_heads, group, width)
+  q = (q.float() * (1.0 / width ** 0.5)).cast(prefix_k.dtype).reshape(batch, kv_heads, group, width)
   # prefix: batch folded next to the group, [1, kv_heads, B*group, hd], so each key/value head is one
   # GEMM that reads the shared keys once for the whole batch
-  rows = q.permute(1, 0, 2, 3).reshape(1, kv_heads, batch * group, width)
+  rows = q.permute(1, 0, 2, 3).reshape(1, kv_heads, batch * group, width).contiguous()
   span = prefix_k.shape[2]
-  scores = rows.cast(prefix_k.dtype).dot(prefix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = rows.dot(prefix_k.transpose(-1, -2), dtype=dtypes.float)
   scores = (Tensor.arange(span) < prefix_length).reshape(1, 1, 1, span).where(scores, float("-inf"))
   prefix = [t.reshape(kv_heads, -1, batch, group, t.shape[-1]).permute(2, 0, 1, 3, 4)
             for t in _partials(scores, prefix_v, chunk)]
   # suffix: each sequence's own keys, rows after `step` masked
   span = suffix_k.shape[2]
-  scores = q.cast(suffix_k.dtype).dot(suffix_k.transpose(-1, -2), dtype=dtypes.float)
+  scores = q.cast(suffix_k.dtype).contiguous().dot(suffix_k.transpose(-1, -2), dtype=dtypes.float)
   scores = (Tensor.arange(span) <= step).reshape(1, 1, 1, span).where(scores, float("-inf"))
-  suffix = _partials(scores, suffix_v, chunk)
+  suffix = _partials(scores, suffix_vt, chunk, keys_last=True)
   # log-sum-exp combine over every chunk of both segments; a fully masked chunk has max -inf and weight 0
   peaks, sums, outs = (p.cat(s, dim=2) for p, s in zip(prefix, suffix))
   peak = peaks.max(2, keepdim=True)
@@ -125,7 +132,9 @@ class SharedPrefixKV:
                dtype: DType = dtypes.bfloat16, chunk: int = 256):
     self.batch, self.prefix_capacity, self.suffix_capacity, self.chunk = batch, prefix_capacity, suffix_capacity, chunk
     self.prefix = {key: _fresh((1, kv_heads, prefix_capacity, head_dim), dtype) for key in ("k", "v")}
-    self.suffix = {key: _fresh((batch, kv_heads, suffix_capacity, head_dim), dtype) for key in ("k", "v")}
+    # suffix values are stored transposed, [B, kv_heads, hd, S]: see two_segment_attention
+    self.suffix = {"k": _fresh((batch, kv_heads, suffix_capacity, head_dim), dtype),
+                   "v": _fresh((batch, kv_heads, head_dim, suffix_capacity), dtype)}
 
   def load_prefix(self, k: Tensor, v: Tensor):
     """Copy prompt keys/values `[1, kv_heads, n, hd]` into rows [0, min(n, capacity)); rows past the prompt are never read."""
@@ -134,9 +143,9 @@ class SharedPrefixKV:
       self.prefix[key][:, :, :rows].assign(value[:, :, :rows].cast(self.prefix[key].dtype)).realize()
 
   def write(self, k: Tensor, v: Tensor, step: UOp | int):
-    """Store each sequence's new key/value `[B, kv_heads, 1, hd]` at suffix row `step`."""
-    for key, value in (("k", k), ("v", v)):
-      self.suffix[key][:, :, step:step + 1].assign(value.cast(self.suffix[key].dtype)).realize()
+    """Store each sequence's new key/value `[B, kv_heads, 1, hd]` at suffix row `step` (column, for values)."""
+    self.suffix["k"][:, :, step:step + 1].assign(k.cast(self.suffix["k"].dtype)).realize()
+    self.suffix["v"][:, :, :, step:step + 1].assign(v.transpose(-1, -2).cast(self.suffix["v"].dtype)).realize()
 
   def attend(self, q: Tensor, prefix_length: UOp | int, step: UOp | int, bucket: int,
              prefix_span: int | None = None) -> Tensor:
@@ -149,7 +158,7 @@ class SharedPrefixKV:
     if not 0 < bucket <= self.suffix_capacity or not 0 < prefix_span <= self.prefix_capacity:
       raise ValueError(f"bucket {bucket} or prefix span {prefix_span} outside the capacities")
     return two_segment_attention(q, self.prefix["k"][:, :, :prefix_span], self.prefix["v"][:, :, :prefix_span],
-                                 self.suffix["k"][:, :, :bucket], self.suffix["v"][:, :, :bucket], prefix_length, step,
+                                 self.suffix["k"][:, :, :bucket], self.suffix["v"][:, :, :, :bucket], prefix_length, step,
                                  self.chunk)
 
 
