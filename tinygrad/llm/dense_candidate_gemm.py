@@ -154,7 +154,9 @@ def route_dense_bf16_hilo(x: Tensor, weight: Tensor, role: str, n_out: int, *, m
   lo = (flat - hi.float()).cast(dtypes.bfloat16)
   rows = flat.shape[0]
   out = route_dense_bf16(hi.cat(lo), weight, role, n_out, min_rows=2 * min_rows)
-  return None if out is None else (out[:rows] + out[rows:]).reshape(*x.shape[:-1], n_out)
+  # Materialize the sum: fusing the strided, padded partials into a consumer's reduction (the Mamba scan) hits a
+  # lowering KeyError on NV, and one M x N elementwise pass is cheap next to the GEMM.
+  return None if out is None else (out[:rows] + out[rows:]).contiguous().reshape(*x.shape[:-1], n_out)
 
 
 class CandidateBinding:
@@ -173,7 +175,12 @@ def bind_projection(lin, role: str) -> CandidateBinding | None:
   if weight is None or getattr(lin, "bias", None) is not None or weight.dtype != dtypes.bfloat16: return None
   if not isinstance(weight.device, str) or _routes_for(weight.device) is None: return None
   padded = pad_weight(weight)
-  if padded is not weight: lin.weight = padded[:weight.shape[0]]
+  if padded is not weight:
+    lin.weight = padded[:weight.shape[0]]
+    # The unpadded buffer is garbage now; return it to the device instead of the allocator's reuse cache, or the
+    # padded copies of a whole model's projections double their footprint.
+    device, weight = weight.device, None
+    if hasattr(allocator := Device[device].allocator, "free_cache"): allocator.free_cache()
   lin._candidate = binding = CandidateBinding(role, padded)
   return binding
 

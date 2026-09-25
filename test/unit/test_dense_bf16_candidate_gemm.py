@@ -106,6 +106,9 @@ def test_hilo_route_stacks_both_bf16_terms_and_sums_them(monkeypatch):
   x = Tensor([[1.0 + 2**-12, 3.0]])
   out = dense.route_dense_bf16_hilo(x, Tensor.ones(8, 2, dtype=dtypes.bfloat16), "r", 8, min_rows=4)
   assert seen == [((2, 2), dtypes.bfloat16, 8)]
+  from tinygrad.uop.ops import Ops
+  # the hi + lo sum is its own buffer: fused into a Mamba-scan consumer it hit a lowering KeyError on NV
+  assert any(u.op is Ops.CONTIGUOUS and u.shape == (1, 8) for u in out.uop.toposort())
   assert out.shape == (1, 8) and out.numpy()[0, 0] == 4.0 + 2**-12   # hi + lo recovers what one bf16 rounding loses
 
 
