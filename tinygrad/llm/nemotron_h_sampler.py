@@ -206,7 +206,13 @@ class NemotronHRolloutSampler:
 
   `capture=k` also returns, for every sampled token, the float32 hidden state entering block `k` at the position
   that produced it: the buffer block `k` read in that decode step, bit for bit. Each window's captures are copied to
-  the host (`[batch, window, dim]` on the device), so the device holds no per-token history.
+  the host (`[batch, window, dim]` on the device), so the device holds no per-token history. `replay` runs blocks
+  `k..` and the sampling tail again from those captures on the same decode graph code, one rollout per lane.
+
+  Every lane starts on a window boundary, so a rollout's position t always sits in Mamba ring slot `t % ring` and is
+  followed by a flush when that slot is the last one. Its generated keys sit at ring rows `start + t` (mod
+  `capacity`), where `start` (`stats["starts"]`) is the sampler step it began on; attention's reduction over the ring
+  depends on where the keys sit, so a replay through an attention block needs it.
   """
 
   def __init__(self, model, batch: int, capacity: int, prefix_capacity: int, prompts: int | None = None, rows: int = 8,
@@ -245,20 +251,42 @@ class NemotronHRolloutSampler:
                     "logprobs": _fresh(Tensor.zeros(batch, window))}
     if capture is not None:
       self.history["hidden"] = _fresh(Tensor.zeros(batch, window, config.dim))
+      # replay inputs: a window of captured hidden states and of the tokens whose log probabilities are read
+      self.feed = {"hidden": _fresh(Tensor.zeros(batch, window, config.dim)),
+                   "tokens": _fresh(Tensor.zeros(batch, window, dtype=dtypes.int32))}
     self.row = UOp.variable("ring_row", 0, self.capacity - 1)
     self.slot, self.count = UOp.variable("slot", 0, ring - 1), UOp.variable("count", 1, ring)
     self.column = UOp.variable("column", 0, window - 1)
     self.lane, self.source = UOp.variable("lane", 0, batch - 1), UOp.variable("source", 0, self.prompts - 1)
     self.step, self.flush = TinyJit(self._step), TinyJit(self._flush)
     self.load_lane, self.seed = TinyJit(self._load_lane), TinyJit(self._seed)
+    self.replay_step, self.replay_flush = TinyJit(self._replay_step), TinyJit(self._replay_flush)
 
   # *** device graphs ***
 
   def _step(self, row: UOp, slot: UOp, column: UOp, temperature: Tensor) -> None:
     self.lengths.assign(self.lengths + 1).realize()
     hidden = self.model.token_embd(self.tokens.reshape(self.batch, 1)).float().contiguous()
+    hidden = self._blocks(hidden, 0, row, slot, column)
+    token, chosen = self._sample(hidden, temperature)
+    for key, value in (("tokens", token), ("logprobs", chosen)):
+      self.history[key][:, column:column + 1].assign(value.reshape(self.batch, 1)).realize()
+    self.tokens.assign(token).realize()
+
+  def _replay_step(self, row: UOp, slot: UOp, column: UOp, temperature: Tensor) -> None:
+    """Blocks `capture..` and the tail from the fed hidden states; records the fed tokens' log probabilities."""
+    self.lengths.assign(self.lengths + 1).realize()
+    hidden = self.feed["hidden"][:, column:column + 1].contiguous()
+    hidden = self._blocks(hidden, self.capture, row, slot, column)
+    chosen = self._logprobs(hidden, temperature).gather(-1, self.feed["tokens"][:, column:column + 1])
+    self.history["logprobs"][:, column:column + 1].assign(chosen).realize()
+
+  def _blocks(self, hidden: Tensor, first: int, row: UOp, slot: UOp, column: UOp) -> Tensor:
+    """Blocks `first..` of one decode step; every block's input is a realized buffer."""
     for index, (block, buffer, attention) in enumerate(zip(self.model.blk, self.buffers, self.attention)):
-      if index == self.capture:  # `hidden` is a realized buffer here: block `index` reads exactly these bits
+      if index < first:
+        continue
+      if index == self.capture and first == 0:  # the buffer block `index` reads, bit for bit
         self.history["hidden"][:, column:column + 1].assign(hidden).realize()
       if block.block_type == "attention":
         normed = block.attn_norm(hidden)
@@ -274,10 +302,7 @@ class NemotronHRolloutSampler:
         hidden = mamba_replay_buffers_step(block, hidden, buffer, slot).contiguous()
       else:
         hidden = self._stateless(block, hidden)
-    token, chosen = self._sample(hidden, temperature)
-    for key, value in (("tokens", token), ("logprobs", chosen)):
-      self.history[key][:, column:column + 1].assign(value.reshape(self.batch, 1)).realize()
-    self.tokens.assign(token).realize()
+    return hidden
 
   _sample, _logprobs = NemotronHBatchSampler._sample, NemotronHBatchSampler._logprobs
 
@@ -295,10 +320,13 @@ class NemotronHRolloutSampler:
       hidden = self._stateless(block, hidden)
     return self._logprobs(hidden, Tensor([temperature])).realize()
 
-  def _flush(self, count: UOp) -> None:
-    for block, buffer in zip(self.model.blk, self.buffers):
+  def _flush(self, count: UOp, first: int = 0) -> None:
+    for block, buffer in zip(self.model.blk[first:], self.buffers[first:]):
       if block.block_type == "mamba":
         mamba_replay_flush(block, buffer, count)
+
+  def _replay_flush(self, count: UOp) -> None:
+    self._flush(count, self.capture)
 
   def _load_lane(self, lane: UOp, source: UOp) -> None:
     """Lane `lane` takes prompt slot `source`'s Mamba state; its generated keys restart empty.
@@ -348,6 +376,91 @@ class NemotronHRolloutSampler:
             value = Tensor.zeros(1, short, *value.shape[2:], dtype=value.dtype).cat(value, dim=1)
           state[key][slot:slot + 1].assign(value).realize()
 
+  def _bind(self, lanes: list[tuple[int, int] | None], prefix_lengths: list[int], started: list[int]):
+    """Lane `b` serves row `lanes[b][1]` of prompt slot `lanes[b][0]`; lanes in `started` begin from their slot."""
+    table = [0] * (self.prompts * self.rows)
+    for lane, place in enumerate(lanes):
+      if place is not None:
+        table[place[0] * self.rows + place[1]] = lane
+    self.lane_rows.assign(Tensor(table, dtype=dtypes.int32)).realize()
+    self.lane_slot.assign(Tensor([0 if p is None else p[0] * self.rows + p[1] for p in lanes],
+                                 dtype=dtypes.int32)).realize()
+    lengths = [min(n, self.prefix_capacity) for n in prefix_lengths]
+    self.prefix_lengths.assign(Tensor(lengths, dtype=dtypes.int32)).realize()
+    for lane in started:
+      self.load_lane(self.lane.bind(lane), self.source.bind(lanes[lane][0]))
+
+  def replay(self, requests: list[tuple], temperature: float = 1.0, starts: list[list[int]] | None = None
+             ) -> list[list[np.ndarray]]:
+    """Log probabilities of given tokens through blocks `capture..` and the tail, from captured inputs.
+
+    `requests` is `[(prompt, [(tokens, hidden), ...]), ...]` with `hidden` the `[len(tokens), dim]` captures; returns
+    float32 log probabilities per rollout, laid out like the request. Each rollout runs on its own lane through the
+    decode step's code for those blocks: Mamba blocks from the prompt's state through the same replay ring and
+    flushes, attention blocks against the prompt's keys and the keys the replay itself writes at the rollout's ring
+    rows (`starts`, from `generate`'s stats; needed only when the window has an attention block). With the
+    sampler's weights, lanes and temperature this gives the sampled log probabilities bit for bit.
+    """
+    if self.capture is None:
+      raise ValueError("replay needs a sampler built with capture")
+    attends = any(block.block_type == "attention" for block in self.model.blk[self.capture:])
+    mambas = any(block.block_type == "mamba" for block in self.model.blk[self.capture:])
+    if attends and starts is None:
+      raise ValueError("a window with an attention block needs each rollout's first ring row (stats['starts'])")
+    pending = []
+    for r, (prompt, rollouts) in enumerate(requests):
+      for i, (tokens, hidden) in enumerate(rollouts):
+        if hidden.shape != (len(tokens), self.model.config.dim) or not 0 < len(tokens) <= self.capacity:
+          raise ValueError("each rollout needs one captured row per token, within the capacity")
+        pending.append((starts[r][i] if attends else 0, r, i, prompt, tokens, hidden))
+    pending.sort(key=lambda item: item[0])
+    out: list[list] = [[None] * len(rollouts) for _, rollouts in requests]
+    rate = Tensor([temperature]).realize()
+    while pending:
+      start, taken, slots, lanes = pending[0][0], [], {}, []
+      for item in pending:
+        key = tuple(item[3])
+        if item[0] != start or len(lanes) == self.batch:
+          continue
+        if key not in slots:
+          if len(slots) == self.prompts:
+            continue
+          slots[key] = [len(slots), 0]
+        if slots[key][1] == self.rows:
+          continue
+        lanes.append((slots[key][0], slots[key][1]))
+        slots[key][1] += 1
+        taken.append(item)
+      pending = [item for item in pending if all(item is not t for t in taken)]
+      for key, (g, _) in slots.items():
+        self._prime(g, list(key))
+      lengths = [0] * self.prompts
+      for key, (g, _) in slots.items():
+        lengths[g] = len(key) - 1
+      self._bind(lanes + [None] * (self.batch - len(lanes)), lengths, list(range(len(lanes))))
+      steps = max(len(item[4]) for item in taken)
+      values = np.zeros((len(taken), steps), np.float32)
+      for first in range(0, steps, self.window):
+        width = min(self.window, steps - first)
+        hidden = np.zeros((self.batch, self.window, self.model.config.dim), np.float32)
+        tokens = np.zeros((self.batch, self.window), np.int32)
+        for lane, item in enumerate(taken):
+          part = item[5][first:first + width]
+          hidden[lane, :len(part)] = part
+          tokens[lane, :len(part)] = item[4][first:first + len(part)]
+        self.feed["hidden"].assign(Tensor(hidden)).realize()
+        self.feed["tokens"].assign(Tensor(tokens)).realize()
+        for column in range(width):
+          t = first + column
+          self.replay_step(self.row.bind((start + t) % self.capacity), self.slot.bind(t % self.ring),
+                           self.column.bind(column), rate)
+          if t % self.ring == self.ring - 1 and mambas:
+            self.replay_flush(self.count.bind(self.ring))
+        values[:, first:first + width] = self.history["logprobs"].numpy()[:len(taken), :width]
+      for lane, item in enumerate(taken):
+        out[item[1]][item[2]] = values[lane, :len(item[4])]
+    return out
+
   def generate(self, requests: list[tuple], max_new: int, temperature: float = 1.0,
                stop: set[int] | None = None, stats: dict | None = None) -> list[list[tuple[list[int], list[float]]]]:
     """Sample `n` rollouts of up to `max_new` tokens for each `(prompt, n)`; returns per request its (tokens, logprobs).
@@ -356,13 +469,15 @@ class NemotronHRolloutSampler:
     A request `(prompt, n, limits)` caps its i-th rollout at `min(limits[i], max_new)` tokens instead (a forced
     length, e.g. to replay a length mix). A rollout ends at (and includes) its first stop token. `stats`, when given,
     receives the decode step count, the lane-steps spent on rollouts that were still running (in total and while
-    rollouts were still waiting to start, `steady_*`), and the time spent priming prompts.
+    rollouts were still waiting to start, `steady_*`), the time spent priming prompts, and `starts`, each rollout's
+    first ring row, laid out like the result (what `replay` needs for a window with attention).
     """
     import time
     if max_new > self.capacity:
       raise ValueError("max_new exceeds the generated-token ring")
     stop = stop or set()
     results: list[list] = [[] for _ in requests]
+    starts: list[list[int]] = [[] for _ in requests]
     queue = []
     for index, (prompt, n, *limits) in enumerate(requests):
       limits = [min(int(x), max_new) for x in limits[0]] if limits else [max_new] * n
@@ -396,22 +511,13 @@ class NemotronHRolloutSampler:
         s = slots[slot]
         j = s["rows"].index(None)
         s["rows"][j] = lane
-        lanes[lane] = {"slot": slot, "row": j, "limit": s["left"].pop(0), "tokens": [], "logprobs": [], "hidden": []}
+        lanes[lane] = {"slot": slot, "row": j, "limit": s["left"].pop(0), "tokens": [], "logprobs": [], "hidden": [],
+                       "start": steps % self.capacity}
         started.append(lane)
       if not started:
         return any(lane is not None for lane in lanes)
-      table = [0] * (self.prompts * self.rows)
-      for g, s in enumerate(slots):
-        for j, lane in enumerate(s["rows"] if s is not None else []):
-          if lane is not None:
-            table[g * self.rows + j] = lane
-      self.lane_rows.assign(Tensor(table, dtype=dtypes.int32)).realize()
-      self.lane_slot.assign(Tensor([0 if l is None else l["slot"] * self.rows + l["row"] for l in lanes],
-                                   dtype=dtypes.int32)).realize()
-      self.prefix_lengths.assign(Tensor([min(s["length"], self.prefix_capacity) if s is not None else 0
-                                         for s in slots], dtype=dtypes.int32)).realize()
-      for lane in started:
-        self.load_lane(self.lane.bind(lane), self.source.bind(lanes[lane]["slot"]))
+      self._bind([None if l is None else (l["slot"], l["row"]) for l in lanes],
+                 [0 if s is None else s["length"] for s in slots], started)
       fresh = Tensor([lane in started for lane in range(self.batch)]).realize()
       last = Tensor([slots[l["slot"]]["last"] if l is not None else 0 for l in lanes], dtype=dtypes.int32).realize()
       self.seed(fresh, last)
@@ -430,6 +536,7 @@ class NemotronHRolloutSampler:
         if self.capture is not None:
           rollout += (np.concatenate(l["hidden"])[:end + 1],)
         results[s["request"]].append(rollout)
+        starts[s["request"]].append(l["start"])
         s["rows"][l["row"]], lanes[lane] = None, None
         if not s["left"] and all(r is None for r in s["rows"]):
           slots[l["slot"]] = None
@@ -471,7 +578,7 @@ class NemotronHRolloutSampler:
       retire()
     if stats is not None:
       stats.update(steps=steps, lane_steps=steps * self.batch, active_lane_steps=active_lane_steps,
-                   steady_lane_steps=steady_steps * self.batch, steady_active_lane_steps=steady_active,
+                   steady_lane_steps=steady_steps * self.batch, steady_active_lane_steps=steady_active, starts=starts,
                    prime_s=prime_time)
     return results
 

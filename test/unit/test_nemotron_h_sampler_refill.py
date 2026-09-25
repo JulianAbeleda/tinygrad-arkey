@@ -7,7 +7,28 @@ from tinygrad import Tensor
 
 from test.unit import test_nemotron_h_model as model_tests
 from test.unit.test_nemotron_h_model import tiny_model
+from tinygrad.llm.nemotron_h import NemotronHConfig, NemotronHModel
 from tinygrad.llm.nemotron_h_sampler import NemotronHRolloutSampler
+
+
+def tiny_model_of(types: tuple[str, ...]) -> NemotronHModel:
+  """`tiny_model`'s sizes with another block order (e.g. a Mamba block above the attention block)."""
+  config = NemotronHConfig(num_blocks=len(types), dim=32, vocab_size=64, norm_eps=1e-5, max_context=64,
+                           block_types=types,
+                           head_counts=tuple(4 if t == "attention" else 0 for t in types),
+                           kv_head_counts=tuple(2 if t == "attention" else 0 for t in types),
+                           ffn_dims=tuple(48 if t == "mlp" else 0 for t in types), head_dim=8, ssm_inner=32,
+                           ssm_state=8, ssm_groups=2, ssm_heads=4, conv_kernel=4, scan_chunk=4)
+  Tensor.manual_seed(0)
+  model = NemotronHModel(config)
+  for block in model.blk:
+    if block.block_type == "mamba":
+      block.ssm_a = -(Tensor.rand(config.ssm_heads, 1) + 0.1)
+      block.ssm_d = Tensor.rand(config.ssm_heads, 1)
+      block.ssm_dt = {"bias": Tensor.rand(config.ssm_heads) - 0.5}
+      block.ssm_conv1d.weight = Tensor.randn(*block.ssm_conv1d.weight.shape) * 0.3
+      block.ssm_norm.weight = Tensor.ones(*block.ssm_norm.weight.shape)
+  return model
 
 
 class TestNemotronHSamplerRefill(unittest.TestCase):
@@ -74,6 +95,44 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
       got = np.array([logprobs[i, token] for i, (_, token, _) in enumerate(chunk)], np.float32)
       want = np.array([logprob for _, _, logprob in chunk], np.float32)
       np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
+
+  def test_replay_of_every_block_window_is_bit_exact(self):
+    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4, 8, 19, 25], [11, 4]]
+    limits = [[6, 11], [3, 9], [10, 2], [7, 7]]
+    temperature = 0.7
+    # both orders put Mamba, attention and MLP blocks inside and outside some window [k, end)
+    for types in (("mamba", "mlp", "attention", "mlp"), ("attention", "mlp", "mamba", "mlp")):
+      model = tiny_model_of(types)
+      for capture in range(len(types)):
+        with self.subTest(types=types, capture=capture):
+          sampler = NemotronHRolloutSampler(model, batch=3, capacity=16, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                            window=4, capture=capture)
+          stats = {}
+          results = sampler.generate([(p, 2, l) for p, l in zip(prompts, limits)], max_new=12,
+                                     temperature=temperature, stats=stats)
+          for prompt, rollouts in zip(prompts, results):
+            tokens, _, hidden = rollouts[0]
+            if capture:  # the capture is the input to block `capture`, at the positions that sampled the tokens
+              reference, caches = model.prefix(prompt, through=capture - 1)
+              reference = reference[:, -1:]
+              if len(tokens) > 1:
+                reference = reference.cat(model.advance(tokens[:-1], caches, through=capture - 1)[0], dim=1)
+            else:
+              reference = model.token_embd(Tensor([[prompt[-1]] + tokens[:-1]])).float()
+            np.testing.assert_allclose(hidden, reference[0].numpy(), rtol=1e-4, atol=1e-4)
+          replayed = sampler.replay([(p, [(t, h) for t, _, h in r]) for p, r in zip(prompts, results)], temperature,
+                                    starts=stats["starts"])
+          got = np.concatenate([values for rollouts in replayed for values in rollouts])
+          want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
+          np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
+
+  def test_replay_through_attention_needs_ring_rows(self):
+    model = tiny_model()  # block 2 is attention
+    sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,
+                                      window=2, capture=1)
+    (rollouts,) = sampler.generate([([3, 17, 5], 2, [3, 4])], max_new=4)
+    with self.assertRaisesRegex(ValueError, "first ring row"):
+      sampler.replay([([3, 17, 5], [(t, h) for t, _, h in rollouts])])
 
   def test_prompts_need_two_tokens(self):
     sampler = NemotronHRolloutSampler(tiny_model(), batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,
