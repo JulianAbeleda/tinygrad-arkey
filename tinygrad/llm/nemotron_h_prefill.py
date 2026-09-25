@@ -11,8 +11,11 @@ log2(piece) extra graphs, each compiled once and reused across prompts. Attentio
 a power-of-two bound past the piece's last position (one graph per bound), not
 the whole capacity.
 
-Mamba and MLP blocks step through the model's own `cached(..., keep_graph=True)`
-path; only attention is written here, as in the batched sampler.
+MLP blocks step through the model's own `cached(..., keep_graph=True)` path.
+Mamba blocks run the chunked SSD scan (`nemotron_h_ssd`, `mamba="ssd"`, the
+default): the whole piece is one graph of batched matmuls, so large pieces
+(2k-8k tokens) stay cheap; `mamba="scan"` keeps the model's sequential
+`scan_chunk` loop. Attention is written here, as in the batched sampler.
 
 Where the fused flash-prefill route is admitted (`nemotron_h_prefill_attention`),
 attention runs on that generated kernel instead of SDPA: pieces are at most 512
@@ -25,6 +28,7 @@ import functools
 
 from tinygrad import Tensor, TinyJit, UOp, dtypes
 from tinygrad.llm import nemotron_h_prefill_attention as fused_attention
+from tinygrad.llm.nemotron_h_ssd import PRECISIONS, ssd_cached
 
 
 def _fresh(value: Tensor) -> Tensor:
@@ -33,9 +37,13 @@ def _fresh(value: Tensor) -> Tensor:
 
 
 class NemotronHPrefill:
-  def __init__(self, model, capacity: int, piece: int = 256, fused: bool | None = None):
+  def __init__(self, model, capacity: int, piece: int = 256, fused: bool | None = None, mamba: str = "ssd",
+               ssd_chunk: int = 256, ssd_precision: str = "float"):
     if piece & (piece - 1) or piece % model.config.scan_chunk:
       raise ValueError("piece must be a power of two and a multiple of the scan chunk")
+    if mamba not in ("ssd", "scan") or ssd_precision not in PRECISIONS:
+      raise ValueError(f"mamba must be 'ssd' or 'scan' and ssd_precision one of {PRECISIONS}")
+    self.mamba, self.ssd_chunk, self.ssd_precision = mamba, ssd_chunk, ssd_precision
     self.fused = fused_attention.fused_prefill_supported(model) if fused is None else fused
     if self.fused:
       piece = min(piece, fused_attention.BLOCK)
@@ -93,7 +101,10 @@ class NemotronHPrefill:
         hidden = (hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype))
         hidden = hidden.contiguous().realize()
       elif block.block_type == "mamba":
-        hidden, carried = block.cached(hidden, buffer, keep_graph=True)
+        if self.mamba == "ssd":
+          hidden, carried = ssd_cached(block, hidden, buffer, chunk=self.ssd_chunk, precision=self.ssd_precision)
+        else:
+          hidden, carried = block.cached(hidden, buffer, keep_graph=True)
         hidden, *states = (hidden.contiguous().realize(), *(carried[key].contiguous().realize() for key in buffer))
         for key, state in zip(buffer, states):
           buffer[key].assign(state).realize()

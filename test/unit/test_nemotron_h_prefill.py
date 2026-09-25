@@ -41,8 +41,14 @@ class TestNemotronHPrefill(unittest.TestCase):
     self.assertEqual(sorted(prefill.graphs), [(1, 32), (4, 32), (8, 8), (8, 16)])
 
   def test_matches_cached_prefix_across_jit_replays(self):
+    for mamba in ("ssd", "scan"):
+      with self.subTest(mamba=mamba):
+        self._matches_cached_prefix(mamba)
+
+  def _matches_cached_prefix(self, mamba: str):
     model = tiny_model()
-    prefill = NemotronHPrefill(model, capacity=64, piece=8)
+    # ssd_chunk 4 < piece 8: several SSD chunks per piece plus a carried state between pieces
+    prefill = NemotronHPrefill(model, capacity=64, piece=8, mamba=mamba, ssd_chunk=4)
     rng = np.random.default_rng(2)
     # three prompts of one length: the graphs capture, then replay
     for _ in range(3):
