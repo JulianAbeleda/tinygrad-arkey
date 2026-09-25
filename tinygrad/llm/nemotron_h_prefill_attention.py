@@ -90,4 +90,24 @@ def fused_prefill_attention(q: Tensor, k: Tensor, v: Tensor, tile: Tensor, posit
   return (out if length == BLOCK else out[:, :, offset:offset + length]).float()
 
 
-__all__ = ["BLOCK", "block_admitted","fused_prefill_supported", "fused_prefill_attention", "query_tile"]
+def grouped_prefill_attention(q: Tensor, k: Tensor, v: Tensor, position: UOp | int, keys: int) -> Tensor:
+  """Causal attention over key rows [0, keys) as two fp16 tensor-core matmuls with fp32 accumulation.
+
+  The interim for blocks the flash kernel does not admit: an ordinary scheduler expression (no
+  custom kernel) that keeps a symbolic position. Each KV head's query group is one matmul operand,
+  so K/V are never repeated. Returns (1, Hq, length, Hd) float32.
+  """
+  _, heads, length, width = q.shape
+  kv_heads = k.shape[1]
+  group = heads // kv_heads
+  rows = (Tensor.arange(length) + position).reshape(1, 1, 1, length, 1)
+  mask = (Tensor.arange(keys).reshape(1, 1, 1, 1, keys) <= rows).where(0.0, float("-inf"))
+  queries = q.reshape(1, kv_heads, group, length, width).cast(dtypes.float16)
+  k16 = k[:, :, :keys].cast(dtypes.float16).reshape(1, kv_heads, 1, keys, width)
+  v16 = v[:, :, :keys].cast(dtypes.float16).reshape(1, kv_heads, 1, keys, width)
+  scores = queries.matmul(k16.transpose(-1, -2), dtype=dtypes.float) * (width ** -0.5) + mask
+  return scores.softmax(-1).cast(dtypes.float16).matmul(v16, dtype=dtypes.float).reshape(1, heads, length, width)
+
+
+__all__ = ["BLOCK", "block_admitted", "fused_prefill_supported", "fused_prefill_attention", "grouped_prefill_attention",
+           "query_tile"]

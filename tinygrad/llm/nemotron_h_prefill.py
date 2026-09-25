@@ -79,6 +79,11 @@ class NemotronHPrefill:
           hidden = (hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype))
           hidden = hidden.contiguous().realize()
           continue
+        if self.fused:  # a block the flash kernel does not admit: tensor-core matmuls over the key bound
+          attended = fused_attention.grouped_prefill_attention(q, buffer["k"], buffer["v"], position, keys)
+          hidden = (hidden + block.attn_output(attended.transpose(1, 2).reshape(1, length, -1)).cast(hidden.dtype))
+          hidden = hidden.contiguous().realize()
+          continue
         # keys: a power-of-two bound on the positions this piece can see, not the full capacity
         allowed = (Tensor.arange(keys).reshape(1, keys) <= rows).reshape(1, 1, length, keys)
         mask = allowed.where(0.0, float("-inf")).cast(hidden.dtype)

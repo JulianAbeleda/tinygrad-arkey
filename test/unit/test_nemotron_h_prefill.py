@@ -59,6 +59,17 @@ class TestNemotronHPrefill(unittest.TestCase):
             np.testing.assert_allclose(buffer[key].numpy(), cache[key].numpy(), rtol=1e-4, atol=1e-4)
 
 
+  def test_grouped_tensor_core_attention_matches_sdpa(self):
+    from tinygrad.llm.nemotron_h_prefill_attention import grouped_prefill_attention
+    Tensor.manual_seed(1)
+    q, k, v = Tensor.randn(1, 8, 16, 32), Tensor.randn(1, 2, 64, 32), Tensor.randn(1, 2, 64, 32)
+    position, keys = 20, 64  # rows 20..35 over a key bound past the last visible key
+    got = grouped_prefill_attention(q, k, v, position, keys).numpy()
+    allowed = Tensor.arange(keys).reshape(1, keys) <= (Tensor.arange(16) + position).reshape(16, 1)
+    mask = allowed.where(0.0, float("-inf")).reshape(1, 1, 16, keys)
+    want = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True).numpy()
+    np.testing.assert_allclose(got, want, rtol=1e-2, atol=1e-2)
+
   def test_unadmitted_geometry_stays_on_sdpa(self):
     self.assertFalse(NemotronHPrefill(tiny_model(), capacity=64, piece=8).fused)
 
