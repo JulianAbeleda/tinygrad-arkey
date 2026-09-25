@@ -114,3 +114,10 @@ def test_attention_spec_target_resolves_from_renderer_facts(monkeypatch):
   monkeypatch.setattr(fa, "Device", _NoRenderer)
   with pytest.raises(ValueError, match="cannot resolve"):
     fa._attention_spec_target("CPU")
+
+
+def test_flash_prefill_spec_admits_keys_up_to_the_shared_ceiling():
+  from tinygrad.uop.ops import ATTENTION_MAX_KV_TOKENS
+  FlashPrefillAttentionSpec(40, 8, 512, 10240, True, 0.125).validate()
+  with pytest.raises(ValueError):
+    FlashPrefillAttentionSpec(40, 8, 512, ATTENTION_MAX_KV_TOKENS + 16, True, 0.125).validate()

@@ -1,0 +1,22 @@
+{
+  "base_model": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+  "extra": {
+    "sequence_length": 18,
+    "training_scope": "output_first_completion_token"
+  },
+  "kind": "llm_lora_adapter",
+  "seed": 123,
+  "source": "gameterm-shaped-jsonl",
+  "targets": [
+    {
+      "alpha": 8.0,
+      "detach_base": true,
+      "in_features": 4096,
+      "out_features": 151936,
+      "rank": 8,
+      "target": "output"
+    }
+  ],
+  "version": 1,
+  "weights": "adapter.npz"
+}

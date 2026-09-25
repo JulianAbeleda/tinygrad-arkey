@@ -50,6 +50,7 @@ PLAN_GATES: tuple[tuple[str, str], ...] = (
   ("ALLOW_HALF8", "0"), ("DEVECTORIZE_NO_PTR_GROUP", "0"), ("EXPAND_SSA", "0"), ("THREADS", "1"),
   ("ALIGNED", "1"), ("SCHED_MODULO", "0"), ("MV", "1"), ("MV_BLOCKSIZE", "4"), ("MV_DEQUANT", "0"),
   ("MV_ROWS_PER_THREAD", "4"), ("MV_THREADS_PER_ROW", "8"), ("MV_UNROLL_MAX", "32"),
+  ("MV_MAX_BATCH", "16"), ("MV_VEC", "1"), ("MV_WIDE", "1"),
   ("MV_UNROLL_REDUCE", "1"), ("REGALLOC_ADDR_REMAT_NO_END", "0"), ("REGALLOC_ADDR_REMAT_END_NO_EMIT", "0"),
 )
 
@@ -97,6 +98,9 @@ GATE_READERS: dict[str, tuple] = {
   "MV_ROWS_PER_THREAD": ("getenv", 4),
   "MV_THREADS_PER_ROW": ("getenv", 8),
   "MV_UNROLL_MAX": ("getenv", 32),
+  "MV_MAX_BATCH": ("getenv", 16),
+  "MV_VEC": ("getenv", 1),
+  "MV_WIDE": ("getenv", 1),
   "MV_UNROLL_REDUCE": ("getenv", 1),
   "REGALLOC_ADDR_REMAT_NO_END": ("getenv", 0),
   "REGALLOC_ADDR_REMAT_END_NO_EMIT": ("getenv", 0),

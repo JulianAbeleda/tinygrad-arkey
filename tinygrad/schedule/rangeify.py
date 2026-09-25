@@ -1763,7 +1763,10 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   kernel_assign: dict[UOp, UOp] = {u.buf_uop:u for u in write_afters if u.buf_uop not in repeated_write_bufs}
   assign_rep: dict[UOp, UOp] = {}
   for u in afters:
-    if u not in write_afters: continue
+    # Repeated writes already carry a fully ordered epoch chain. They are
+    # deliberately absent from kernel_assign, so they must also bypass the
+    # legacy single-writer WAR repair below.
+    if u not in write_afters or u.buf_uop in repeated_write_bufs: continue
     for s in u.src[1].src:
       # TODO: this is probably broken for MSELECT/MSTACK
       if s.op not in {Ops.BUFFER, Ops.PARAM} or s is u.buf_uop or s in repeated_write_bufs or (a:=kernel_assign.get(s)) is None: continue

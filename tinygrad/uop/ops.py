@@ -1858,6 +1858,11 @@ def native_attention_abi(abi: str, suffix: str) -> bool:
   """True for the native fused-attention ABI names of any modeled target."""
   return abi in {f"amd_gfx1100_{suffix}", f"nv_sm120_{suffix}"}
 
+# Longest key span one generated attention kernel admits. Keys are loaded through guarded addresses, so the
+# bound is a validation ceiling, not an addressing limit; 16384 is verified against fp32 attention (a 10k-token
+# Nemotron-H prompt's last prefill block reads 10240 keys).
+ATTENTION_MAX_KV_TOKENS = 16384
+
 class NativeRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
 
@@ -1913,7 +1918,7 @@ class NativeRowSoftmaxRepackSpec(NamedTuple):
     if not all(isinstance(x, int) and not isinstance(x, bool) for x in (self.query_start, self.kv_start, self.valid_kv)):
       raise ValueError("row-softmax native repack validity metadata must be integral")
     if self.dynamic_kv_v1:
-      if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= 4096:
+      if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= ATTENTION_MAX_KV_TOKENS:
         raise ValueError("dynamic row-softmax validity requires loop_state_v1 and a bounded KV loop")
       if self.grid is not None: self.grid.validate()
     elif self.kv_start < 0 or not 0 <= self.valid_kv <= 32 or self.kv_start not in {0, 16}:
@@ -2013,9 +2018,9 @@ class AttentionGridSpec(NamedTuple):
     # those loads were UNCONDITIONAL past the true kv_tokens extent on the ceil-divided tail tile
     # (kernels.py's `full_kv_tiles=(kv_tokens+15)//16`) -- an out-of-bounds-read bug, not a real ABI
     # requirement. Now that expand_loop_fragment guards the LOAD ADDRESS itself (row_ok/_row_ok, gated
-    # via UOp.valid), any positive kv_tokens<=4096 is safe; q_tokens stays 16-wide because Q addressing
+    # via UOp.valid), any positive kv_tokens<=ATTENTION_MAX_KV_TOKENS is safe; q_tokens stays 16-wide because Q addressing
     # is unguarded (q_tiles=q_tokens//16 must stay exact) and was never part of this bug.
-    if self.head_dim <= 0 or self.head_dim % 16 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens > 4096 or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires a positive 16-wide head_dim, 16-wide q_tokens, and grouped heads")
+    if self.head_dim <= 0 or self.head_dim % 16 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens > ATTENTION_MAX_KV_TOKENS or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires a positive 16-wide head_dim, 16-wide q_tokens, and grouped heads")
     if self.wave_size != 32 or self.local_size < self.wave_size or self.local_size % self.wave_size:
       raise ValueError("AMD attention grid requires wave32 and a whole-wave workgroup")
     return self
@@ -2482,6 +2487,10 @@ class ScheduleHints:
     if not isinstance(self.opts_to_apply, tuple): raise TypeError("ScheduleHints.opts_to_apply must be a tuple")
     if self.name is not None and (not isinstance(self.name, str) or not self.name):
       raise ValueError("ScheduleHints.name must be None or a non-empty string")
+
+class RuntimeLocalBytes(int):
+  """Launch-sized workgroup-local bytes a program's arenas need (ProgramInfo.aux[0]), excluding any per-workgroup
+  bytes the runtime itself reserves; runtimes that reserve (NV: 1 KiB on sm_80+) add their own share."""
 
 @dataclass(frozen=True)
 class RuntimeLocalAllocation:

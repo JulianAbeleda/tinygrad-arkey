@@ -1,0 +1,9 @@
+{"schema":"gameterm.harness.ready.v1","event":"ready","session_id":"self-train-qwen-base-final-qwen-turn-00","model":"qwen-base-final"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"turn_started","turn_id":"turn:1","request_id":"turn:1:request:0"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"context","tokens":154,"committed":false}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"provider_started"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"text_delta","text":""}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"text_delta","text":" ._"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"usage","input_tokens":56,"output_tokens":1}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"context","tokens":168,"committed":true}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-00","client_request_id":"request-qwen-turn-00","event":"completed","text":" ._"}

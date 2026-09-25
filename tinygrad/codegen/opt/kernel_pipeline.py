@@ -90,10 +90,16 @@ class KernelStage1PipelinePlan:
   slot_bytes: int
   stage_count: int = 1
   roles: tuple[str, ...] = ("A", "B")
+  # Asynchronous global->LDS copies (cp.async on sm_80+): buffer_count LDS slots form a buffer_count-deep ring
+  # filled buffer_count-1 tiles ahead of the consumer (build_async_stage_uop_graph).
+  async_copy: bool = False
 
   def __post_init__(self) -> None:
-    if not isinstance(self.buffer_count, int) or isinstance(self.buffer_count, bool) or self.buffer_count not in (1, 2):
-      raise ValueError("stage-1 pipeline buffer_count must be 1 or 2")
+    if not isinstance(self.async_copy, bool): raise ValueError("async_copy must be a bool")
+    allowed = tuple(range(2, 9)) if self.async_copy else (1, 2)
+    if not isinstance(self.buffer_count, int) or isinstance(self.buffer_count, bool) or self.buffer_count not in allowed:
+      raise ValueError("stage-1 pipeline buffer_count must be 1 or 2" if not self.async_copy else
+                       "async pipeline buffer_count (stages) must be in [2, 8]")
     if self.stage_count != 1: raise ValueError("only stage_count=1 is currently proved")
     if self.roles != ("A", "B"): raise ValueError("stage-1 pipeline roles must be exactly ('A', 'B')")
     if not isinstance(self.slot_bytes, int) or isinstance(self.slot_bytes, bool) or self.slot_bytes <= 0:
@@ -260,6 +266,63 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
   drain=tuple(drain)
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end),drain,reg,init,rng,end,join,
     prologue,body_prod,body_frag,drain_frag,drain,subtile_count,body_readiness,accumulator_dtype,accumulator_lane_width)
+
+
+def build_async_stage_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
+                                produce:Callable[[UOp,UOp,UOp|None],UOp],
+                                fragments:Callable[[UOp,UOp,UOp], KernelStage1FragmentStage],
+                                wmma:Callable[[KernelStage1FragmentStage,UOp,int], UOp], *,
+                                commit:Callable[...,UOp], wait_prior:Callable[...,UOp],
+                                accumulator_elements:int, accumulator_offset:UOp,
+                                accumulator_contract:tuple[UOp,tuple[tuple[int,int],...]],
+                                body_range_id:int, accumulator_id:int, accumulator_dtype:DType=dtypes.float,
+                                accumulator_lane_width:int=8) -> KernelStage1UOpGraph:
+  """An N-stage asynchronous-copy ring (N = plan.buffer_count).
+
+  Prologue: copy tiles 0..N-2 into slots 0..N-2, one commit group each.  Iteration i: wait until at most N-2 groups
+  are pending (so tile i has landed), barrier, consume slot i%N, then copy tile i+N-1 into slot (i+N-1)%N -- the slot
+  every thread finished reading in iteration i-1, ordered by this iteration's barrier -- and commit.  Copies past the
+  last tile wrap to tile (i+N-1)%k_tiles, landing in slots that are never consumed, so no copy is ever gated.
+  ``produce(epoch, slot, after)`` returns the copies' GROUP; ``commit(*deps)`` / ``wait_prior(n, *deps)`` return
+  the ordered group-commit / wait statements. The loop covers every K tile, so there is no drain MMA."""
+  if not plan.async_copy: raise ValueError("async stage graph requires an async_copy plan")
+  stages = plan.buffer_count
+  if k_tiles < 1: raise ValueError("k_tiles must be positive")
+  accumulator_vec_dtype = accumulator_dtype.vec(accumulator_lane_width)
+  zero = UOp.const(dtypes.weakint, 0)
+  pending: UOp|None = None
+  prologue_groups = []
+  for e in range(stages - 1):
+    copies = produce(UOp.const(dtypes.weakint, e % k_tiles), UOp.const(dtypes.weakint, e), pending)
+    pending = commit(copies)
+    prologue_groups.append(pending)
+  assert pending is not None
+  prologue = KernelStage1ProducerStage(zero, zero, (prologue_groups[0], prologue_groups[-1]), pending)
+  rng = UOp.range(k_tiles, body_range_id, AxisType.REDUCE)
+  ready = UOp.barrier(wait_prior(stages - 2, pending, rng))
+  # Issue the next tile's copies first, so they overlap this tile's MMAs; the fragment reads are ordered after them
+  # (they target a different slot, so this adds no data dependency, only issue order).
+  ahead = rng + (stages - 1)
+  copies = produce(ahead % k_tiles, ahead % stages, ready)
+  committed = commit(copies)
+  body_frag = fragments(rng, rng % stages, committed)
+  reg = UOp.placeholder((accumulator_elements,), accumulator_dtype, accumulator_id, addrspace=AddrSpace.REG)
+  init = reg.index(zero, dtype=accumulator_dtype.vec(accumulator_elements)).store(UOp.const(accumulator_dtype.vec(accumulator_elements), 0))
+  elem, arg = accumulator_contract
+  acc = UOp(Ops.CONTRACT, accumulator_vec_dtype, (reg.after(init, rng).index(accumulator_offset+elem).load(),), arg)
+  value = wmma(body_frag, acc, 0)
+  if value.dtype != accumulator_vec_dtype:
+    raise ValueError(f"mixed accumulator dtypes: expected {accumulator_vec_dtype}, got {value.dtype}")
+  update = reg.index(accumulator_offset+elem).store(UOp(Ops.UNROLL, accumulator_dtype, (value,), arg))
+  body_prod = KernelStage1ProducerStage(ahead, ahead % stages, (copies, committed), committed)
+  join = UOp.group(update, committed).replace(tag=("pipeline_body_join", rng, ahead, ahead % stages))
+  end = join.end(rng).replace(tag=("pipeline_body_end", rng))
+  # Retire the wrapped copies before the kernel's epilogue.
+  retired = UOp.barrier(wait_prior(0, end))
+  final = UOp(Ops.CONTRACT, accumulator_vec_dtype, (reg.after(retired).index(accumulator_offset+elem).load(),), arg)
+  drain = (final,)
+  return KernelStage1UOpGraph(plan, k_tiles, UOp.sink(*drain, end), drain, reg, init, rng, end, join,
+    prologue, body_prod, body_frag, body_frag, drain, 1, "matching", accumulator_dtype, accumulator_lane_width)
 
 
 def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: KernelStage1PipelinePlan, k_tiles: int,

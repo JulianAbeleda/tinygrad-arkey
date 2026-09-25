@@ -1,0 +1,120 @@
+{
+  "schema": "async-copy-gate.v1",
+  "passed": true,
+  "rows": [
+    {
+      "m": 512,
+      "n": 5120,
+      "k": 3136,
+      "tile": [
+        128,
+        128,
+        32
+      ],
+      "waves": [
+        4,
+        2
+      ],
+      "stages": 3,
+      "dtype": "bfloat16",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    },
+    {
+      "m": 512,
+      "n": 5120,
+      "k": 3136,
+      "tile": [
+        128,
+        128,
+        32
+      ],
+      "waves": [
+        4,
+        2
+      ],
+      "stages": 4,
+      "dtype": "bfloat16",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    },
+    {
+      "m": 256,
+      "n": 3200,
+      "k": 7680,
+      "tile": [
+        64,
+        64,
+        32
+      ],
+      "waves": [
+        2,
+        2
+      ],
+      "stages": 3,
+      "dtype": "bfloat16",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    },
+    {
+      "m": 384,
+      "n": 12544,
+      "k": 3136,
+      "tile": [
+        128,
+        64,
+        64
+      ],
+      "waves": [
+        4,
+        2
+      ],
+      "stages": 3,
+      "dtype": "bfloat16",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    },
+    {
+      "m": 512,
+      "n": 17536,
+      "k": 3136,
+      "tile": [
+        128,
+        128,
+        32
+      ],
+      "waves": [
+        4,
+        2
+      ],
+      "stages": 2,
+      "dtype": "bfloat16",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    },
+    {
+      "m": 512,
+      "n": 5120,
+      "k": 3136,
+      "tile": [
+        128,
+        128,
+        32
+      ],
+      "waves": [
+        4,
+        2
+      ],
+      "stages": 3,
+      "dtype": "half",
+      "finite": true,
+      "bitexact_vs_safe_tc": true,
+      "max_abs_diff": 0.0
+    }
+  ]
+}

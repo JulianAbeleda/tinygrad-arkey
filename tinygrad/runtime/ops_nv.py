@@ -333,12 +333,17 @@ class NVArgsState(CLikeArgsState):
     if isinstance(prg.dev.iface, MOCKIface): prg.cbuf_0[80:82] = [len(bufs), len(vals)]
     super().__init__(buf, prg, bufs, vals=vals, prefix=prg.cbuf_0 or None)
 
+NV_RESERVED_SHARED_BYTES = 1024
+
 class NVProgram(HCQProgram['NVDevice']):
   def __init__(self, dev:NVDevice, name:str, lib:bytes, shared_mem:int=0, **kwargs):
     self.dev, self.name, self.lib = dev, name, lib
     # shared_mem is positional as well as keyword so finalized PROGRAM UOps can
     # transport it through ProgramInfo.aux/get_runtime without a side channel.
-    requested_shmem = shared_mem
+    # Codegen-sized arenas (RuntimeLocalBytes) exclude the 1 KiB per-CTA shared memory the sm_80+ hardware reserves
+    # ahead of the dynamic window; explicit native callers already include it in their shared_mem.
+    from tinygrad.uop.ops import RuntimeLocalBytes
+    requested_shmem = shared_mem + (NV_RESERVED_SHARED_BYTES if isinstance(shared_mem, RuntimeLocalBytes) and shared_mem else 0)
     self.constbufs: dict[int, tuple[int, int]] = {0: (0, 0x160)} # dict[constbuf index, tuple[va_addr, size]]
 
     if (NAK:=isinstance(dev.renderer, NAKRenderer)):

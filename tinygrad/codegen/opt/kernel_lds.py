@@ -18,6 +18,10 @@ if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeomet
 # implementation, not a per-target snapshot: AMD wave32 and Metal's 32-wide SIMD group both satisfy it,
 # while e.g. AMD CDNA's wave64 genuinely does not (see test_wave64_cdna_descriptor_is_self_consistent_but_unsupported).
 _PRECONTRACT_WARP_THREADS = 32
+# Dense operand dtype -> accumulator dtype this precontract path expresses.  bf16 shares fp16's
+# 2-byte element and (on every descriptor that declares it) the identical fragment cardinality
+# and swizzle, so the LDS staging, lane layout, and cooperative-store math are unchanged.
+_PRECONTRACT_DTYPE_PAIRS = {dtypes.half:dtypes.float, dtypes.bfloat16:dtypes.float, dtypes.char:dtypes.int}
 
 
 def validate_wmma_descriptor(tc) -> None:
@@ -51,9 +55,9 @@ def validate_wmma_descriptor(tc) -> None:
   if threads != _PRECONTRACT_WARP_THREADS:
     raise ValueError(f"WMMA descriptor threads must be {_PRECONTRACT_WARP_THREADS} for this precontract "
                       "path's warp-wide fragment and cooperative-store math")
-  if dtype_in not in (dtypes.half, dtypes.char):
+  if dtype_in not in _PRECONTRACT_DTYPE_PAIRS:
     raise ValueError("WMMA descriptor dtype_in is not a pairing this precontract path expresses")
-  if dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int):
+  if dtype_out != _PRECONTRACT_DTYPE_PAIRS[dtype_in]:
     raise ValueError("WMMA descriptor dtype_out is not a pairing this precontract path expresses")
 
 
@@ -588,8 +592,8 @@ def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract", tc
   if len(dims) != 3 or any(not isinstance(d, int) or d <= 0 for d in dims):
     raise ValueError(f"{context} WMMA descriptor dimensions are invalid")
   dtype_in, dtype_out = arg[2], arg[3]
-  if dtype_in not in (dtypes.half, dtypes.char) or \
-     dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int) or arg[5] != _PRECONTRACT_WARP_THREADS:
+  if dtype_in not in _PRECONTRACT_DTYPE_PAIRS or dtype_out != _PRECONTRACT_DTYPE_PAIRS[dtype_in] or \
+     arg[5] != _PRECONTRACT_WARP_THREADS:
     raise ValueError(f"{context} WMMA descriptor carrier ABI drifted")
   axes = arg[6]
   if not isinstance(axes, tuple) or len(axes) != 3:
@@ -629,8 +633,11 @@ def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:Precon
       (threads.lane.op, threads.lane.vmax + 1, threads.lane.arg[-1]) !=
       (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
     raise ValueError(f"{context} thread axes do not match derived wave geometry")
-  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax + 1 != factors.subtiles_m or
-      subtile_n.op is not Ops.RANGE or subtile_n.vmax + 1 != factors.subtiles_n):
+  # The same CONST 0 collapse applies to a single subtile per warp.
+  def _subtile_ok(subtile:UOp, count:int) -> bool:
+    if count == 1 and subtile.op is Ops.CONST: return subtile.arg == 0
+    return subtile.op is Ops.RANGE and subtile.vmax + 1 == count
+  if not _subtile_ok(subtile_m, factors.subtiles_m) or not _subtile_ok(subtile_n, factors.subtiles_n):
     raise ValueError(f"{context} subtile axes do not match derived geometry")
 
 @dataclass(frozen=True)
@@ -645,6 +652,8 @@ class PrecontractPipelineTemplate:
   subtile_n: UOp
   contracts: tuple[PrecontractContractSpec, ...]
   pipeline_plan: object
+  vector_global_loads: bool = False   # Renderer.precontract_vector_global_loads
+  async_copy_ops: AsyncCopyOps|None = None   # Renderer.async_copy_ops, required by async_copy plans
 
   def __post_init__(self) -> None:
     factors = derive_precontract_factors(self.geometry, self.tc)
@@ -664,7 +673,12 @@ class PrecontractPipelineTemplate:
 
   def producer(self, epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
     return instantiate_precontract_producer(self.geometry, tc=self.tc, allocation=self.allocation,
-      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot)
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, vector_global_loads=self.vector_global_loads)
+
+  def async_producer(self, epoch:UOp, slot:UOp, after:UOp|None) -> UOp:
+    if self.async_copy_ops is None: raise ValueError("async precontract producer requires declared async copy ops")
+    return instantiate_precontract_async_producer(self.geometry, tc=self.tc, allocation=self.allocation,
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, after=after, ops=self.async_copy_ops)
 
   def fragments(self, epoch:UOp, slot:UOp, ready:UOp, k_substep:int) -> PrecontractFragmentInstance:
     if not 0 <= k_substep < self.factors.k_substeps: raise ValueError("precontract K substep is out of range")
@@ -780,7 +794,7 @@ def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_byte
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                      operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
                                      epoch:UOp, slot:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
-                                     logical_k_block:UOp|None=None) -> PrecontractProducerInstance:
+                                     logical_k_block:UOp|None=None, vector_global_loads:bool=False) -> PrecontractProducerInstance:
   factors=derive_precontract_factors(geometry,tc)
   item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
   vector_elements = vector_bytes // item_bytes
@@ -803,8 +817,11 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
           if operand.fragment_provider is not None else \
           operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value
       else:
-        value = UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
-          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
+        coords = {operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k}
+        value = _dense_vector_load(operand, coords, tc.dtype_in, vector_elements) if vector_global_loads else None
+        if value is None:
+          value = UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
+            operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       # Keep lane ownership explicit.  A vector pointer with a vectorized
       # logical index can be lowered as INDEX(LOAD(ptr), lane); that turns the
@@ -817,6 +834,70 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
                                for elem in range(vector_elements))))
     role_nodes.append(UOp.group(*stores))
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
+
+def _dense_vector_address(operand, coords:dict, dtype, width:int) -> tuple[UOp, UOp]|None:
+  """(PARAM, first element index) of a dense operand's ``width`` consecutive K elements, or None.
+
+  Admitted only for an ungated ``INDEX(PARAM, idx)`` whose address advances by exactly one element per K step and
+  whose first element address is provably width-aligned and in bounds, so one b128 access covers exactly the
+  scalar elements."""
+  src = operand.source
+  if src.op is not Ops.INDEX or len(src.src) != 2 or src.src[0].op is not Ops.PARAM or src.dtype != dtype: return None
+  idx = src.src[1]
+  if idx.dtype != dtypes.weakint or idx.get_valid().op is not Ops.CONST: return None
+  start = idx.substitute(coords).simplify()
+  step = (idx.substitute({**coords, operand.k_axis:coords[operand.k_axis]+1}) - start).simplify()
+  if step.op is not Ops.CONST or step.arg != 1: return None
+  if start.divides(width) is None or start.vmin < 0 or start.vmax + width > src.src[0].ptrdtype.size: return None
+  return src.src[0], start
+
+def _dense_vector_load(operand, coords:dict, dtype, width:int) -> UOp|None:
+  """One b128 global load for a dense operand's ``width`` consecutive K elements, or None for the scalar fallback."""
+  if (address := _dense_vector_address(operand, coords, dtype, width)) is None: return None
+  return address[0].index(address[1], dtype=dtype.vec(width)).load()
+
+@dataclass(frozen=True)
+class AsyncCopyOps:
+  """A renderer's declared asynchronous global->LDS copy instructions (``Renderer.async_copy_ops``).
+
+  ``copy16`` is a CUSTOM format taking ({0}=LDS pointer, {1}=global pointer) and copying 16 bytes; ``commit`` closes
+  the current copy group; ``wait`` is a format with ``{n}``, the number of most recent groups that may stay pending."""
+  copy16: str
+  commit: str
+  wait: str
+
+def instantiate_precontract_async_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
+                                           operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
+                                           epoch:UOp, slot:UOp, after:UOp|None, ops:AsyncCopyOps) -> UOp:
+  """The cooperative producer as 16-byte asynchronous copies into LDS slot ``slot``, ordered after ``after``.
+
+  Same (row, vector) ownership and LDS addresses as the synchronous producer; every operand must be a dense
+  unit-stride, aligned source (``_dense_vector_address``), otherwise this fails closed."""
+  factors=derive_precontract_factors(geometry,tc)
+  item_bytes = tc.dtype_in.itemsize
+  vector_elements = 16 // item_bytes
+  slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
+  thread=(threads.wave_m*geometry.waves[1]+threads.wave_n)*geometry.wave_size+threads.lane
+  copies=[]
+  for operand in operands:
+    if isinstance(operand, PackedPrecontractOperandTemplate): raise ValueError("async copies require dense operands")
+    window=_window(geometry,operand.role); loads=factors.loads_a if operand.role == "A" else factors.loads_b
+    rows=geometry.tile[0] if operand.role == "A" else geometry.tile[1]
+    for row_iteration in range(loads):
+      linear_vector=thread+row_iteration*geometry.threads
+      row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
+      row=cooperative_store_row(row,vectors_per_row=factors.vectors_per_row,rows=rows,
+                                stride_bytes=window.stride_bytes,vector_bytes=16)
+      logical_k=vector*vector_elements
+      coords={operand.row_axis:operand.row_tile_base+row, operand.k_axis:epoch*geometry.tile[2]+logical_k}
+      if (address := _dense_vector_address(operand, coords, tc.dtype_in, vector_elements)) is None:
+        raise ValueError(f"async copy source for {operand.role} is not a dense aligned unit-stride operand")
+      base=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
+      # A trailing void source orders the copy after ``after`` (its slot's last readers passed that barrier).
+      copies.append(UOp(Ops.CUSTOM, dtypes.void, (allocation.index(base, ptr=True), address[0].index(address[1], ptr=True),
+                        *(() if after is None else (after,))), arg=ops.copy16).replace(tag=("kernel_tile_async_copy", operand.role, row_iteration)))
+  return UOp.group(*copies)
+
 
 def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, allocation:UOp, threads:PrecontractThreadAxes,
                                       k_substep:UOp, subtile_m:UOp, subtile_n:UOp,

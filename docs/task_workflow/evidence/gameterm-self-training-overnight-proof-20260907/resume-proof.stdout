@@ -1,0 +1,241 @@
+{
+  "best_exact_correct": 1,
+  "config": {
+    "alpha": 8.0,
+    "device": "NV",
+    "eval_every": 3,
+    "harness": "/home/ubuntu/gameterm_beta/target/debug/gameterm-harness",
+    "init_adapter": "/home/ubuntu/tinygrad-self-training/docs/task_workflow/evidence/gameterm-qwen-self-training-20260907/adapter",
+    "input": "/home/ubuntu/tinygrad-self-training/test/fixtures/llm/qwen_output_lora_overnight.jsonl",
+    "lr": 0.0002,
+    "lr_decay": 0.8,
+    "max_context": 64,
+    "model": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+    "port": 8091,
+    "prefill_chunk_size": 64,
+    "rank": 8,
+    "server_max_tokens": 1,
+    "steps_per_round": 1,
+    "system_prompt": "Reply with exactly one uppercase action label: READ, WATCH, OPEN, or BLOCK. No punctuation. /no_think"
+  },
+  "kind": "gameterm_qwen_self_training_loop",
+  "last_started_at_unix": 1788839508.7894156,
+  "rounds": [
+    {
+      "adapter": "/tmp/gameterm-overnight-proof-20260907-c/round-000/training/adapter",
+      "adapter_sha256": "c79631bf6124f0da951c3a5bf42781bda8b104097333e90bc531e38b14f4e0ed",
+      "elapsed_s": 134.82109455001773,
+      "gameterm_failures": 0,
+      "gameterm_score": {
+        "exact_accuracy": 0.25,
+        "exact_correct": 1,
+        "total": 4
+      },
+      "learning_rate": 0.0002,
+      "round": 0,
+      "trainer_exit_code": 0,
+      "training_final_eval": {
+        "accuracy": 0.125,
+        "examples": 8,
+        "loss": 15.052478238940239,
+        "losses": [
+          0.8445345163345337,
+          19.231969833374023,
+          14.646241188049316,
+          23.548032760620117,
+          2.605060338973999,
+          19.23216438293457,
+          21.079805374145508,
+          19.232017517089844
+        ],
+        "predictions": [
+          {
+            "correct": true,
+            "id": "qwen-example-00:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-00",
+            "target_id": 9560,
+            "target_text": "READ",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-00:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-00",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-03:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-03",
+            "target_id": 39964,
+            "target_text": "BLOCK",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-03:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-03",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-06:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-06",
+            "target_id": 30933,
+            "target_text": "OPEN",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-06:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-06",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-09:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-09",
+            "target_id": 64492,
+            "target_text": "WATCH",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-09:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-09",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          }
+        ],
+        "sequence_accuracy": 0.0,
+        "sequences": 4
+      },
+      "training_initial_eval": {
+        "accuracy": 0.125,
+        "examples": 8,
+        "loss": 16.242995843291283,
+        "losses": [
+          0.7057310342788696,
+          20.98027229309082,
+          15.478534698486328,
+          25.659317016601562,
+          2.504835367202759,
+          20.980478286743164,
+          22.654457092285156,
+          20.9803409576416
+        ],
+        "predictions": [
+          {
+            "correct": true,
+            "id": "qwen-example-00:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-00",
+            "target_id": 9560,
+            "target_text": "READ",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-00:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-00",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-03:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-03",
+            "target_id": 39964,
+            "target_text": "BLOCK",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-03:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-03",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-06:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-06",
+            "target_id": 30933,
+            "target_text": "OPEN",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-06:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-06",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-09:token-0",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-09",
+            "target_id": 64492,
+            "target_text": "WATCH",
+            "token_index": 0
+          },
+          {
+            "correct": false,
+            "id": "qwen-example-09:token-1",
+            "predicted_id": 9560,
+            "predicted_text": "READ",
+            "row_id": "qwen-example-09",
+            "target_id": 151645,
+            "target_text": "<|im_end|>",
+            "token_index": 1
+          }
+        ],
+        "sequence_accuracy": 0.0,
+        "sequences": 4
+      },
+      "training_status": "pass",
+      "warmup_elapsed_s": 7.677239165001083
+    }
+  ],
+  "status": "max_rounds",
+  "stopped_at_unix": 1788839508.7902522
+}

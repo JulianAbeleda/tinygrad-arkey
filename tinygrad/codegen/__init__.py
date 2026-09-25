@@ -527,6 +527,13 @@ def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
     open(f'/tmp/nv1-generated-{name}.cu','w').write(src)
   provenance = ("tinygrad_renderer", f"{type(ctx).__module__}.{type(ctx).__qualname__}", ctx.target.device)
   new_arg = replace(prg.arg, aux=tuple(ctx.aux(list(lin.src))) if ctx.has_aux else prg.arg.aux, provenance=provenance)
+  if getattr(ctx, "runtime_local_launch_aux", False):
+    from tinygrad.uop.ops import RuntimeLocalAllocation, RuntimeLocalBytes
+    runtime_local = sum(u.tag.size_bytes for u in lin.src if isinstance(u.tag, RuntimeLocalAllocation))
+    if runtime_local:
+      # The program runtime sizes the launch's dynamic workgroup-local memory from aux[0] (NVProgram/CUDAProgram).
+      if new_arg.aux: raise RuntimeError("runtime-local launch size cannot share ProgramInfo.aux with other metadata")
+      new_arg = replace(new_arg, aux=(RuntimeLocalBytes(runtime_local),))
   return prg.replace(src=prg.src + (UOp(Ops.SOURCE, arg=src),), arg=new_arg)
 
 def do_compile(ctx:Renderer, prg:UOp, source:UOp) -> UOp|None:

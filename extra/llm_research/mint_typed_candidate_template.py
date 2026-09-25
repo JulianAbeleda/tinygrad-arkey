@@ -50,11 +50,72 @@ _COMPACT_TARGETS = {
   "gfx1100": ({"backend": "AMD", "arch": "gfx1100", "wave_size": 32}, "gfx1100"),
   "sm120": ({"backend": "NV", "arch": "sm_120", "wave_size": 32}, "sm120"),
 }
+# Dense bf16 promotion: the NV sm_120 precontract family (same capability row and derivation as the promoted Qwen
+# schedule) at the geometry and split-K factor the offline search selected per exact Nemotron-H 4B BF16 row.
+_NV_PROMOTED_SET = _PROMOTED_SET.with_name("prefill_sm120_lds_dbuf_candidate_set.json")
+_DENSE_BF16_ARTIFACT = _PROMOTED_SET.with_name("dense_bf16_sm120_candidate_set.json")
+_DENSE_BF16_SELECTION = Path(__file__).resolve().parent / "prefill" / "dense_bf16_sm120_selection.json"
+_DENSE_BF16_PROFILE = "nemotron_h_4b_bf16_sm120"
 _ROLES_SHAPES = (("attn_kv", (512, 1024, 4096)), ("attn_qo", (512, 4096, 4096)),
                  ("ffn_down", (512, 4096, 12288)), ("ffn_gate_up", (512, 12288, 4096)))
 
 
+def _compact(profile:str, target:dict, template:dict, roles_shapes) -> dict:
+  compact = {"schema": "tinygrad.prefill_wmma_lds_compact.v1", "route_id": ROUTE_ID, "candidate_set_identity": "unset",
+             "profile": profile, "target": dict(target), "template": template, "entries": []}
+  expanded = {"schema": "boltbeam.full_kernel_candidate_set.v1", "entries": []}
+  for role, (m, n, k) in roles_shapes:
+    payload = {"schema_version": template["schema_version"],
+               "workload": {"profile": profile, "role": role, "shape": {"m": m, "n": n, "k": k},
+                            "dtypes": dict(template["dtypes"]), "layout": dict(template["layout"]), "target": dict(target)},
+               "schedule": json.loads(json.dumps(template["schedule"])),
+               "static_constraints": dict(template["static_constraints"]),
+               "applicability": {"exact_shape": True, "profiles": [profile], "roles": [role],
+                                 "targets": [f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"]}}
+    canonical, legacy = _candidate_identity(payload), _legacy_candidate_identity(payload)
+    compact["entries"].append({"role": role, "shape": {"m": m, "n": n, "k": k},
+                               "canonical_identity": canonical, "legacy_identity": legacy})
+    expanded["entries"].append({"canonical_identity": canonical, "payload": payload})
+  compact["candidate_set_identity"] = canonical_candidate_set_identity(expanded)
+  return compact
+
+
+def mint_dense_bf16(selection: list[dict] | None = None) -> dict:
+  """One compact set per selected geometry (schedule derived like the promoted one), plus the route table."""
+  if selection is None: selection = json.loads(_DENSE_BF16_SELECTION.read_text())["rows"]
+  nv = json.loads(_NV_PROMOTED_SET.read_text())
+  base = nv["template"]
+  groups: dict[tuple, list] = {}
+  for row in selection:
+    tm, tn, tk, wm, wn = row["geometry"]
+    groups.setdefault((tm, tn, tk, wm, wn), []).append(row)
+  sets, routes = [], []
+  for (tm, tn, tk, wm, wn), rows in sorted(groups.items()):
+    geometry = {"tile": {"m": tm, "n": tn, "k": tk}, "waves": {"m": wm, "n": wn},
+                "buffer_count": base["schedule"]["pipeline"]["buffer_count"], "stage_count": base["schedule"]["pipeline"]["stage_count"]}
+    first = rows[0]
+    derived = derive_target_schedule(NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, geometry,
+      {"m": first["m"], "n": first["n"], "k": first["k"] // first["split_k"], "dtypes": dict(base["dtypes"])})
+    template = {"schema_version": base["schema_version"], "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"},
+                "layout": dict(base["layout"]), "schedule": derived["schedule"], "static_constraints": derived["static_constraints"]}
+    ordered = sorted(rows, key=lambda r: (r["role"], r["m"], r["n"], r["k"]))
+    compact = _compact(_DENSE_BF16_PROFILE, nv["target"], template,
+                       [(r["role"], (r["m"], r["n"], r["k"] // r["split_k"])) for r in ordered])
+    sets.append(compact)
+    for r, entry in zip(ordered, compact["entries"]):
+      routes.append({"role": r["role"], "m": r["m"], "n": r["n"], "k": r["k"], "split_k": r["split_k"],
+                     "canonical_identity": entry["canonical_identity"]})
+  # The runtime keys warmstart schedules by (output dims, reduce size); two routes may never share a key.
+  keys = [(frozenset({r["m"], r["n"]} | ({r["split_k"]} if r["split_k"] > 1 else set())), r["k"] // r["split_k"]) for r in selection]
+  if len(set(keys)) != len(keys): raise ValueError("dense bf16 selection has colliding warmstart keys")
+  return {"schema": "tinygrad.dense_bf16_candidate_routes.v1", "profile": _DENSE_BF16_PROFILE, "target": dict(nv["target"]),
+          "sets": sets, "routes": sorted(routes, key=lambda r: (r["role"], r["m"]))}
+
+
 def main() -> int:
+  if sys.argv[1:] == ["--dense-bf16"]:
+    _DENSE_BF16_ARTIFACT.write_text(json.dumps(mint_dense_bf16(), indent=2, sort_keys=True) + "\n")
+    return 0
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("target", choices=tuple(_TARGET_ROWS), help="capability row to derive from")
   parser.add_argument("--out", required=True, help="write the typed schedule template JSON here")

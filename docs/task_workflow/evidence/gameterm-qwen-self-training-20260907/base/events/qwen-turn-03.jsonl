@@ -1,0 +1,9 @@
+{"schema":"gameterm.harness.ready.v1","event":"ready","session_id":"self-train-qwen-base-final-qwen-turn-03","model":"qwen-base-final"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"turn_started","turn_id":"turn:1","request_id":"turn:1:request:0"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"context","tokens":154,"committed":false}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"provider_started"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"text_delta","text":""}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"text_delta","text":"不爱"}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"usage","input_tokens":55,"output_tokens":1}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"context","tokens":169,"committed":true}
+{"schema":"gameterm.harness.event.v1","session_id":"self-train-qwen-base-final-qwen-turn-03","client_request_id":"request-qwen-turn-03","event":"completed","text":"不爱"}

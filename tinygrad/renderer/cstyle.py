@@ -14,7 +14,8 @@ def _render_arg_format(ctx, x:UOp) -> str:
   # literal C braces in the body must be doubled ({{ }}). Surface a clear, actionable error if they aren't,
   # instead of a bare IndexError/ValueError from .format. Success path is byte-identical to x.arg.format(...).
   try:
-    return x.arg.format(*[ctx[y] for y in x.src])
+    # void sources (GROUP/BARRIER/CUSTOM statements) are ordering-only: they are emitted first and render as ""
+    return x.arg.format(*["" if y.dtype == dtypes.void else ctx[y] for y in x.src])
   except (IndexError, KeyError, ValueError) as e:
     raise RuntimeError(f"{x.op} arg failed to format ({type(e).__name__}: {e}); "
                        f"literal C braces must be doubled and placeholders must match len(src)={len(x.src)}. "

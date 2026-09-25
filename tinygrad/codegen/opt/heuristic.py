@@ -57,6 +57,38 @@ def bounded_reduction_unroll(upcast_lanes:int, reduction_size:int, choices:tuple
     if _pressure_admits(accumulators=upcast_lanes*choice): return choice
   return None
 
+def _loaded(u):
+  """The load under a widening CAST (and the BITCAST that reads bf16 as 16-bit words), or the value itself."""
+  inner = u
+  while inner.op in (Ops.CAST, Ops.BITCAST) and inner.src:
+    inner = inner.src[0]
+  return inner if inner.op is Ops.INDEX and inner is not u else u
+
+
+def _widened(u):
+  """The product under a widening CAST of the reduce input (a bf16 product summed in fp32), or the value itself."""
+  return u.src[0] if u.op is Ops.CAST and u.src and u.src[0].op is Ops.MUL else u
+
+def _matvec(k:Scheduler, max_batch:int):
+  """(mulop, activation idx, weight idx, first reduce range, batch ranges) of a (small-M batched) matvec, else None.
+
+  A small-M batched matvec (M activation rows against one weight) carries batch ranges in the activation index that the
+  weight index lacks; they must be GLOBAL and M <= max_batch. A widening CAST of a load (a bf16 weight read as fp32) or
+  of the product (a bf16 product summed in fp32) is still a matvec."""
+  if not (k.reduceop is not None and k.reduceop.arg[0] is Ops.ADD and len(k.full_shape) >= 2 and k.ranges_of(AxisType.REDUCE)): return None
+  if (mulop:=_widened(k.reduceop.src[0])).op is not Ops.MUL or not all(_loaded(x).op is Ops.INDEX for x in mulop.src): return None
+  idx0, idx1 = _buf_idx(_loaded(mulop.src[0])), _buf_idx(_loaded(mulop.src[1]))
+  if idx0 is None or idx1 is None: return None
+  first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
+  batch = [r for r in idx0.ranges if r not in idx1.ranges]
+  if not all(r.arg[-1] is AxisType.GLOBAL and isinstance(r.vmax, int) for r in batch) or prod(r.vmax+1 for r in batch) > max_batch: return None
+  if not any(u is first_reduce_rng for u in idx0.split_uop(Ops.ADD)): return None
+  return mulop, idx0, idx1, first_reduce_rng, batch
+
+def _wide_bf16(k:Scheduler, mulop) -> bool:
+  """bf16 weights on a target that folds 16-byte bf16 loads (the measured sm_120 schedule applies)."""
+  return bool(getenv("MV_WIDE", 1)) and bool(k.ren.global_bf16_vector_widths) and _loaded(mulop.src[1]).src[0].dtype.base == dtypes.bfloat16
+
 def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   if _is_composite_landing(k): return k
 
@@ -79,7 +111,10 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
     2: allows kernels with M, N, K axes that are not multiples of the tensor core dimensions by applying padding those axes as needed
   """
   # NOTE: unless TC_OPT is > 0, we only trigger tensor cores if there's only one reduce axis
-  if USE_TC > 0 and (len(k.axes_of(AxisType.GROUP_REDUCE, AxisType.REDUCE)) == 1 or (TC_OPT.value >= 1)):
+  # A small-M (M<=16) bf16 matvec streams its weight faster through the matvec schedule below than through a
+  # 16-row tensor-core tile (sm_120, 3136x12544 at M=16: TC 342us, batched matvec 126us).
+  small_mv = (mv:=_matvec(k, getenv("MV_MAX_BATCH", 16))) is not None and bool(mv[4]) and k.ren.has_local and _wide_bf16(k, mv[0])
+  if USE_TC > 0 and not small_mv and (len(k.axes_of(AxisType.GROUP_REDUCE, AxisType.REDUCE)) == 1 or (TC_OPT.value >= 1)):
     good_tc_opt = False
     tk = k.copy()
     try: # check TC first and apply hand-coded opts if successful
@@ -133,23 +168,43 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
 
   # should use matvec - TODO: adjust/tune based on the wide vs tall/large vs small mat
   MV_BLOCKSIZE, MV_THREADS_PER_ROW, MV_ROWS_PER_THREAD = getenv("MV_BLOCKSIZE", 4), getenv("MV_THREADS_PER_ROW", 8), getenv("MV_ROWS_PER_THREAD", 4)
-  if k.ren.has_local and getenv("MV",1) != 0 and (MV_BLOCKSIZE > 1 or MV_THREADS_PER_ROW > 1 or MV_ROWS_PER_THREAD > 1) and  \
-    k.reduceop is not None and k.reduceop.arg[0] is Ops.ADD and len(k.full_shape) >= 2 and k.ren.has_shared and \
-    (mulop:=k.reduceop.src[0]).op is Ops.MUL and mulop.src[0].op is Ops.INDEX and mulop.src[1].op is Ops.INDEX:
-    idx0, idx1 = _buf_idx(mulop.src[0]), _buf_idx(mulop.src[1])
-    if idx0 is not None and idx1 is not None and k.ranges_of(AxisType.REDUCE):
-      first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
-      if any(u is first_reduce_rng for u in idx0.split_uop(Ops.ADD)) and all(r in idx1.ranges for r in idx0.ranges):
-        for global_idx in k.axes_of(AxisType.GLOBAL):
-          if first_reduce_rng.src[0].divides(MV_THREADS_PER_ROW) is not None and k.full_shape[global_idx]%(MV_BLOCKSIZE*MV_ROWS_PER_THREAD) == 0:
-            if DEBUG >= 3:
-              print(f"MATVEC: {k.full_shape=} {first_reduce_rng.render()} {MV_BLOCKSIZE=} {MV_THREADS_PER_ROW=} {MV_ROWS_PER_THREAD=}")
-            try:
-              if MV_THREADS_PER_ROW > 1: k.apply_opt(Opt(OptOps.GROUP, 0, MV_THREADS_PER_ROW))
-            except KernelOptError: pass
-            if MV_BLOCKSIZE > 1: k.apply_opt(Opt(OptOps.LOCAL, global_idx, MV_BLOCKSIZE))
-            if MV_ROWS_PER_THREAD > 1: k.apply_opt(Opt(OptOps.UPCAST, global_idx, MV_ROWS_PER_THREAD))
-            return k
+  # MV_VEC: reduction elements per lane per load; MV_WIDE (in _wide_bf16): the measured bf16 schedule
+  MV_MAX_BATCH, MV_VEC = getenv("MV_MAX_BATCH", 16), getenv("MV_VEC", 1)
+  if k.ren.has_local and getenv("MV",1) != 0 and (MV_BLOCKSIZE > 1 or MV_THREADS_PER_ROW > 1 or MV_ROWS_PER_THREAD > 1) and \
+    k.ren.has_shared and (mv:=_matvec(k, MV_MAX_BATCH)) is not None:
+    mulop, idx0, idx1, first_reduce_rng, batch = mv
+    nbatch = prod(r.vmax+1 for r in batch)
+    tpr, blocksize, vec = MV_THREADS_PER_ROW, MV_BLOCKSIZE, MV_VEC
+    # keep the accumulator tile (rows per thread x batch) near the unbatched one
+    rows_per_thread = min(MV_ROWS_PER_THREAD, max(1, MV_ROWS_PER_THREAD*4 // nbatch)) if batch else MV_ROWS_PER_THREAD
+    if _wide_bf16(k, mulop):
+      # bf16 weights on a target that folds 16-byte bf16 loads (measured sm_120): a warp-wide row split with one
+      # row per lane and 128-thread blocks keeps enough loads in flight to stream at ~80-95% of DRAM bandwidth;
+      # the 8/4/4 default launches too few threads (ffn_down 3136x12544: 558 -> 1335 GB/s). The reduction
+      # UNROLL feeds each weight load to every batch row (M=8: 546-634 -> 1057-1132 GB/s).
+      tpr, vec = next(((t, v) for t, v in ((32, 8), (16, 4), (8, 8), (8, 4), (8, 1))
+                       if first_reduce_rng.src[0].divides(t*v) is not None), (MV_THREADS_PER_ROW, 1))
+      blocksize, rows_per_thread = max(1, 128 // tpr), 1
+    for global_idx in k.axes_of(AxisType.GLOBAL):
+      if batch and (k.rngs[global_idx] in batch or k.rngs[global_idx] not in idx1.ranges): continue
+      if first_reduce_rng.src[0].divides(tpr) is not None and k.full_shape[global_idx]%(blocksize*rows_per_thread) == 0:
+        if DEBUG >= 3:
+          print(f"MATVEC: {k.full_shape=} {first_reduce_rng.render()} {blocksize=} {tpr=} {rows_per_thread=} {vec=}")
+        if vec > 1 and first_reduce_rng.src[0].divides(vec*tpr) is not None:
+          k.apply_opt(Opt(OptOps.UNROLL, 0, vec))
+        try:
+          if tpr > 1: k.apply_opt(Opt(OptOps.GROUP, 0, tpr))
+        except KernelOptError: pass
+        if blocksize > 1: k.apply_opt(Opt(OptOps.LOCAL, global_idx, blocksize))
+        if rows_per_thread > 1: k.apply_opt(Opt(OptOps.UPCAST, global_idx, rows_per_thread))
+        # up to 8 batch rows share each weight load in registers; more rows spill, so the rest become blocks
+        budget = 8
+        for rng in batch:
+          size = rng.vmax+1
+          amt = size if size <= budget else next((a for a in (8, 4, 2) if a <= budget and size % a == 0), 1)
+          if amt > 1: k.apply_opt(Opt(OptOps.UPCAST, k.rngs.index(rng), 0 if amt == size else amt))
+          budget //= amt
+        return k
 
   # MV_DEQUANT (opt-in, research): the strict matvec check above requires reduceop.src[0] == MUL(INDEX, INDEX)
   # (two DIRECT loads). A fused-dequant matvec is MUL(dequant(INDEX(words)), INDEX(x)) -- the weight operand is a

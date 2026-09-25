@@ -35,6 +35,17 @@ def test_metal_descriptor_is_admitted_by_the_same_generic_validator():
   validate_wmma_descriptor(tc)
 
 
+def test_cuda_bf16_descriptor_is_admitted_with_fp32_accumulation_only():
+  """sm_120's m16n8k16 bf16->fp32 descriptor shares fp16's 2-byte element, fragment cardinality and swizzle, so
+  the dense precontract (LDS staging, lane layout, cooperative stores) admits it; bf16 accumulation does not."""
+  from tinygrad.codegen.opt.tc import cuda_81616
+  fp16 = next(tc for tc in cuda_81616 if tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float)
+  bf16 = next(tc for tc in cuda_81616 if tc.dtype_in == dtypes.bfloat16 and tc.dtype_out == dtypes.float)
+  assert (bf16.dims, bf16.elements_per_thread, bf16.swizzle) == (fp16.dims, fp16.elements_per_thread, fp16.swizzle)
+  validate_wmma_descriptor(bf16)
+  with pytest.raises(ValueError, match="dtype_out"): validate_wmma_descriptor(_DescriptorDrift(bf16, "dtype_out", dtypes.bfloat16))
+
+
 def test_wave64_cdna_descriptor_is_self_consistent_but_unsupported():
   """A real, valid CDNA descriptor -- self-consistent, and used for actual CDNA lowering elsewhere in
   tc.py -- is still rejected here, because this precontract path's fragment/cooperative-store math is
@@ -103,7 +114,7 @@ class _DescriptorDrift:
 @pytest.mark.parametrize("field,value,match", (
   ("dims", (16, 16, 8), "self-consistent"), ("threads", 64, "self-consistent"),
   ("elements_per_thread", (16, 8, 8), "self-consistent"),
-  ("dtype_in", dtypes.bfloat16, "dtype_in"), ("dtype_out", dtypes.half, "dtype_out"),
+  ("dtype_in", dtypes.fp8e4m3, "dtype_in"), ("dtype_out", dtypes.half, "dtype_out"),
   ("opts", ("l0",), "self-consistent"),
   ("swizzle", (((), (), ()), ((), (), ())), "self-consistent"),
 ))
@@ -188,3 +199,42 @@ def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():
   uneven = KernelTileGeometry((64, 64, 32), (4, 4), 512, 32,
     (KernelLDSWindow("A", 0, 5120, 80), KernelLDSWindow("B", 5120, 10240, 80)))
   with pytest.raises(ValueError, match="divide evenly"): derive_precontract_factors(uneven, _tc())
+
+
+def test_single_subtile_per_warp_collapses_to_const_zero_like_a_single_wave():
+  """A (16, 64, 32) tile with one warp in m owns one m16 subtile: the scheduler emits CONST 0 rather than a
+  size-one RANGE (which breaks substitution), and the thread-axis validator accepts exactly that collapse."""
+  from tinygrad.codegen.opt.kernel_lds import PrecontractFactors, PrecontractThreadAxes, validate_precontract_thread_axes
+  from tinygrad.uop.ops import UOp, AxisType
+  geometry = KernelTileGeometry((16, 64, 32), (1, 2), 64, 32,
+    (KernelLDSWindow("A", 0, 1280, 80), KernelLDSWindow("B", 1280, 6400, 80)))
+  factors = PrecontractFactors(1, 4, 1, 2, 2, 4, 1, 4)
+  zero = UOp.const(dtypes.weakint, 0)
+  threads = PrecontractThreadAxes(zero, UOp.range(2, 90, AxisType.LOCAL), UOp.range(32, 91, AxisType.WARP))
+  validate_precontract_thread_axes(geometry, factors, threads, zero, UOp.range(4, 92, AxisType.UPCAST))
+  with pytest.raises(ValueError, match="subtile axes"):
+    validate_precontract_thread_axes(geometry, factors, threads, zero, zero)   # 4 subtiles in n cannot collapse
+  with pytest.raises(ValueError, match="subtile axes"):
+    validate_precontract_thread_axes(geometry, factors, threads, UOp.const(dtypes.weakint, 1), UOp.range(4, 92, AxisType.UPCAST))
+
+
+def test_dense_vector_load_admits_only_unit_stride_aligned_k_runs():
+  from types import SimpleNamespace
+  from tinygrad.codegen.opt.kernel_lds import _dense_vector_load
+  from tinygrad.uop.ops import UOp, Ops, AxisType
+  from tinygrad.renderer import Renderer
+  from tinygrad.renderer.cuda import CUDARenderer
+  assert Renderer.precontract_vector_global_loads is False and CUDARenderer.precontract_vector_global_loads is True
+  param = UOp.param(1, dtypes.bfloat16.ptr(4*64))
+  row, k = UOp.range(4, 80), UOp.range(64, 81, AxisType.REDUCE)
+  def operand(idx): return SimpleNamespace(source=param.index(idx), row_axis=row, k_axis=k)
+  tile_row = UOp.range(4, 82)
+  coords = {row: tile_row, k: UOp.const(dtypes.weakint, 16)}
+  ld = _dense_vector_load(operand(row*64+k), coords, dtypes.bfloat16, 8)
+  assert ld is not None and ld.op is Ops.LOAD and ld.dtype == dtypes.bfloat16.vec(8)
+  assert _dense_vector_load(operand(row*64+k*2), coords, dtypes.bfloat16, 8) is None                 # K stride 2
+  assert _dense_vector_load(operand(row*60+k), coords, dtypes.bfloat16, 8) is None                   # row start misaligned
+  assert _dense_vector_load(operand(row*64+k), {row: tile_row, k: UOp.const(dtypes.weakint, 20)}, dtypes.bfloat16, 8) is None
+  assert _dense_vector_load(operand(row*64+k), coords, dtypes.half, 8) is None                       # dtype mismatch
+  assert _dense_vector_load(operand(row*64+k), {row: UOp.const(dtypes.weakint, 3), k: UOp.const(dtypes.weakint, 60)},
+                            dtypes.bfloat16, 8) is None                                                # would read past the end

@@ -124,11 +124,13 @@ def test_guard_folds_away_entirely_when_kv_tokens_aligned(role):
 def test_grid_spec_still_rejects_non_positive_or_oversized_kv_tokens():
   """Relaxing the 16-wide kv_tokens requirement must not open the door to nonsense geometry:
   q_tokens stays 16-wide (Q addressing is unguarded and out of scope for this fix), and kv_tokens
-  must still be a positive integer <= 4096."""
+  must still be a positive integer <= ATTENTION_MAX_KV_TOKENS (16384, a 10k-token prompt's last block)."""
+  from tinygrad.uop.ops import ATTENTION_MAX_KV_TOKENS
   with pytest.raises(ValueError):
     AttentionGridSpec(kv_tokens=0).validate()
   with pytest.raises(ValueError):
-    AttentionGridSpec(kv_tokens=4097).validate()
+    AttentionGridSpec(kv_tokens=ATTENTION_MAX_KV_TOKENS + 1).validate()
+  AttentionGridSpec(kv_tokens=10240).validate()
   with pytest.raises(ValueError):
     AttentionGridSpec(q_tokens=33).validate()  # q_tokens must stay 16-wide
   AttentionGridSpec(kv_tokens=500).validate()  # kv_tokens itself no longer needs to be 16-wide

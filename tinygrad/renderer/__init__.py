@@ -57,6 +57,8 @@ class Renderer:
   supports_float4: bool = True
   local_store_vector_widths: dict[DType, tuple[int, ...]] = {}
   local_store_requires_static_alignment: bool = True
+  # fold widths for bf16 GLOBAL loads/stores (empty: bf16 stays scalar)
+  global_bf16_vector_widths: tuple[int, ...] = ()
   has_local: bool = True
   has_threads: bool = False
   has_shared: bool = True
@@ -110,6 +112,20 @@ class Renderer:
   # distinct from `None` for this fact -- a target either declares the guarantee, citing the hardware
   # property it rests on, or it doesn't.
   lds_read_before_next_write_ordered: bool|None = None
+  # Whether a precontract pipeline's cooperative producer may fetch a dense operand's K run as one aligned b128
+  # global load instead of per-element loads (kernel_lds.py::_dense_vector_load). The load covers exactly the
+  # same elements (unit K stride and alignment are proven per load), so this is an optimization: default off, so
+  # no target's rendered kernels move without its own measurement.
+  precontract_vector_global_loads: bool = False
+  # Asynchronous global->LDS copy instructions (kernel_lds.AsyncCopyOps) for async_copy precontract pipelines;
+  # None: the target declares none and such candidates fail closed.
+  async_copy_ops: object|None = None
+  # Largest statically declared workgroup-local allocation the toolchain accepts; a larger precontract arena is
+  # emitted as a runtime (launch-sized) allocation, which requires runtime_local_launch_aux. None: no static limit.
+  max_static_local_bytes: int|None = None
+  max_runtime_local_bytes: int|None = None
+  # Whether this target's program runtime takes the runtime-local byte count as ProgramInfo.aux[0].
+  runtime_local_launch_aux: bool = False
   pre_matcher: PatternMatcher|None = None
   extra_matcher: PatternMatcher|None = None
   code_for_op: dict[Ops, Callable] = {}

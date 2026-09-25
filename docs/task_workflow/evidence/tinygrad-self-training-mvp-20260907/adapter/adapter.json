@@ -1,0 +1,23 @@
+{
+  "base_model": "frozen-byte-probe-v1",
+  "extra": {
+    "context_bytes": 8,
+    "feature_dim": 1025,
+    "vocab_size": 128
+  },
+  "kind": "llm_lora_adapter",
+  "seed": 123,
+  "source": "test/fixtures/llm/self_training_mvp.jsonl",
+  "targets": [
+    {
+      "alpha": 8.0,
+      "detach_base": true,
+      "in_features": 1025,
+      "out_features": 128,
+      "rank": 8,
+      "target": "output"
+    }
+  ],
+  "version": 1,
+  "weights": "adapter.npz"
+}

@@ -8,7 +8,7 @@ from tinygrad.llm.model import Transformer
 
 class SimpleTokenizer:
   def __init__(self, normal_tokens:dict[str, int], special_tokens:dict[str, int], preset:str="llama3",
-               bos_id:int|None=None, eos_id:int=0, eot_id:int|None=None):
+               bos_id:int|None=None, eos_id:int=0, eot_id:int|None=None, chat_template:str|None=None, architecture:str|None=None):
     preset = {"qwen35":"qwen2","qwen35moe":"qwen2"}.get(preset, preset)
     if preset not in ("llama3","llama-v3","llama-bpe","qwen2","olmo","kimi-k2","tekken","glm4"):
       raise ValueError(f"Invalid tokenizer preset '{preset}'")
@@ -28,6 +28,7 @@ class SimpleTokenizer:
     self._special_tokens = special_tokens
     self._tok2bytes = {tid: tok for tok, tid in self._normal_tokens.items()} | {tid: tok.encode() for tok, tid in self._special_tokens.items()}
     self.preset = preset
+    self.chat_template, self.architecture = chat_template, architecture
     self.bos_id, self.eos_id, self.eot_id = bos_id, eos_id, eot_id
 
   @staticmethod
@@ -37,7 +38,8 @@ class SimpleTokenizer:
     normal_tokens, special_tokens = partition(vocab, lambda e: kv["tokenizer.ggml.token_type"][e[1]] == 1)
     return SimpleTokenizer(dict(normal_tokens), dict(special_tokens), kv["tokenizer.ggml.pre"],
       bos_id=kv.get('tokenizer.ggml.bos_token_id') if kv.get('tokenizer.ggml.add_bos_token', True) else None,
-      eos_id=kv.get('tokenizer.ggml.eos_token_id', 0), eot_id=kv.get('tokenizer.ggml.eot_token_id'))
+      eos_id=kv.get('tokenizer.ggml.eos_token_id', 0), eot_id=kv.get('tokenizer.ggml.eot_token_id'),
+      chat_template=kv.get('tokenizer.chat_template'), architecture=kv.get('general.architecture'))
 
   def _encode_word(self, word:bytes) -> list[int]:
     if (early_token:=self._normal_tokens.get(word)) is not None: return [early_token]
@@ -196,6 +198,8 @@ class RuntimeState:
     self.load_count = 0
     self.request_count = 0
     self.last_error: str|None = None
+    self.default_max_tokens: int|None = None
+    self.prefill_chunk_size = 32
     # gen_lock serializes generation AND lifecycle mutation: the server is threaded (so /runtime/status and
     # /runtime/cancel stay responsive during generation), and a single shared model/KV cache must never be
     # touched by two requests at once. Non-blocking acquire -> runtime_busy.

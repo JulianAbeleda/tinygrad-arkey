@@ -13,7 +13,20 @@
 
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
+#include <cuda_bf16.h>
 #include <cstdio>
+
+// -DBF16 measures the bf16 variant (mma.sync...m16n8k16.row.col.f32.bf16.bf16.f32): the same
+// fragment cardinality as fp16, the instruction cuda_81616's (bfloat16, float) descriptor emits.
+#ifdef BF16
+#define MMA_TYPE "bf16"
+typedef __nv_bfloat162 pair_t;
+#define MAKE_PAIR(x, y) __floats2bfloat162_rn(x, y)
+#else
+#define MMA_TYPE "f16"
+typedef __half2 pair_t;
+#define MAKE_PAIR(x, y) __floats2half2_rn(x, y)
+#endif
 
 #ifndef NACC
 #define NACC 8
@@ -22,11 +35,11 @@
 __global__ __launch_bounds__(256) void mma_peak(float* out, int iters) {
   // m16n8k16 f16->f32 fragments: A=16x16 f16 (4 b32 regs), B=16x8 f16 (2 b32), C=16x8 f32 (4 f32)
   unsigned a0, a1, a2, a3, b0, b1;
-  __half2 ha[4], hb[2];
+  pair_t ha[4], hb[2];
   #pragma unroll
-  for (int i = 0; i < 4; i++) ha[i] = __floats2half2_rn(1.0f + 0.001f*(2*i), 1.0f + 0.001f*(2*i+1));
+  for (int i = 0; i < 4; i++) ha[i] = MAKE_PAIR(1.0f + 0.001f*(2*i), 1.0f + 0.001f*(2*i+1));
   #pragma unroll
-  for (int i = 0; i < 2; i++) hb[i] = __floats2half2_rn(0.5f + 0.002f*(2*i), 0.5f + 0.002f*(2*i+1));
+  for (int i = 0; i < 2; i++) hb[i] = MAKE_PAIR(0.5f + 0.002f*(2*i), 0.5f + 0.002f*(2*i+1));
   a0 = *reinterpret_cast<unsigned*>(&ha[0]); a1 = *reinterpret_cast<unsigned*>(&ha[1]);
   a2 = *reinterpret_cast<unsigned*>(&ha[2]); a3 = *reinterpret_cast<unsigned*>(&ha[3]);
   b0 = *reinterpret_cast<unsigned*>(&hb[0]); b1 = *reinterpret_cast<unsigned*>(&hb[1]);
@@ -39,7 +52,7 @@ __global__ __launch_bounds__(256) void mma_peak(float* out, int iters) {
     #pragma unroll
     for (int j = 0; j < NACC; j++) {
       asm volatile(
-        "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
+        "mma.sync.aligned.m16n8k16.row.col.f32." MMA_TYPE "." MMA_TYPE ".f32 "
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
         : "+f"(c[j][0]), "+f"(c[j][1]), "+f"(c[j][2]), "+f"(c[j][3])
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
@@ -69,7 +82,7 @@ int main(int argc, char** argv) {
   float ms; cudaEventElapsedTime(&ms, s, e);
   double warps = (double)blocks * (tpb/32);
   double flop = warps * iters * NACC * 2.0*16*8*16;   // 4096 FLOP per mma.m16n8k16
-  printf("blocks=%d tpb=%d iters=%d nacc=%d  time=%.2f ms  -> %.1f TFLOPS\n",
-         blocks, tpb, iters, NACC, ms, flop/(ms*1e-3)/1e12);
+  printf("type=%s blocks=%d tpb=%d iters=%d nacc=%d  time=%.2f ms  -> %.1f TFLOPS\n",
+         MMA_TYPE, blocks, tpb, iters, NACC, ms, flop/(ms*1e-3)/1e12);
   return 0;
 }

@@ -7,6 +7,7 @@ from tinygrad.helpers import DEBUG, Timing, GlobalCounters, stderr_log, colored,
 from tinygrad.runtime.support.system import RemotePCIDevice
 from tinygrad.viz.serve import TCPServerWithReuse, HTTPRequestHandler
 from tinygrad.llm.model import Transformer
+from tinygrad.llm.chat import ChatError, NativeChat, native_request
 from tinygrad.llm.runtime_state import (SimpleTokenizer, models, _quant_from_name, _device_target,
                                         DEFAULT_REGISTRY_PATH, build_registry, RuntimeFault, RuntimeState)
 
@@ -20,6 +21,7 @@ RUNTIME_ERROR_STATUS = {
   "runtime_busy": 429,
   "invalid_request": 400,
   "internal_runtime_error": 500,
+  "invalid_model_output": 502,
 }
 
 def remote_pressure_snapshot() -> dict[str, typing.Any]:
@@ -85,7 +87,10 @@ class Handler(HTTPRequestHandler):
     dec = tok.stream_decoder()
     if s.remote_metrics: RemotePCIDevice.reset_stats()
     prefill_snap = None
-    for next_id in model.generate(ids, temperature=temperature, expected_output_tokens=max_tokens):
+    # Transformer.generate appends completion tokens to its list. Keep the request
+    # prompt immutable so usage and runtime metrics report input tokens only.
+    for next_id in model.generate(list(ids), chunk_size=s.prefill_chunk_size,
+                                  temperature=temperature, expected_output_tokens=max_tokens):
       if len(out) == 0:
         pt = time.perf_counter()
         pf = prefill_tokens / (pt - st) if pt > st else 0.0
@@ -128,21 +133,30 @@ class Handler(HTTPRequestHandler):
     s = self.server.state
     if not s.loaded: raise RuntimeFault("model_not_loaded", "no model loaded; POST /runtime/load first")
     tok = s.tok
-    ids: list[int] = tok.prefix()
-    for i, msg in enumerate(body["messages"]):
-      ids += tok.role(msg["role"])
-      content = msg["content"]
-      if isinstance(content, str): ids += tok.encode(content)
-      elif isinstance(content, list):
-        for c in content:
-          if c["type"] == "text": ids += tok.encode(c["text"])
-          else: raise RuntimeFault("invalid_request", f"unhandled content part type: {c['type']}")
-      else: raise RuntimeFault("invalid_request", f"unknown content type: {type(content)}")
-      if msg["role"] == "assistant" and i == len(body["messages"]) - 1: break
-      ids += tok.end_turn()
-    else: ids += tok.role("assistant")
+    if not isinstance(body.get('messages'), list) or not body['messages'] or any(not isinstance(m, dict) for m in body['messages']):
+      raise RuntimeFault("invalid_request", "messages must be a nonempty list of objects")
+    protocol = None
+    try:
+      if native_request(body):
+        protocol = NativeChat(tok)
+        ids = protocol.prompt(body)
+      else:
+        ids: list[int] = tok.prefix()
+        for i, msg in enumerate(body["messages"]):
+          ids += tok.role(msg["role"])
+          content = msg["content"]
+          if isinstance(content, str): ids += tok.encode(content)
+          elif isinstance(content, list):
+            for c in content:
+              if c["type"] == "text": ids += tok.encode(c["text"])
+              else: raise RuntimeFault("invalid_request", f"unhandled content part type: {c['type']}")
+          else: raise RuntimeFault("invalid_request", f"unknown content type: {type(content)}")
+          if msg["role"] == "assistant" and i == len(body["messages"]) - 1: break
+          ids += tok.end_turn()
+        else: ids += tok.role("assistant")
+    except ChatError as exc: raise RuntimeFault("invalid_request", str(exc)) from exc
 
-    max_tokens = body.get("max_completion_tokens") or body.get("max_tokens")
+    max_tokens = body.get("max_completion_tokens") or body.get("max_tokens") or s.default_max_tokens
     temperature = float(body.get("temperature", 0.0))
     model_name = body.get("model") or s.model_id
     self._guard_context(ids)
@@ -160,6 +174,25 @@ class Handler(HTTPRequestHandler):
 
     self._acquire_gen()
     try:
+      if protocol is not None:
+        # Tool-enabled output is buffered: never expose a partial call as executable evidence.
+        parts, finish = [], "stop"
+        for kind, payload in self._stream_tokens(ids, max_tokens, temperature):
+          if kind == "delta": parts.append(payload)
+          else: finish = payload
+        if s.cancel_event.is_set(): raise RuntimeFault("generation_cancelled", "tool generation cancelled")
+        try: message = protocol.parse("".join(parts), body.get("tools", []), finish)
+        except ChatError as exc: raise RuntimeFault("invalid_model_output", str(exc)) from exc
+        if "tool_calls" in message: finish = "tool_calls"
+        if not stream:
+          return self._send_json({**tmpl, "object": "chat.completion",
+            "choices": [{"index": 0, "message": message, "finish_reason": finish}], "usage": self._usage(ids)})
+        delta = dict(message)
+        if "tool_calls" in delta: delta["tool_calls"] = [dict(call, index=i) for i, call in enumerate(delta["tool_calls"])]
+        response = [{**tmpl, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+                    {**tmpl, "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]}]
+        if include_usage: response.append({**tmpl, "choices": [], "usage": self._usage(ids)})
+        return self.stream_json(iter(response))
       if stream: return self.stream_json(chunks())
       out, finish = [], "stop"
       for c in chunks():
@@ -257,6 +290,7 @@ class LLMServer(socketserver.ThreadingMixIn, TCPServerWithReuse):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--model", "-m", default=list(models.keys())[0], help=f"Model choice ({', '.join(models.keys())}) or path to a local GGUF file")
+  parser.add_argument("--adapter", type=pathlib.Path, help="Optional tinygrad LoRA adapter directory to load after the base GGUF")
   parser.add_argument("--max_context", type=lambda v: v if v == "auto" else int(v), default="auto",
                       help="Max context length: 'auto' (default) auto-scans free VRAM and admits the largest safe "
                            "context (refuses loud if the model can't fit a useful fp16-KV context, e.g. 32B); an "
@@ -271,6 +305,10 @@ def main():
   parser.add_argument("--registry", type=str, default=None, help="Path to a runtime_models.json registry (Phase R3)")
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
+  parser.add_argument("--no-warmup", action="store_true", help="serve immediately without startup JIT warmup")
+  parser.add_argument("--default-max-tokens", type=int, help="Server-side completion cap when a request omits one")
+  parser.add_argument("--prefill-chunk-size", type=int, default=32,
+                      help="Maximum prompt tokens per model prefill call (default 32)")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
   parser.add_argument("--benchmark-context", type=int, metavar="TOKENS",
                       help="Prefill exactly TOKENS synthetic tokens before --benchmark decode samples")
@@ -279,6 +317,10 @@ def main():
 
   registry = build_registry(models, pathlib.Path(args.registry) if args.registry else DEFAULT_REGISTRY_PATH)
   state = RuntimeState(registry, remote_metrics=args.remote_metrics)
+  if args.default_max_tokens is not None and args.default_max_tokens < 1: parser.error("--default-max-tokens must be positive")
+  if args.prefill_chunk_size < 1: parser.error("--prefill-chunk-size must be positive")
+  state.default_max_tokens = args.default_max_tokens
+  state.prefill_chunk_size = args.prefill_chunk_size
 
   # serve without a model when explicitly requested: the client drives load via /runtime/load
   if args.serve and args.no_preload:
@@ -289,21 +331,25 @@ def main():
   # load the model
   source = models.get(args.model, args.model)
   model, kv = Transformer.from_gguf(fetch(source), args.max_context, stream=args.stream)
+  if args.adapter is not None:
+    from tinygrad.llm.adapter import load_adapter
+    load_adapter(model, args.adapter.expanduser())
   model_name = kv.get('general.name') or kv.get('general.basename') or args.model
   model_id = args.model if args.model in models else pathlib.Path(args.model).stem
   file_sizes = [y.nbytes() for y in UOp.sink(*[x.uop for x in nn.state.get_parameters(model)]).toposort() if y.op is Ops.BUFFER]
-  print(f"using model \"{model_name}\" with {sum(file_sizes):,} bytes and {sum(x.numel() for x in nn.state.get_parameters(model)):,} params")
+  adapter_text = f" and adapter {args.adapter.expanduser()}" if args.adapter is not None else ""
+  print(f"using model \"{model_name}\" with {sum(file_sizes):,} bytes and {sum(x.numel() for x in nn.state.get_parameters(model)):,} params{adapter_text}")
 
   # get tokenizer
   tok = SimpleTokenizer.from_gguf_kv(kv)
 
   # warmup the JIT
   warm_s, warm_compiles = None, None
-  if args.warmup or args.serve:
+  if args.warmup or (args.serve and not args.no_warmup):
     warm_s, warm_compiles = RuntimeState._do_warmup(model)
 
   # adopt the preloaded model into the runtime state (centralized for /runtime/* and /v1/*)
-  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or args.serve),
+  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or (args.serve and not args.no_warmup)),
               warmup_s=warm_s, warmup_compiles=warm_compiles)
 
   # start server

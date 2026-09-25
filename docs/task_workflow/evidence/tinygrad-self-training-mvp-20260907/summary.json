@@ -1,0 +1,85 @@
+{
+  "adapter_sha256": {
+    "after": "45db8ee1afff0fe352601b55b6f467e1691b75ec556b270b923159beb7b0bf3f",
+    "before": "7aadcacf9a0d41f619431444056c8c5755d110fc3629117713d33de97b23f1ca"
+  },
+  "artifacts": {
+    "adapter": "adapter",
+    "frozen_base": "frozen_base.npz"
+  },
+  "base_sha256": {
+    "after": "b9efbe49080b11fcce07b1dd3b15dc6531d00975c6c9120e732a1f08628f44e3",
+    "before": "b9efbe49080b11fcce07b1dd3b15dc6531d00975c6c9120e732a1f08628f44e3"
+  },
+  "checks": {
+    "adapter_changed": true,
+    "adapter_reload_exact": true,
+    "base_unchanged": true,
+    "eval_loss_decreased": true,
+    "finite": true,
+    "train_loss_decreased": true
+  },
+  "context_bytes": 8,
+  "deltas": {
+    "eval_accuracy": 0.9497487489134073,
+    "eval_loss": -4.7275427132844925,
+    "train_accuracy": 0.9504562932997942,
+    "train_loss": -4.754313707351685
+  },
+  "device": "NV",
+  "eval_examples": 199,
+  "eval_rows": 5,
+  "eval_source_ids": [
+    "turn-00",
+    "turn-05",
+    "turn-10",
+    "turn-15",
+    "turn-20"
+  ],
+  "feature_dim": 1025,
+  "final": {
+    "eval": {
+      "accuracy": 0.9748743772506714,
+      "examples": 199,
+      "loss": 0.10011975467205048
+    },
+    "train": {
+      "accuracy": 0.9752281308174133,
+      "examples": 767,
+      "loss": 0.07557511329650879
+    }
+  },
+  "initial": {
+    "eval": {
+      "accuracy": 0.02512562833726406,
+      "examples": 199,
+      "loss": 4.827662467956543
+    },
+    "train": {
+      "accuracy": 0.024771837517619133,
+      "examples": 767,
+      "loss": 4.829888820648193
+    }
+  },
+  "input": "test/fixtures/llm/self_training_mvp.jsonl",
+  "kind": "tinygrad_lora_self_training_mvp",
+  "mode": "train",
+  "model": "frozen_byte_context_plus_lora",
+  "purpose": "prove tinygrad optimizer and LoRA lifecycle over harness-shaped SFT rows",
+  "reload_max_abs": 0.0,
+  "rows": 24,
+  "status": "pass",
+  "train_examples": 767,
+  "train_rows": 19,
+  "training": {
+    "alpha": 8.0,
+    "batch_size": 128,
+    "elapsed_s": 2.3920558379613794,
+    "first_batch_loss": 4.823376655578613,
+    "last_batch_loss": 0.036951638758182526,
+    "lr": 0.02,
+    "rank": 8,
+    "steps": 60
+  },
+  "vocab_size": 128
+}

@@ -1,0 +1,170 @@
+{
+  "adapter_sha256": {
+    "after": "e25687f0201e35067eefefd1ad2fad1414df19b6af74a13b49458fb6ca618d41",
+    "before": "b667e3cb169990c083b44d0de086e6db363094381282327f891c3baab6f244c9",
+    "reloaded": "e25687f0201e35067eefefd1ad2fad1414df19b6af74a13b49458fb6ca618d41"
+  },
+  "checks": {
+    "adapter_changed": true,
+    "adapter_reload_exact": true,
+    "base_model_file_unchanged": true,
+    "finite": true,
+    "heldout_loss_decreased": true,
+    "optimizer_scope_adapter_only": true
+  },
+  "device": "NV",
+  "eval_rows": 4,
+  "eval_source_ids": [
+    "qwen-turn-00",
+    "qwen-turn-03",
+    "qwen-turn-06",
+    "qwen-turn-09"
+  ],
+  "eval_targets": [
+    {
+      "completion_tokens": [
+        9560
+      ],
+      "id": "qwen-example-00",
+      "target_id": 9560,
+      "target_text": "READ"
+    },
+    {
+      "completion_tokens": [
+        44671,
+        39,
+        7863
+      ],
+      "id": "qwen-example-03",
+      "target_id": 44671,
+      "target_text": "WITH"
+    },
+    {
+      "completion_tokens": [
+        30933
+      ],
+      "id": "qwen-example-06",
+      "target_id": 30933,
+      "target_text": "OPEN"
+    },
+    {
+      "completion_tokens": [
+        46,
+        7347,
+        76079
+      ],
+      "id": "qwen-example-09",
+      "target_id": 46,
+      "target_text": "O"
+    }
+  ],
+  "final_eval": {
+    "accuracy": 0.25,
+    "examples": 4,
+    "loss": 1.482965625822544,
+    "losses": [
+      1.619626760482788,
+      2.474592924118042,
+      1.3757637739181519,
+      0.46187904477119446
+    ],
+    "predictions": [
+      {
+        "id": "qwen-example-00",
+        "predicted_id": 30933,
+        "predicted_text": "OPEN",
+        "target_id": 9560,
+        "target_text": "READ"
+      },
+      {
+        "id": "qwen-example-03",
+        "predicted_id": 46,
+        "predicted_text": "O",
+        "target_id": 44671,
+        "target_text": "WITH"
+      },
+      {
+        "id": "qwen-example-06",
+        "predicted_id": 46,
+        "predicted_text": "O",
+        "target_id": 30933,
+        "target_text": "OPEN"
+      },
+      {
+        "id": "qwen-example-09",
+        "predicted_id": 46,
+        "predicted_text": "O",
+        "target_id": 46,
+        "target_text": "O"
+      }
+    ]
+  },
+  "initial_eval": {
+    "accuracy": 0.0,
+    "examples": 4,
+    "loss": 13.283193588256836,
+    "losses": [
+      12.08719539642334,
+      12.322994232177734,
+      17.026533126831055,
+      11.696051597595215
+    ],
+    "predictions": [
+      {
+        "id": "qwen-example-00",
+        "predicted_id": 15428,
+        "predicted_text": "asa",
+        "target_id": 9560,
+        "target_text": "READ"
+      },
+      {
+        "id": "qwen-example-03",
+        "predicted_id": 5645,
+        "predicted_text": "afe",
+        "target_id": 44671,
+        "target_text": "WITH"
+      },
+      {
+        "id": "qwen-example-06",
+        "predicted_id": 5645,
+        "predicted_text": "afe",
+        "target_id": 30933,
+        "target_text": "OPEN"
+      },
+      {
+        "id": "qwen-example-09",
+        "predicted_id": 5645,
+        "predicted_text": "afe",
+        "target_id": 46,
+        "target_text": "O"
+      }
+    ]
+  },
+  "kind": "tinygrad_qwen_output_lora_mvp",
+  "limitations": [
+    "trains only the first assistant completion token",
+    "adapts only the output projection",
+    "uses synthetic, host-labeled harness turns with unique held-out prompt wording"
+  ],
+  "model": "/home/ubuntu/storage/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_sha256": {
+    "after": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+    "before": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+  },
+  "rows": 12,
+  "scope": "Qwen3-8B output LoRA; first completion token only",
+  "sequence_length": 57,
+  "status": "pass",
+  "system_prompt": "Reply with exactly one uppercase action label: READ, OBSERVE, OPEN, or WITHHOLD. No punctuation. /no_think",
+  "train_rows": 8,
+  "training": {
+    "alpha": 8.0,
+    "first_loss": 11.662774085998535,
+    "last_loss": 0.46201303601264954,
+    "load_s": 13.345576539984904,
+    "lr": 0.0005,
+    "rank": 8,
+    "steps": 96,
+    "train_s": 265.80212592799217
+  }
+}

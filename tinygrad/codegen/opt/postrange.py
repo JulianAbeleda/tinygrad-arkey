@@ -531,8 +531,11 @@ class Scheduler:
             try: candidate_contract = PrecontractCandidateContract.create(self.ast.arg.candidate_context, tc)
             except ValueError as exc: raise KernelOptError(str(exc)) from exc
             factors = candidate_contract.factors
-            axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
-            axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
+            # One subtile per warp is a constant for the same reason: no size-one RANGE.
+            if factors.subtiles_n == 1: subtile_n = UOp.const(dtypes.weakint, 0)
+            else: axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
+            if factors.subtiles_m == 1: subtile_m = UOp.const(dtypes.weakint, 0)
+            else: axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
             # A constant gives wave-private schedules cross-wave ownership without an unsupported size-one RANGE.
             if factors.waves_m == 1: wave_m = UOp.const(dtypes.weakint, 0)
             else: axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)
@@ -604,8 +607,20 @@ class Scheduler:
                   Stage1StorageAdapter, build_stage1_uop_graph_with_storage, validate_stage1_uop_graph,
                   storage_policy_from_stage1)
                 from tinygrad.codegen.opt.kernel_lds import binary_axis_count, fold_binary_axes
+                async_copy = getattr(candidate_pipeline, "async_copy", False)
+                if async_copy and self.ren.async_copy_ops is None:
+                  raise KernelOptError("async-copy candidate requires the renderer's declared async_copy_ops")
+                lds_bytes = candidate_pipeline.active_lds_bytes
+                if self.ren.max_static_local_bytes is not None and lds_bytes > self.ren.max_static_local_bytes:
+                  # Beyond the static limit the arena is sized at launch (ProgramInfo.aux -> program shared_mem).
+                  if not self.ren.runtime_local_launch_aux or lds_bytes > (self.ren.max_runtime_local_bytes or 0):
+                    raise KernelOptError(f"candidate LDS {lds_bytes} B exceeds this target's workgroup-local limits")
+                  from tinygrad.uop.ops import RuntimeLocalAllocation
+                  allocation = allocation.replace(tag=RuntimeLocalAllocation(lds_bytes))
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
-                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
+                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline,
+                  vector_global_loads=self.ren.precontract_vector_global_loads,
+                  async_copy_ops=self.ren.async_copy_ops if async_copy else None)
                 factors=template.factors
                 def _produce(epoch,slot,reuse):
                   p=template.producer(epoch,slot)
@@ -648,13 +663,28 @@ class Scheduler:
                   fragments = staticmethod(_fragments)
                 storage_adapter = Stage1StorageAdapter(_StageCallbacks(), storage_policy_from_stage1(candidate_pipeline))
                 pipeline_plan = candidate_pipeline
-                graph=build_stage1_uop_graph_with_storage(storage_adapter, pipeline_plan, outer_k.vmax+1, _wmma, subtile_count=1,
-                  accumulator_elements=accumulator_total,
-                  accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
-                  accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
-                  accumulator_dtype=tc.dtype_out, accumulator_lane_width=accumulator_lane_width)
-                if errors := validate_stage1_uop_graph(graph, tc=tc):
-                  raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
+                if async_copy:
+                  from tinygrad.codegen.opt.kernel_pipeline import build_async_stage_uop_graph
+                  ops = self.ren.async_copy_ops
+                  # Statements are ordered by their (void, render-empty) sources.
+                  def _stmt(arg, *deps): return UOp(Ops.CUSTOM, dtypes.void, deps, arg=arg)
+                  def _async_produce(epoch, slot, after):
+                    try: return template.async_producer(epoch, slot, after)
+                    except ValueError as exc: raise KernelOptError(str(exc)) from exc
+                  graph=build_async_stage_uop_graph(pipeline_plan, outer_k.vmax+1, _async_produce, _fragments, _wmma,
+                    commit=lambda *deps: _stmt(ops.commit, *deps), wait_prior=lambda n, *deps: _stmt(ops.wait.format(n=n), *deps),
+                    accumulator_elements=accumulator_total,
+                    accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
+                    accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
+                    accumulator_dtype=tc.dtype_out, accumulator_lane_width=accumulator_lane_width)
+                else:
+                  graph=build_stage1_uop_graph_with_storage(storage_adapter, pipeline_plan, outer_k.vmax+1, _wmma, subtile_count=1,
+                    accumulator_elements=accumulator_total,
+                    accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*accumulator_lane_width,
+                    accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
+                    accumulator_dtype=tc.dtype_out, accumulator_lane_width=accumulator_lane_width)
+                  if errors := validate_stage1_uop_graph(graph, tc=tc):
+                    raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
               elif not register_mode:
                 # Thread the renderer's own declared bank and ordering facts (Renderer.lds_bank_dwords/

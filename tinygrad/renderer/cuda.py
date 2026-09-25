@@ -3,6 +3,7 @@ import os
 from tinygrad.codegen.opt import tc
 from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.helpers import NV_FLASH_LOAD_SCHEDULE, Target, dedup, prod
+from tinygrad.codegen.opt.kernel_lds import AsyncCopyOps
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, create_non_native_float_pats, uops_to_dtypes, wmma_args, _install_native_attention_bindings
 from tinygrad.uop.ops import LoadSchedule, Ops, PatternMatcher, RegionLoad, StrictAfter, UPat, UOp
 
@@ -316,6 +317,20 @@ class CUDARenderer(CStyleLanguage):
   smem_prefix_for_cast = False
   barrier = "__syncthreads();"
   float4 = "make_float4"
+  global_bf16_vector_widths = (8, 4, 2)
+  # sm_120, 2026-09-25: scalar LDG.E.U16 x8 per b128 vector -> one LDG.E.128; bf16 GEMM M=128 N=17536 K=3136
+  # 218 -> 149 us, bit-exact (extra/llm_research/prefill/dense_bf16_candidate_gate.py).
+  precontract_vector_global_loads = True
+  # sm_80+ cp.async (16-byte, L2-only .cg) with commit/wait groups, as CUTLASS's multistage sm80 GEMMs use.
+  async_copy_ops = AsyncCopyOps(
+    copy16='asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" :: "r"((unsigned)__cvta_generic_to_shared({0})), "l"({1}) : "memory");',
+    commit='asm volatile("cp.async.commit_group;" ::: "memory");',
+    wait='asm volatile("cp.async.wait_group {n};" ::: "memory");')
+  # Static __shared__ is capped at 48 KB by ptxas; larger arenas are extern __shared__ sized at launch (NVProgram /
+  # CUDAProgram shared_mem). sm_120 allows 99 KB (101376 B) of shared memory per block.
+  max_static_local_bytes = 48 * 1024
+  max_runtime_local_bytes = 101376
+  runtime_local_launch_aux = True
   gep_arr_threshold = 8
   code_for_workitem = {"g": lambda x: f"blockIdx.{chr(120+int(x))}", "l": lambda x: f"threadIdx.{chr(120+int(x))}",
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+int(x))}+threadIdx.{chr(120+int(x))})"}
@@ -364,6 +379,8 @@ class CUDARenderer(CStyleLanguage):
     native = self.native_vector_types.get(dtype.scalar())
     if native is not None and lanes in self.native_vector_lanes.get(dtype.scalar(), self.default_native_lanes):
       return f"{native}{lanes}"
+    # cuda_bf16.h already typedefs nv_bfloat162 (with constructors, so no brace init): the emitted struct needs its own name
+    if dtype.scalar() == dtypes.bfloat16 and lanes == 2: return "tg_bfloat162"
     return super().render_vector_dtype(dtype, lanes)
 
   extra_matcher = create_non_native_float_pats(dtypes.fp8s, casting=False) + PatternMatcher([
@@ -377,9 +394,10 @@ class CUDARenderer(CStyleLanguage):
     vec, scal = self.render_vector_dtype(dt, dt.count), self.render_dtype(dt)
     names = _nms[:dt.count] if dt.count <= len(_nms) else [f"v{i}" for i in range(dt.count)]
     elems, header = ', '.join(names), ', '.join([f"{scal} {x}" for x in names])
-    # nvcc rejects alignment values above 128, so cap there; wider structs stay correct,
-    # just without their ideal alignment.
-    align = min(dt.itemsize, 128)
+    # CUDA alignment must be a power of two and must divide the struct size to
+    # avoid tail padding. Non-native vectors such as float6 therefore use 8,
+    # while naturally power-of-two vectors retain their ideal alignment.
+    align = min(dt.itemsize & -dt.itemsize, 128)
     return f"struct __align__({align}) {vec} {{ {scal} {elems}; }}; __device__ {vec} make_{vec}({header}) {{ {vec} r={{{elems}}}; return r; }}"
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):

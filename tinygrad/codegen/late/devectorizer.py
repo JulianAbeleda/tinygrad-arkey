@@ -337,6 +337,9 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base in (dtypes.uint32, dtypes.uint16) and ctx is not None and ctx.supports_float4:
     # Native packed storage uses the same generic b128/b64 memory carriers.
     lengths = [16//buf.dtype.base.itemsize, 8//buf.dtype.base.itemsize]
+  elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base == dtypes.bfloat16 and ctx is not None and ctx.supports_float4 and \
+      ctx.global_bf16_vector_widths:
+    lengths = list(ctx.global_bf16_vector_widths)
   elif buf.dtype.base not in (dtypes.float, dtypes.half, *dtypes.fp8s) and not isinstance(buf.dtype, ImageDType):
     pass
   elif buf.addrspace == AddrSpace.REG:
