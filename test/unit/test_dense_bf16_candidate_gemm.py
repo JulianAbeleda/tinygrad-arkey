@@ -147,3 +147,4 @@ def test_bind_projection_stays_out_of_the_state_dict_and_routes_hilo(monkeypatch
                       Tensor.zeros(x.shape[0], n))
   assert dense.route_bound(lin, Tensor.ones(1, 20, 1024), min_rows=17).shape == (1, 20, 256)
   assert seen == [((40, 1024), "r", 256, 34)]                               # hi and lo rows stacked
+  assert dense.route_bound(lin, Tensor.ones(1, 20, 1024), max_rows=16) is None and len(seen) == 1

@@ -185,10 +185,14 @@ def bind_projection(lin, role: str) -> CandidateBinding | None:
   return binding
 
 
-def route_bound(lin, x: Tensor, *, min_rows: int = 1) -> Tensor | None:
-  """The hi/lo routed product for a projection bound by ``bind_projection``, or None to decline."""
+def route_bound(lin, x: Tensor, *, min_rows: int = 1, max_rows: int | None = None) -> Tensor | None:
+  """The hi/lo routed product for a projection bound by ``bind_projection``, or None to decline.
+
+  ``max_rows`` lets a caller keep large row counts (e.g. prefill pieces, whose per-layer route buffers stay
+  resident in a captured graph) on its own path."""
   binding = getattr(lin, "_candidate", None)
   if binding is None: return None
+  if max_rows is not None and all(isinstance(s, int) for s in x.shape) and math.prod(x.shape[:-1]) > max_rows: return None
   return route_dense_bf16_hilo(x, binding.padded, binding.role, lin.weight.shape[0], min_rows=min_rows)
 
 
