@@ -42,7 +42,7 @@ class TestSuffixBuckets(unittest.TestCase):
 
 class TestTwoSegmentAttention(unittest.TestCase):
   def test_matches_concatenated_sdpa_across_positions_buckets_and_replays(self):
-    for chunk in (256, 4):  # one chunk per segment; several, including fully masked ones
+    for chunk in (1024, 4):  # one chunk per segment; several, including fully masked ones
       with self.subTest(chunk=chunk):
         self._check_parity(chunk)
 

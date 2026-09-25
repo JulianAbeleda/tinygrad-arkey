@@ -85,7 +85,7 @@ def _partials(scores: Tensor, values: Tensor, chunk: int, keys_last: bool = Fals
 
 
 def two_segment_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
-                          prefix_length: UOp | int, step: UOp | int, chunk: int = 256) -> Tensor:
+                          prefix_length: UOp | int, step: UOp | int, chunk: int = 1024) -> Tensor:
   """One decode query per sequence against a shared prefix and its own suffix.
 
   q: `[B, heads, 1, hd]`. prefix_k/v: `[1, kv_heads, P, hd]`, rows `[0, prefix_length)`
@@ -129,7 +129,7 @@ class SharedPrefixKV:
   """One attention layer's shared prompt keys/values and per-sequence suffix keys/values."""
 
   def __init__(self, batch: int, kv_heads: int, head_dim: int, prefix_capacity: int, suffix_capacity: int,
-               dtype: DType = dtypes.bfloat16, chunk: int = 256):
+               dtype: DType = dtypes.bfloat16, chunk: int = 1024):
     self.batch, self.prefix_capacity, self.suffix_capacity, self.chunk = batch, prefix_capacity, suffix_capacity, chunk
     self.prefix = {key: _fresh((1, kv_heads, prefix_capacity, head_dim), dtype) for key in ("k", "v")}
     # suffix values are stored transposed, [B, kv_heads, hd, S]: see two_segment_attention
@@ -163,7 +163,7 @@ class SharedPrefixKV:
 
 
 def shared_kv_for_model(model, batch: int, prefix_capacity: int, suffix_capacity: int,
-                        dtype: DType | None = None) -> list[SharedPrefixKV | None]:
+                        dtype: DType | None = None, chunk: int = 1024) -> list[SharedPrefixKV | None]:
   """One `SharedPrefixKV` per attention block, `None` elsewhere, aligned with `model.blk`.
 
   The default storage dtype is the key projection's weight dtype: bf16 for the
@@ -171,7 +171,7 @@ def shared_kv_for_model(model, batch: int, prefix_capacity: int, suffix_capacity
   """
   head_dim = model.config.head_dim
   return [SharedPrefixKV(batch, block.n_kv_heads, head_dim, prefix_capacity, suffix_capacity,
-                         block.attn_k.weight.dtype if dtype is None else dtype)
+                         block.attn_k.weight.dtype if dtype is None else dtype, chunk)
           if block.block_type == "attention" else None for block in model.blk]
 
 
