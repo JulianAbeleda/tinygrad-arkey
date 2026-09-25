@@ -35,6 +35,17 @@ def test_metal_descriptor_is_admitted_by_the_same_generic_validator():
   validate_wmma_descriptor(tc)
 
 
+def test_cuda_bf16_descriptor_is_admitted_with_fp32_accumulation_only():
+  """sm_120's m16n8k16 bf16->fp32 descriptor shares fp16's 2-byte element, fragment cardinality and swizzle, so
+  the dense precontract (LDS staging, lane layout, cooperative stores) admits it; bf16 accumulation does not."""
+  from tinygrad.codegen.opt.tc import cuda_81616
+  fp16 = next(tc for tc in cuda_81616 if tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float)
+  bf16 = next(tc for tc in cuda_81616 if tc.dtype_in == dtypes.bfloat16 and tc.dtype_out == dtypes.float)
+  assert (bf16.dims, bf16.elements_per_thread, bf16.swizzle) == (fp16.dims, fp16.elements_per_thread, fp16.swizzle)
+  validate_wmma_descriptor(bf16)
+  with pytest.raises(ValueError, match="dtype_out"): validate_wmma_descriptor(_DescriptorDrift(bf16, "dtype_out", dtypes.bfloat16))
+
+
 def test_wave64_cdna_descriptor_is_self_consistent_but_unsupported():
   """A real, valid CDNA descriptor -- self-consistent, and used for actual CDNA lowering elsewhere in
   tc.py -- is still rejected here, because this precontract path's fragment/cooperative-store math is
@@ -103,7 +114,7 @@ class _DescriptorDrift:
 @pytest.mark.parametrize("field,value,match", (
   ("dims", (16, 16, 8), "self-consistent"), ("threads", 64, "self-consistent"),
   ("elements_per_thread", (16, 8, 8), "self-consistent"),
-  ("dtype_in", dtypes.bfloat16, "dtype_in"), ("dtype_out", dtypes.half, "dtype_out"),
+  ("dtype_in", dtypes.fp8e4m3, "dtype_in"), ("dtype_out", dtypes.half, "dtype_out"),
   ("opts", ("l0",), "self-consistent"),
   ("swizzle", (((), (), ()), ((), (), ())), "self-consistent"),
 ))

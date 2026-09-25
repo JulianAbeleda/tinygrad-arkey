@@ -364,6 +364,8 @@ class CUDARenderer(CStyleLanguage):
     native = self.native_vector_types.get(dtype.scalar())
     if native is not None and lanes in self.native_vector_lanes.get(dtype.scalar(), self.default_native_lanes):
       return f"{native}{lanes}"
+    # cuda_bf16.h already typedefs nv_bfloat162 (with constructors, so no brace init): the emitted struct needs its own name
+    if dtype.scalar() == dtypes.bfloat16 and lanes == 2: return "tg_bfloat162"
     return super().render_vector_dtype(dtype, lanes)
 
   extra_matcher = create_non_native_float_pats(dtypes.fp8s, casting=False) + PatternMatcher([

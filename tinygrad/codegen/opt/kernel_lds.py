@@ -18,6 +18,10 @@ if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeomet
 # implementation, not a per-target snapshot: AMD wave32 and Metal's 32-wide SIMD group both satisfy it,
 # while e.g. AMD CDNA's wave64 genuinely does not (see test_wave64_cdna_descriptor_is_self_consistent_but_unsupported).
 _PRECONTRACT_WARP_THREADS = 32
+# Dense operand dtype -> accumulator dtype this precontract path expresses.  bf16 shares fp16's
+# 2-byte element and (on every descriptor that declares it) the identical fragment cardinality
+# and swizzle, so the LDS staging, lane layout, and cooperative-store math are unchanged.
+_PRECONTRACT_DTYPE_PAIRS = {dtypes.half:dtypes.float, dtypes.bfloat16:dtypes.float, dtypes.char:dtypes.int}
 
 
 def validate_wmma_descriptor(tc) -> None:
@@ -51,9 +55,9 @@ def validate_wmma_descriptor(tc) -> None:
   if threads != _PRECONTRACT_WARP_THREADS:
     raise ValueError(f"WMMA descriptor threads must be {_PRECONTRACT_WARP_THREADS} for this precontract "
                       "path's warp-wide fragment and cooperative-store math")
-  if dtype_in not in (dtypes.half, dtypes.char):
+  if dtype_in not in _PRECONTRACT_DTYPE_PAIRS:
     raise ValueError("WMMA descriptor dtype_in is not a pairing this precontract path expresses")
-  if dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int):
+  if dtype_out != _PRECONTRACT_DTYPE_PAIRS[dtype_in]:
     raise ValueError("WMMA descriptor dtype_out is not a pairing this precontract path expresses")
 
 
@@ -588,8 +592,8 @@ def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract", tc
   if len(dims) != 3 or any(not isinstance(d, int) or d <= 0 for d in dims):
     raise ValueError(f"{context} WMMA descriptor dimensions are invalid")
   dtype_in, dtype_out = arg[2], arg[3]
-  if dtype_in not in (dtypes.half, dtypes.char) or \
-     dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int) or arg[5] != _PRECONTRACT_WARP_THREADS:
+  if dtype_in not in _PRECONTRACT_DTYPE_PAIRS or dtype_out != _PRECONTRACT_DTYPE_PAIRS[dtype_in] or \
+     arg[5] != _PRECONTRACT_WARP_THREADS:
     raise ValueError(f"{context} WMMA descriptor carrier ABI drifted")
   axes = arg[6]
   if not isinstance(axes, tuple) or len(axes) != 3:

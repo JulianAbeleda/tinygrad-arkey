@@ -2,21 +2,22 @@ import unittest
 
 import numpy as np
 
-from tinygrad import Tensor, TinyJit
-from tinygrad.llm.nemotron_h_decode import mamba_decode_buffers, mamba_decode_step
+from tinygrad import Tensor, TinyJit, UOp
+from tinygrad.llm.nemotron_h_decode import (mamba_decode_buffers, mamba_decode_step, mamba_replay_buffers,
+                                             mamba_replay_buffers_step, mamba_replay_flush)
 from test.unit.test_nemotron_h_model import tiny_model
 
-BATCH, STEPS = 3, 5
+BATCH, STEPS, RING = 3, 5, 4
 
 
-def _setup():
+def _setup(steps=STEPS):
   model = tiny_model()
   block = model.blk[0]
   rng = np.random.default_rng(7)
   # a real prefix gives a nonzero conv tail and state to start from
   hidden0 = Tensor(rng.standard_normal((BATCH, 6, model.config.dim)).astype(np.float32))
   _, cache = block.cached(hidden0, None)
-  inputs = [rng.standard_normal((BATCH, 1, model.config.dim)).astype(np.float32) for _ in range(STEPS)]
+  inputs = [rng.standard_normal((BATCH, 1, model.config.dim)).astype(np.float32) for _ in range(steps)]
   return block, cache, inputs
 
 
@@ -71,6 +72,35 @@ class TestNemotronHDecode(unittest.TestCase):
       outs.append(out.numpy()); states.append((buffer["conv"].numpy(), buffer["state"].numpy()))
     self.assertIsNotNone(step.captured)
     self._check(outs, states, ref_outs, ref_states)
+
+  def _replay(self, jit: bool):
+    steps = 2 * RING + 3
+    block, cache, inputs = _setup(steps)
+    ref_outs, ref_states = _reference(block, cache, inputs)
+    buffer = mamba_replay_buffers(block, cache["conv"], cache["state"], RING)
+    if jit:
+      slot_var, count_var = UOp.variable("slot", 0, RING - 1), UOp.variable("count", 1, RING)
+      step_jit = TinyJit(lambda hidden, slot: mamba_replay_buffers_step(block, hidden, buffer, slot))
+      flush_jit = TinyJit(lambda count: mamba_replay_flush(block, buffer, count))
+      step = lambda hidden, slot: step_jit(hidden, slot_var.bind(slot))
+      flush = lambda count: flush_jit(count_var.bind(count))
+    else:
+      step = lambda hidden, slot: mamba_replay_buffers_step(block, hidden, buffer, slot)
+      flush = lambda count: mamba_replay_flush(block, buffer, count)
+    flushed = []
+    for index, value in enumerate(inputs):
+      slot = index % RING
+      out = step(Tensor(value).realize(), slot)
+      np.testing.assert_allclose(out.numpy(), ref_outs[index], rtol=1e-5, atol=1e-5, err_msg=f"out step {index}")
+      np.testing.assert_allclose(buffer["conv"].numpy(), ref_states[index][0], rtol=1e-6, atol=1e-7)
+      if slot == RING - 1 or index == steps - 1:
+        flush(slot + 1)
+        flushed.append(index)
+        self.assertLessEqual(_rel(buffer["state"].numpy(), ref_states[index][1]), 1e-6, f"state after step {index}")
+    self.assertEqual(flushed, [RING - 1, 2 * RING - 1, steps - 1])
+
+  def test_replay_matches_cached(self): self._replay(jit=False)
+  def test_replay_jit_matches_cached(self): self._replay(jit=True)
 
 
 if __name__ == "__main__":
