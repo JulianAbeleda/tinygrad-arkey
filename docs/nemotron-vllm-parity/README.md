@@ -11,27 +11,22 @@ state, prefix caching on, RL shape n=8 T=1 logprobs=1):
 
 | Target | vLLM number |
 |---|---|
-| step @ B=1 | 5.2 ms (193 tok/s) |
-| step @ B=8 | 6.6 ms (1.2k tok/s) |
-| step @ B=64 | 13.4 ms (4.79k tok/s) |
-| step @ B=128 | 22.3 ms (5.74k tok/s) |
-| 10k-token prefill (1 prompt) | 0.37 s |
-| 10k prefill, group of 8 (n=8) | 0.48 s |
-| B=128 w/ ReplaySSM or bf16 state | 16.9 ms (7.6k tok/s) |
+| step @ B=1 | 5.2 ms | 5.5 ms (95% of vLLM speed) | last status before the crash, 12:56 |
+| step @ B=8 | 6.6 ms | 7.1 ms (93%) | commit c736693a2 (P=200 chained, gpu-run time) |
+| step @ B=64 | 13.4 ms | 17.8 ms (75%) | commit c736693a2 (17.6–18.0) |
+| step @ B=128 | 22.3 ms | 30.5 ms (73%) | commit c736693a2 (30.0–31.0) |
+| 10k prefill, warm | 0.37 s | **2.15 s** (17%) | gpu-run time, 11:31: 256-token pieces + old scan, after the GEMM route, route-scratch and 16k key-limit fixes (4.9 s at 4d3a90a11) |
 
-Interim/earlier targets: ≥5k tok/s aggregate at B=128; a 10k-token prime in ~1 s; logprob parity
-(mean |Δ| ≤ 1e-3, max ≤ 1e-2 vs. full recompute).
+10k prefill history: 92 s → 34 s (886a907ea) → 5.5 s (47ea79db6) → 4.9 s (4d3a90a11) → 2.15 s (11:31 measurement).
 
-## (b) Current status: vLLM vs. our latest measured number
+Projected 10k prefill (not yet measured end to end; the W9b sweep at larger chunks OOMed on VRAM at 10k):
 
-| Target | vLLM | Ours (latest measured) | Source (ours) |
+| Component | 256-token pieces now | large chunks + SSD scan | + cuBLAS-level GEMMs |
 |---|---|---|---|
-| step @ B=1 | 5.2 ms | unknown | not found in scratchpad |
-| step @ B=8 | 6.6 ms | 7.1 ms | commit c736693a2 (P=200 chained, gpu-run time) |
-| step @ B=64 | 13.4 ms | 17.6–18.0 ms (c736693a2); 17.5 ms earlier | `status-board-20260925.md` (same correction; also TC agent: 184.2→153.6 ms/step pre-fix in `tc-checklist.md` line 5, superseded) |
-| step @ B=128 | 22.3 ms | 30.0–31.0 ms | commit c736693a2; 29.85 ms in status-board correction |
-| 10k prefill, warm | 0.37 s | 7.0 s (warm); ~88 s cold | `nemotron_checklist.md` item 6 (`prime stall`, unresolved `[-]`) |
-| 10k prefill (TC agent scratch-tree, patched) | 0.37 s | L=2048: 1.15 → 0.70 s; L=10000: OOM both arms | `tc-checklist.md` item 5 |
+| GEMMs (hi/lo) | ~4 s-equivalent | ~0.80 s (ssm_in 275 ms per 8k chunk is the long pole) | ~0.56 s |
+| Mamba scan (21 layers) | ~0.5 s+ | 225–290 ms split, ~390 ms float, 94 ms bf16 | same (vLLM ~30 ms) |
+
+Open when the session crashed (12:57): cuBLAS GEMM audit and vLLM kernel audit under `sudo ncu` (`bench/spec/vncu.sh`, `cublas_trace.json`); the sudo ncu run of vLLM B=128 decode was the root python the kernel OOM-killed.
 
 Notes:
 - The "Correction" numbers in the status board are the most recent reconciled figures (wall ≈ GPU busy,
