@@ -29,6 +29,24 @@ class TestTrainingPrimitives(unittest.TestCase):
         np.testing.assert_allclose(p.grad.realize().numpy(), it * np.array([[4.0, 6.0], [4.0, 6.0]]))
       self.assertIsNone(alias.grad)
 
+  def test_assign_reads_unrealized_fill(self):
+    # the RMW kernel's load shares the store's INDEX(PARAM); _sink_param_io saw slot 0 as write-only, so the dead-item
+    # pass dropped the ones() fill and x.assign(x*0.9) read uninitialized memory (0.0, not 0.9)
+    a, b = Tensor.ones((1,), device="CPU"), Tensor.ones((1,), device="CPU")
+    a *= 0.9
+    b *= 0.999
+    np.testing.assert_allclose(a.numpy(), [0.9], rtol=1e-6)
+    np.testing.assert_allclose(b.numpy(), [0.999], rtol=1e-6)
+
+  def test_adam_zero_grad_param_stays_finite(self):
+    # fresh (lazy-const) Adam state: b2_t lost its fill -> v_hat = 0/(1-1) = NaN on a zero-grad param
+    a, b = Tensor.ones(2, 2, device="CPU").contiguous().realize().is_param_(), Tensor.ones(2, device="CPU").contiguous().realize().is_param_()
+    optimizer = nn.optim.Adam([a, b], lr=0.1)
+    a.grad, b.grad = Tensor.zeros(2, 2, device="CPU").contiguous().realize(), Tensor.ones(2, device="CPU").contiguous().realize()
+    with Tensor.train(): optimizer.step()
+    np.testing.assert_allclose(a.numpy(), np.ones((2, 2)))
+    np.testing.assert_allclose(b.numpy(), np.full(2, 0.9), rtol=1e-5)
+
   def test_adam_reduces_loss(self):
     weight = Tensor([0.0], device="CPU").is_param_()
     optimizer = nn.optim.Adam([weight], lr=0.1)

@@ -426,27 +426,24 @@ def _sink_param_io(sink:UOp) -> tuple[set[int], set[int]]:
   ts = list(sink.toposort())
   # A slot is written when its PARAM is the base of a STORE address chain.  The chain
   # reaches the PARAM through view ops (INDEX, and RESHAPE for the epi_resadd block
-  # store); unwrap it so such kernels are provable outputs instead of fail-safe keeps.
-  store_bases: set[int] = set()
-  for u in ts:
-    if u.op is not Ops.STORE: continue
-    a = u.src[0]
-    while a.op in (Ops.INDEX, Ops.SHRINK, Ops.RESHAPE, Ops.SLICE, Ops.CAST, Ops.CONTIGUOUS,
-                   Ops.PERMUTE, Ops.EXPAND, Ops.PAD, Ops.MULTI, Ops.BIND):
-      a = a.src[0]
-    if a.op is Ops.PARAM: store_bases.add(id(a))
-  # Everything else that touches a PARAM is a read, including residual views that reach
-  # the PARAM through RESHAPE instead of INDEX (the epi_resadd residual slot) and
-  # read-modify-write kernels.  Dropping a writer whose read is invisible here is what
-  # broke the open-arm token stream, so err on the side of marking reads.
+  # store).  Every other consumer of a PARAM-rooted address node is a read, including
+  # residual views that reach the PARAM through RESHAPE and read-modify-write kernels,
+  # whose load shares the store's INDEX node (x.assign(x*k) reads slot 0; classifying it
+  # write-only dropped the producer of x as dead).  Err on the side of marking reads.
+  views = (Ops.INDEX, Ops.SHRINK, Ops.RESHAPE, Ops.SLICE, Ops.CAST, Ops.CONTIGUOUS,
+           Ops.PERMUTE, Ops.EXPAND, Ops.PAD, Ops.MULTI, Ops.BIND)
+  root: dict[int, int] = {}
   outs: set[int] = set()
   ins: set[int] = set()
   for u in ts:
-    if u.op is Ops.PARAM: continue
-    for s in u.src:
-      if s.op is not Ops.PARAM: continue
-      if id(s) in store_bases: outs.add(s.arg.slot)
-      else: ins.add(s.arg.slot)
+    if u.op is Ops.PARAM:
+      root[id(u)] = u.arg.slot
+      continue
+    for k, s in enumerate(u.src):
+      if (slot := root.get(id(s))) is None: continue
+      if k == 0 and u.op in views: root[id(u)] = slot
+      elif k == 0 and u.op is Ops.STORE: outs.add(slot)
+      else: ins.add(slot)
   cached = (frozenset(outs), frozenset(ins))
   if len(_sink_io_cache) < _RESOLVE_PRECOMPILE_BASE_LIMIT: _sink_io_cache[id(sink)] = cached
   return cached
