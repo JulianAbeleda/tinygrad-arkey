@@ -17,9 +17,9 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 
 | ID | Item | Owner | Files | Status | Gate |
 |---|---|---|---|---|---|
-| T0 | Profile one RLOO update; which tinygrad the trainer uses | profiler agent | none (scratchpad only) | measured: trainer = DayCare vendored tinygrad; ~20 min/update (1x8): features 443 s, server 228 s, sample 228 s, 10k prefix 186 s, update 115 s | stage table + ranked levers |
-| W8 | Continuous batching / slot refill in the sampler | sampler agent | `tinygrad/llm/nemotron_h_sampler.py`, `test/unit/test_nemotron_h_sampler*.py` | starting | >=90% active slots on a skewed length mix; parity holds |
-| I1 | One-stack RLOO loop: tinygrad sampler -> recompute -> LoRA update in place -> sample; + TIS (C=2); predeclare `research/rloo-tinygrad-countdown.md` | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; loop committed DayCare 8d6e7ff; real-model smoke next | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
+| T0 | Profile one RLOO update | profiler agent | none | DONE: vendored tinygrad 0.13; 1 prompt x 8 on llama.cpp path: prefix 186 s, sample 228 s, features 443 s, parity recompute 115 s, **backward ~4000 s (~84%, CPU-bound in `_apply_map_to_tensors`, 16-token slices)**; est. ~5 h/update at 4 prompts |
+| W8 | Slot refill: default slots 2*batch//rows+2 (~99% active while queued, CPU sim) | sampler agent | `nemotron_h_sampler.py`, `test_nemotron_h_sampler_refill.py` | parked uncommitted in ~/wt/w8; needs one GPU bench (B=32/64) |
+| I1 | One-stack RLOO loop + TIS (C=2) | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; DayCare 8d6e7ff loop, e691a13 TIS, c7f6955 predeclared; real-model smoke (R3) queued; watch backward cost | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
 | R3 | Smoke on the llama.cpp loop | after T0 | `~/DayCare` | pending | R3 in rloo-llama-countdown.md |
 | F16 | Why fp16 fails the consistency gate; mixed fp16/hi-lo scheme | fp16 agent | `~/scratchpad/fp16/` (no product code) | running | same-numerics sampler vs recompute mean <=1e-3, max <=1e-2 |
 | RS | How vLLM/verl/NeMo-RL correct rollout/trainer mismatch (TIS etc.) | research agent | none | running | ranked fixes + hypotheses |
