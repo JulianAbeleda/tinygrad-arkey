@@ -51,10 +51,16 @@ class NemotronHBatchSampler:
     self.position = UOp.variable("position", 0, capacity - 1)  # suffix row of the token being fed
     self.slot, self.count = UOp.variable("slot", 0, ring - 1), UOp.variable("count", 1, ring)
     self.graphs: dict[int, TinyJit] = {}
+    # sampled ids and log probabilities stay on the device; column c holds suffix row c (0 = the first sample)
+    self.history = {"tokens": _fresh(Tensor.zeros(batch, capacity, dtype=dtypes.int32)),
+                    "logprobs": _fresh(Tensor.zeros(batch, capacity))}
     self.flush = TinyJit(self._flush)
 
   def step(self, tokens: Tensor, index: int, temperature: Tensor) -> tuple[Tensor, Tensor]:
     """Feed each sequence's token at suffix row `index` (0 = first generated token); returns the next sample.
+
+    The returned token tensor can be fed straight back as the next step's input: the graph reads its input tokens
+    before it writes the new ones, so the host never waits on the device between steps.
 
     Mamba inputs go to ring slot `index % ring`; a full ring is folded into the checkpoint state right after."""
     bucket = suffix_bucket(index, self.capacity, self.min_bucket)
@@ -113,7 +119,13 @@ class NemotronHBatchSampler:
       else:
         hidden, _ = block.cached(hidden, None, keep_graph=True)
       hidden = hidden.contiguous()
-    return self._sample(hidden, temperature)
+    token, chosen = self._sample(hidden, temperature)
+    self._record(token, chosen, position + 1)
+    return token, chosen
+
+  def _record(self, token: Tensor, chosen: Tensor, column: UOp | int):
+    for key, value in (("tokens", token), ("logprobs", chosen)):
+      self.history[key][:, column:column + 1].assign(value.reshape(self.batch, 1)).realize()
 
   def _flush(self, count: UOp) -> None:
     """Fold the ring's first `count` tokens into every Mamba checkpoint state."""
@@ -122,24 +134,29 @@ class NemotronHBatchSampler:
         mamba_replay_flush(block, buffer, count)
 
   def generate(self, prompt: list[int], steps: int, temperature: float = 1.0, stop: set[int] | None = None,
-               prefill=None):
-    """Sample up to `steps` tokens for every sequence; returns (tokens, logprobs) as lists per sequence."""
+               prefill=None, check_every: int = 32):
+    """Sample up to `steps` tokens for every sequence; returns (tokens, logprobs) as lists per sequence.
+
+    Steps chain on the device (each step's sampled tokens are the next step's input); the host reads the sampled
+    history back only every `check_every` steps, to stop early once every sequence has emitted a stop token.
+    """
     if steps > self.capacity:
       raise ValueError("rollout exceeds the decode capacity")
     token, chosen = self.first(self.prime(prompt, prefill), temperature)
+    self._record(token, chosen, 0)
     rate = Tensor([temperature]).realize()
-    tokens, logprobs = [token.numpy().tolist()], [chosen.numpy().tolist()]
-    finished = [bool(stop) and t in stop for t in tokens[0]]
-    for step in range(1, steps):
-      if all(finished):
-        break
-      token, chosen = self.step(Tensor(tokens[-1], dtype=dtypes.int32).realize(), step - 1, rate)
-      tokens.append(token.numpy().tolist())
-      logprobs.append(chosen.numpy().tolist())
-      finished = [done or (bool(stop) and t in stop) for done, t in zip(finished, tokens[-1])]
+    done = 1
+    while done < steps:
+      token, _ = self.step(token, done - 1, rate)
+      done += 1
+      if stop and (done % check_every == 0 or done == steps):
+        ids = self.history["tokens"].numpy()[:, :done]
+        if all(any(int(t) in stop for t in row) for row in ids):
+          break
+    tokens = self.history["tokens"].numpy()[:, :done].tolist()
+    logprobs = self.history["logprobs"].numpy()[:, :done].tolist()
     per_sequence = []
-    for index in range(self.batch):
-      ids, lps = [row[index] for row in tokens], [row[index] for row in logprobs]
+    for ids, lps in zip(tokens, logprobs):
       end = next((i for i, t in enumerate(ids) if stop and t in stop), len(ids) - 1)
       per_sequence.append((ids[:end + 1], lps[:end + 1]))
     return per_sequence

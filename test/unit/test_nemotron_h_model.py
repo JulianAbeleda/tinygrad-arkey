@@ -98,6 +98,16 @@ class TestNemotronHBatchSampler(unittest.TestCase):
       np.testing.assert_allclose(np.asarray(logprobs), reference[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
     self.assertEqual(sorted(sampler.graphs), [4, 8, 16])
 
+  def test_device_chained_generate_stops_and_trims(self):
+    from tinygrad.llm.nemotron_h_sampler import NemotronHBatchSampler
+    sampler = NemotronHBatchSampler(tiny_model(), batch=2, capacity=16)
+    calls = []
+    step = sampler.step
+    sampler.step = lambda *args: calls.append(args[1]) or step(*args)
+    rollouts = sampler.generate([3, 17, 5], steps=12, stop=set(range(64)), check_every=2)
+    self.assertEqual([len(tokens) for tokens, _ in rollouts], [1, 1])
+    self.assertEqual(calls, [0])  # every first sample is a stop token: the host check ends the loop at step 2
+
   def test_step_reads_each_projection_weight_once(self):
     # a lazily chained residual stream makes every consumer of a block's output recompute its projection
     from tinygrad.nn.state import get_parameters
