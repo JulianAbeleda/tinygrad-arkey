@@ -19,9 +19,9 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 |---|---|---|---|---|---|
 | T0 | Profile one RLOO update | profiler agent | none | DONE: vendored tinygrad 0.13; 1 prompt x 8 on llama.cpp path: prefix 186 s, sample 228 s, features 443 s, parity recompute 115 s, **backward ~4000 s (~84%, CPU-bound in `_apply_map_to_tensors`, 16-token slices)**; est. ~5 h/update at 4 prompts |
 | W8 | Slot refill: default slots 2*batch//rows+2 (~99% active while queued, CPU sim) | sampler agent | `nemotron_h_sampler.py`, `test_nemotron_h_sampler_refill.py` | parked uncommitted in ~/wt/w8; needs one GPU bench (B=32/64) |
-| I1 | One-stack RLOO loop + TIS (C=2) | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; DayCare 8d6e7ff loop, e691a13 TIS, c7f6955 predeclared; real-model smoke (R3) queued; watch backward cost | 2 updates on the 4B: loss moves, parity <=0.1 nats, no llama.cpp |
+| I1 | One-stack RLOO loop + TIS (C=2) | integration agent | `~/DayCare/daycare/nursery/rloo_tinygrad.py` + its test | **GPU PRIORITY**; smoke-001 (15:38) hit the parity hard stop: max 0.207 nats > 0.1 (update 0, real 4B, 4k rollouts); DayCare 7cf9996 512-token gradient slices; smoke-002 queued |
 | R3 | Smoke on the llama.cpp loop | after T0 | `~/DayCare` | pending | R3 in rloo-llama-countdown.md |
-| TIM | Localize train/inference reduction-order mismatch (Mamba scan vs recurrent step, split-KV attention, row-count kernel choice, RMSNorm); invariance plan | fp16 agent | `~/scratchpad/fp16/` -> docs/.../train-inference-mismatch-localization.md | after smoke | site table with gap reduction when unified |
+| TIM | Localize train/inference reduction-order mismatch (Mamba scan vs recurrent step, split-KV attention, row-count kernel choice, RMSNorm); invariance plan | fp16 agent | `~/scratchpad/fp16/` -> docs/.../train-inference-mismatch-localization.md | **now critical path** (smoke parity stop) | site table with gap reduction when unified |
 | RS | How vLLM/verl/NeMo-RL correct rollout/trainer mismatch (TIS etc.) | research agent | none | running | ranked fixes + hypotheses |
 | W5/W10 | Fusion, per-B graphs | - | - | parked | - |
 | P | 10k prefill 1.65 s vs vLLM 0.37 s | - | - | parked (about 10% of a group) | - |
