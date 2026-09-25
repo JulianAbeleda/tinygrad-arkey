@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import pathlib
 
-from tinygrad import Tensor, nn
+from tinygrad import Tensor, dtypes, nn
 from tinygrad.llm.gguf import gguf_load
 from tinygrad.nn.state import load_state_dict
 
@@ -88,6 +88,45 @@ def config_from_gguf(metadata: dict, *, max_context: int | None = None,
     )
 
 
+class _Linear(nn.Linear):
+    """A bf16-weight projection with near-float32 activations, on the bf16 tensor core when rows allow.
+
+    The residual stream is float32 and the weights are bf16. Tensor cores match
+    one input dtype for both operands, so a float32 activation against a bf16
+    weight never reaches them. Rounding the activation to bf16 reaches them but
+    breaks sampler/trainer self-consistency: the decode recurrence and the full
+    recompute differ at float32 noise, and bf16 rounding amplifies that to a
+    mean 5e-3 sampled-token logprob gap (float32 activations: under 1e-4).
+
+    So with more than MATVEC_MAX_ROWS static rows the activation is split into
+    two bf16 terms, x = hi + lo + O(2**-17 |x|) (gap: 4e-4). Both halves are stacked as rows
+    of one `bf16 x bf16 -> float32` matmul, which reads the weight once and is
+    the shape the bf16 tensor core matches; a product of two bf16 values is
+    exact in float32. The rows pad to the tensor core's M, since without
+    TC_OPT=2 the heuristic falls back to scalar bf16-rounded products otherwise.
+
+    Up to MATVEC_MAX_ROWS (batched decode) the kernel is a bandwidth-bound
+    matvec that the heuristic's small-batch schedule runs faster than the tensor
+    core: nn.Linear's float32 activation times the widened weight.
+    """
+    MATVEC_MAX_ROWS = 16
+    TC_ROWS = 16  # the tensor core's M
+
+    def __call__(self, x: Tensor) -> Tensor:
+        *lead, width = x.shape
+        rows = 1
+        for size in lead:
+            rows *= size
+        if not (isinstance(rows, int) and rows > self.MATVEC_MAX_ROWS):
+            return super().__call__(x)
+        flat = x.reshape(rows, width).cast(dtypes.float)
+        hi = flat.cast(self.weight.dtype)
+        lo = (flat - hi.cast(dtypes.float)).cast(self.weight.dtype)
+        split = hi.cat(lo).pad(((0, -2 * rows % self.TC_ROWS), None))
+        out = split.dot(self.weight.transpose(), dtype=dtypes.float)
+        return (out[:rows] + out[rows:2 * rows]).reshape(*lead, -1)
+
+
 class _WeightBias:
     def __init__(self, weight_shape: tuple[int, ...], bias_shape: tuple[int, ...] | None = None):
         self.weight = Tensor.zeros(*weight_shape)
@@ -100,13 +139,13 @@ class NemotronHMamba2:
         conv_dim = config.ssm_inner + 2 * config.ssm_groups * config.ssm_state
         projection = config.ssm_inner + conv_dim + config.ssm_heads
         self.config = config
-        self.ssm_in = nn.Linear(config.dim, projection, bias=False)
+        self.ssm_in = _Linear(config.dim, projection, bias=False)
         self.ssm_conv1d = _WeightBias((conv_dim, config.conv_kernel), (conv_dim,))
         self.ssm_dt = {"bias": Tensor.zeros(config.ssm_heads)}
         self.ssm_a = Tensor.zeros(config.ssm_heads, 1)
         self.ssm_d = Tensor.zeros(config.ssm_heads, 1)
         self.ssm_norm = _WeightBias((config.ssm_groups, config.ssm_inner // config.ssm_groups))
-        self.ssm_out = nn.Linear(config.ssm_inner, config.dim, bias=False)
+        self.ssm_out = _Linear(config.ssm_inner, config.dim, bias=False)
 
     def _causal_conv(self, values: Tensor) -> Tensor:
         batch, length, channels = values.shape
@@ -280,10 +319,10 @@ class NemotronHAttention:
         self.config = config
         self.n_heads = config.head_counts[layer]
         self.n_kv_heads = config.kv_head_counts[layer]
-        self.attn_q = nn.Linear(config.dim, self.n_heads * config.head_dim, bias=False)
-        self.attn_k = nn.Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
-        self.attn_v = nn.Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
-        self.attn_output = nn.Linear(self.n_heads * config.head_dim, config.dim, bias=False)
+        self.attn_q = _Linear(config.dim, self.n_heads * config.head_dim, bias=False)
+        self.attn_k = _Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
+        self.attn_v = _Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
+        self.attn_output = _Linear(self.n_heads * config.head_dim, config.dim, bias=False)
 
     def __call__(self, hidden: Tensor, *, retain_graph: bool = True) -> Tensor:
         batch, length, _ = hidden.shape
@@ -345,8 +384,8 @@ class NemotronHAttention:
 class NemotronHMLP:
     def __init__(self, config: NemotronHConfig, layer: int):
         hidden = config.ffn_dims[layer]
-        self.ffn_up = nn.Linear(config.dim, hidden, bias=False)
-        self.ffn_down = nn.Linear(hidden, config.dim, bias=False)
+        self.ffn_up = _Linear(config.dim, hidden, bias=False)
+        self.ffn_down = _Linear(hidden, config.dim, bias=False)
 
     def __call__(self, hidden: Tensor, *, retain_graph: bool = True) -> Tensor:
         return self.ffn_down(self.ffn_up(hidden).relu().square())
@@ -360,24 +399,24 @@ class NemotronHBlock:
         if self.block_type == "mamba":
             conv_dim = config.ssm_inner + 2 * config.ssm_groups * config.ssm_state
             projection = config.ssm_inner + conv_dim + config.ssm_heads
-            self.ssm_in = nn.Linear(config.dim, projection, bias=False)
+            self.ssm_in = _Linear(config.dim, projection, bias=False)
             self.ssm_conv1d = _WeightBias((conv_dim, config.conv_kernel), (conv_dim,))
             self.ssm_dt = {"bias": Tensor.zeros(config.ssm_heads)}
             self.ssm_a = Tensor.zeros(config.ssm_heads, 1)
             self.ssm_d = Tensor.zeros(config.ssm_heads, 1)
             self.ssm_norm = _WeightBias((config.ssm_groups, config.ssm_inner // config.ssm_groups))
-            self.ssm_out = nn.Linear(config.ssm_inner, config.dim, bias=False)
+            self.ssm_out = _Linear(config.ssm_inner, config.dim, bias=False)
         elif self.block_type == "attention":
             self.n_heads = config.head_counts[layer]
             self.n_kv_heads = config.kv_head_counts[layer]
-            self.attn_q = nn.Linear(config.dim, self.n_heads * config.head_dim, bias=False)
-            self.attn_k = nn.Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
-            self.attn_v = nn.Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
-            self.attn_output = nn.Linear(self.n_heads * config.head_dim, config.dim, bias=False)
+            self.attn_q = _Linear(config.dim, self.n_heads * config.head_dim, bias=False)
+            self.attn_k = _Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
+            self.attn_v = _Linear(config.dim, self.n_kv_heads * config.head_dim, bias=False)
+            self.attn_output = _Linear(self.n_heads * config.head_dim, config.dim, bias=False)
         else:
             hidden = config.ffn_dims[layer]
-            self.ffn_up = nn.Linear(config.dim, hidden, bias=False)
-            self.ffn_down = nn.Linear(hidden, config.dim, bias=False)
+            self.ffn_up = _Linear(config.dim, hidden, bias=False)
+            self.ffn_down = _Linear(hidden, config.dim, bias=False)
 
     def __call__(self, hidden: Tensor, *, retain_graph: bool = True) -> Tensor:
         normalized = self.attn_norm(hidden)
@@ -410,7 +449,7 @@ class NemotronHModel:
         self.blk = [NemotronHBlock(config, layer) for layer in range(config.num_blocks)]
         self.token_embd = nn.Embedding(config.vocab_size, config.dim)
         self.output_norm = nn.RMSNorm(config.dim, config.norm_eps)
-        self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
+        self.output = _Linear(config.dim, config.vocab_size, bias=False)
 
     def prefix(self, ids: list[int], *, through: int) -> tuple[Tensor, list[dict | None]]:
         """Run one shared causal prefix once: its states after `through`, and the caches."""
