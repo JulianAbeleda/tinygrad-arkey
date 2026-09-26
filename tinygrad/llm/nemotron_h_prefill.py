@@ -61,6 +61,8 @@ class NemotronHPrefill:
     if self.fused:
       capacity = -(-capacity // fused_attention.BLOCK) * fused_attention.BLOCK  # the kernel reads whole blocks
     self.model, self.capacity, self.piece = model, capacity, piece
+    # the SSD path pads the last piece; its padded rows still need cache rows to write into (masked) and to attend
+    self.rows = -(-capacity // piece) * piece if mamba == "ssd" else capacity
     config = model.config
     probe = model.token_embd(Tensor([[0] * config.conv_kernel])).float()
     self.buffers = []
@@ -68,7 +70,7 @@ class NemotronHPrefill:
       probe, cache = block.cached(probe, None)
       if block.block_type == "attention":
         _, heads, _, width = cache["k"].shape
-        self.buffers.append({key: _fresh(Tensor.zeros(1, heads, capacity, width, dtype=cache[key].dtype))
+        self.buffers.append({key: _fresh(Tensor.zeros(1, heads, self.rows, width, dtype=cache[key].dtype))
                              for key in ("k", "v")})
       elif block.block_type == "mamba":
         self.buffers.append({key: _fresh(Tensor.zeros(*value.shape, dtype=value.dtype)) for key, value in cache.items()})
@@ -77,7 +79,8 @@ class NemotronHPrefill:
     self.tile = fused_attention.query_tile(config.head_counts[next(i for i, b in enumerate(model.blk)
                                                                      if b.block_type == "attention")],
                                            config.head_dim) if self.fused else None
-    self.position = UOp.variable("prefill_position", 0, capacity - 1)
+    self.position = UOp.variable("prefill_position", 0, self.rows - 1)
+    self.valid: dict[int, UOp] = {}  # piece size -> its count of real (unpadded) positions
     # weights are graph inputs: one graph per block kind and weight geometry serves every block of that kind
     # (a weight may be a view of a buffer, and blocks may share buffers: the graphs take the distinct buffers)
     self.params = [sorted(get_state_dict(block).items()) for block in model.blk]
@@ -96,6 +99,8 @@ class NemotronHPrefill:
     self.block_graphs: dict[tuple, TinyJit] = {}  # (kind, piece) and ("embed", piece), ("attn_out", kind, piece)
     self.bindings = {}  # (template block, projection) -> its own route binding, restored after each graph
     self.flash_blocks: dict[int, bool] = {}
+    self._reset = TinyJit(self._zero)
+    self.pad_token = 0  # fills a padded piece; nothing the prefill keeps may depend on it
 
   def _bind(self, kind, bases: tuple[Tensor, ...] | None):
     """Point the template block's weights at the same views of `bases` (None: its own); returns the block."""
@@ -125,10 +130,15 @@ class NemotronHPrefill:
   def _embed(self, tokens: Tensor, out: Tensor) -> None:
     out.assign(self.model.token_embd(tokens).float()).realize()
 
-  def _block(self, kind, hidden: Tensor, out: Tensor, position: UOp, *tensors: Tensor):
+  def _block(self, kind, hidden: Tensor, out: Tensor, position: UOp, valid: UOp, *tensors: Tensor):
     """One Mamba or MLP block (hidden -> out), or an attention block's projections (hidden -> out: the query;
     keys and values written into the cache rows at `position`). `tensors`: the carried state (key/value
-    cache or convolution tail and scan state; none for an MLP), then weights replacing the template block's."""
+    cache or convolution tail and scan state; none for an MLP), then weights replacing the template block's.
+
+    Only the piece's first `valid` positions are the prompt; the rest pad it to the graph's size. Padded positions
+    never reach the carried state: their keys and values are not written (the rows keep their contents), and the
+    Mamba update treats them as identity steps (`ssd_mixer`'s `valid`). Rows before `valid` are causal, so they
+    never read the padding."""
     count = 0 if kind[0] == "mlp" else 2
     state, bases = tensors[:count], tensors[count:]
     block = self._bind(kind, bases)
@@ -141,11 +151,15 @@ class NemotronHPrefill:
         for cache, layer in zip(state, (block.attn_k, block.attn_v)):
           new = layer(normed).reshape(1, length, kv_heads, width).transpose(1, 2)
           # rounded to the key projection dtype, as the model and the sampler store keys and values
-          cache[:, :, position:position + length].assign(new.cast(layer.weight.dtype).cast(cache.dtype)).realize()
+          new = new.cast(layer.weight.dtype).cast(cache.dtype)
+          rows = cache[:, :, position:position + length]
+          keep = Tensor.arange(length).reshape(1, 1, length, 1) < valid
+          rows.assign(keep.where(new, rows)).realize()
       elif block.block_type == "mamba":
         carry = dict(zip(("conv", "state"), state))
         if self.mamba == "ssd":
-          result, carried = ssd_cached(block, hidden, carry, chunk=self.ssd_chunk, precision=self.ssd_precision)
+          result, carried = ssd_cached(block, hidden, carry, chunk=self.ssd_chunk, precision=self.ssd_precision,
+                                       valid=valid)
         else:
           result, carried = block.cached(hidden, carry, keep_graph=True)
         result, *states = (result.contiguous().realize(), *(carried[key].contiguous().realize() for key in carry))
@@ -189,8 +203,21 @@ class NemotronHPrefill:
                                                                 self.model.config.head_dim)
     return self.flash_blocks[block]
 
+  def spans(self, length: int) -> list[tuple[int, int]]:
+    """(piece size, real positions in it) covering `length`: full pieces, then the remainder.
+
+    On the SSD path the remainder is one piece padded to a power of two of at least the scan chunk, so a prompt
+    costs at most one partial piece whatever its length; the scan path splits it into its powers of two.
+    """
+    full, rest = [(self.piece, self.piece)] * (length // self.piece), length % self.piece
+    if not rest:
+      return full
+    if self.mamba == "ssd":
+      return full + [(max(self.model.config.scan_chunk, 1 << (rest - 1).bit_length()), rest)]
+    return full + [(size, size) for size in self.pieces(rest)]
+
   def pieces(self, length: int) -> list[int]:
-    """Piece sizes covering `length`: full pieces, then the remainder's powers of two, largest first."""
+    """Piece sizes covering `length` unpadded: full pieces, then the remainder's powers of two, largest first."""
     sizes, rest = [self.piece] * (length // self.piece), length % self.piece
     size = self.piece
     while rest:
@@ -205,11 +232,15 @@ class NemotronHPrefill:
       self.block_graphs[key] = TinyJit(function)
     return self.block_graphs[key]
 
-  def reset(self):
+  def _zero(self):
     for buffer in self.buffers:
       if buffer is not None:
         for value in buffer.values():
           value.assign(Tensor.zeros(*value.shape, dtype=value.dtype)).realize()
+
+  def reset(self):
+    """Zero every cache buffer, in one graph (eager, its ~50 assigns cost ~0.1-0.2 s of host time per prompt)."""
+    self._reset()
 
   def __call__(self, prompt: list[int]) -> Tensor:
     """Run the prompt from an empty state; returns the last position's hidden state, shape (1, 1, dim).
@@ -221,22 +252,25 @@ class NemotronHPrefill:
       raise ValueError("prompt must be nonempty and fit the prefill capacity")
     self.reset()
     start, hidden = 0, None
-    for size in self.pieces(len(prompt)):
+    for size, count in self.spans(len(prompt)):
       # fused: keyed by the piece's 512-token block while the kernel admits it; SDPA: a power-of-two key bound
       block = start // fused_attention.BLOCK
       last = (start + size - 1) // fused_attention.BLOCK
       if self.fused and all(self._flash_admitted(b) for b in range(block, last + 1)):
         key, attend = (size, -1 - block), functools.partial(self._attend, keys=0, flash_block=block)
       else:
-        keys = min(self.capacity, max(self.piece, 1 << (start + size - 1).bit_length()))
+        keys = min(self.rows, max(self.piece, 1 << (start + size - 1).bit_length()))
         key, attend = (size, keys), functools.partial(self._attend, keys=keys)
       if key not in self.graphs:
         self.graphs[key] = TinyJit(attend)
       position = self.position.bind(start)
+      if size not in self.valid:
+        self.valid[size] = UOp.variable(f"prefill_valid_{size}", 1, size)
+      valid = self.valid[size].bind(count)
       if size not in self.hidden:
         self.hidden[size] = [Tensor.empty(1, size, self.model.config.dim).contiguous().realize() for _ in range(2)]
       current, spare = self.hidden[size]
-      tokens = Tensor([prompt[start:start + size]], dtype=dtypes.int32).realize()
+      tokens = Tensor([prompt[start:start + count] + [self.pad_token] * (size - count)], dtype=dtypes.int32).realize()
       with route_scratch():
         self._graph(("embed", size), self._embed)(tokens, current)
         for index, (block, kind) in enumerate(zip(self.model.blk, self.kinds)):
@@ -246,16 +280,16 @@ class NemotronHPrefill:
             k, v = self.buffers[index]["k"], self.buffers[index]["v"]
             if size not in self.queries:
               self.queries[size] = Tensor.empty(1, block.n_heads, size, self.model.config.head_dim).contiguous().realize()
-            graph(current, self.queries[size], position, k, v, *weights)
+            graph(current, self.queries[size], position, valid, k, v, *weights)
             attended = self.graphs[key](self.queries[size], k, v, position)
             self._graph(("attn_out", kind, size), functools.partial(self._attn_out, kind))(current, attended, spare, *weights)
           elif block.block_type == "mamba":
-            graph(current, spare, position, self.buffers[index]["conv"], self.buffers[index]["state"], *weights)
+            graph(current, spare, position, valid, self.buffers[index]["conv"], self.buffers[index]["state"], *weights)
           else:
-            graph(current, spare, position, *weights)
+            graph(current, spare, position, valid, *weights)
           current, spare = spare, current
-      hidden = current[:, -1:].contiguous().realize()
-      start += size
+      hidden = current[:, count - 1:count].contiguous().realize()
+      start += count
     return hidden
 
 

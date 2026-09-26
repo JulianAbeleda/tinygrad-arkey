@@ -34,11 +34,58 @@ class TestNemotronHPrefill(unittest.TestCase):
     self.assertEqual(prefill.pieces(29), [8, 8, 8, 4, 1])
     self.assertEqual(prefill.pieces(16), [8, 8])
 
+  def test_ssd_spans_pad_the_remainder_into_one_piece(self):
+    model = tiny_model()  # scan chunk 4
+    prefill = NemotronHPrefill(model, capacity=60, piece=8)
+    self.assertEqual(prefill.spans(29), [(8, 8)] * 3 + [(8, 5)])
+    self.assertEqual(prefill.spans(16), [(8, 8)] * 2)
+    self.assertEqual(prefill.spans(2), [(4, 2)])  # at least a scan chunk
+    self.assertEqual(prefill.rows, 64)  # a padded last piece always has cache rows to run in
+    scan = NemotronHPrefill(model, capacity=60, piece=8, mamba="scan")
+    self.assertEqual(scan.spans(29), [(8, 8)] * 3 + [(4, 4), (1, 1)])
+
+  def test_padding_never_reaches_the_kept_state(self):
+    model = tiny_model()
+    prefill = NemotronHPrefill(model, capacity=32, piece=8, ssd_chunk=4)
+    rng = np.random.default_rng(5)
+    prompt = [int(v) for v in rng.integers(1, 64, 13)]  # 8, then 5 real positions in a padded 8
+    def run(pad: int):
+      prefill.pad_token = pad
+      hidden = prefill(prompt).numpy()
+      return hidden, [{key: value.numpy() for key, value in buffer.items()} if buffer else None
+                      for buffer in prefill.buffers]
+    reference = run(0)
+    for pad in (37, 63, 0):  # other padding, and JIT replays
+      hidden, buffers = run(pad)
+      np.testing.assert_array_equal(hidden.view(np.uint32), reference[0].view(np.uint32))
+      for got, want in zip(buffers, reference[1]):
+        for key in (got or {}):
+          np.testing.assert_array_equal(got[key].view(np.uint32), want[key].view(np.uint32))
+    # keys/values past the prompt are never written (reset zeroed them), and the prompt's rows equal an
+    # unpadded run of the same positions: the prompt continued to a whole second piece
+    longer = prompt + [int(v) for v in rng.integers(1, 64, 3)]
+    prefill(longer)
+    for block, buffer, kept in zip(model.blk, prefill.buffers, reference[1]):
+      if block.block_type == "attention":
+        for key in ("k", "v"):
+          self.assertFalse(kept[key][:, :, len(prompt):].any())
+          np.testing.assert_array_equal(buffer[key].numpy()[:, :, :len(prompt)].view(np.uint32),
+                                        kept[key][:, :, :len(prompt)].view(np.uint32))
+
+  def test_reset_zeroes_every_buffer_as_one_graph(self):
+    prefill = NemotronHPrefill(tiny_model(), capacity=16, piece=8)
+    for length in (5, 11, 7):  # the reset graph captures, then replays
+      prefill([3] * length)
+      prefill.reset()
+      for buffer in prefill.buffers:
+        for value in (buffer or {}).values():
+          self.assertFalse(value.numpy().any())
+
   def test_attention_reads_a_power_of_two_key_bound_not_capacity(self):
     prefill = NemotronHPrefill(tiny_model(), capacity=64, piece=8)
     prefill(list(range(1, 22)))
-    # pieces 8, 8, 4, 1 end at 8, 16, 20, 21: key bounds 8, 16, 32, 32
-    self.assertEqual(sorted(prefill.graphs), [(1, 32), (4, 32), (8, 8), (8, 16)])
+    # pieces 8, 8 and a padded 8 end at 8, 16, 24: key bounds 8, 16, 32
+    self.assertEqual(sorted(prefill.graphs), [(8, 8), (8, 16), (8, 32)])
 
   def test_matches_cached_prefix_across_jit_replays(self):
     for mamba in ("ssd", "scan"):
@@ -111,7 +158,7 @@ class TestNemotronHFusedPrefill(unittest.TestCase):
     self.assertEqual(prefill.capacity, 1536)
     rng = np.random.default_rng(3)
     for _ in range(2):
-      # pieces 512, 512, 256, 128, 64, 16: two full blocks, then tails at offsets 0..496 of block 2
+      # pieces 512, 512 and 464 real positions padded to 512: the tail is one piece in block 2
       prompt = [int(v) for v in rng.integers(0, 64, 1488)]
       hidden = prefill(prompt).numpy()
       expected, caches = model.prefix(prompt, through=len(model.blk) - 1)
@@ -121,7 +168,7 @@ class TestNemotronHFusedPrefill(unittest.TestCase):
         np.testing.assert_allclose(prefill.buffers[1][key].numpy()[:, :, :len(prompt)], caches[1][key].numpy(),
                                    rtol=2e-2, atol=2e-2)
     # graphs are keyed (piece, -1 - block): one per 512-token block, shared by every piece in it
-    self.assertEqual(sorted(prefill.graphs), [(16, -3), (64, -3), (128, -3), (256, -3), (512, -2), (512, -1)])
+    self.assertEqual(sorted(prefill.graphs), [(512, -3), (512, -2), (512, -1)])
 
   def test_piece_larger_than_a_block_runs_one_flash_call_per_block(self):
     model = flash_geometry_model()
@@ -135,8 +182,8 @@ class TestNemotronHFusedPrefill(unittest.TestCase):
                                  rtol=2e-2, atol=2e-2)
     for key in ("conv", "state"):
       np.testing.assert_allclose(prefill.buffers[0][key].numpy(), caches[0][key].numpy(), rtol=1e-3, atol=1e-3)
-    # pieces 1024 (blocks 0-1 in one graph), then 256, 128, 64, 16 in block 2
-    self.assertEqual(sorted(prefill.graphs), [(16, -3), (64, -3), (128, -3), (256, -3), (1024, -1)])
+    # pieces 1024 (blocks 0-1 in one graph), then 464 real positions padded to 512 in block 2
+    self.assertEqual(sorted(prefill.graphs), [(512, -3), (1024, -1)])
 
 
 if __name__ == "__main__":

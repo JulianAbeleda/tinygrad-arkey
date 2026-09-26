@@ -134,8 +134,14 @@ def ssd_scan(x_dt: Tensor, b: Tensor, c: Tensor, log_a: Tensor, state: Tensor, *
 
 
 def ssd_mixer(block, hidden: Tensor, cache: dict | None = None, *, chunk: int = 256,
-              precision: str = "float") -> tuple[Tensor, dict]:
-  """`NemotronHMamba2.cached(hidden, cache, keep_graph=True)` with the scan as one SSD graph."""
+              precision: str = "float", valid=None) -> tuple[Tensor, dict]:
+  """`NemotronHMamba2.cached(hidden, cache, keep_graph=True)` with the scan as one SSD graph.
+
+  `valid` (an int or bound variable, with a `cache`): only the first `valid` positions are the sequence, the rest
+  padding. Padded positions get x*dt = 0 and a decay of exp(0) = 1, so the returned state is the state after
+  `valid` tokens and the convolution tail ends at `valid`; outputs at positions before `valid` never read later
+  positions (causal), so they do not depend on the padding either.
+  """
   from tinygrad.llm.nemotron_h import NemotronHMamba2
   cfg = block.config
   batch, length, _ = hidden.shape
@@ -145,7 +151,12 @@ def ssd_mixer(block, hidden: Tensor, cache: dict | None = None, *, chunk: int = 
   previous_conv = None if cache is None else cache["conv"]
   combined = raw_xbc if previous_conv is None else previous_conv.cat(raw_xbc, dim=1)
   xbc = NemotronHMamba2._causal_conv(block, combined)[:, -length:]
-  conv_tail = combined[:, -(cfg.conv_kernel - 1):]
+  if valid is None:
+    conv_tail = combined[:, -(cfg.conv_kernel - 1):]
+  elif previous_conv is None:
+    raise ValueError("a padded piece needs the carried convolution tail")
+  else:  # combined row k-1+i is position i: the tail is rows [valid, valid + k - 1)
+    conv_tail = combined[:, valid:valid + cfg.conv_kernel - 1]
   x, b, c = xbc.split((cfg.ssm_inner, cfg.ssm_groups * cfg.ssm_state, cfg.ssm_groups * cfg.ssm_state), dim=-1)
   width = cfg.ssm_inner // cfg.ssm_heads
   x = x.reshape(batch, length, cfg.ssm_heads, width).float()
@@ -154,6 +165,9 @@ def ssd_mixer(block, hidden: Tensor, cache: dict | None = None, *, chunk: int = 
   dt = (dt + block.ssm_dt["bias"]).softplus().float()
   log_a = dt * block.ssm_a.reshape(cfg.ssm_heads).float()
   x_dt = x * dt.unsqueeze(-1)
+  if valid is not None:
+    keep = Tensor.arange(length).reshape(1, length, 1) < valid
+    x_dt, log_a = keep.unsqueeze(-1).where(x_dt, 0.0), keep.where(log_a, 0.0)
   state = cache["state"] if cache is not None else Tensor.zeros(batch, cfg.ssm_heads, width, cfg.ssm_state,
                                                                   device=hidden.device)
   y, state = ssd_scan(x_dt, b, c, log_a, state, chunk=chunk, precision=precision)
@@ -166,9 +180,9 @@ def ssd_mixer(block, hidden: Tensor, cache: dict | None = None, *, chunk: int = 
 
 
 def ssd_cached(block, hidden: Tensor, cache: dict | None = None, *, chunk: int = 256,
-               precision: str = "float") -> tuple[Tensor, dict]:
+               precision: str = "float", valid=None) -> tuple[Tensor, dict]:
   """A Mamba block's `cached(hidden, cache, keep_graph=True)`: pre-norm, SSD mixer, residual."""
-  mixed, next_cache = ssd_mixer(block, block.attn_norm(hidden), cache, chunk=chunk, precision=precision)
+  mixed, next_cache = ssd_mixer(block, block.attn_norm(hidden), cache, chunk=chunk, precision=precision, valid=valid)
   return hidden + mixed.cast(hidden.dtype), next_cache
 
 
