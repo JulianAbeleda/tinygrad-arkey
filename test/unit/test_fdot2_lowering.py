@@ -37,6 +37,13 @@ def test_fdot2_pair_and_accumulator_contract():
     assert lowered.arg == "__builtin_amdgcn_fdot2({1}, {2}, {0}, false)"
 
 
+def test_fdot2_accepts_widened_product_terms():
+  a, b = _half2("a"), _half2("b")
+  term = lambda i: _lane(a, i).cast(dtypes.float) * _lane(b, i).cast(dtypes.float)
+  assert _fdot_nodes(graph_rewrite(term(0) + term(1), pm_fdot2))
+  assert not _fdot_nodes(graph_rewrite(term(0) + term(0), pm_fdot2))
+
+
 def test_fdot2_rejects_mismatched_sources_and_lanes():
   a, b, c = _half2("a"), _half2("b"), _half2("c")
   assert not _fdot_nodes(graph_rewrite(_term(a, b, 0) + _term(a, c, 1), pm_fdot2))

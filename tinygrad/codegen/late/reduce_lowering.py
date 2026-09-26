@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass
-from tinygrad.dtype import dtypes, DType, AddrSpace
+from tinygrad.dtype import dtypes, DType, AddrSpace, can_lossless_cast
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, identity_element, AxisType, CompositeReduceTag
 from tinygrad.helpers import flatten, prod
 
@@ -385,6 +385,22 @@ def composite_reduce_state_adapter(values:tuple[UOp, ...], shapes:tuple[tuple|No
   if len(values) != len(shapes):
     raise ValueError(f"composite state arity mismatch: {len(values)} != {len(shapes)}")
   return UOp(Ops.COMPOSITE_ACCUMULATOR, values[0].dtype if values else dtypes.void, values, shapes)
+
+def widen_reduce_products(red:UOp, cast:UOp, mul:UOp) -> UOp|None:
+  """Invariant: ADD-REDUCE(CAST(a*b)) with a lossless widening CAST means the products are formed in the accumulation
+  dtype. `x.dot(w, dtype=float)` (and default half/bf16 dots, whose sum accumulates in fp32) builds this shape; the
+  tensor-core lowering already computes it as narrow x narrow -> wide exactly, so the scalar lowering must agree
+  instead of rounding every product to the operand dtype before the wide sum. Runs after apply_opts, so shapes the
+  optimizer turned into WMMA (or any matcher keyed on CAST(MUL)) never see it."""
+  if red.arg[0] is not Ops.ADD or cast.dtype.count != mul.dtype.count: return None
+  wide, narrow = cast.dtype.scalar(), mul.dtype.scalar()
+  if wide == narrow or not can_lossless_cast(narrow, wide) or any(x.dtype.scalar() != narrow for x in mul.src): return None
+  return red.replace(src=(UOp(Ops.MUL, cast.dtype, tuple(x.cast(wide.vec(x.dtype.count)) for x in mul.src)),)+red.src[1:])
+
+pm_widen_reduce_products = PatternMatcher([
+  (UPat(Ops.REDUCE, src=(UPat(Ops.CAST, src=(UPat(Ops.MUL, name="mul"),), name="cast"),), allow_any_len=True, name="red"),
+   widen_reduce_products),
+])
 
 pm_reduce = PatternMatcher([
   (UPat(Ops.COMPOSITE_ACCUMULATOR, name="state"), lower_composite_accumulator),

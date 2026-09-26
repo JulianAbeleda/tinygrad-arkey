@@ -30,6 +30,12 @@ def _indexed_half_lane(u: UOp) -> tuple[UOp, int] | None:
   return u.src[0], idx
 
 def _cast_half_mul_term(u: UOp) -> tuple[UOp, UOp, int] | None:
+  # widened-product form: (float)a.x * (float)b.x, which is what pm_widen_reduce_products makes of the rounded form
+  # below (fdot2 forms exact products, so both spellings lower to the same builtin).
+  if u.op is Ops.MUL and u.dtype.scalar() is dtypes.float and len(u.src) == 2 and \
+     all(x.op is Ops.CAST and len(x.src) == 1 and x.src[0].dtype.scalar() is dtypes.half for x in u.src):
+    a, b = _indexed_half_lane(u.src[0].src[0]), _indexed_half_lane(u.src[1].src[0])
+    return None if a is None or b is None or a[1] != b[1] else (a[0], b[0], a[1])
   if u.op is not Ops.CAST or u.dtype.scalar() is not dtypes.float or len(u.src) != 1: return None
   mul = u.src[0]
   if mul.op is not Ops.MUL or mul.dtype.scalar() is not dtypes.half or len(mul.src) != 2: return None

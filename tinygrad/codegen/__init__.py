@@ -20,7 +20,7 @@ from tinygrad.uop.decompositions import get_late_rewrite_patterns, get_transcend
 from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_for_reduce
 from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, devectorize_store, \
   correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_output_projection_store, pm_reduce_duplicate_output_store
-from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
+from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext, pm_widen_reduce_products
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
 from tinygrad.codegen.late.recurrence import unroll_recurrence
@@ -195,7 +195,7 @@ def _full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
       sink = graph_rewrite(sink, native_state_pm, name="lower optimizer native state lanes")
 
   # ** expander (expand_rewrite) **
-  sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")
+  sink = graph_rewrite(sink, sym+pm_move_where_on_load+pm_widen_reduce_products, name="postopt symbolic")
 
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
