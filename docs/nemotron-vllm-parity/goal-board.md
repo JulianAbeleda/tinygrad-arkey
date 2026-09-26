@@ -17,6 +17,9 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 5. **Rotating-window RL** (capture at any block; bit-exact on the real 4B) as the next experiment.
 6. **External write-up**: bit-exact RL on a hybrid Mamba model + mismatch localization (vLLM RFC #55524, NeMo-RL).
 
+## Priority (2026-09-26 ~10:30, Julian)
+PAUSED: kernel search, sampler prefix sharing. FIRST: update BoltBeam with the new techniques (strategy space derived from GPU facts: smem, cp.async/ldmatrix, SM count -> split-K, swizzle; record NV routes + evidence in BoltBeam). Then resume goals 3-4.
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
