@@ -9,6 +9,7 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
   (shared, correctness). Both cap host RAM at 24 GB. Never run on the GPU outside it.
 - Results go into the repo (commit + push to `exp`), never only into /tmp.
 - Method: reverse engineer -> test -> solve. Every number is measured.
+- Before any long run: a short real-model run proves the outputs (save -> reload -> exact check); trained weights get a raw backup before any formatted export. Never edit code a running job imports.
 
 ## Priority (2026-09-25 ~14:45)
 1. I1 real-model smoke owns the GPU. 2. W8 lands if passing, then parks. 3. fp16 diagnosis resumes after the smoke. R5 gate stays exactly as predeclared.
