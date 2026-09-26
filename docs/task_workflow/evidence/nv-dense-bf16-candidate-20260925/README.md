@@ -82,3 +82,13 @@ so a balanced Stream-K schedule is bounded by ~6-15% on 2 shapes (~0.1 ms/step),
 Ragged K (K=3136 has K32 splits 1/2/7/14 only; padded to 3200 gives 4/5/10 at +2% bytes, a lower bound on ragged):
 attn_kv 64/128/256 rows 11.8/16.2/24.8 -> 10.9/13.9/22.8, attn_q 64 33.5 -> 32.3, ffn_up 64 65.9 -> 64.8, ssm_in 64,
 attn_q 128 no gain: ~0.02 ms/step at B=32 (scan estimate 0.45). Neither lowering is built; both are recorded as bounded.
+
+## Round 5: principled grid at 64/128 rows (2026-09-26)
+`search-r5-principled-grid.jsonl`: exhaustive over tile M {64,128} x N {64,128} x K {32,64}, 4/8-warp grids, 3-4 ring
+stages, every admissible split with 64..1360 CTAs (1852 configs, 14 shapes), rotated weights, caches cleared per
+candidate. Motivation (ncu, BoltBeam ncu-collect): at equal DRAM bytes the gap to cuBLAS is wave quantization (a
+grid just over one wave at 1 CTA/SM), which the cost model does not price and the climb did not reach. 11 routes
+improved >= 2% (vs the same-session re-measure of the promoted route, us): attn_kv 64 11.6 -> 9.3, attn_o 64/128
+34.0/53.3 -> 30.5/45.6, attn_q 64/128 33.5/41.7 -> 30.0/40.6, ffn_down 64/128 69.8/107.7 -> 67.2/100.9, ffn_up 128
+109.2 -> 105.3, ssm_in 128 127.2 -> 116.0, ssm_out 64/128 45.8/70.7 -> 40.3/60.8. `gate-v6-grid-correctness.json`:
+16/16 finite, <= oracle bound, unsplit rows bit-exact.
