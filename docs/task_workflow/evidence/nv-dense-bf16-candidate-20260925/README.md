@@ -71,3 +71,14 @@ only at attn_kv 64/128, ssm_in 128, attn_o/ssm_out 2048, attn_q 64 -- at the edg
 "barrier" stall bucket is the wait for the tile's copies to land (issued by the same warps), not the barrier count:
 halving barriers does not shorten it. Kept as a lowering/search axis (gate `async-copy-barrier-group-gate.json`,
 18/18 bit-exact incl. g = 2, 3, bf16/fp16); nothing promoted.
+
+## Move 5 prototypes 2-3: payoff probes before building (2026-09-26)
+Stream-K (grid scaled over N at the promoted tile, same per-CTA work; rotated weights; us):
+ssm_in 128 rows 128x128x32: 137 CTAs 127.4, 170 CTAs 149.1 (per tile 0.93 -> 0.88: filling the 33 idle SMs is worth
+<= 6%); 64x128x64: 274 CTAs 135.3, 340 CTAs 179.6 (no gain); ffn_up 128 rows 64x64x64: 392 CTAs 111.2, 510 CTAs 122.7
+(per tile 0.567 -> 0.481, a wave-tail worth <= 15%); ffn_down 128 rows split 4: 400/512/680 CTAs 110/139/153 (flat);
+ssm_in 2048 rows: 2192/2448/2720 CTAs 1206/1375/1487 (flat). The memory-bound shapes do not speed up with more SMs,
+so a balanced Stream-K schedule is bounded by ~6-15% on 2 shapes (~0.1 ms/step), not the scan's 0.3-0.55.
+Ragged K (K=3136 has K32 splits 1/2/7/14 only; padded to 3200 gives 4/5/10 at +2% bytes, a lower bound on ragged):
+attn_kv 64/128/256 rows 11.8/16.2/24.8 -> 10.9/13.9/22.8, attn_q 64 33.5 -> 32.3, ffn_up 64 65.9 -> 64.8, ssm_in 64,
+attn_q 128 no gain: ~0.02 ms/step at B=32 (scan estimate 0.45). Neither lowering is built; both are recorded as bounded.
