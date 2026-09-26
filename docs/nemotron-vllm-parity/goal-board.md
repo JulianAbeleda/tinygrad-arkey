@@ -28,6 +28,8 @@ Moves (move 1 DONE 23ea7e291: prefill pieces one ring launch per projection, 10k
 
 Non-GEMM audit (33efc994b, nongemm-audit.md): Mamba prefill +339 ms is precision="float" SSD (fp32 CUDA-core reductions 5-7 TF); bf16 SSD core 4.9x (-250 ms/10k, y 1.5e-3 rel) -> PRECISION DECISION (Julian); vLLM fuses into 5 bf16-mma kernels (~185 vs 1770 us/1024 tok). Decode non-GEMM top: sampler full log-softmax (-0.32/-1.36 ms B=32/128, tokens identical), attention _exact_dot on CUDA cores (TC swap -0.37..-3.1 ms but unexplained 1.3e-3 diff: investigate), Mamba decode helpers (~19 kernels/layer, est -1.2/-4.3), ring flush 21% DRAM, residual+norm 3 kernels vs 1. BoltBeam importer fix committed locally 2db8922 (not pushed).
 
+Prefix sharing LANDED 73bf13a28: real RL shape (10.4k envelope) B=32 1399 tok/s (1.82x), B=64 1453 tok/s, replay bit-exact; B=128 real shape OOMs by ~0.4 GB (lever: bf16 Mamba state, -5.2 GB = precision decision #4).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
