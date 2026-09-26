@@ -1,0 +1,53 @@
+--- a/boltbeam/profiler/ncu_counters.py	2026-09-26 10:57:35.978066216 -0400
++++ b/boltbeam/profiler/ncu_counters.py	2026-09-26 12:58:34.435878260 -0400
+@@ -137,11 +137,13 @@
+ 
+ 
+ def mark_gemm(group:list[dict[str, Any]]) -> None:
+-  """In one shape's launches, the longest kernel that uses the tensor pipe (not a split-K reduction) is the GEMM."""
++  """In one shape's launches, the longest kernel that uses the tensor pipe (not a split-K reduction) is the GEMM.
++  Every launch of that same kernel is GEMM too: a row-chunked op (ours prefill runs a 1024-token piece as 4 launches
++  of the 512-row kernel) is one GEMM made of several launches, not one GEMM plus aux."""
+   if not group: return
+   cands = [r for r in group if "splitKreduce" not in (r["kernel"] or "") and (r["tensor_pipe_util_pct"] or 0) > 0.5]
+   gemm = max(cands or group, key=lambda r: r["duration_us"])
+-  for r in group: r["aux"] = r is not gemm
++  for r in group: r["aux"] = r["kernel"] != gemm["kernel"]
+ 
+ 
+ def _shape_lines(stdout:str) -> list[tuple[str, int, int]]:
+--- a/boltbeam/profiler/ncu_audit.py	2026-09-26 10:57:35.978066216 -0400
++++ b/boltbeam/profiler/ncu_audit.py	2026-09-26 12:58:34.435878260 -0400
+@@ -91,10 +91,11 @@
+ 
+ 
+ def _side(rows:list[dict[str, Any]]) -> dict[str, Any]:
+-  gemm = next(r for r in rows if not r.get("aux"))
+-  total = sum(r["duration_us"] for r in rows)
+-  return {"gemm": gemm, "total_us": total, "gemm_us": gemm["duration_us"], "aux_us": total - gemm["duration_us"],
+-          "kernels": len(rows)}
++  gemms = [r for r in rows if not r.get("aux")]
++  gemm = max(gemms, key=lambda r: r["duration_us"])   # the representative launch for counters/grid
++  total, gemm_us = sum(r["duration_us"] for r in rows), sum(r["duration_us"] for r in gemms)
++  return {"gemm": gemm, "total_us": total, "gemm_us": gemm_us, "aux_us": total - gemm_us,
++          "kernels": len(rows), "gemm_launches": len(gemms)}
+ 
+ 
+ def audit(counters:Iterable[Mapping[str, Any]], dims:Mapping[str, tuple[int, int]], *, machine=None, lowering=None,
+--- /dev/null	2026-09-04 12:56:55.346425518 -0400
++++ b/tests/test_ncu_chunked_gemm.py	2026-09-26 12:58:53.919981552 -0400
+@@ -0,0 +1,14 @@
++"""A row-chunked GEMM (4 launches of one kernel per 1024-token piece) is GEMM on every launch, not 1 GEMM + 3 aux."""
++from boltbeam.profiler.ncu_counters import mark_gemm
++from boltbeam.profiler.ncu_audit import _side
++
++
++def _row(kernel, us, tp): return {"kernel": kernel, "duration_us": us, "tensor_pipe_util_pct": tp}
++
++
++def test_every_chunk_launch_is_gemm():
++  group = [_row("split", 6.0, 0.0)] + [_row("gemm512", 460.0 + i, 57.0) for i in range(4)] + [_row("concat", 150.0, 0.0)]
++  mark_gemm(group)
++  assert [r["aux"] for r in group] == [True, False, False, False, False, True]
++  side = _side(group)
++  assert side["gemm_us"] == sum(460.0 + i for i in range(4)) and side["aux_us"] == 156.0 and side["gemm_launches"] == 4
