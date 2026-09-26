@@ -178,6 +178,31 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
       for tokens, logprobs in rollouts:
         model_tests.TestNemotronHRolloutSampler._check(self, model, prompt, tokens, logprobs)
 
+  def test_bucket_step_graphs_share_one_arena(self):
+    from tinygrad.uop.ops import Ops
+    from tinygrad.dtype import dtypes
+    model = tiny_model()
+    sampler = NemotronHRolloutSampler(model, batch=3, capacity=32, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                      window=4, min_bucket=4)
+    sampler.warm()
+    # buckets 4, 8, 16 in both forms, plus the whole ring: 7 graphs, all planned into the one pool
+    self.assertEqual(len(sampler.graphs), 7)
+    self.assertTrue(sampler.arenas)
+    def arenas():  # every graph's planned intermediates live in these int8 buffers
+      return {id(u) for graph in sampler.graphs.values() for u in graph.captured.linear.toposort()
+              if u.op is Ops.BUFFER and u.dtype == dtypes.int8}
+    pool = {id(arena) for arena in sampler.arenas.values()}
+    # every graph plans into the pool alone: none keeps an arena of its own or an outgrown one
+    self.assertEqual(arenas(), pool)
+    # replay graphs join the same pool, and step graphs are recaptured if that had to grow it
+    capture = NemotronHRolloutSampler(model, batch=3, capacity=32, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                      window=4, min_bucket=4, capture=1)
+    stats = {}
+    results = capture.generate([([3, 17, 5], 2, [9, 12]), ([7, 1], 2, [5, 3])], max_new=12, stats=stats)
+    capture.replay([(p, [(t, h) for t, _, h in r]) for p, r in zip(([3, 17, 5], [7, 1]), results)], stats=stats)
+    sampler = capture
+    self.assertEqual(arenas(), {id(arena) for arena in capture.arenas.values()})
+
   def test_replay_through_attention_needs_ring_rows(self):
     model = tiny_model()  # block 2 is attention
     sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from contextlib import contextmanager
 from contextvars import ContextVar
 from tinygrad.device import Device
 from tinygrad.helpers import NO_MEMORY_PLANNER, DEBUG, round_up
@@ -19,6 +20,19 @@ def _can_plan(b:UOp, held_bufs:set[UOp]) -> bool:
 
 LaneKey = tuple[str, int, int, int]
 _memory_manifest_collectors:ContextVar[tuple] = ContextVar("memory_manifest_collectors", default=())
+_shared_arenas:ContextVar[dict|None] = ContextVar("shared_arenas", default=None)
+
+@contextmanager
+def shared_arenas(pool:dict):
+  """Plan every JIT captured inside into the arenas of `pool` (lane key -> arena buffer) instead of its own.
+
+  For graphs that never overlap: each arena holds only intermediates that die within one graph run, so graphs run
+  one after another can share it. Several decode graphs that differ only in a static size (one per length bucket)
+  then cost one arena, not one each. An arena grows (a new, larger buffer) when a capture needs more; graphs
+  captured earlier keep the smaller one, so capture the largest first."""
+  token = _shared_arenas.set(pool)
+  try: yield pool
+  finally: _shared_arenas.reset(token)
 
 def _fanout_lanes(linear:UOp, first:dict[UOp, int], last:dict[UOp, int]) -> dict[UOp, int]:
   """Keep sibling fan-out outputs (q/k/v and flash internals in decode) in distinct
@@ -124,7 +138,13 @@ def memory_plan_rewrite(linear:UOp, held_bufs:set[UOp]|None=None) -> UOp:
     else: peaks[key(buf)][1].free(offsets[buf])
     peaks[key(buf)] = (max(peaks[key(buf)][0], offsets[buf] + buf.arg*buf.dtype.itemsize), peaks[key(buf)][1])
   arena_sizes = {k:round_up(peak, block_size) for k,(peak,_) in peaks.items()}
-  arenas = {} if NO_MEMORY_PLANNER else {k:UOp.new_buffer(k[0], sz, dtypes.int8) for k,sz in arena_sizes.items()}
+  arenas:dict[LaneKey, UOp] = {}
+  pool = _shared_arenas.get()
+  for k, sz in ({} if NO_MEMORY_PLANNER else arena_sizes).items():
+    if pool is None: arenas[k] = UOp.new_buffer(k[0], sz, dtypes.int8)
+    else:
+      if (have:=pool.get(k)) is None or have.arg < sz: pool[k] = UOp.new_buffer(k[0], sz, dtypes.int8)
+      arenas[k] = pool[k]
   # Collectors receive the placement evidence (arena, offset, aligned size,
   # lifetime) so observers can attribute planner-added WAR/WAW edges to exact
   # physical ranges. The call is a no-op when no collector is installed.

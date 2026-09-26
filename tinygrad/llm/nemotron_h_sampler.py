@@ -25,6 +25,8 @@ from tinygrad import Tensor, TinyJit, UOp, dtypes
 from tinygrad.llm.nemotron_h_attention import (decode_attention, load_prefix_from_prefill, rollout_kv_for_model,
                                                shared_kv_for_model, suffix_bucket)
 from tinygrad.llm.nemotron_h_decode import mamba_replay_buffers, mamba_replay_buffers_step, mamba_replay_flush
+from tinygrad.schedule.memory import shared_arenas
+from tinygrad.uop.ops import Ops
 
 
 def _fresh(value: Tensor) -> Tensor:
@@ -271,6 +273,9 @@ class NemotronHRolloutSampler:
     self.prompt_length = UOp.variable("prompt_length", 1, self.prefix_capacity)
     self.lows: dict[int, UOp] = {}  # bucket -> the first ring row it reads when it does not wrap
     self.graphs: dict[tuple[bool, int, bool], TinyJit] = {}  # (replay, bucket, wraps)
+    self.arenas: dict = {}  # the step graphs' shared intermediate arenas
+    self.rate = _fresh(Tensor([1.0]))  # a temperature for capture steps
+    self.warmed = False
 
   def bucket(self, longest: int) -> int:
     """Ring rows attention reads for lanes of at most `longest` generated keys."""
@@ -290,7 +295,47 @@ class NemotronHRolloutSampler:
       if bucket not in self.lows:
         self.lows[bucket] = UOp.variable(f"ring_low_{bucket}", 0, self.capacity - bucket)
       low = (self.lows[bucket].bind(row - bucket + 1),)
-    self.graphs[key](self.row.bind(row), self.slot.bind(step % self.ring), self.column.bind(column), temperature, *low)
+    with shared_arenas(self.arenas):
+      self.graphs[key](self.row.bind(row), self.slot.bind(step % self.ring), self.column.bind(column), temperature,
+                       *low)
+
+  def warm(self) -> None:
+    """Capture every sampling step graph now (one per bucket and wrap form), so no capture lands inside a run."""
+    sizes, size = [self.capacity], self.min_bucket
+    while 2 * size <= self.capacity:
+      sizes.append(size)
+      size *= 2
+    self._capture([(False, size, wraps) for size in set(sizes) for wraps in ((False, True) if size < self.capacity
+                                                                              else (False,))])
+    self.warmed = True
+
+  def _capture(self, keys: list[tuple[bool, int, bool]]) -> None:
+    """Capture the step (or replay) graphs `keys` so every captured graph plans its intermediates into the shared
+    arenas (`shared_arenas`; the graphs never run at the same time), sized for the most any of them needs.
+
+    A capture that needs more than an arena holds replaces it with a larger one, and graphs captured before keep
+    the old: so each new graph is first captured and dropped (its arenas freed unless the pool kept them), and if
+    that grew the pool, every graph is captured again against the final sizes. The capture steps run on whatever
+    the lanes hold; `generate` and `replay` reload every lane they start."""
+    keys = [key for key in keys if key not in self.graphs]
+    if not keys:
+      return
+    def capture(key):
+      replay, size, wraps = key
+      step = 0 if wraps or size == self.capacity else size  # a row that selects the key's wrap form
+      for _ in range(2):  # the second call captures
+        self._run(replay, size, step, 0, self.rate)
+    before = {key: arena.arg for key, arena in self.arenas.items()}
+    for key in sorted(keys, key=lambda k: -k[1]):
+      capture(key)
+      del self.graphs[key]
+    if {key: arena.arg for key, arena in self.arenas.items()} != before:
+      keys, self.graphs = keys + list(self.graphs), {}
+    for key in sorted(keys, key=lambda k: -k[1]):
+      capture(key)
+    # a lane planned only in a dropped capture keeps no graph's intermediates: release it
+    used = {id(u) for graph in self.graphs.values() for u in graph.captured.linear.toposort() if u.op is Ops.BUFFER}
+    self.arenas = {key: arena for key, arena in self.arenas.items() if id(arena) in used}
 
   # *** device graphs ***
 
@@ -466,6 +511,11 @@ class NemotronHRolloutSampler:
           raise ValueError("each rollout needs one captured row per token, within the capacity")
         pending.append((stats["starts"][r][i] if attends else 0, r, i, prompt, tokens, hidden))
     pending.sort(key=lambda item: item[0])
+    if attends:
+      self._capture([(True, size, wraps) for size in set(stats["buckets"]) for wraps in
+                     ((False, True) if size < self.capacity else (False,))])
+    else:
+      self._capture([(True, self.capacity, False)])
     out: list[list] = [[None] * len(rollouts) for _, rollouts in requests]
     rate = Tensor([temperature]).realize()
     while pending:
@@ -528,6 +578,8 @@ class NemotronHRolloutSampler:
     import time
     if max_new > self.capacity:
       raise ValueError("max_new exceeds the generated-token ring")
+    if not self.warmed:
+      self.warm()
     stop = stop or set()
     results: list[list] = [[] for _ in requests]
     starts: list[list[int]] = [[] for _ in requests]
