@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from extra.llm_research.runtime_specs import (
   GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, METAL_M4_10C_TWO_BUFFER_STAGE1_CAPABILITY,
-  NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+  NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, NV_SM120_ASYNC_RING_CAPABILITY,
 )
 from extra.llm_research.target_schedule import derive_target_schedule
 from tinygrad.llm.prefill_candidate_runtime import (
@@ -85,16 +85,24 @@ def mint_dense_bf16(selection: list[dict] | None = None) -> dict:
   if selection is None: selection = json.loads(_DENSE_BF16_SELECTION.read_text())["rows"]
   nv = json.loads(_NV_PROMOTED_SET.read_text())
   base = nv["template"]
+  # A selection row without "pipeline" is the promoted register-staged two-buffer schedule; with it, a cp.async ring
+  # [stages, async_copy, matrix_fragments, xor_swizzle] (dense_bf16_geometry_search.py) from the async-ring row.
   groups: dict[tuple, list] = {}
   for row in selection:
     tm, tn, tk, wm, wn = row["geometry"]
-    groups.setdefault((tm, tn, tk, wm, wn), []).append(row)
+    groups.setdefault((tm, tn, tk, wm, wn, tuple(row.get("pipeline", ()))), []).append(row)
   sets, routes = [], []
-  for (tm, tn, tk, wm, wn), rows in sorted(groups.items()):
+  for (tm, tn, tk, wm, wn, pipe), rows in sorted(groups.items()):
     geometry = {"tile": {"m": tm, "n": tn, "k": tk}, "waves": {"m": wm, "n": wn},
                 "buffer_count": base["schedule"]["pipeline"]["buffer_count"], "stage_count": base["schedule"]["pipeline"]["stage_count"]}
+    capability = NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY
+    if pipe:
+      stages, async_copy, matrix, swizzle = pipe
+      geometry.update(buffer_count=stages, async_copy=async_copy, fragment_load="matrix" if matrix else "scalar",
+                      swizzle="xor_b128" if swizzle else "none")
+      capability = NV_SM120_ASYNC_RING_CAPABILITY
     first = rows[0]
-    derived = derive_target_schedule(NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, geometry,
+    derived = derive_target_schedule(capability, geometry,
       {"m": first["m"], "n": first["n"], "k": first["k"] // first["split_k"], "dtypes": dict(base["dtypes"])})
     template = {"schema_version": base["schema_version"], "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"},
                 "layout": dict(base["layout"]), "schedule": derived["schedule"], "static_constraints": derived["static_constraints"]}

@@ -36,6 +36,7 @@ from tinygrad.dtype import dtypes
 from extra.llm_research.runtime_specs import FullKernelCapability
 
 _GEOMETRY_KEYS = {"tile", "waves", "buffer_count", "stage_count"}
+_OPTIONAL_GEOMETRY_KEYS = ("async_copy", "fragment_load", "swizzle")
 _TILE_KEYS = {"m", "n", "k"}
 _WAVES_KEYS = {"m", "n"}
 _SHAPE_KEYS = {"m", "n", "k", "dtypes"}
@@ -73,6 +74,13 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
     raise ValueError(
       f"derive_target_schedule supports the LDS buffer family only, got transport {row.transport!r}; "
       "register/direct-global schedules are their own emitter authorities")
+  # Optional pipeline keys (async_copy, fragment_load, swizzle) are emitted only when they differ from the defaults,
+  # so a schedule derived without them is byte-identical to one derived before they existed.
+  options = {key: geometry[key] for key in _OPTIONAL_GEOMETRY_KEYS if key in geometry}
+  geometry = {key: value for key, value in geometry.items() if key not in _OPTIONAL_GEOMETRY_KEYS}
+  if options.get("async_copy", False) not in (True, False) or options.get("fragment_load", "scalar") not in ("scalar", "matrix") or \
+     options.get("swizzle", "none") not in ("none", "xor_b128"):
+    raise ValueError(f"geometry pipeline options are invalid: {options}")
   _strict_keys(geometry, _GEOMETRY_KEYS, "geometry")
   _strict_keys(geometry["tile"], _TILE_KEYS, "geometry.tile")
   _strict_keys(geometry["waves"], _WAVES_KEYS, "geometry.waves")
@@ -93,7 +101,9 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
   tile, waves = geometry["tile"], geometry["waves"]
   tm, tn, tk = tile["m"], tile["n"], tile["k"]
   wm, wn = waves["m"], waves["n"]
-  stride = tk * itemsize + row.lds_padding
+  swizzled = options.get("swizzle", "none") == "xor_b128"
+  padding = 0 if swizzled else row.lds_padding   # a swizzled window is unpadded by construction
+  stride = tk * itemsize + padding
   a_end, b_end = tm * stride, (tm + tn) * stride
 
   epoch_graph = [{k: (list(v) if isinstance(v, tuple) else v) for k, v in row.epoch_graph}]
@@ -110,7 +120,7 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
     "lds": {
       "windows": {"a": [0, a_end], "b": [a_end, b_end]},
       "strides": {"a": stride, "b": stride},
-      "padding": row.lds_padding,
+      "padding": padding,
       "banks": row.lds_banks,
       "store_vector_width": vector_width,
       "load_vector_width": vector_width,
@@ -125,6 +135,9 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
     "epilogue": {"lane_mapping": row.epilogue_lane_mapping, "vector_width": row.epilogue_vector_width},
     "numerical_mode": row.numerical_mode,
   }
+  if swizzled: schedule["lds"]["swizzle"] = "xor_b128"
+  if options.get("async_copy", False): schedule["pipeline"]["async_copy"] = True
+  if options.get("fragment_load", "scalar") == "matrix": schedule["pipeline"]["fragment_load"] = "matrix"
   static_constraints = {"max_lds_bytes": row.max_lds_bytes,
                         "max_vgpr_per_thread": row.max_vgpr_per_thread,
                         "allow_spill": row.allow_spill}

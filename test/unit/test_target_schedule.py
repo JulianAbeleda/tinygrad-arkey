@@ -162,3 +162,35 @@ def test_contract_table_pins_are_the_rows_the_derive_reads():
       for part in (parts[1:] if root == "static_constraints" else parts):
         value = value[part]
       assert value == contract.value, f"{backend}:{arch} derived {path} != declared {contract.value!r}"
+
+
+def test_async_ring_matrix_options_are_emitted_only_when_set():
+  from extra.llm_research.runtime_specs import NV_SM120_ASYNC_RING_CAPABILITY
+  from tinygrad.renderer.cuda import CUDARenderer
+  plain = derive_target_schedule(NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY, _seed_geometry(), _seed_shape())
+  defaults = derive_target_schedule(NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+    dict(_seed_geometry(), async_copy=False, fragment_load="scalar", swizzle="none"), _seed_shape())
+  assert _canonical_json(plain) == _canonical_json(defaults)
+  ring = derive_target_schedule(NV_SM120_ASYNC_RING_CAPABILITY,
+    dict(_seed_geometry(), buffer_count=4, async_copy=True, fragment_load="matrix", swizzle="xor_b128"), _seed_shape())
+  schedule = ring["schedule"]
+  assert schedule["pipeline"]["async_copy"] is True and schedule["pipeline"]["fragment_load"] == "matrix"
+  assert schedule["lds"]["swizzle"] == "xor_b128" and schedule["lds"]["padding"] == 0
+  assert schedule["lds"]["strides"] == {"a": 64, "b": 64} and schedule["lds"]["windows"] == {"a": [0, 8192], "b": [8192, 16384]}
+  assert ring["static_constraints"]["max_lds_bytes"] == CUDARenderer.max_runtime_local_bytes
+  with pytest.raises(ValueError, match="pipeline options"):
+    derive_target_schedule(NV_SM120_ASYNC_RING_CAPABILITY, dict(_seed_geometry(), fragment_load="ldsm"), _seed_shape())
+
+
+def test_dense_mint_decodes_a_ring_selection_row():
+  from extra.llm_research.mint_typed_candidate_template import mint_dense_bf16
+  from tinygrad.llm.dense_candidate_gemm import load_routes
+  rows = [{"role": "ssm_in", "m": 64, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 2], "split_k": 1,
+           "pipeline": [4, True, True, True]},
+          {"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 4, 2], "split_k": 2}]
+  raw = mint_dense_bf16(rows)
+  routes = load_routes(raw, "NV", "sm_120", 32)
+  ring, sync = routes[("ssm_in", 64, 17536, 3136)].admission, routes[("ssm_in", 128, 17536, 3136)].admission
+  assert ring.pipeline_plan.async_copy and ring.pipeline_plan.matrix_fragments and ring.pipeline_plan.buffer_count == 4
+  assert all(w.xor_swizzle and w.stride_bytes == 128 for w in ring.geometry.lds_windows) and ring.active_lds_bytes == 4 * 192 * 128
+  assert not sync.pipeline_plan.async_copy and not sync.pipeline_plan.matrix_fragments and sync.pipeline_plan.buffer_count == 2

@@ -120,6 +120,18 @@ NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
   lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
+# cp.async ring with native matrix fragments: the same fragment/lane vocabulary, LDS bounded by the launch-sized
+# (dynamic shared memory) maximum rather than the 48 KB static limit -- CUDARenderer.max_runtime_local_bytes.
+def _cuda_runtime_local_max() -> int:
+  from tinygrad.renderer.cuda import CUDARenderer
+  return CUDARenderer.max_runtime_local_bytes
+NV_SM120_ASYNC_RING_CAPABILITY = FullKernelCapability(
+  capability_id="nvidia.sm120.prefill.wmma_lds.async_ring_matrix.v1", backend="CUDA", arch="sm120",
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=_cuda_runtime_local_max(), vector_bytes=16, buffer_count=3,
+  stage_count=1,
+  instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
+  fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
+  lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
 # tinygrad's live NV renderer reports the target as NV:sm_120, while retained
 # CUDA compiler artifacts use CUDA:sm120.  Keep both exact spellings typed:
 # admission remains fail-closed and the hardware facts are identical.
@@ -161,6 +173,7 @@ _CAPABILITY_ROWS: dict[tuple[str, str], dict[str, "FullKernelCapability"]] = {
   ("CUDA", "sm120"): {
     "single_buffer": NV_SM120_SINGLE_BUFFER_CAPABILITY,
     "two_buffer_stage1": NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY,
+    "async_ring_matrix": NV_SM120_ASYNC_RING_CAPABILITY,
   },
   ("NV", "sm_120"): {
     "single_buffer": NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY,
