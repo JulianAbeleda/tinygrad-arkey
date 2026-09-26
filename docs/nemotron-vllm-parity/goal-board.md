@@ -40,6 +40,8 @@ Non-GEMM opt choice: hand heuristic puts LOCAL lanes on the strided row axis (un
 
 bf16 product-rounding FIXED e72668106 (pm_widen_reduce_products: widened-product reduces multiply in the accumulation dtype; TC kernels untouched; production sampler bits unchanged, fires in model.prefix only). Sibling fusion v1 approved behind SIBLING_FUSE=1 (5 fusibility invariants); PCONTIG measured per pattern, not flipped globally.
 
+Compile-cache key bug FIXED 829da80a7 (to_program keyed by AST only -> now by the warm-start opt binding); today's routes/scan unaffected (search paths cleared caches per candidate). 8f00e5e01 ldmatrix 32-bit shared addresses. Memory path: same DRAM bytes as cuBLAS, more bytes in flight, yet ours with cuBLAS's exact tile is 83 vs 54 us (ffn_down 64 rows) -> lowering quality gap (2x LDSM/HMMA: B x2 vs cuBLAS x4 pairing, extra ALU, split-K epilogue).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
