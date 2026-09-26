@@ -21,18 +21,33 @@ Step times are `NemotronHBatchSampler` (`bench/spec/ours_prof.py`). b5ef62d16 (Q
 signal, the NaN-race fix) costs +0.5 / +1.0 / +1.5 ms per step at B=8/64/128 (+7/+5/+5%).
 
 Continuously batched `NemotronHRolloutSampler` (the RLOO sampler), step + flush every 16, P=200, 3 runs each within
-0.1 ms: B=8 8.8 ms, B=32 13.3, B=64 21.6 (capacity 4096), B=128 35.2 (capacity 2048). It reads the whole
-generated-key ring every step (no length bucket), hence above the batch sampler.
+0.02 ms (caae90e1e: attention reads a length bucket of the generated-key ring):
+
+| B (capacity) | bucket 256 | bucket 1024 | whole ring |
+|---|---|---|---|
+| 8 (4096) | 8.1 ms | 8.3 | 8.8 |
+| 32 (4096) | 12.0 | 12.5 | 13.3 |
+| 64 (4096) | 18.9 | 19.8 | 21.6 |
+| 128 (2048) | 33.0 | OOM | - |
+
+Each (bucket, wrap) step graph holds its own intermediate buffers: a run that meets every bucket captures 13
+graphs, which fits at B=32 and not at B=64 when all are warmed up front (at B=128 a second graph already OOMs).
+Open: share the graphs' intermediates, or fewer buckets (`min_bucket=512`: 7 graphs).
+
+Priming a prompt into a rollout slot (caae90e1e: one padded tail piece, reset and slot copy as graphs), 6 prompts
+each after capture: 256 tokens 46 ms (was ~670), 1001 tokens 160-170 ms, 2050 tokens 340-360 ms.
+B=8 batch sampler rerun (profile the integration run lost): 7.51 / 7.62 / 7.54 ms.
 
 W8 slot refill (`scratchpad/w8/bench.py`, P=256, 4 waves of groups of 8, forced lognormal lengths median 1.2k,
 cap 4096, mean 1.44k):
 
 | B | fixed batch (runs to its longest) | refill | active lanes, prompts queued / whole run | tok/s vs B/step |
 |---|---|---|---|---|
-| 32 | 1001 tok/s (43% of lane-steps useful) | **1701 tok/s (1.70x)** | 99.1% / 80% | 0.71 |
+| 32 | 1001 tok/s (43% of lane-steps useful) | **1701 tok/s (1.70x)**; with buckets and graph priming, all graphs warm: **1876 (1.87x)** | 99.1% / 80% | 0.71; 0.78 |
 | 64 | 1094 tok/s (37%) | **1726 tok/s (1.58x)** | 99.0% / 66% | 0.58 |
 
-Losses against B/step: the final drain (no queue left; a 4-wave run is short, and at B=64 one 4096 rollout ends
+With caae90e1e, priming 16 prompts takes 0.66 s of the 99 s run (was 11 s). Without warming the 13 step graphs
+first, the run pays their capture and compile (1360 tok/s), once per process. Losses against B/step: the final drain (no queue left; a 4-wave run is short, and at B=64 one 4096 rollout ends
 alone) and prompt priming, 0.67 s per 256-token prompt (11 s of 110 s at B=32, 21 s of 211 s at B=64), which is
 far above the 10k prefill rate and is the next lever.
 
