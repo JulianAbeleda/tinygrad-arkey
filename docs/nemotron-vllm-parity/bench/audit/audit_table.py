@@ -1,7 +1,12 @@
 """Join the microbench timings and the ncu reports into the kernel-audit tables (markdown on stdout).
 usage: audit_table.py DIR   (DIR holds vllm_gemm.json ours.json vncu_raw.csv oncu_raw.csv oncu.log)
+
+Kernel-row parsing (ncu CSV -> counters) is shared with ncu_kernel_counters.py; this script only adds
+the role/shape mapping and the audit-specific roofline/lever tables.
 """
-import sys, json, csv, re, collections
+import sys, json, re, collections
+sys.path.insert(0, __file__.rsplit("/", 1)[0])
+from ncu_kernel_counters import read_ncu_csv_rows, parse_kernel_row
 D = sys.argv[1].rstrip("/") + "/"
 PEAK_TF, BW = 250e12, 1.69e12
 MS_DEC, MS_PF = [8, 16, 32, 64, 128], [512, 1024, 2048, 4096, 8192]
@@ -26,24 +31,21 @@ def o_us(role, m, mode="prod"):
   if m > 1024: return m / 1024 * oj[(role, 1024, mode)]["gpu_us"]
   return oj[(role, m, mode)]["gpu_us"]
 
+# Thin wrapper: parse via the shared module, then adapt to this file's legacy field names/units
+# (smem_kb combines static+dynamic; the tables below were written against these names).
 def ncu_rows(path):
-  r = list(csv.reader(open(path)))
-  h = r[0]
-  return [dict(zip(h, row)) for row in r[2:]]
+  return read_ncu_csv_rows(path)
 
-STALLS = re.compile(r"smsp__average_warps_issue_stalled_(\w+)_per_issue_active\.ratio")
 def summarize(k):
-  st = sorted(((float(v), STALLS.match(c).group(1)) for c, v in k.items() if STALLS.match(c) and v and
-               "selected" not in c), reverse=True)
-  tot = sum(v for v, _ in st) or 1
-  smem = float(k.get("launch__shared_mem_per_block") or 0)
-  return {"name": k["Kernel Name"], "grid": k["Grid Size"], "block": k["Block Size"],
-          "warps": int(k["launch__block_size"]) // 32, "regs": k["launch__registers_per_thread"], "smem_kb": smem,
-          "us": float(k["gpu__time_duration.sum"]) * (1e3 if float(k["gpu__time_duration.sum"]) < 1e3 else 1),
-          "occ": float(k["sm__warps_active.avg.pct_of_peak_sustained_active"]),
-          "tensor": float(k["sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed"]),
-          "dram": float(k["dram__bytes.sum.per_second"]), "sm": float(k["sm__throughput.avg.pct_of_peak_sustained_elapsed"]),
-          "stalls": ", ".join(f"{n} {v/tot*100:.0f}%" for v, n in st[:3])}
+  row = parse_kernel_row(k, side="tinygrad")  # side is unused by this file; role/shape are assigned below
+  # Legacy smem_kb is the ncu-computed per-block total (static + driver-reserved), not static+dynamic;
+  # read it straight off the raw row to keep this file's existing table numbers unchanged.
+  smem_kb = float(k.get("launch__shared_mem_per_block") or 0)
+  return {"name": row["kernel"], "grid": row["grid"], "block": row["block"],
+          "warps": int(k["launch__block_size"]) // 32, "regs": row["registers_per_thread"], "smem_kb": smem_kb,
+          "us": row["duration_us"], "occ": row["achieved_occupancy_pct"], "tensor": row["tensor_pipe_util_pct"],
+          "dram": row["dram_throughput_bytes_per_sec"], "sm": row["sm_throughput_pct"],
+          "stalls": ", ".join(f"{s['reason']} {s['pct']:.0f}%" for s in row["top_stall_reasons"])}
 
 # vLLM ncu rows in (role, M) order; the number of kernels per shape comes from the timing run
 vrows, vncu = ncu_rows(D + "vncu_raw.csv"), {}

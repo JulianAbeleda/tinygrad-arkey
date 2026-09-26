@@ -450,5 +450,27 @@ ncu --import OUT/vncu.ncu-rep --page raw --csv > OUT/vncu_raw.csv; same for oncu
 python3 $B/audit_table.py OUT tinygrad/llm/generated/dense_bf16_sm120_candidate_set.json
 ```
 
-`vncu.sh`/`oncu.sh` run ncu under `sudo systemd-run --scope -p MemoryMax=20G` (admin counters; memory-capped) and
-profile one call per shape. The whole audit is ~40 min of GPU time.
+`vncu.sh`/`oncu.sh` are thin shell callers of `$B/ncu_kernel_counters.py build-cmd`: the ncu section list
+(`SpeedOfLight`/`LaunchStats`/`Occupancy`/`WarpStateStats`/`MemoryWorkloadAnalysis`/`ComputeWorkloadAnalysis`),
+`--cache-control all --clock-control none`, and the memory-capped `sudo systemd-run --scope -p MemoryMax=20G`
+scope are defined once there, not duplicated between the two scripts. `audit_table.py`'s `summarize()` is
+likewise a thin wrapper over `ncu_kernel_counters.parse_kernel_row` (the raw-CSV-row -> counters mapping).
+The whole audit is ~40 min of GPU time.
+
+To convert an already-collected run's raw CSVs into the committed JSON evidence format
+(`tinygrad.nv_ncu_kernel_counters.v1`; see `results/ncu-kernel-counters-20260926.json` for the fields:
+side, role, shape, kernel, grid/block, registers/static+dynamic shared bytes, duration, achieved occupancy,
+tensor-pipe utilization, DRAM throughput, top-3 stall reasons, bank conflicts if present, plus provenance):
+
+```
+python3 $B/build_ncu_evidence.py OUT $B/results/ncu-kernel-counters-YYYYMMDD.json
+```
+
+**Ownership note (2026-09-26, Julian; see `../goal-board.md`):** ongoing NCU collection, CSV import, and
+cross-run comparison is moving to BoltBeam. `ncu_kernel_counters.py`'s pure-parsing half
+(`parse_kernel_row`, `top_stall_reasons`, `bank_conflicts`) is a CPU-testable reference for the raw-CSV
+counter-column mapping (test/unit/test_ncu_kernel_counters.py) that a BoltBeam importer can reuse rather
+than re-derive; tinygrad's own long-term surface for this is the cubin+launch-spec exporter
+(`extra/llm_research/decode/nv_cubin_capture.py`, `nv_cubin_ncu_launcher.py`), not an ongoing in-tree ncu
+pipeline. The `oncu.sh`/`vncu.sh`/`audit_table.py`/`build_ncu_evidence.py` scripts above are the finishing
+pass on this one audit run, not a new open-ended tool.

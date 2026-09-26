@@ -6,6 +6,15 @@ blob, launch geometry, and parameter values the first time a name-prefixed
 kernel is constructed and called, then runs a minimal deterministic decode so
 the production route compiles and launches it. It writes the cubin plus a JSON
 record and makes no production code change.
+
+This is tinygrad's producer half of the cubin+launch-spec contract: the JSON
+record (schema "tinygrad.nv_cubin_capture.v1", one entry per captured kernel
+under "captured": name, cubin_path, cubin_sha256, regs/shmem/lcmem usage, and
+the launch geometry under "calls" -- global_size, local_size, vals, n_bufs) is
+what a downstream ncu collector (nv_cubin_ncu_launcher.py locally, or BoltBeam
+per docs/nemotron-vllm-parity/goal-board.md's 2026-09-26 priority note) loads
+to replay the exact production launch outside the driver-bypassing NV backend.
+Ongoing ncu collection/import/comparison ownership lives there, not here.
 """
 from __future__ import annotations
 
