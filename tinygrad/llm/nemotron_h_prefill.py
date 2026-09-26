@@ -62,7 +62,8 @@ class NemotronHPrefill:
       capacity = -(-capacity // fused_attention.BLOCK) * fused_attention.BLOCK  # the kernel reads whole blocks
     self.model, self.capacity, self.piece = model, capacity, piece
     # the SSD path pads the last piece; its padded rows still need cache rows to write into (masked) and to attend
-    self.rows = -(-capacity // piece) * piece if mamba == "ssd" else capacity
+    # (plus one piece: a prompt resumed at a position that is not a whole number of pieces pads past `capacity`)
+    self.rows = -(-capacity // piece) * piece + piece if mamba == "ssd" else capacity
     config = model.config
     probe = model.token_embd(Tensor([[0] * config.conv_kernel])).float()
     self.buffers = []
@@ -100,6 +101,9 @@ class NemotronHPrefill:
     self.bindings = {}  # (template block, projection) -> its own route binding, restored after each graph
     self.flash_blocks: dict[int, bool] = {}
     self._reset = TinyJit(self._zero)
+    self.saved: list[dict | None] | None = None  # a snapshot of every Mamba block's state (`save`)
+    self._save = TinyJit(functools.partial(self._copy, True))
+    self._restore = TinyJit(functools.partial(self._copy, False))
     self.pad_token = 0  # fills a padded piece; nothing the prefill keeps may depend on it
 
   def _bind(self, kind, bases: tuple[Tensor, ...] | None):
@@ -238,25 +242,52 @@ class NemotronHPrefill:
         for value in buffer.values():
           value.assign(Tensor.zeros(*value.shape, dtype=value.dtype)).realize()
 
+  def _copy(self, save: bool):
+    for buffer, saved in zip(self.buffers, self.saved):
+      if saved is not None:
+        for key in ("conv", "state"):
+          (saved[key] if save else buffer[key]).assign(buffer[key] if save else saved[key]).realize()
+
+  def save(self):
+    """Snapshot every Mamba block's convolution tail and scan state (a shared prefix's, to resume from)."""
+    if self.saved is None:
+      self.saved = [{key: _fresh(Tensor.zeros(*buffer[key].shape, dtype=buffer[key].dtype))
+                     for key in ("conv", "state")} if block.block_type == "mamba" else None
+                    for block, buffer in zip(self.model.blk, self.buffers)]
+    self._save()
+
+  def restore(self):
+    """Put the `save`d Mamba state back (the saved prefix's attention rows stay unless something rewrites them)."""
+    if self.saved is None:
+      raise ValueError("nothing saved to restore")
+    self._restore()
+
   def reset(self):
     """Zero every cache buffer, in one graph (eager, its ~50 assigns cost ~0.1-0.2 s of host time per prompt)."""
     self._reset()
 
-  def __call__(self, prompt: list[int]) -> Tensor:
+  def __call__(self, prompt: list[int], start: int = 0) -> Tensor:
     """Run the prompt from an empty state; returns the last position's hidden state, shape (1, 1, dim).
 
     Afterwards `buffers` holds the prompt's state: attention key/value rows
     [0, len(prompt)) and each Mamba block's convolution tail and scan state.
+
+    With `start`, the buffers must already hold the state after `prompt[:start]` (its attention rows, left in place
+    by earlier calls since each call writes only its own rows, and its Mamba state, e.g. `restore`d), and only
+    `prompt[start:]` runs, from position `start`.
     """
-    if not prompt or len(prompt) > self.capacity:
-      raise ValueError("prompt must be nonempty and fit the prefill capacity")
-    self.reset()
-    start, hidden = 0, None
-    for size, count in self.spans(len(prompt)):
+    if not 0 <= start < len(prompt) or len(prompt) > self.capacity:
+      raise ValueError("prompt must run past `start` and fit the prefill capacity")
+    if not start:
+      self.reset()
+    hidden = None
+    for size, count in self.spans(len(prompt) - start):
       # fused: keyed by the piece's 512-token block while the kernel admits it; SDPA: a power-of-two key bound
       block = start // fused_attention.BLOCK
       last = (start + size - 1) // fused_attention.BLOCK
-      if self.fused and all(self._flash_admitted(b) for b in range(block, last + 1)):
+      # the flash call runs a piece as whole 512-token blocks from a block start, or inside one block
+      aligned = start % fused_attention.BLOCK == 0 if size >= fused_attention.BLOCK else block == last
+      if self.fused and aligned and all(self._flash_admitted(b) for b in range(block, last + 1)):
         key, attend = (size, -1 - block), functools.partial(self._attend, keys=0, flash_block=block)
       else:
         keys = min(self.rows, max(self.piece, 1 << (start + size - 1).bit_length()))

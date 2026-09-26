@@ -197,6 +197,32 @@ class TestRolloutAttention(unittest.TestCase):
                         Tensor(lane_rows, dtype=dtypes.int32), Tensor(lane_slot, dtype=dtypes.int32),
                         Tensor(prefix_lengths, dtype=dtypes.int32), Tensor(lengths, dtype=dtypes.int32), 9, 4, 12, None)
 
+  def test_shared_prefix_ahead_of_every_slot(self):
+    from tinygrad.llm.nemotron_h_attention import rollout_attention
+    rng = np.random.default_rng(2)
+    batch, heads, kv_heads, width, prompts, rows, span, ring, shared = 4, 4, 2, 8, 2, 2, 8, 16, 12
+    q = rng.standard_normal((batch, heads, 1, width)).astype(np.float32)
+    pk, pv = (rng.standard_normal((prompts, kv_heads, span, width)).astype(np.float32) for _ in range(2))
+    sk, sv = (rng.standard_normal((batch, kv_heads, ring, width)).astype(np.float32) for _ in range(2))
+    hk, hv = (rng.standard_normal((1, kv_heads, shared, width)).astype(np.float32) for _ in range(2))
+    lane_prompt, prefix_lengths, lengths, shared_length = [0, 1, 0, 1], [5, 8], [3, 1, 4, 2], 9
+    lane_rows, lane_slot = [0, 2, 1, 3], [0, 2, 1, 3]
+    for row, chunk, bucket, low in ((9, 4, None, None), (9, 4, 4, 6), (1, 4, 4, None)):
+      out = rollout_attention(Tensor(q), Tensor(pk), Tensor(pv), Tensor(sk), Tensor(sv.transpose(0, 1, 3, 2).copy()),
+                              Tensor(lane_rows, dtype=dtypes.int32), Tensor(lane_slot, dtype=dtypes.int32),
+                              Tensor(prefix_lengths, dtype=dtypes.int32), Tensor(lengths, dtype=dtypes.int32), row,
+                              chunk, bucket, low,
+                              (Tensor(hk), Tensor(hv), Tensor([shared_length], dtype=dtypes.int32))).numpy()
+      for b in range(batch):
+        g = lane_prompt[b]
+        own = [w for w in range(ring) if (row - w) % ring < lengths[b]]
+        keys = np.concatenate([hk[0, :, :shared_length], pk[g, :, :prefix_lengths[g]], sk[b][:, own]], 1)
+        values = np.concatenate([hv[0, :, :shared_length], pv[g, :, :prefix_lengths[g]], sv[b][:, own]], 1)
+        for h in range(heads):
+          scores = keys[h // (heads // kv_heads)] @ q[b, h, 0] / np.sqrt(width)
+          p = np.exp(scores - scores.max())
+          np.testing.assert_allclose(out[b, h, 0], p @ values[h // (heads // kv_heads)] / p.sum(), rtol=1e-4, atol=1e-5)
+
 
 if __name__ == "__main__":
   unittest.main()

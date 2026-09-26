@@ -218,6 +218,36 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
       for tokens, logprobs in rollouts:
         model_tests.TestNemotronHRolloutSampler._check(self, model, prompt, tokens, logprobs)
 
+  def test_shared_prefix_primed_once_keeps_parity_and_replay_bits(self):
+    from tinygrad.llm.nemotron_h_prefill import NemotronHPrefill
+    model = tiny_model()
+    rng = np.random.default_rng(7)
+    envelope = [int(v) for v in rng.integers(1, 64, 14)]
+    prompts = [envelope + [int(v) for v in rng.integers(1, 64, n)] for n in (3, 2, 6, 2)]
+    for capture in range(len(model.blk)):
+      with self.subTest(capture=capture):
+        prefill = NemotronHPrefill(model, capacity=24, piece=8, ssd_chunk=4)
+        # slots hold 8 rows of their own; the 14-token envelope is primed once into the shared segment
+        sampler = NemotronHRolloutSampler(model, batch=3, capacity=16, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                          window=4, capture=capture, prefill=prefill, shared_capacity=16)
+        stats = {}
+        results = sampler.generate([(p, 2) for p in prompts], max_new=7, temperature=0.7, stats=stats)
+        self.assertEqual(stats["shared"], 14)
+        self.assertEqual(sampler.attention[2].prefix["k"].shape[2], 8)
+        for prompt, rollouts in zip(prompts, results):
+          for tokens, logprobs, _ in rollouts:
+            reference, caches = model.prefix(prompt, through=len(model.blk) - 1)
+            hidden = reference[:, -1:]
+            if len(tokens) > 1:
+              hidden = hidden.cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+            expected = (model.output(model.output_norm(hidden))[0].float() / 0.7).log_softmax(-1).numpy()
+            np.testing.assert_allclose(logprobs, expected[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
+        replayed = sampler.replay([(p, [(t, h) for t, _, h in r]) for p, r in zip(prompts, results)], 0.7,
+                                  stats=stats)
+        got = np.concatenate([values for rollouts in replayed for values in rollouts])
+        want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
+        np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
+
   def test_replay_through_attention_needs_ring_rows(self):
     model = tiny_model()  # block 2 is attention
     sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,

@@ -40,7 +40,7 @@ class TestNemotronHPrefill(unittest.TestCase):
     self.assertEqual(prefill.spans(29), [(8, 8)] * 3 + [(8, 5)])
     self.assertEqual(prefill.spans(16), [(8, 8)] * 2)
     self.assertEqual(prefill.spans(2), [(4, 2)])  # at least a scan chunk
-    self.assertEqual(prefill.rows, 64)  # a padded last piece always has cache rows to run in
+    self.assertEqual(prefill.rows, 72)  # whole pieces plus one: a padded last piece always has rows, resumed or not
     scan = NemotronHPrefill(model, capacity=60, piece=8, mamba="scan")
     self.assertEqual(scan.spans(29), [(8, 8)] * 3 + [(4, 4), (1, 1)])
 
@@ -71,6 +71,29 @@ class TestNemotronHPrefill(unittest.TestCase):
           self.assertFalse(kept[key][:, :, len(prompt):].any())
           np.testing.assert_array_equal(buffer[key].numpy()[:, :, :len(prompt)].view(np.uint32),
                                         kept[key][:, :, :len(prompt)].view(np.uint32))
+
+  def test_resume_after_a_saved_prefix_matches_the_whole_prompt(self):
+    model = tiny_model()
+    prefill = NemotronHPrefill(model, capacity=40, piece=8, ssd_chunk=4)
+    rng = np.random.default_rng(6)
+    shared = [int(v) for v in rng.integers(1, 64, 16)]
+    prefill(shared)
+    prefill.save()
+    for _ in range(3):  # several prompts resumed from the one saved prefix; the graphs capture, then replay
+      prompt = shared + [int(v) for v in rng.integers(1, 64, int(rng.integers(1, 12)))]
+      prefill.restore()
+      hidden = prefill(prompt, start=len(shared)).numpy()
+      expected, caches = model.prefix(prompt, through=len(model.blk) - 1)
+      np.testing.assert_allclose(hidden, expected.numpy()[:, -1:], rtol=1e-4, atol=1e-4)
+      for block, buffer, cache in zip(model.blk, prefill.buffers, caches):
+        if block.block_type == "attention":
+          for key in ("k", "v"):
+            np.testing.assert_allclose(buffer[key].numpy()[:, :, :len(prompt)], cache[key].numpy(), rtol=1e-4, atol=1e-4)
+        elif block.block_type == "mamba":
+          for key in ("conv", "state"):
+            np.testing.assert_allclose(buffer[key].numpy(), cache[key].numpy(), rtol=1e-4, atol=1e-4)
+    with self.assertRaises(ValueError):
+      prefill(shared, start=len(shared))  # nothing past the start
 
   def test_reset_zeroes_every_buffer_as_one_graph(self):
     prefill = NemotronHPrefill(tiny_model(), capacity=16, piece=8)

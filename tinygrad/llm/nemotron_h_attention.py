@@ -233,9 +233,12 @@ class RolloutKV:
   """One attention layer's prompt slots `[G, kv_heads, P, hd]` and per-lane generated-key ring `[B, kv_heads, C, hd]`."""
 
   def __init__(self, batch: int, prompts: int, kv_heads: int, head_dim: int, prefix_capacity: int, ring: int,
-               dtype: DType = dtypes.bfloat16, chunk: int = 1024):
+               dtype: DType = dtypes.bfloat16, chunk: int = 1024, shared_capacity: int = 0):
     self.batch, self.prompts, self.prefix_capacity, self.ring, self.chunk = batch, prompts, prefix_capacity, ring, chunk
     self.prefix = {key: _fresh((prompts, kv_heads, prefix_capacity, head_dim), dtype) for key in ("k", "v")}
+    # keys/values of a prefix every prompt slot shares, stored once and read by every lane ahead of its slot's own
+    self.shared = {key: _fresh((1, kv_heads, shared_capacity, head_dim), dtype) for key in ("k", "v")} \
+      if shared_capacity else None
     self.suffix = {"k": _fresh((batch, kv_heads, ring, head_dim), dtype),
                    "v": _fresh((batch, kv_heads, head_dim, ring), dtype)}
 
@@ -251,14 +254,17 @@ class RolloutKV:
     self.suffix["v"][:, :, :, row:row + 1].assign(v.transpose(-1, -2).cast(self.suffix["v"].dtype)).realize()
 
   def attend(self, q: Tensor, lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor,
-             row: UOp | int, bucket: int | None = None, low: UOp | int | None = None) -> Tensor:
+             row: UOp | int, bucket: int | None = None, low: UOp | int | None = None,
+             shared_length: Tensor | None = None) -> Tensor:
+    shared = None if self.shared is None else (self.shared["k"], self.shared["v"], shared_length)
     return rollout_attention(q, self.prefix["k"], self.prefix["v"], self.suffix["k"], self.suffix["v"], lane_rows,
-                             lane_slot, prefix_lengths, lengths, row, self.chunk, bucket, low)
+                             lane_slot, prefix_lengths, lengths, row, self.chunk, bucket, low, shared)
 
 
 def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
                       lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor, row: UOp | int,
-                      chunk: int = 1024, bucket: int | None = None, low: UOp | int | None = None) -> Tensor:
+                      chunk: int = 1024, bucket: int | None = None, low: UOp | int | None = None,
+                      shared: tuple[Tensor, Tensor, Tensor] | None = None) -> Tensor:
   """One decode query per lane against its prompt slot's prefix and its own ring of generated keys.
 
   q `[B, heads, 1, hd]`; prefix_k/v `[G, kv_heads, P, hd]` with `prefix_lengths[g]` valid rows; suffix_k
@@ -271,6 +277,10 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
   wrap); with `low=None` (the window wraps, `row < bucket - 1`), rows [0, bucket) and [C - bucket, C). The result
   depends on the bucket and on which of the two forms runs, so a recompute that wants the same bits reads the same
   way at the same step.
+
+  `shared` `(k, v, length)`, k/v `[1, kv_heads, S, hd]`: a prefix ahead of every slot's own (`length[0]` valid rows),
+  stored once and read by all lanes in one product per key/value head; each lane then attends over
+  `[shared prefix, prompt g_b, its generated keys]`.
   """
   batch, heads, length, width = q.shape
   prompts, kv_heads, span, _ = prefix_k.shape
@@ -287,6 +297,16 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
   prefix = [t.reshape(prompts, kv_heads, t.shape[2], rows_per, group, t.shape[-1]).permute(0, 3, 1, 2, 4, 5)
             .reshape(prompts * rows_per, kv_heads, t.shape[2], group, t.shape[-1])[lane_slot]
             for t in _partials(scores, prefix_v, chunk)]
+  parts = [prefix]
+  if shared is not None:  # every lane's queries side by side against the one shared prefix
+    shared_k, shared_v, shared_length = shared
+    span_shared = shared_k.shape[2]
+    lanes = q.permute(1, 0, 2, 3).reshape(1, kv_heads, batch * group, width).contiguous()
+    scores = _exact_dot(lanes, shared_k.transpose(-1, -2))
+    valid = Tensor.arange(span_shared).reshape(1, 1, 1, span_shared) < shared_length.reshape(1, 1, 1, 1)
+    scores = valid.where(scores, float("-inf"))
+    parts.append([t.reshape(kv_heads, t.shape[2], batch, group, t.shape[-1]).permute(2, 0, 1, 3, 4)
+                  for t in _partials(scores, shared_v, chunk)])
   # generated keys: ring rows younger than the lane's length
   ring = suffix_k.shape[2]
   if bucket is None or bucket >= ring:
@@ -295,7 +315,6 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
     raise ValueError("a bucketed ring read needs a bucket of at most half the ring")
   else:
     segments = [(0, bucket), (ring - bucket, bucket)] if low is None else [(low, bucket)]
-  parts = [prefix]
   for first, size in segments:
     scores = _exact_dot(q, suffix_k[:, :, first:first + size].transpose(-1, -2))
     age = (Tensor.arange(size) + first) * -1 + row
@@ -311,10 +330,11 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
 
 
 def rollout_kv_for_model(model, batch: int, prompts: int, prefix_capacity: int, ring: int,
-                         dtype: DType | None = None, chunk: int = 1024) -> list[RolloutKV | None]:
+                         dtype: DType | None = None, chunk: int = 1024,
+                         shared_capacity: int = 0) -> list[RolloutKV | None]:
   """One `RolloutKV` per attention block, `None` elsewhere, aligned with `model.blk`."""
   return [RolloutKV(batch, prompts, block.n_kv_heads, model.config.head_dim, prefix_capacity, ring,
-                    block.attn_k.weight.dtype if dtype is None else dtype, chunk)
+                    block.attn_k.weight.dtype if dtype is None else dtype, chunk, shared_capacity)
           if block.block_type == "attention" else None for block in model.blk]
 
 

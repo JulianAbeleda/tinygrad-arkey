@@ -25,6 +25,7 @@ from tinygrad import Tensor, TinyJit, UOp, dtypes
 from tinygrad.llm.nemotron_h_attention import (decode_attention, load_prefix_from_prefill, rollout_kv_for_model,
                                                shared_kv_for_model, suffix_bucket)
 from tinygrad.llm.nemotron_h_decode import mamba_replay_buffers, mamba_replay_buffers_step, mamba_replay_flush
+from tinygrad.llm import nemotron_h_prefill_attention as fused_attention
 from tinygrad.schedule.memory import shared_arenas
 from tinygrad.uop.ops import Ops
 
@@ -227,7 +228,7 @@ class NemotronHRolloutSampler:
 
   def __init__(self, model, batch: int, capacity: int, prefix_capacity: int, prompts: int | None = None, rows: int = 8,
                bias=None, ring: int = 16, window: int = 32, prefill=None, capture: int | None = None,
-               min_bucket: int = 64):
+               min_bucket: int = 64, shared_capacity: int = 0):
     if ring < 2 or window % ring:
       raise ValueError("the refill window must be a whole number of replay rings of at least 2 slots")
     def whole_chunks(n: int) -> int: return n if n <= ATTENTION_CHUNK else -(-n // ATTENTION_CHUNK) * ATTENTION_CHUNK
@@ -236,6 +237,9 @@ class NemotronHRolloutSampler:
     self.model, self.batch, self.ring, self.window, self.prefill = model, batch, ring, window, prefill
     self.capture, self.min_bucket = capture, min_bucket
     self.capacity, self.prefix_capacity = whole_chunks(capacity), whole_chunks(prefix_capacity)
+    self.shared_capacity = whole_chunks(shared_capacity) if shared_capacity else 0
+    if self.shared_capacity and (prefill is None or prefill.rows < self.shared_capacity + self.prefix_capacity):
+      raise ValueError("a shared prefix needs a NemotronHPrefill holding shared_capacity + prefix_capacity rows")
     self.prompts, self.rows = prompts or 2 * batch // rows + 2, rows
     config = model.config
     self.bias = _fresh(Tensor(bias) if bias is not None else Tensor.zeros(config.vocab_size))
@@ -254,7 +258,9 @@ class NemotronHRolloutSampler:
         self.buffers.append(None)
         self.prompt_state.append(None)
     self.attention = rollout_kv_for_model(model, batch, self.prompts, self.prefix_capacity, self.capacity,
-                                          chunk=ATTENTION_CHUNK)
+                                          chunk=ATTENTION_CHUNK, shared_capacity=self.shared_capacity)
+    self.shared_length = _fresh(Tensor.zeros(1, dtype=dtypes.int32))  # valid rows of the shared prefix
+    self.shared: list[int] = []  # the shared prefix's tokens, primed by `_share`
     self.prefix_lengths = _fresh(Tensor.zeros(self.prompts, dtype=dtypes.int32))
     self.lengths = _fresh(Tensor.zeros(batch, dtype=dtypes.int32))
     self.lane_rows = _fresh(Tensor.zeros(self.prompts * rows, dtype=dtypes.int32))
@@ -274,8 +280,11 @@ class NemotronHRolloutSampler:
     self.load_lane, self.seed = TinyJit(self._load_lane), TinyJit(self._seed)
     self.pending: int | None = None  # the prompt slot whose Mamba state `prompt_state` holds, while rollouts wait
     # priming copies a prompt's state into its slot in one graph; eager, its ~60 copies cost ~0.2 s of host time
-    self.load_slot = TinyJit(self._load_slot)
+    self.load_slot, self.load_shared = TinyJit(self._load_slot), TinyJit(self._load_shared)
     self.prompt_length = UOp.variable("prompt_length", 1, self.prefix_capacity)
+    if self.shared_capacity:
+      self.prompt_offset = UOp.variable("prompt_offset", 0, prefill.rows - self.prefix_capacity)
+      self.shared_rows = UOp.variable("shared_rows", 1, self.shared_capacity)
     self.lows: dict[int, UOp] = {}  # bucket -> the first ring row it reads when it does not wrap
     self.graphs: dict[tuple, TinyJit] = {}  # (replay, bucket, wraps) step graphs and ("flush", replay) ring flushes
     self.arenas: dict = {}  # the step graphs' shared intermediate arenas
@@ -392,7 +401,7 @@ class NemotronHRolloutSampler:
         v = block.attn_v(normed).reshape(self.batch, 1, block.n_kv_heads, width).transpose(1, 2)
         attention.write(k, v, row)
         attended = attention.attend(q, self.lane_rows, self.lane_slot, self.prefix_lengths, self.lengths, row,
-                                    bucket if bucket < self.capacity else None, low)
+                                    bucket if bucket < self.capacity else None, low, self.shared_length)
         mixed = block.attn_output(attended.transpose(1, 2).reshape(self.batch, 1, -1))
         hidden = (hidden + mixed.cast(hidden.dtype)).contiguous()
       elif block.block_type == "mamba":
@@ -442,14 +451,16 @@ class NemotronHRolloutSampler:
           value[lane:lane + 1].assign(Tensor.zeros(1, *value.shape[1:], dtype=value.dtype)).realize()
     self.lengths[lane:lane + 1].assign(Tensor.zeros(1, dtype=dtypes.int32)).realize()
 
-  def _load_slot(self, source: UOp, length: UOp) -> None:
-    """Prompt slot `source` takes the prefill's first `length` key/value rows (the rest zeroed, since a masked row's
-    value still meets a 0 weight); `prompt_state` takes every Mamba block's convolution tail and scan state."""
+  def _load_slot(self, source: UOp, length: UOp, *offset: UOp) -> None:
+    """Prompt slot `source` takes the prefill's `length` key/value rows from row `offset` (0; past the shared prefix
+    when there is one), the rest zeroed since a masked row's value still meets a 0 weight; `prompt_state` takes every
+    Mamba block's convolution tail and scan state."""
     for attention, state, cache in zip(self.attention, self.prompt_state, self.prefill.buffers):
       if attention is not None:
         span = attention.prefix_capacity
         for key, target in attention.prefix.items():
-          value = cache[key][:, :, :min(cache[key].shape[2], span)]
+          value = cache[key][:, :, offset[0]:offset[0] + span] if offset else \
+            cache[key][:, :, :min(cache[key].shape[2], span)]
           if value.shape[2] < span:
             value = value.pad((None, None, (0, span - value.shape[2]), None))
           keep = Tensor.arange(span).reshape(1, 1, span, 1) < length
@@ -458,19 +469,60 @@ class NemotronHRolloutSampler:
         for key in ("conv", "state"):
           state[key].assign(cache[key]).realize()
 
+  def _load_shared(self, length: UOp) -> None:
+    """The shared prefix takes the prefill's first `length` key/value rows (the rest zeroed)."""
+    for attention, cache in zip(self.attention, self.prefill.buffers):
+      if attention is not None:
+        span = attention.shared["k"].shape[2]
+        for key, target in attention.shared.items():
+          keep = Tensor.arange(span).reshape(1, 1, span, 1) < length
+          target.assign(keep.where(cache[key][:, :, :span], 0).cast(target.dtype)).realize()
+    self.shared_length.assign(Tensor([0], dtype=dtypes.int32) + length).realize()
+
   def _seed(self, fresh: Tensor, last: Tensor) -> None:
     """Lanes flagged `fresh` feed their prompt's last token next."""
     self.tokens.assign(fresh.where(last, self.tokens)).realize()
 
   # *** host ***
 
+  def _share(self, prompts: list[list[int]], length: int | None = None) -> int:
+    """Prime the prefix every prompt shares into the shared segment, once; returns its length (0: none).
+
+    Without `length`, it is the longest common prefix of `prompts` (without their last token, each keeping at least
+    one token of its own), capped at `shared_capacity` and cut to whole 512-token blocks on the flash-attention
+    prefill, so each prompt's own part starts on a block. The prefill's Mamba state after it is saved; every prompt
+    then prefills only its own part, resumed from there (`_prime`)."""
+    if not self.shared_capacity or not prompts:
+      self.shared, _ = [], self.shared_length.assign(Tensor.zeros(1, dtype=dtypes.int32)).realize()
+      return 0
+    if length is None:
+      first, length = prompts[0], min(len(p) - 2 for p in prompts)
+      for other in prompts[1:]:
+        length = min(length, next((i for i, (x, y) in enumerate(zip(first, other)) if x != y), length))
+      grain = fused_attention.BLOCK if self.prefill.fused else 1
+      length = min(length, self.shared_capacity) // grain * grain
+    if length <= 0:
+      return self._share([])
+    self.shared = list(prompts[0][:length])
+    self.prefill(self.shared)
+    self.prefill.save()
+    self.load_shared(self.shared_rows.bind(length))
+    return length
+
   def _prime(self, slot: int, prompt: list[int]):
-    if not 1 < len(prompt) <= self.prefix_capacity + 1:
-      raise ValueError("a prompt needs at least two tokens and must fit the prefix capacity")
-    prompt = prompt[:-1]  # the last token runs through the decode step
+    own = len(prompt) - 1 - len(self.shared)  # the last token runs through the decode step
+    if not 0 < own <= self.prefix_capacity or prompt[:len(self.shared)] != self.shared:
+      raise ValueError("a prompt needs a token past the shared prefix and the last one, and must fit the prefix "
+                       "capacity")
+    prompt = prompt[:-1]
     if self.prefill is not None:
-      self.prefill(prompt)
-      self.load_slot(self.source.bind(slot), self.prompt_length.bind(len(prompt)))
+      if self.shared:
+        self.prefill.restore()
+        self.prefill(prompt, start=len(self.shared))
+        self.load_slot(self.source.bind(slot), self.prompt_length.bind(own), self.prompt_offset.bind(len(self.shared)))
+      else:
+        self.prefill(prompt)
+        self.load_slot(self.source.bind(slot), self.prompt_length.bind(own))
       return
     caches = self.model.prefix(prompt, through=len(self.model.blk) - 1)[1]
     length = len(prompt)
@@ -509,17 +561,20 @@ class NemotronHRolloutSampler:
     float32 log probabilities per rollout, laid out like the request. Each rollout runs on its own lane through the
     decode step's code for those blocks: Mamba blocks from the prompt's state through the same replay ring and
     flushes, attention blocks against the prompt's keys and the keys the replay itself writes at the rollout's ring
-    rows with the same ring buckets (`stats`, the dict `generate` filled: its `starts` and `buckets`; needed only when
-    the window has an attention block). With the sampler's weights and temperature this gives the sampled log
-    probabilities bit for bit.
+    rows with the same ring buckets, the prompts primed with the same shared prefix (`stats`, the dict `generate`
+    filled; needed when the window has a Mamba or attention block). With the sampler's weights and temperature this
+    gives the sampled log probabilities bit for bit. A window of MLP blocks only needs no prompt state at all.
     """
     if self.capture is None:
       raise ValueError("replay needs a sampler built with capture")
     attends = any(block.block_type == "attention" for block in self.model.blk[self.capture:])
     mambas = any(block.block_type == "mamba" for block in self.model.blk[self.capture:])
-    if attends and not (stats and "starts" in stats and "buckets" in stats):
-      raise ValueError("a window with an attention block needs generate's stats (each rollout's first ring row and "
-                       "the ring buckets)")
+    stateful = attends or mambas
+    if stateful and not (stats and "shared" in stats and (not attends or ("starts" in stats and "buckets" in stats))):
+      raise ValueError("a window with a Mamba or attention block needs generate's stats (the shared prefix, and for "
+                       "attention each rollout's first ring row and the ring buckets)")
+    if stateful:
+      self._share([prompt for prompt, _ in requests], length=stats["shared"])
     pending = []
     for r, (prompt, rollouts) in enumerate(requests):
       for i, (tokens, hidden) in enumerate(rollouts):
@@ -551,14 +606,14 @@ class NemotronHRolloutSampler:
         slots[key][1] += 1
         taken.append(item)
       pending = [item for item in pending if all(item is not t for t in taken)]
-      for key, (g, _) in slots.items():
+      for key, (g, _) in slots.items() if stateful else ():
         self._prime(g, list(key))
         for lane, place in enumerate(lanes):  # each prompt's lanes take its Mamba state before the next is primed
           if place[0] == g:
             self.load_lane(self.lane.bind(lane))
       lengths = [0] * self.prompts
       for key, (g, _) in slots.items():
-        lengths[g] = len(key) - 1
+        lengths[g] = len(key) - 1 - len(self.shared)
       self._bind(lanes + [None] * (self.batch - len(lanes)), lengths)
       steps = max(len(item[4]) for item in taken)
       values = np.zeros((len(taken), steps), np.float32)
@@ -592,8 +647,8 @@ class NemotronHRolloutSampler:
     length, e.g. to replay a length mix). A rollout ends at (and includes) its first stop token. `stats`, when given,
     receives the decode step count, the lane-steps spent on rollouts that were still running (in total and while
     rollouts were still waiting to start, `steady_*`), the time spent priming prompts, `starts` (each rollout's first
-    step, laid out like the result) and `buckets` (the ring rows attention read, per window): what `replay` needs
-    for a window with attention.
+    step, laid out like the result), `buckets` (the ring rows attention read, per window) and `shared` (the length of
+    the prefix primed once for every prompt, `_share`): what `replay` needs to start lanes and read keys the same way.
     """
     import time
     if max_new > self.capacity:
@@ -615,7 +670,9 @@ class NemotronHRolloutSampler:
     lanes: list[dict | None] = [None] * self.batch
     rate = Tensor([temperature]).realize()
     steps = active_lane_steps = steady_steps = steady_active = 0
-    prime_time = 0.0
+    clock = time.perf_counter()
+    shared = self._share([prompt for _, prompt, _ in queue])
+    prime_time = time.perf_counter() - clock
 
     def refill() -> bool:
       nonlocal prime_time
@@ -631,7 +688,8 @@ class NemotronHRolloutSampler:
           start = time.perf_counter()
           self._prime(slot, prompt)
           prime_time += time.perf_counter() - start
-          slots[slot] = {"request": index, "left": limits, "rows": [None] * self.rows, "length": len(prompt) - 1,
+          slots[slot] = {"request": index, "left": limits, "rows": [None] * self.rows,
+                         "length": len(prompt) - 1 - len(self.shared),
                          "last": prompt[-1]}
           self.pending = slot
         if slot is None:
@@ -712,6 +770,7 @@ class NemotronHRolloutSampler:
     if stats is not None:
       stats.update(steps=steps, lane_steps=steps * self.batch, active_lane_steps=active_lane_steps,
                    steady_lane_steps=steady_steps * self.batch, steady_active_lane_steps=steady_active, starts=starts,
+                   shared=shared,
                    buckets=buckets,
                    prime_s=prime_time)
     return results
