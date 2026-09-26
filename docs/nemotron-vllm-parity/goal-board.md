@@ -3,18 +3,19 @@
 Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16 for DayCare's RLOO on Countdown
 (`~/DayCare/research/rloo-llama-countdown.md`), and a pass/fail answer on its R5 gate. Parity numbers: `README.md`.
 
-## Definition of done (Julian, 2026-09-25 evening)
-1. Finish phase 1 (RLOO R4-R7) and the v2 learning-rate run.
-2. **Near parity with vLLM for training**: RL sampling throughput at RL batch sizes (decode B=32-128 now ~70% of vLLM,
-   batch 1-8 ~87-95%; prefill 22%).
-3. **10k batched prefill**: find out why it does not work (earlier: 10k at large pieces / B=128 capacity 4096 ran out of
-   VRAM) and why prefill is missing the substrate the decode path uses (promoted routes, machine-search kernels),
-   then fix it. Current: 10k single-prompt prefill 1.65 s vs vLLM 0.37 s.
-4. **BoltBeam kernels at parity with vLLM's, shape by shape**: finish the interrupted ncu audit of cuBLAS/vLLM kernels
-   on Nemotron shapes (tile, stages, warp layout, stalls) -> a replication spec per shape -> BoltBeam searches toward it.
-   Only head-to-head so far: ssm_in M=4096 BoltBeam 141 TF vs cuBLAS 209 TF (~67%, fda18e7ab); peak ~250 TF.
-   Gate (Julian's per-kernel rule): every emitted kernel matches or beats vLLM's on the same shape. Scripts:
-   bench/spec/ (vncu.sh, vllm_ncu.py, ours_prof.*). Feeds steps 2 and 3.
+## Definition of done (Julian, 2026-09-25 evening; ordered by dependency)
+1. **Finish phase 1**: RLOO R5-R7, then the LR sweep and the v2 run (does RL help at a real step size?).
+2. **Kernel audit (measure first)**: ncu of vLLM/cuBLAS vs BoltBeam-emitted kernels on every Nemotron shape (decode
+   M=8-128 and prefill M=512-8k): tile, stages, warp layout, stalls, % of roofline -> a replication spec per shape.
+   Only head-to-head so far: ssm_in M=4096 BoltBeam 141 TF (56% of ~250 TF) vs cuBLAS 209 TF (84%). Scripts: bench/spec/.
+3. **Training parity with vLLM**: RL sampling throughput at B=32-128 (now ~70%). Decode shapes first (thin GEMMs at
+   ~36-38% of roofline are the biggest lever), plus fusion, attention length bucketing and one-graph priming
+   (built: d6491e857/d97387365, held until 1 finishes). Gate: every decode kernel matches or beats vLLM's shape.
+4. **Prefill parity + 10k batched prefill**: promote Nemotron's large-M shapes onto the tuned substrate (shape by
+   shape; it was a shape problem), fix the batched 10k memory failure, test plain-bf16 prompt prefill (capture may make
+   hi/lo unnecessary there). Now 1.65 s vs 0.37 s.
+5. **Rotating-window RL** (capture at any block; bit-exact on the real 4B) as the next experiment.
+6. **External write-up**: bit-exact RL on a hybrid Mamba model + mismatch localization (vLLM RFC #55524, NeMo-RL).
 
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
