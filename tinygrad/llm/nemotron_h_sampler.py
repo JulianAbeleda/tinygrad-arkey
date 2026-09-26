@@ -195,7 +195,7 @@ class NemotronHBatchSampler:
 class NemotronHRolloutSampler:
   """Continuously batched rollouts over several prompts, each sampled `n` times (RLOO groups).
 
-  The batch is `batch` lanes. `prompts` prompt slots each hold one prompt's attention prefix and Mamba state; a
+  The batch is `batch` lanes. `prompts` prompt slots each hold one prompt's attention prefix (keys and values); a
   prompt stays resident until all of its rollouts have finished, and each of its running rollouts occupies one lane
   and one of the slot's `rows` rows. A group's longest rollout holds its slot long after its siblings have finished,
   so the default is two slots' worth of rows per lane (`2 * batch // rows + 2`): with RL-skewed lengths (median 1.2k,
@@ -204,7 +204,10 @@ class NemotronHRolloutSampler:
   of the Mamba replay ring, so every window ends right after a ring flush); between windows the host reads the
   sampled history, retires lanes that hit a stop token or `max_new` tokens, and refills free lanes with the next
   rollouts, priming new prompts (through `prefill` when given) into free prompt slots. A slot holds its prompt
-  without the last token; a lane starts from the slot's Mamba state with empty generated keys (length 0) and feeds
+  without the last token. Only one prompt's Mamba state is kept (`prompt_state`, ~83 MB on the 4B): a lane copies it
+  when assigned, and the next prompt is primed only after every rollout of the last one has started, which the
+  refill order (waiting rollouts before new prompts) already gives. A lane starts with empty generated keys
+  (length 0) and feeds
   the prompt's last token through the decode step, so every sampled token, the first included, comes from the same
   step graph. Prompts therefore need at least two tokens.
 
@@ -243,7 +246,9 @@ class NemotronHRolloutSampler:
       if block.block_type == "mamba":
         self.buffers.append(mamba_replay_buffers(block, *(Tensor.zeros(batch, *cache[key].shape[1:],
                                                    dtype=cache[key].dtype) for key in ("conv", "state")), ring))
-        self.prompt_state.append({key: _fresh(Tensor.zeros(self.prompts, *value.shape[1:], dtype=value.dtype))
+        # one prompt's Mamba state: lanes copy it as they are assigned, and a new prompt is primed only once every
+        # rollout of the last one has started, so the prompt slots keep only attention's prefix keys and values
+        self.prompt_state.append({key: _fresh(Tensor.zeros(1, *value.shape[1:], dtype=value.dtype))
                                   for key, value in cache.items()})
       else:
         self.buffers.append(None)
@@ -267,6 +272,7 @@ class NemotronHRolloutSampler:
     self.column = UOp.variable("column", 0, window - 1)
     self.lane, self.source = UOp.variable("lane", 0, batch - 1), UOp.variable("source", 0, self.prompts - 1)
     self.flush, self.load_lane, self.seed = TinyJit(self._flush), TinyJit(self._load_lane), TinyJit(self._seed)
+    self.pending: int | None = None  # the prompt slot whose Mamba state `prompt_state` holds, while rollouts wait
     self.replay_flush = TinyJit(self._replay_flush)
     # priming copies a prompt's state into its slot in one graph; eager, its ~60 copies cost ~0.2 s of host time
     self.load_slot = TinyJit(self._load_slot)
@@ -407,15 +413,15 @@ class NemotronHRolloutSampler:
   def _replay_flush(self, count: UOp) -> None:
     self._flush(count, self.capture)
 
-  def _load_lane(self, lane: UOp, source: UOp) -> None:
-    """Lane `lane` takes prompt slot `source`'s Mamba state; its generated keys restart empty.
+  def _load_lane(self, lane: UOp) -> None:
+    """Lane `lane` takes the primed prompt's Mamba state; its generated keys restart empty.
 
     The lane's replay ring and generated-key ring are zeroed: masked entries get weight 0, and 0 times a previous
     occupant's non-finite value is NaN, so a lane that went NaN would otherwise poison the next rollout it serves."""
     for buffer, state in zip(self.buffers, self.prompt_state):
       if buffer is not None:
         for key in ("conv", "state"):
-          buffer[key][lane:lane + 1].assign(state[key][source:source + 1]).realize()
+          buffer[key][lane:lane + 1].assign(state[key]).realize()
         for key in ("ring_x", "ring_a", "ring_b"):
           buffer[key][lane:lane + 1].assign(Tensor.zeros(1, *buffer[key].shape[1:], dtype=buffer[key].dtype)).realize()
     for attention in self.attention:
@@ -425,8 +431,8 @@ class NemotronHRolloutSampler:
     self.lengths[lane:lane + 1].assign(Tensor.zeros(1, dtype=dtypes.int32)).realize()
 
   def _load_slot(self, source: UOp, length: UOp) -> None:
-    """Prompt slot `source` takes the prefill's state: its first `length` key/value rows (the rest zeroed, since a
-    masked row's value still meets a 0 weight) and every Mamba block's convolution tail and scan state."""
+    """Prompt slot `source` takes the prefill's first `length` key/value rows (the rest zeroed, since a masked row's
+    value still meets a 0 weight); `prompt_state` takes every Mamba block's convolution tail and scan state."""
     for attention, state, cache in zip(self.attention, self.prompt_state, self.prefill.buffers):
       if attention is not None:
         span = attention.prefix_capacity
@@ -438,7 +444,7 @@ class NemotronHRolloutSampler:
           target[source:source + 1].assign(keep.where(value, 0).cast(target.dtype)).realize()
       elif state is not None:
         for key in ("conv", "state"):
-          state[key][source:source + 1].assign(cache[key]).realize()
+          state[key].assign(cache[key]).realize()
 
   def _seed(self, fresh: Tensor, last: Tensor) -> None:
     """Lanes flagged `fresh` feed their prompt's last token next."""
@@ -469,10 +475,10 @@ class NemotronHRolloutSampler:
           value = cache[key]
           if (short := state[key].shape[1] - value.shape[1]) > 0:  # a prompt shorter than the conv tail
             value = Tensor.zeros(1, short, *value.shape[2:], dtype=value.dtype).cat(value, dim=1)
-          state[key][slot:slot + 1].assign(value).realize()
+          state[key].assign(value).realize()
 
-  def _bind(self, lanes: list[tuple[int, int] | None], prefix_lengths: list[int], started: list[int]):
-    """Lane `b` serves row `lanes[b][1]` of prompt slot `lanes[b][0]`; lanes in `started` begin from their slot."""
+  def _bind(self, lanes: list[tuple[int, int] | None], prefix_lengths: list[int]):
+    """Lane `b` serves row `lanes[b][1]` of prompt slot `lanes[b][0]`."""
     table = [0] * (self.prompts * self.rows)
     for lane, place in enumerate(lanes):
       if place is not None:
@@ -482,8 +488,6 @@ class NemotronHRolloutSampler:
                                  dtype=dtypes.int32)).realize()
     lengths = [min(n, self.prefix_capacity) for n in prefix_lengths]
     self.prefix_lengths.assign(Tensor(lengths, dtype=dtypes.int32)).realize()
-    for lane in started:
-      self.load_lane(self.lane.bind(lane), self.source.bind(lanes[lane][0]))
 
   def replay(self, requests: list[tuple], temperature: float = 1.0, stats: dict | None = None
              ) -> list[list[np.ndarray]]:
@@ -536,10 +540,13 @@ class NemotronHRolloutSampler:
       pending = [item for item in pending if all(item is not t for t in taken)]
       for key, (g, _) in slots.items():
         self._prime(g, list(key))
+        for lane, place in enumerate(lanes):  # each prompt's lanes take its Mamba state before the next is primed
+          if place[0] == g:
+            self.load_lane(self.lane.bind(lane))
       lengths = [0] * self.prompts
       for key, (g, _) in slots.items():
         lengths[g] = len(key) - 1
-      self._bind(lanes + [None] * (self.batch - len(lanes)), lengths, list(range(len(lanes))))
+      self._bind(lanes + [None] * (self.batch - len(lanes)), lengths)
       steps = max(len(item[4]) for item in taken)
       values = np.zeros((len(taken), steps), np.float32)
       for first in range(0, steps, self.window):
@@ -584,7 +591,7 @@ class NemotronHRolloutSampler:
     results: list[list] = [[] for _ in requests]
     starts: list[list[int]] = [[] for _ in requests]
     buckets: list[int] = []
-    queue = []
+    queue, self.pending = [], None
     for index, (prompt, n, *limits) in enumerate(requests):
       limits = [min(int(x), max_new) for x in limits[0]] if limits else [max_new] * n
       if len(limits) != n or min(limits, default=1) < 1:
@@ -604,7 +611,8 @@ class NemotronHRolloutSampler:
         if lanes[lane] is not None:
           continue
         slot = next((g for g, s in enumerate(slots) if s is not None and s["left"] and None in s["rows"]), None)
-        if slot is None and queue and None in slots:
+        # a new prompt is primed only once the primed one's rollouts have all started: its Mamba state is overwritten
+        if slot is None and queue and None in slots and self.pending is None:
           slot = slots.index(None)
           index, prompt, limits = queue.pop(0)
           start = time.perf_counter()
@@ -612,6 +620,7 @@ class NemotronHRolloutSampler:
           prime_time += time.perf_counter() - start
           slots[slot] = {"request": index, "left": limits, "rows": [None] * self.rows, "length": len(prompt) - 1,
                          "last": prompt[-1]}
+          self.pending = slot
         if slot is None:
           continue
         s = slots[slot]
@@ -619,11 +628,14 @@ class NemotronHRolloutSampler:
         s["rows"][j] = lane
         lanes[lane] = {"slot": slot, "row": j, "limit": s["left"].pop(0), "tokens": [], "logprobs": [], "hidden": [],
                        "start": steps}
+        self.load_lane(self.lane.bind(lane))
+        if not s["left"]:
+          self.pending = None
         started.append(lane)
       if not started:
         return any(lane is not None for lane in lanes)
       self._bind([None if l is None else (l["slot"], l["row"]) for l in lanes],
-                 [0 if s is None else s["length"] for s in slots], started)
+                 [0 if s is None else s["length"] for s in slots])
       fresh = Tensor([lane in started for lane in range(self.batch)]).realize()
       last = Tensor([slots[l["slot"]]["last"] if l is not None else 0 for l in lanes], dtype=dtypes.int32).realize()
       self.seed(fresh, last)

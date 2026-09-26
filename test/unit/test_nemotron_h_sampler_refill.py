@@ -203,6 +203,21 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
     sampler = capture
     self.assertEqual(arenas(), {id(arena) for arena in capture.arenas.values()})
 
+  def test_one_mamba_state_serves_groups_larger_than_their_rows(self):
+    model = tiny_model()
+    # 3 rollouts per prompt on 2 rows: a prompt's last rollout waits for a row while lanes are free; the next prompt
+    # must not be primed over its Mamba state before it starts
+    sampler = NemotronHRolloutSampler(model, batch=4, capacity=16, prefix_capacity=8, prompts=3, rows=2, ring=2,
+                                      window=2)
+    self.assertEqual(sampler.prompt_state[0]["state"].shape[0], 1)
+    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4], [11, 4]]
+    limits = [[3, 8, 5], [2, 6, 4], [7, 2, 3], [5, 5, 1]]
+    results = sampler.generate([(p, 3, l) for p, l in zip(prompts, limits)], max_new=8)
+    for prompt, limit, rollouts in zip(prompts, limits, results):
+      self.assertEqual(sorted(len(t) for t, _ in rollouts), sorted(limit))
+      for tokens, logprobs in rollouts:
+        model_tests.TestNemotronHRolloutSampler._check(self, model, prompt, tokens, logprobs)
+
   def test_replay_through_attention_needs_ring_rows(self):
     model = tiny_model()  # block 2 is attention
     sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,
