@@ -24,7 +24,7 @@ Target state (Julian): every kernel at or better than vLLM's on the same shape, 
 
 ## Scan result (2026-09-26, scan-20260926.md, 67766877a)
 Gap to vLLM is KERNELS, not lifecycle: decode B=32/64/128 wall +2.88/+5.64/+10.21 ms = GEMM +0.93/+3.42/+7.18, non-GEMM +1.68/+1.88/+2.47, lifecycle +0.27/+0.34/+0.56; 10k prefill 1646 vs 377 ms (GEMM +868, Mamba +339, attn +47, norm +22, lifecycle ~0). Decode search exhausted under today's lowering (best in space 1.19-1.85x cuBLAS). hi/lo tax: +2.8/+5.6 ms/step at B=64/128, ~705 ms per 10k prefill.
-Moves (12:25: 1, 3, 4 started under the standing directive; 2 hi/lo and BoltBeam push await Julian): 1 promote ring routes at prefill rows; 2 hi/lo vs plain bf16 decision; 3 Mamba prefill kernel audit (297 vs 26 ms); 4 non-GEMM decode kernel audit; 5 lowering: barrier per 64-K tile, dense Stream-K, ragged K. Research queue: BoltBeam importer miscounts chunked prefill GEMM launches; unknown cuBLAS opcodes B2R, CGAERRBAR, UVIMNMX.
+Moves (move 1 DONE 23ea7e291: prefill pieces one ring launch per projection, 10k prefill 1.52 -> 1.22 s, checks pass; 12:25: 3, 4 started under the standing directive; 2 hi/lo and BoltBeam push await Julian): 1 promote ring routes at prefill rows; 2 hi/lo vs plain bf16 decision; 3 Mamba prefill kernel audit (297 vs 26 ms); 4 non-GEMM decode kernel audit; 5 lowering: barrier per 64-K tile, dense Stream-K, ragged K. Research queue: BoltBeam importer miscounts chunked prefill GEMM launches; unknown cuBLAS opcodes B2R, CGAERRBAR, UVIMNMX.
 
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
