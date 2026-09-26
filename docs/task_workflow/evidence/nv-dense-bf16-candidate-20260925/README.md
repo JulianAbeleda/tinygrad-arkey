@@ -48,3 +48,9 @@ derived by BoltBeam gemm_strategy from the 5090's facts + tinygrad's lowering fa
 prune; climb from the promoted route + the model's 12 best distinct geometries, 23 measurements, gpu-run time).
 The promoted route re-measures 127.71 us (gate 128.19); the best derived candidate, 128x128x64 4x4 warps 2-stage ring,
 123.49 us (-3.3%, not promoted: within the noise band the gate would have to clear).
+
+## Round 4: prefill pieces at 2048 hi/lo rows (2026-09-26)
+Winners of the derived-space climbs at 2048 rows (`docs/nemotron-vllm-parity/bench/scan-20260926/climb/*-2048.jsonl`),
+one ring launch per 1024-token piece instead of 4x512 sync2 chunks. Control (today's chunked route, rotated weights, us):
+ssm_in 2129, ssm_out 876, attn_q 595, attn_kv 157, attn_o 612, ffn_up 1334, ffn_down 1311. `gate-v5-prefill-2048.json`:
+7/7 bit-exact vs the safe TC path, <= 1.7e-5 vs the oracle; medians 1208/624/415/116/429/913/982.

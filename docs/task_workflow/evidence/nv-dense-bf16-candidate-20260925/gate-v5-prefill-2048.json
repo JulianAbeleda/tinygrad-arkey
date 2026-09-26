@@ -1,0 +1,230 @@
+{
+  "schema": "dense-bf16-candidate-gate.v2",
+  "target": {
+    "backend": "NV",
+    "arch": "sm_120",
+    "wave_size": 32
+  },
+  "device": "NV",
+  "measured_bf16_peak_tflops": 251.7,
+  "passed": true,
+  "rows": [
+    {
+      "role": "attn_kv",
+      "m": 2048,
+      "n": 1024,
+      "k": 3136,
+      "split_k": 1,
+      "geometry": [
+        64,
+        256,
+        32,
+        1,
+        8
+      ],
+      "canonical_identity": "e0710db7d1196afbbdbb62255978ed43c6971e45f33e12ef26d89df1ba4dcafc",
+      "candidate_programs": [
+        "E_32_4_32_8_2_2_4_4_98_5ef203ca64e733f4daeaf6407a6bf6a435503af6d79310937f49402c9ffcd502"
+      ],
+      "safe_tc_programs": [
+        "r_128_128_32_2_2_196_2_6cd487022d08efbad7d2a340987e905a7789b50dfd445ace5c9f82201db14196"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 2.3365020751953125e-05,
+      "max_rel_err_vs_oracle": 4.0703313382618126e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 115.81,
+      "safe_tc_median_us": 534.66,
+      "candidate_tflops": 113.58,
+      "safe_tc_tflops": 24.6,
+      "candidate_pct_of_measured_peak": 45.1
+    },
+    {
+      "role": "attn_o",
+      "m": 2048,
+      "n": 3200,
+      "k": 5120,
+      "split_k": 1,
+      "geometry": [
+        64,
+        128,
+        64,
+        1,
+        4
+      ],
+      "canonical_identity": "f95600a477b95301ff4297fb0743c0f27adc1946afba206983d9f9e03aad7b2f",
+      "candidate_programs": [
+        "E_32_25_32_4_2_2_4_4_80_453770e49ee5769091672a9e326a57ad987550c63b59fb115b6992c87def5236"
+      ],
+      "safe_tc_programs": [
+        "r_128_400_32_2_2_320_2_3f6e2a95de66070506b93c07b0f97801f45c9d01845f09d01fd6e236f7bdacf6"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 4.9114227294921875e-05,
+      "max_rel_err_vs_oracle": 6.6541039767703294e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 429.38,
+      "safe_tc_median_us": 2171.62,
+      "candidate_tflops": 156.29,
+      "safe_tc_tflops": 30.9,
+      "candidate_pct_of_measured_peak": 62.1
+    },
+    {
+      "role": "attn_q",
+      "m": 2048,
+      "n": 5120,
+      "k": 3136,
+      "split_k": 1,
+      "geometry": [
+        128,
+        128,
+        64,
+        2,
+        8
+      ],
+      "canonical_identity": "c77f101f9664b44799d114f41391a828ac91f1d1c1dacaa39aa12dfa089ed882",
+      "candidate_programs": [
+        "E_16_40_32_2_8_2_2_2_4_49_64a8871715ab084ae8ac22904127a84d871f03106f01d9c271d260daad73fa91"
+      ],
+      "safe_tc_programs": [
+        "r_128_640_32_2_2_196_2_021719d2631dafa2f4d2e32d292d56c50d83d8c9c74e7b5350c1e2bf997771f4"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 2.47955322265625e-05,
+      "max_rel_err_vs_oracle": 4.138574763989815e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 415.49,
+      "safe_tc_median_us": 2289.86,
+      "candidate_tflops": 158.29,
+      "safe_tc_tflops": 28.72,
+      "candidate_pct_of_measured_peak": 62.9
+    },
+    {
+      "role": "ffn_down",
+      "m": 2048,
+      "n": 3200,
+      "k": 12544,
+      "split_k": 1,
+      "geometry": [
+        64,
+        128,
+        64,
+        2,
+        8
+      ],
+      "canonical_identity": "03067f088c672a1e9eeeae2e32587b838659afa2324cb48fd537ed2b5957747a",
+      "candidate_programs": [
+        "E_32_25_32_2_8_2_2_2_2_196_b65872da9937ad1a55c1907cd51a6490fd947d0c9997936f9be7c76ac0680a69"
+      ],
+      "safe_tc_programs": [
+        "r_128_400_32_2_2_784_2_cd25243abd4f6fba80c534c71c839a8098d337ae1b9914dae395eec62922b8e7"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 0.000202178955078125,
+      "max_rel_err_vs_oracle": 1.6849736671202583e-05,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 982.14,
+      "safe_tc_median_us": 5734.14,
+      "candidate_tflops": 167.41,
+      "safe_tc_tflops": 28.67,
+      "candidate_pct_of_measured_peak": 66.5
+    },
+    {
+      "role": "ffn_up",
+      "m": 2048,
+      "n": 12544,
+      "k": 3136,
+      "split_k": 1,
+      "geometry": [
+        128,
+        128,
+        32,
+        2,
+        4
+      ],
+      "canonical_identity": "eb0f28848ed3c4bb9115c3ac5d7eeb81239de52b4635326deac84e8085bfa8fe",
+      "candidate_programs": [
+        "E_16_98_32_2_4_2_2_4_4_98_589358a60f1d55a89e4a2eda9e754748ac49930bd0b886ac436d3f59ad39f43f"
+      ],
+      "safe_tc_programs": [
+        "r_128_1568_32_2_2_196_2_bb27d7e6162bd1c5ee78d60701373d0195d83e8a7ec2fad20859c750f80e4e34"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 2.7179718017578125e-05,
+      "max_rel_err_vs_oracle": 3.855442288222585e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 913.34,
+      "safe_tc_median_us": 5965.15,
+      "candidate_tflops": 176.42,
+      "safe_tc_tflops": 27.01,
+      "candidate_pct_of_measured_peak": 70.1
+    },
+    {
+      "role": "ssm_in",
+      "m": 2048,
+      "n": 17536,
+      "k": 3136,
+      "split_k": 1,
+      "geometry": [
+        128,
+        128,
+        64,
+        2,
+        2
+      ],
+      "canonical_identity": "9cf41083db62f207c91f30a929fd9ced78b5c5a352d19eee9655f7ff82fceb4a",
+      "candidate_programs": [
+        "E_16_137_32_2_2_2_2_8_4_49_945939066d540d88b0203acaf97c7ede8ac28977746c944a1205a9090bb2a341"
+      ],
+      "safe_tc_programs": [
+        "r_128_2192_32_2_2_196_2_483c101399466be4185a415befef4efae3c3d80572fb3ac1385fddcfea87bb96"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 2.8133392333984375e-05,
+      "max_rel_err_vs_oracle": 4.277197174440049e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 1207.62,
+      "safe_tc_median_us": 9042.05,
+      "candidate_tflops": 186.53,
+      "safe_tc_tflops": 24.91,
+      "candidate_pct_of_measured_peak": 74.1
+    },
+    {
+      "role": "ssm_out",
+      "m": 2048,
+      "n": 3200,
+      "k": 7680,
+      "split_k": 1,
+      "geometry": [
+        64,
+        128,
+        64,
+        1,
+        4
+      ],
+      "canonical_identity": "d398ace2186f8e2014d04120b0e445b670610a0d0cab82bff217aba19f299f8c",
+      "candidate_programs": [
+        "E_32_25_32_4_2_2_4_4_120_97cff1efa8a208c4793f45586a73afade9ed3264231b2d187c3c5e367826fbcf"
+      ],
+      "safe_tc_programs": [
+        "r_128_400_32_2_2_480_2_880ae2ebbaba5042860a25c6855f7d88d7a2cbf22a37fd3ff15d176d6c587a7e"
+      ],
+      "finite": true,
+      "max_abs_err_vs_oracle": 8.20159912109375e-05,
+      "max_rel_err_vs_oracle": 8.991092754412902e-06,
+      "bitexact_vs_safe_tc": true,
+      "distinct_programs": true,
+      "candidate_median_us": 623.74,
+      "safe_tc_median_us": 3299.23,
+      "candidate_tflops": 161.39,
+      "safe_tc_tflops": 30.51,
+      "candidate_pct_of_measured_peak": 64.1
+    }
+  ]
+}
