@@ -342,6 +342,9 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
         if not (PCONTIG > 1 or share) or any(any(rr.arg > e.arg for e in ending_ranges[x]) for rr in r.ranges):
           _realize_axis.append(i)
       ending_ranges[x] = []
+      # SIBLING_FUSE>=2: keep the value in its consumer entirely or realize it to a global buffer, never a partial
+      # shared-memory stage: the realized axes need not be workgroup-local (a 62-160 KB stage on the 4B otherwise)
+      if share and _realize_axis: _realize_axis = list(range(len(out_rngs)))
       if len(_realize_axis):
         rctx.realize_map[x] = _realize_axis
         out_rngs = tuple([(rctx.new_range(x.shape[i]) if i in _realize_axis else r) for i,r in enumerate(out_rngs)])

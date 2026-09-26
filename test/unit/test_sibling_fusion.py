@@ -217,3 +217,25 @@ def test_v2_row_local_declines_reduce_that_depends_on_every_output():
   with unittest.mock.patch.object(rl, "row_local_plan", spy):
     srcs = _nv_sources(Tensor.empty(32, 64, 128).sum(-1).contiguous())
   assert len(srcs) == 1 and plans == [None]
+
+
+def test_v2_rollout_sampler_adds_no_shared_stage_and_keeps_tokens():
+  # Partial realizations under SIBLING_FUSE=2 go to global buffers. A shared-memory stage over realized axes that
+  # are not workgroup-local failed to compile on the 4B (62-160 KB of shared memory); on this tiny model the same
+  # path made 31 stages.
+  from tinygrad.dtype import AddrSpace
+  import tinygrad.codegen as codegen
+  from test.unit.test_nemotron_h_model import tiny_model
+  from tinygrad.llm.nemotron_h_sampler import NemotronHRolloutSampler
+  def run(flag):
+    stages = []
+    orig = codegen.full_rewrite_to_sink
+    def spy(ast, ren, optimize=True):
+      stages.extend(u for u in ast.toposort() if u.op is Ops.STAGE and getattr(u.arg, "addrspace", None) is AddrSpace.LOCAL)
+      return orig(ast, ren, optimize)
+    with unittest.mock.patch.object(codegen, "full_rewrite_to_sink", spy), Context(SIBLING_FUSE=flag):
+      s = NemotronHRolloutSampler(tiny_model(), batch=3, capacity=16, prefix_capacity=8, prompts=2, rows=2, ring=2, window=4)
+      res = s.generate([([3, 17, 5, 42, 9], 2, [5, 7]), ([7, 7, 1], 2, [4, 6])], max_new=8)
+    return len(stages), [t for r in res for t, _ in r]
+  (s0, t0), (s2, t2) = run(0), run(2)
+  assert s2 <= s0 and t2 == t0
