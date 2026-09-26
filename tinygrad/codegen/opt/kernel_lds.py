@@ -329,12 +329,12 @@ def xor_swizzle_chunks(window, bank_dwords:int|None) -> tuple[int, int]:
   return chunks, line_chunks
 
 
-def xor_swizzle_conflict_free(window, bank_dwords:int, rows:int=8) -> bool:
+def xor_swizzle_conflict_free(window, bank_dwords:int, rows:int=8, item_bytes:int=2) -> bool:
   """Whether ``rows`` consecutive rows' copies of each logical chunk land in distinct 16-byte bank groups."""
   chunks, line_chunks = xor_swizzle_chunks(window, bank_dwords)
   for start in range(0, 2*rows, rows):
     for chunk in range(chunks):
-      groups = {(lds_row_element(window, r, chunk*8, 2, bank_dwords=bank_dwords)*2 // 16) % line_chunks
+      groups = {(lds_row_element(window, r, chunk*(16//item_bytes), item_bytes, bank_dwords=bank_dwords)*item_bytes // 16) % line_chunks
                 for r in range(start, start+rows)}
       if len(groups) != min(rows, line_chunks): return False
   return True
@@ -745,6 +745,10 @@ class PrecontractPipelineTemplate:
     validate_precontract_thread_axes(self.geometry, factors, self.threads, self.subtile_m, self.subtile_n,
                                      context="precontract pipeline")
     validate_precontract_contracts(self.tc, self.contracts, context="precontract pipeline")
+    for window in self.geometry.lds_windows:
+      if getattr(window, "xor_swizzle", False) and \
+         not xor_swizzle_conflict_free(window, self.lds_bank_dwords, item_bytes=self.tc.dtype_in.itemsize):
+        raise ValueError("XOR-swizzled LDS window is not bank-conflict free on this target")
     slot_bytes = self.geometry.lds_windows[-1].end
     if (getattr(self.pipeline_plan, "slot_bytes", None) != slot_bytes or
         self.allocation.op is not Ops.DEFINE_LOCAL or self.allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
@@ -1012,6 +1016,7 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
     operand_idx = 0 if role == "A" else 1
     if spec is not None and spec.format == "Q4_K":
       spec.validate()
+      if getattr(window, "xor_swizzle", False): raise ValueError("native Q4 A fragments address padded (unswizzled) LDS rows")
       if role != "A" or tc_dim != 16 or item_bytes != 1 or window.base%16 or window.stride_bytes%16:
         raise ValueError("native Q4 A x4 requires aligned byte-addressed char LDS and an m16 operand")
       row_base=(wave*subtiles+subtile)*tc_dim

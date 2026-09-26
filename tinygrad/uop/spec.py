@@ -534,7 +534,9 @@ spec_program = PatternMatcher([
    lambda x: True if ((isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] == "native_fragment_carrier_v1"
    and x.tag[1] in (2, 4) and x.dtype == dtypes.uint.vec(x.tag[1])
    and len(x.src) == 2 and (x.src[0].dtype.scalar() in {dtypes.uint, dtypes.int, dtypes.weakint} or
-     (isinstance(x.src[0].dtype,PtrDType) and x.src[0].dtype.addrspace is AddrSpace.LOCAL) or x.src[0].op is Ops.INDEX)
+     (isinstance(x.src[0].dtype,PtrDType) and x.src[0].dtype.addrspace is AddrSpace.LOCAL) or
+     (x.src[0].op is Ops.INDEX and x.src[0].src[0].op in (Ops.BUFFER, Ops.DEFINE_LOCAL, Ops.AFTER) and
+      getattr(x.src[0].src[0].arg, "addrspace", AddrSpace.LOCAL) is AddrSpace.LOCAL))
    and x.src[1].dtype.scalar() in {dtypes.int, dtypes.uint, dtypes.weakint})
    or any((isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] == "native_fragment_carrier_v1")
           or (s.op is Ops.CUSTOMI and s.arg in (("native_fragment_x2_v1",), ("native_fragment_x4_v1",))) for s in x.src)) else None),

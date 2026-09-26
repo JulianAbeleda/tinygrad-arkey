@@ -186,3 +186,12 @@ def test_candidate_registry_decodes_matrix_fragments_and_swizzle_keys():
   template["schedule"]["pipeline"]["fragment_load"] = "bogus"
   with pytest.raises(ValueError, match="fragment load"):
     candidate_registry(expand_compact_candidate_set(_compact("bad", nv["target"], template, [("r", (512, 512, 512))]), **nv["target"]))
+
+
+def test_xor_bound_is_integer_only_and_tight():
+  from tinygrad.uop.ops import UOp
+  from tinygrad.dtype import dtypes as dt
+  r = UOp.range(6, 991)
+  assert (r ^ 3).vmin == 0 and (r ^ 3).vmax == 7
+  b = UOp.variable("b", 0, 1, dt.bool) if hasattr(UOp, "variable") else None
+  if b is not None: assert (b ^ True).vmax in (True, 1)
