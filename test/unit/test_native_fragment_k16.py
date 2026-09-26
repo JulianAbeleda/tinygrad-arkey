@@ -22,7 +22,7 @@ def test_native_k16_renders_and_compiles():
   o=UOp.placeholder((128,),dtypes.int32,0); a=UOp.placeholder((64,),dtypes.uint32,1); b=UOp.placeholder((128,),dtypes.int8,2)
   p=to_program(kernel(o,a,b),CUDARenderer(Target.parse('NV:CUDA:sm_120'))); s=next(x.arg for x in p.src if x.op is Ops.SOURCE)
   NVRTCCompiler('sm_120',ptx=True,cache_key='native_fragment_k16_test').compile(s)
-  assert s.count('ldmatrix.sync.aligned.m8n8.x2.b16')==1
+  assert s.count('ldmatrix.sync.aligned.m8n8.x2.shared.b16')==1
   assert 'mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32' in s
   rng=np.random.default_rng(20260831); av=rng.integers(-127,128,(16,16),dtype=np.int8); bv=rng.integers(-127,128,(16,8),dtype=np.int8)
   d=Device['NV']; alloc=lambda n:d.allocator._alloc(n,BufferSpec())

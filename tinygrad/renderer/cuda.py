@@ -410,13 +410,13 @@ class CUDARenderer(CStyleLanguage):
               "template <class T, class F> __device__ __forceinline__ T tg_bitcast(F v) { union U { F f; T t; }; U u; u.f = v; return u.t; }"]
     if any(u.op is Ops.CUSTOMI and isinstance(u.arg,str) and "tg_ldmatrix_x4(" in u.arg for u in uops):
       prefix.append('''__device__ __forceinline__ uint4 tg_ldmatrix_x4(const void *p) {
-  uint4 r; asm volatile("ldmatrix.sync.aligned.m8n8.x4.b16 {%0,%1,%2,%3},[%4];"
-    : "=r"(r.x),"=r"(r.y),"=r"(r.z),"=r"(r.w) : "l"(p)); return r;
+  uint4 r; asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3},[%4];"
+    : "=r"(r.x),"=r"(r.y),"=r"(r.z),"=r"(r.w) : "r"((unsigned)__cvta_generic_to_shared(p))); return r;
 }''')
     if any(u.op is Ops.CUSTOMI and isinstance(u.arg,str) and "tg_ldmatrix_x2(" in u.arg for u in uops):
       prefix.append('''__device__ __forceinline__ uint2 tg_ldmatrix_x2(const void *p) {
-  uint2 r; asm volatile("ldmatrix.sync.aligned.m8n8.x2.b16 {%0,%1},[%2];"
-    : "=r"(r.x),"=r"(r.y) : "l"(p)); return r;
+  uint2 r; asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0,%1},[%2];"
+    : "=r"(r.x),"=r"(r.y) : "r"((unsigned)__cvta_generic_to_shared(p))); return r;
 }''')
     if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
       kernel = _nv_pdl_body_split_phase(function_name, kernel)

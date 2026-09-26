@@ -32,7 +32,7 @@ def test_q4_a_large_local_marker_does_not_emit_allocation_width_vector_types(mon
   monkeypatch.setattr(NVRTCCompiler,"compile",lambda self,src:b"render-only")
   program=to_program(kernel(out),CUDARenderer(Target.parse("NV:CUDA:sm_120")))
   src=next(x.arg for x in program.src if x.op is Ops.SOURCE)
-  assert "ldmatrix.sync.aligned.m8n8.x4.b16" in src
+  assert "ldmatrix.sync.aligned.m8n8.x4.shared.b16" in src
   assert "signed_char20480" not in src and "unsigned_int20480" not in src
 
 def test_q6k_k64_fragment_gate_emits_native_x2():
@@ -40,7 +40,7 @@ def test_q6k_k64_fragment_gate_emits_native_x2():
   program=to_program(emit_q6k_k64_fragment_readback()(out,source),CUDARenderer(Target.parse("NV:CUDA:sm_120")))
   src=next(x.arg for x in program.src if x.op is Ops.SOURCE)
   ptx=NVRTCCompiler("sm_120",ptx=True,cache_key="q6k_k64_fragment_gate_v1").compile(src).decode()
-  assert "ldmatrix.sync.aligned.m8n8.x2.b16" in src and "ldmatrix.sync.aligned.m8n8.x2" in ptx
+  assert "ldmatrix.sync.aligned.m8n8.x2.shared.b16" in src and "ldmatrix.sync.aligned.m8n8.x2" in ptx
 
 def test_native_fragment_x4_renders_one_ldmatrix_and_compiles():
   out=UOp.placeholder((128,),dtypes.uint32,0); source=UOp.placeholder((128,),dtypes.uint32,1)
@@ -48,7 +48,7 @@ def test_native_fragment_x4_renders_one_ldmatrix_and_compiles():
   src=next(x.arg for x in program.src if x.op is Ops.SOURCE)
   ptx=NVRTCCompiler("sm_120",ptx=True,cache_key="native_fragment_x4_readback_v1").compile(src).decode()
   assert program.arg.local_size==(32,1,1)
-  assert src.count("ldmatrix.sync.aligned.m8n8.x4.b16")==1
+  assert src.count("ldmatrix.sync.aligned.m8n8.x4.shared.b16")==1
   assert "ldmatrix.sync.aligned.m8n8.x4" in ptx
 
 def test_native_fragment_feeds_existing_signed_imma_abi():
@@ -56,5 +56,5 @@ def test_native_fragment_feeds_existing_signed_imma_abi():
   program=to_program(emit_native_fragment_imma()(out,a,b),CUDARenderer(Target.parse("NV:CUDA:sm_120")))
   src=next(x.arg for x in program.src if x.op is Ops.SOURCE)
   ptx=NVRTCCompiler("sm_120",ptx=True,cache_key="native_fragment_x4_imma_v1").compile(src).decode()
-  assert src.count("ldmatrix.sync.aligned.m8n8.x4.b16")==1
+  assert src.count("ldmatrix.sync.aligned.m8n8.x4.shared.b16")==1
   assert ptx.count("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32")==1

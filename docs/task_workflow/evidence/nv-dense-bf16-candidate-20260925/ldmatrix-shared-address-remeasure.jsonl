@@ -1,0 +1,40 @@
+{"role": "attn_kv", "m": 64, "n": 1024, "k": 3136, "geometry": [64, 32, 32, 2, 2], "split_k": 7, "pipeline": [4, true, true, true], "median_us": 11.62, "tflops": 35.39, "finite": true, "max_rel_vs_unsplit": 3.612616637838073e-06}
+{"role": "attn_kv", "m": 128, "n": 1024, "k": 3136, "geometry": [64, 64, 32, 2, 2], "split_k": 7, "pipeline": [4, true, true, true], "median_us": 15.33, "tflops": 53.63, "finite": true, "max_rel_vs_unsplit": 3.6633771287597483e-06}
+{"role": "attn_kv", "m": 256, "n": 1024, "k": 3136, "geometry": [64, 64, 32, 2, 2], "split_k": 7, "pipeline": [4, true, true, true], "median_us": 23.14, "tflops": 71.07, "finite": true, "max_rel_vs_unsplit": 3.39606140187243e-06}
+{"role": "attn_kv", "m": 512, "n": 1024, "k": 3136, "geometry": [64, 64, 64, 2, 2], "split_k": 1, "median_us": 42.34, "tflops": 77.67, "finite": true}
+{"role": "attn_kv", "m": 2048, "n": 1024, "k": 3136, "geometry": [64, 256, 32, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 118.69, "tflops": 110.82, "finite": true}
+{"role": "attn_o", "m": 64, "n": 3200, "k": 5120, "geometry": [64, 64, 32, 2, 2], "split_k": 8, "pipeline": [4, true, true, true], "median_us": 33.98, "tflops": 61.71, "finite": true, "max_rel_vs_unsplit": 6.266740911087254e-06}
+{"role": "attn_o", "m": 128, "n": 3200, "k": 5120, "geometry": [64, 64, 32, 2, 2], "split_k": 4, "pipeline": [4, true, true, true], "median_us": 53.31, "tflops": 78.67, "finite": true, "max_rel_vs_unsplit": 5.218661044636974e-06}
+{"role": "attn_o", "m": 256, "n": 3200, "k": 5120, "geometry": [64, 64, 32, 2, 2], "split_k": 4, "pipeline": [4, true, true, true], "median_us": 87.62, "tflops": 95.74, "finite": true, "max_rel_vs_unsplit": 5.520282684301492e-06}
+{"role": "attn_o", "m": 512, "n": 3200, "k": 5120, "geometry": [64, 64, 64, 2, 2], "split_k": 2, "median_us": 151.26, "tflops": 110.91, "finite": true, "max_rel_vs_unsplit": 4.37227117799921e-06}
+{"role": "attn_o", "m": 2048, "n": 3200, "k": 5120, "geometry": [64, 128, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 420.0, "tflops": 159.78, "finite": true}
+{"role": "attn_q", "m": 64, "n": 5120, "k": 3136, "geometry": [64, 128, 32, 1, 4], "split_k": 7, "pipeline": [4, true, true, true], "median_us": 33.5, "tflops": 61.34, "finite": true, "max_rel_vs_unsplit": 3.773535354412161e-06}
+{"role": "attn_q", "m": 128, "n": 5120, "k": 3136, "geometry": [64, 64, 32, 1, 4], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 41.73, "tflops": 98.51, "finite": true}
+{"role": "attn_q", "m": 256, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 1, 4], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 69.7, "tflops": 117.95, "finite": true}
+{"role": "attn_q", "m": 512, "n": 5120, "k": 3136, "geometry": [128, 128, 32, 4, 2], "split_k": 2, "median_us": 142.18, "tflops": 115.64, "finite": true, "max_rel_vs_unsplit": 2.5071281015698332e-06}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 394.66, "tflops": 166.64, "finite": true}
+{"role": "ffn_down", "m": 64, "n": 3200, "k": 12544, "geometry": [64, 64, 32, 2, 2], "split_k": 14, "pipeline": [6, true, true, true], "median_us": 69.76, "tflops": 73.65, "finite": true, "max_rel_vs_unsplit": 1.3797448445984628e-05}
+{"role": "ffn_down", "m": 64, "n": 3200, "k": 12544, "geometry": [64, 128, 64, 2, 2], "split_k": 7, "pipeline": [3, true, true, true], "median_us": 83.36, "tflops": 61.64, "finite": true, "max_rel_vs_unsplit": 1.3150693121133372e-05}
+{"role": "ffn_down", "m": 128, "n": 3200, "k": 12544, "geometry": [64, 64, 64, 2, 2], "split_k": 4, "pipeline": [3, true, true, true], "median_us": 107.74, "tflops": 95.37, "finite": true, "max_rel_vs_unsplit": 1.0816057510965038e-05}
+{"role": "ffn_down", "m": 256, "n": 3200, "k": 12544, "geometry": [64, 64, 32, 2, 2], "split_k": 4, "pipeline": [4, true, true, true], "median_us": 177.57, "tflops": 115.74, "finite": true, "max_rel_vs_unsplit": 1.4791012290515937e-05}
+{"role": "ffn_down", "m": 512, "n": 3200, "k": 12544, "geometry": [64, 64, 64, 2, 2], "split_k": 2, "median_us": 341.38, "tflops": 120.41, "finite": true, "max_rel_vs_unsplit": 1.0896286767092533e-05}
+{"role": "ffn_down", "m": 2048, "n": 3200, "k": 12544, "geometry": [64, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 967.62, "tflops": 169.92, "finite": true}
+{"role": "ffn_up", "m": 64, "n": 12544, "k": 3136, "geometry": [64, 128, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 64.38, "tflops": 78.21, "finite": true}
+{"role": "ffn_up", "m": 128, "n": 12544, "k": 3136, "geometry": [64, 64, 64, 2, 2], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 109.15, "tflops": 92.26, "finite": true}
+{"role": "ffn_up", "m": 256, "n": 12544, "k": 3136, "geometry": [64, 64, 64, 2, 2], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 174.05, "tflops": 115.72, "finite": true}
+{"role": "ffn_up", "m": 512, "n": 12544, "k": 3136, "geometry": [64, 64, 64, 2, 2], "split_k": 1, "median_us": 316.1, "tflops": 127.44, "finite": true}
+{"role": "ffn_up", "m": 2048, "n": 12544, "k": 3136, "geometry": [128, 128, 32, 2, 4], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 919.58, "tflops": 175.22, "finite": true}
+{"role": "output", "m": 64, "n": 131072, "k": 3136, "geometry": [64, 64, 64, 2, 2], "split_k": 1, "pipeline": [6, true, true, true], "median_us": 511.52, "tflops": 102.86, "finite": true}
+{"role": "output", "m": 128, "n": 131072, "k": 3136, "geometry": [128, 64, 64, 2, 2], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 655.01, "tflops": 160.65, "finite": true}
+{"role": "output", "m": 256, "n": 131072, "k": 3136, "geometry": [128, 64, 64, 2, 2], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 1230.18, "tflops": 171.08, "finite": true}
+{"role": "output", "m": 512, "n": 131072, "k": 3136, "geometry": [128, 128, 32, 4, 2], "split_k": 1, "median_us": 3631.26, "tflops": 115.91, "finite": true}
+{"role": "ssm_in", "m": 64, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 2], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 77.06, "tflops": 91.35, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 2, 4], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 127.2, "tflops": 110.68, "finite": true}
+{"role": "ssm_in", "m": 256, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 2, 4], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 219.84, "tflops": 128.08, "finite": true}
+{"role": "ssm_in", "m": 512, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 4, 2], "split_k": 1, "median_us": 495.01, "tflops": 113.76, "finite": true}
+{"role": "ssm_in", "m": 2048, "n": 17536, "k": 3136, "geometry": [128, 128, 64, 2, 2], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 1193.41, "tflops": 188.75, "finite": true}
+{"role": "ssm_out", "m": 64, "n": 3200, "k": 7680, "geometry": [64, 64, 32, 2, 2], "split_k": 8, "pipeline": [4, true, true, true], "median_us": 45.79, "tflops": 68.7, "finite": true, "max_rel_vs_unsplit": 8.489646461384837e-06}
+{"role": "ssm_out", "m": 128, "n": 3200, "k": 7680, "geometry": [128, 64, 32, 4, 2], "split_k": 3, "median_us": 70.72, "tflops": 88.96, "finite": true, "max_rel_vs_unsplit": 7.403278232231969e-06}
+{"role": "ssm_out", "m": 256, "n": 3200, "k": 7680, "geometry": [64, 64, 32, 2, 2], "split_k": 4, "pipeline": [4, true, true, true], "median_us": 119.26, "tflops": 105.5, "finite": true, "max_rel_vs_unsplit": 7.870132321841083e-06}
+{"role": "ssm_out", "m": 512, "n": 3200, "k": 7680, "geometry": [128, 128, 32, 4, 2], "split_k": 3, "median_us": 214.56, "tflops": 117.29, "finite": true, "max_rel_vs_unsplit": 7.500605988752795e-06}
+{"role": "ssm_out", "m": 2048, "n": 3200, "k": 7680, "geometry": [64, 128, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 609.44, "tflops": 165.17, "finite": true}
