@@ -32,7 +32,12 @@ Continuously batched `NemotronHRolloutSampler` (the RLOO sampler), step + flush 
 
 The (bucket, wrap) step graphs share one pool of intermediate arenas (7cc433d27, `shared_arenas`): all 13 warm at
 B=64 capacity 4096 in a 1.24 GB pool (mem_used 20.1 -> 21.3 GB), 11 at B=128 capacity 2048 in 1.71 GB. B=128 at
-capacity 4096 does not fit its per-lane state (about 30 GB before any graph).
+capacity 4096 fits since 3067908d6 + 96009907e: prompt slots keep only attention's prefix keys/values and one
+prompt Mamba state serves every slot (34 x 83 MB -> 83 MB), and the ring flushes plan into the same pool. B=128 at
+capacity 4096 on 96009907e (with the promoted decode routes): 29.2 GB before warm-up, 32.2 GB after all 14 graphs
+(pool 2.95 GB, was 2.04 before the routes); thin headroom. Budget there: model 8.0, lane Mamba state 12.4 (fp32),
+generated-key ring 8.6, pool 3.0, the rest < 0.3. A long prompt capacity adds 34 x 16 KB per prefix token (10k: 5.4 GB)
+and does not fit without a further cut (bf16 Mamba state: -5.2 GB, needs the audit's KL gate).
 
 Priming a prompt into a rollout slot (caae90e1e: one padded tail piece, reset and slot copy as graphs), 6 prompts
 each after capture: 256 tokens 46 ms (was ~670), 1001 tokens 160-170 ms, 2050 tokens 340-360 ms.
@@ -44,6 +49,7 @@ cap 4096, mean 1.44k):
 | B | fixed batch (runs to its longest) | refill | active lanes, prompts queued / whole run | tok/s vs B/step |
 |---|---|---|---|---|
 | 32 | 1001 tok/s (43% of lane-steps useful) | **1701 tok/s (1.70x)**; with buckets and graph priming, all graphs warm: **1876 (1.87x)** | 99.1% / 80% | 0.71; 0.78 |
+| 128 | fixed batch at 4096 does not fit | **2448 tok/s** (step 36.2 ms whole ring) | 98.9% / 70% | 0.69 |
 | 64 | 1094 tok/s (37%) | **1726 tok/s (1.58x)**; with buckets, shared arenas, all graphs warm: **1922 (1.76x)** | 99.0% / 66% | 0.58; 0.65 |
 
 With caae90e1e, priming 16 prompts takes 0.66 s of the 99 s run (was 11 s). Without warming the 13 step graphs
