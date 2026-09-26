@@ -107,15 +107,19 @@ def _instruction_family_for(backend: str, arch: str, dtype_in, dtype_out) -> str
 # ``fragment_layout`` names this repo's emitter contract, not hardware -- it stays a declared
 # literal cited to the emitter that implements it (AMD: cstyle.py rdna3 packed-WMMA branch;
 # CUDA: cuda.py ``mma.sync`` lowering; Metal: cstyle.py ``simdgroup_multiply_accumulate``).
+# The register-staged schedules use static __shared__, capped by ptxas: CUDARenderer.max_static_local_bytes.
+def _cuda_static_local_max() -> int:
+  from tinygrad.renderer.cuda import CUDARenderer
+  return CUDARenderer.max_static_local_bytes
 NV_SM120_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="nvidia.sm120.prefill.wmma_lds.single_buffer.v1", backend="CUDA", arch="sm120",
-  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16,
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=_cuda_static_local_max(), vector_bytes=16,
   instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
   lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
 NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   capability_id="nvidia.sm120.prefill.wmma_lds.two_buffer_stage1.v1", backend="CUDA", arch="sm120",
-  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2,
+  wave_size=_wave_size_for_arch("sm120"), max_lds_bytes=_cuda_static_local_max(), vector_bytes=16, buffer_count=2,
   stage_count=1,
   instruction_family=_instruction_family_for("CUDA", "sm120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
@@ -137,13 +141,13 @@ NV_SM120_ASYNC_RING_CAPABILITY = FullKernelCapability(
 # admission remains fail-closed and the hardware facts are identical.
 NV_SM_120_RUNTIME_SINGLE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="nvidia.sm_120.prefill.wmma_lds.single_buffer.runtime.v1", backend="NV", arch="sm_120",
-  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16,
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=_cuda_static_local_max(), vector_bytes=16,
   instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
   lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
 NV_SM_120_RUNTIME_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   capability_id="nvidia.sm_120.prefill.wmma_lds.two_buffer_stage1.runtime.v1", backend="NV", arch="sm_120",
-  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=49152, vector_bytes=16, buffer_count=2, stage_count=1,
+  wave_size=_wave_size_for_arch("sm_120"), max_lds_bytes=_cuda_static_local_max(), vector_bytes=16, buffer_count=2, stage_count=1,
   instruction_family=_instruction_family_for("CUDA", "sm_120", dtypes.half, dtypes.float),
   fragment_layout="cuda_mma_f32_8x16x16_f16_lds2_static", transport="lds",
   lane_ownership="cuda_mma_f32_8x16x16_f16_lds2_static", waitcnt=(("vm", None), ("lgkm", None)))
