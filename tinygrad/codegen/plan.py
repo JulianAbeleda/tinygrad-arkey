@@ -52,6 +52,8 @@ PLAN_GATES: tuple[tuple[str, str], ...] = (
   ("MV_ROWS_PER_THREAD", "4"), ("MV_THREADS_PER_ROW", "8"), ("MV_UNROLL_MAX", "32"),
   ("MV_MAX_BATCH", "16"), ("MV_VEC", "1"), ("MV_WIDE", "1"),
   ("MV_UNROLL_REDUCE", "1"), ("REGALLOC_ADDR_REMAT_NO_END", "0"), ("REGALLOC_ADDR_REMAT_END_NO_EMIT", "0"),
+  # >=2 enables the row-local lowering in apply_opts (codegen/opt/row_local.py)
+  ("SIBLING_FUSE", "0"),
 )
 
 # HOW each gate is actually read by the code it gates. This is not documentation -- `observed_gate_values()` below
@@ -104,6 +106,7 @@ GATE_READERS: dict[str, tuple] = {
   "MV_UNROLL_REDUCE": ("getenv", 1),
   "REGALLOC_ADDR_REMAT_NO_END": ("getenv", 0),
   "REGALLOC_ADDR_REMAT_END_NO_EMIT": ("getenv", 0),
+  "SIBLING_FUSE": ("contextvar",),
 }
 
 

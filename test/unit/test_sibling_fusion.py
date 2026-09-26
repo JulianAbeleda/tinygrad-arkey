@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, dtypes, nn, GlobalCounters, Device
+from tinygrad.uop.ops import Ops
 from tinygrad.helpers import Context
 import tinygrad.schedule.sibling as sibling
 
@@ -131,3 +132,88 @@ def test_I5_sibling_writes_what_another_reads_refused():
   y = (a2 * 2)
   upd = a2.assign(a2 + b)
   assert "I5 memory" in _decisions(y.contiguous(), upd)
+
+
+# ***** SIBLING_FUSE=2: shared output ranges in rangeify + row-local lowering (codegen/opt/row_local.py) *****
+
+from tinygrad.codegen.opt.row_local import lane_count
+
+
+def test_v2_residual_rmsnorm_hilo_is_one_kernel_and_accurate():
+  Tensor.manual_seed(1)
+  D = 3136
+  norm = nn.RMSNorm(D, 1e-5)
+  norm.weight = Tensor.rand(D).contiguous().realize()
+  hidden = (Tensor.randn(16, 1, D) * 4).contiguous().realize()
+  mixed = Tensor.randn(16, 1, D).cast(dtypes.bfloat16).contiguous().realize()
+  n0, (x0, hi0, lo0) = _run(*_residual_rmsnorm_hilo(hidden, mixed, norm), fuse=0)
+  n2, (x2, hi2, lo2) = _run(*_residual_rmsnorm_hilo(hidden, mixed, norm), fuse=2)
+  assert n0 == 5 and n2 == 1
+  assert np.array_equal(_bits(x0), _bits(x2))
+  x64 = hidden.numpy().astype(np.float64) + mixed.float().numpy().astype(np.float64)
+  n64 = x64 / np.sqrt((x64 * x64).mean(-1, keepdims=True) + 1e-5) * norm.weight.numpy().astype(np.float64)
+  err = lambda hi, lo: np.abs(hi.astype(np.float64) + lo.astype(np.float64) - n64).max() / np.abs(n64).max()
+  # a different summation order, not a loss of precision: same error against fp64 as the unfused schedule
+  assert err(hi2, lo2) < 2 * err(hi0, lo0) + 1e-7
+
+
+def test_v2_no_workgroup_spanning_shared_stage():
+  # PCONTIG=2 alone stages the whole normed tensor in shared memory (602 KB at [32, 3136]); with SIBLING_FUSE=2 the
+  # consumers share ranges and nothing is staged
+  Tensor.manual_seed(0)
+  norm = nn.RMSNorm(256, 1e-5)
+  norm.weight = Tensor.rand(256).contiguous().realize()
+  hidden = Tensor.randn(8, 1, 256).contiguous().realize()
+  mixed = Tensor.randn(8, 1, 256).cast(dtypes.bfloat16).contiguous().realize()
+  seen = []
+  import tinygrad.codegen as codegen
+  orig = codegen.full_rewrite_to_sink
+  def spy(ast, ren, optimize=True):
+    seen.extend(u for u in ast.toposort() if u.op is Ops.STAGE)
+    return orig(ast, ren, optimize)
+  with unittest.mock.patch.object(codegen, "full_rewrite_to_sink", spy):
+    n, _ = _run(*_residual_rmsnorm_hilo(hidden, mixed, norm), fuse=2, pcontig=2)
+  assert n == 1 and seen == []
+
+
+def test_v2_lane_count():
+  assert lane_count(3136, 3136, 512) == 448  # 14 warps: the largest whole-warp common divisor
+  assert lane_count(100, 30, 512) == 10      # no whole-warp divisor: the largest common one
+  assert lane_count(7, 11, 512) is None
+
+
+def _nv_sources(*outs):
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cuda import CUDARenderer
+  with Context(SIBLING_FUSE=2):
+    lin = Tensor.schedule_linear(*outs)
+    ren = CUDARenderer(Target.parse("NV:CUDA:sm_120"))
+    with unittest.mock.patch.object(type(ren.compiler), "compile", lambda self, src: b""):
+      progs = [to_program(c.src[0], ren) for c in lin.src if c.op is Ops.CALL and c.src[0].op is Ops.SINK]
+  return [next(u.arg for u in p.src if u.op is Ops.SOURCE and isinstance(u.arg, str)) for p in progs]
+
+
+def test_v2_gpu_lowering_is_one_workgroup_per_row():
+  D = 3136
+  norm = nn.RMSNorm(D, 1e-5)
+  norm.weight = Tensor.empty(D)
+  srcs = _nv_sources(*_residual_rmsnorm_hilo(Tensor.empty(32, 1, D), Tensor.empty(32, 1, D, dtype=dtypes.bfloat16), norm))
+  assert len(srcs) == 1
+  src = srcs[0]
+  # rows are the grid, 448 lanes reduce a row through a 448-entry shared buffer and then write its three outputs
+  assert "blockIdx.x; /* 32 */" in src and "threadIdx.x; /* 448 */" in src and "float buf1[448]" in src
+  assert src.count("__syncthreads") == 1 and "blockIdx.y" not in src
+
+
+def test_v2_row_local_declines_reduce_that_depends_on_every_output():
+  # out[b, d] = sum_r x[b, d, r]: the reduce depends on d, so no lane can be shared; the heuristic keeps the kernel
+  import tinygrad.codegen.opt.row_local as rl
+  plans = []
+  orig = rl.row_local_plan
+  def spy(k):
+    plans.append(ret:=orig(k))
+    return ret
+  with unittest.mock.patch.object(rl, "row_local_plan", spy):
+    srcs = _nv_sources(Tensor.empty(32, 64, 128).sum(-1).contiguous())
+  assert len(srcs) == 1 and plans == [None]

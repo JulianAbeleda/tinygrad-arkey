@@ -7,7 +7,7 @@ from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes, PtrDType
 from tinygrad.helpers import colored, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
-from tinygrad.helpers import ALLOW_TF32, count
+from tinygrad.helpers import ALLOW_TF32, count, SIBLING_FUSE
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
 from tinygrad.codegen.simplify import pm_flatten_range
@@ -1052,6 +1052,21 @@ def warmstart_binding(ast:UOp, ren:Renderer) -> tuple|None:
   if key == () or (opts := _WARMSTART_OPTS.get(key)) is None: return None
   return (tuple(opts), (_WARMSTART_CANDIDATE_CONTEXTS or {}).get(key))
 
+def _apply_row_local(k:Scheduler) -> bool:
+  """Row-local lowering (codegen/opt/row_local.py); on a threaded target without locals, thread over the rows."""
+  from tinygrad.codegen.opt.row_local import apply_row_local
+  if not apply_row_local(k): return False
+  if not k.ren.has_local and k.ren.has_threads and k.ren.global_max is not None:
+    rows = set(k.reduceops[0].src[0].ranges) & set(k._globalizable_rngs())
+    for axis, rng in enumerate(k.rngs):
+      if rng not in rows or not isinstance(sz:=k.full_shape[axis], int): continue
+      amt = next((a for a in range(min(k.ren.global_max[0], sz), 1, -1) if sz % a == 0), None)
+      if amt is None: continue
+      try: k.apply_opt(Opt(OptOps.THREAD, axis, amt))
+      except KernelOptError: pass
+      break
+  return True
+
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
@@ -1085,6 +1100,8 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
       if not NOOPT and not any(u.op is Ops.STAGE for u in ast.backward_slice):
         from tinygrad.codegen.opt.heuristic import hand_coded_optimizations
         k = hand_coded_optimizations(k)
+  elif not NOOPT and (ast.arg is None or ast.arg.applied_opts == ()) and SIBLING_FUSE.value >= 2 and _apply_row_local(k):
+    pass
   elif not NOOPT and (ast.arg is None or ast.arg.applied_opts == ()):
     from tinygrad.codegen.opt.heuristic import hand_coded_optimizations
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet

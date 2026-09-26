@@ -5,7 +5,7 @@ from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, graph_rewrite, sint, AxisType, profile_matches
 from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink, CompositeReduceTag
 from tinygrad.uop.symbolic import symbolic, pm_simplify_valid, pm_drop_and_clauses
-from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, Context, SPEC
+from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, SIBLING_FUSE, colored, Context, SPEC
 
 # LR-040: the realization map moved to its owner, tinygrad/schedule/realize.py. Re-exported here so
 # this module's public surface is unchanged while the rewrite that consumes it stays put.
@@ -200,6 +200,27 @@ def apply_movement_op(op:Ops, in_shape:tuple[sint,...], arg:tuple, rngs:tuple[UO
     case _: raise RuntimeError(f"{op} is not a MovementOp")
   return rngs
 
+def _store_io(st:UOp) -> tuple[UOp, set[UOp]]:
+  """The buffer a realized STORE writes, and the buffers its value and index read."""
+  reads = {u.buf_uop for root in (st.src[1], *st.src[0].src[1:]) for u in root.toposort() if u.op in {Ops.BUFFER, Ops.PARAM}}
+  return st.src[0].buf_uop, reads
+
+def _sibling_ranges(x:UOp, groups:list[tuple[tuple[UOp, ...], list[UOp]]]) -> tuple[UOp, ...]|None:
+  """Output ranges of an earlier sibling group x may join, or None. The tensor-graph form of the kernel-graph
+  invariants in schedule/sibling.py: same shape and device (I1, I2), neither depends on the other (I3), and no
+  member reads or writes a buffer another writes (I5). I4 (one reduce) is left to the kernel-graph pass."""
+  wx, rx = _store_io(x)
+  for rngs, members in groups:
+    if members[0].shape != x.shape or members[0].device != x.device: continue
+    ok = True
+    for m in members:
+      wm, rm = _store_io(m)
+      if x in m.backward_slice or m in x.backward_slice or wm is wx or wm in rx or wx in rm: ok = False; break
+    if ok:
+      members.append(x)
+      return rngs
+  return None
+
 @profile_matches
 def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
   if debug: print("**************************")
@@ -237,6 +258,10 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
 
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}
+  # SIBLING_FUSE>=2: realized STOREs that may share one kernel also share their output ranges (_sibling_ranges), so
+  # a value their consumers share is not realized on their account, and a row reduce stays in its consumer
+  share = SIBLING_FUSE.value >= 2
+  sibling_groups: list[tuple[tuple[UOp, ...], list[UOp]]] = []
   for x in reversed(tsink_toposort):
     if x.op in {Ops.DEVICE, Ops.UNIQUE, Ops.SCOPED_VALUE}: continue
 
@@ -260,7 +285,9 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
     consumer_rngs = [rctx.range_map[c][0] for c in consumer_map[x] if c in rctx.range_map]
     if x in rctx.realize_map:
       # if this is in the realize_map, we create new ranges (at the output)
-      out_rngs = tuple(rctx.new_range(s) for s in x.shape)
+      shared = _sibling_ranges(x, sibling_groups) if share and x.op is Ops.STORE and rctx.realize_map[x] is None else None
+      out_rngs = shared if shared is not None else tuple(rctx.new_range(s) for s in x.shape)
+      if share and x.op is Ops.STORE and shared is None: sibling_groups.append((out_rngs, [x]))
       # all ranges are ended now
       ending_ranges[x] = []
       # mark all ranges as ended
@@ -297,6 +324,12 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
           _out_rngs.append(rctx.new_range(x.shape[i]))
           _realize_axis.append(i)
       out_rngs = tuple(_out_rngs)
+      # SIBLING_FUSE>=2: consumers that disagree on some axes get a global buffer, not a shared-memory stage. The
+      # disagreeing axes can include outer (grid) ranges, and a stage spanning those does not fit a workgroup
+      # (PCONTIG=2 staged the whole [32, 3136] tensor, 602 KB, on the RMSNorm repro).
+      if share and _realize_axis and len(_realize_axis) != len(x.shape):
+        _realize_axis = list(range(len(x.shape)))
+        out_rngs = tuple(rctx.new_range(s) for s in x.shape)
 
       # we have to (partially) realize here if there's new ranges
       if len(_realize_axis): rctx.realize_map[x] = _realize_axis
@@ -306,7 +339,7 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       _realize_axis = rctx.realize_map.get(x) or []
       for i,r in enumerate(out_rngs):
         if i in _realize_axis: continue
-        if not (PCONTIG > 1) or any(any(rr.arg > e.arg for e in ending_ranges[x]) for rr in r.ranges):
+        if not (PCONTIG > 1 or share) or any(any(rr.arg > e.arg for e in ending_ranges[x]) for rr in r.ranges):
           _realize_axis.append(i)
       ending_ranges[x] = []
       if len(_realize_axis):
