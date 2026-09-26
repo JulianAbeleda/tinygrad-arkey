@@ -80,10 +80,51 @@ def _matvec(k:Scheduler, max_batch:int):
   idx0, idx1 = _buf_idx(_loaded(mulop.src[0])), _buf_idx(_loaded(mulop.src[1]))
   if idx0 is None or idx1 is None: return None
   first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
+  # x * x (a norm's sum of squares) multiplies one load by itself: there is no second operand to share across output
+  # rows, and the matvec schedule's row upcasts only take lanes from the reduce (`_row_reduce_group` takes it)
+  if _loaded(mulop.src[0]) is _loaded(mulop.src[1]): return None
   batch = [r for r in idx0.ranges if r not in idx1.ranges]
   if not all(r.arg[-1] is AxisType.GLOBAL and isinstance(r.vmax, int) for r in batch) or prod(r.vmax+1 for r in batch) > max_batch: return None
   if not any(u is first_reduce_rng for u in idx0.split_uop(Ops.ADD)): return None
   return mulop, idx0, idx1, first_reduce_rng, batch
+
+def _stride_one(idx, rng) -> bool:
+  """`rng` is a bare (stride-1) term of the flattened index `idx`."""
+  return idx is not None and any(c is rng for c in idx.split_uop(Ops.ADD))
+
+def _coalescing_axis(k:Scheduler) -> int|None:
+  """The GLOBAL/LOOP axis that is stride-1 in the most buffer indexes (ties: the later axis), if any.
+
+  Thread lanes are coalesced only along this axis: consecutive lanes then touch consecutive elements."""
+  best = None
+  for axis in k.axes_of(AxisType.GLOBAL, AxisType.LOOP):
+    count = sum(_stride_one(_buf_idx(b), k.rngs[axis]) for b in k.bufs)
+    if count and (best is None or count >= best[0]): best = (count, axis)
+  return None if best is None else best[1]
+
+def _warp_lanes_along(to_local:list[tuple[int, int]], axis:int) -> int:
+  """Lanes of one 32-thread warp that step along `axis`, given locals `to_local` (thread ids go in axis order, the
+  lowest local axis fastest): 1 when `axis` is not local or earlier locals already fill the warp."""
+  stride = 1
+  for local_axis, size in sorted(to_local):
+    if local_axis == axis: return max(1, min(size, 32 // stride)) if stride < 32 else 1
+    stride *= size
+  return 1
+
+def _row_reduce_group(k:Scheduler) -> int|None:
+  """Lanes per output for a row reduce: one reduce axis that is stride-1 in every load that reduces over it, and every
+  such load indexed by every output range (a load reused across outputs is the matvec's case, handled before).
+
+  Consecutive lanes then read consecutive elements (GROUP interleaves them), and every lane keeps at least 16
+  elements to hide load latency: the largest power of two up to 256 dividing the reduce with that much work.
+  Measured sm_120, B=128 rows: sum of squares over 3136 10.2 -> 1.8 us (GROUP 64), over [8, 960] 4.4 -> 2.1 us."""
+  if not (k.ren.has_local and k.ren.has_shared) or k.reduceop is None or k.reduceop.arg[0] not in (Ops.ADD, Ops.MAX): return None
+  reduces = k.ranges_of(AxisType.REDUCE)
+  if len(reduces) != 1 or not isinstance(size:=reduces[0].vmax+1, int): return None
+  outputs = [k.rngs[a] for a in k.axes_of(AxisType.GLOBAL, AxisType.LOOP)]
+  reading = [idx for b in k.bufs if (idx:=_buf_idx(b)) is not None and reduces[0] in idx.ranges]
+  if not reading or not all(_stride_one(idx, reduces[0]) and all(r in idx.ranges for r in outputs) for idx in reading): return None
+  return next((g for g in (256, 128, 64, 32, 16, 8) if size % g == 0 and size // g >= 16), None)
 
 def _wide_bf16(k:Scheduler, mulop) -> bool:
   """bf16 weights on a target that folds 16-byte bf16 loads (the measured sm_120 schedule applies)."""
@@ -239,6 +280,16 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
         if MV_ROWS_PER_THREAD > 1: k.apply_opt(Opt(OptOps.UPCAST, global_idx, MV_ROWS_PER_THREAD))
         return k
 
+  # a row reduce (norms, log-sum-exp): interleaved lanes over its contiguous reduce axis
+  if not NOLOCALS and (lanes:=_row_reduce_group(k)) is not None:
+    try:
+      k.apply_opt(Opt(OptOps.GROUP, 0, lanes))
+      return k
+    except KernelOptError: pass
+
+  # the axis consecutive lanes should walk, from the unmodified kernel (upcasts below split it)
+  coalescing_axis = _coalescing_axis(k) if k.reduceop is None else None
+
   # are we grouping? (requires local shape support)
   if resolve(prod(k.output_shape[i] for i in k.upcastable_dims) <= (240 if NOLOCALS else 2048), False):
     for axis, sz in itertools.product((0, 1, 2), (16,)):
@@ -337,6 +388,13 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
         local_size = prod(sz for _, sz in to_local)
         local_sz: int|None = next((x for x in ([32] * (axis == 0) + [16,8,4,3,2]) if k.full_shape[axis] % x == 0 and local_size * x <= 128), None)
         if local_sz is not None: to_local.append((axis, local_sz))
+      # local dims take thread ids in axis order: the lowest-numbered local axis is threadIdx.x. When that leaves no
+      # two lanes of a warp on the stride-1 axis (a broadcast row axis ranked first above filled the warp: every lane
+      # is another row), make the stride-1 axis the only local instead, as wide as it divides (sm_120, [128, 7680]
+      # fp32 -> bf16 with a per-row scale: 40 -> 2.2 us). A warp with several lanes on it keeps its schedule.
+      if coalescing_axis is not None and to_local and _warp_lanes_along(to_local, coalescing_axis) == 1 and \
+         (wide:=next((x for x in (256, 128, 64, 32) if k.full_shape[coalescing_axis] % x == 0), None)) is not None:
+        to_local = [(coalescing_axis, wide)]
       deleted_shape = 0
       for axis, local_sz in sorted(to_local[:3]):
         axis = axis - deleted_shape
