@@ -19,6 +19,7 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 
 ## Priority (2026-09-26 ~10:30, Julian)
 PAUSED: kernel search, sampler prefix sharing. FIRST: update BoltBeam with the new techniques (strategy space derived from GPU facts: smem, cp.async/ldmatrix, SM count -> split-K, swizzle, occupancy/wave fit; record NV routes + evidence in BoltBeam; NCU collection/import/audit owned by BoltBeam, tinygrad keeps only a cubin+launch-spec exporter). Then (Julian): run a NEW SCAN with the updated BoltBeam (derived search space, BoltBeam-owned NCU) over every Nemotron shape (decode M 8-128, prefill M 512-8k), compare to vLLM and roofline, and use that scan to decide the next moves for goals 3-4 (instead of resuming the paused plans as-is).
+Target state (Julian): every kernel at or better than vLLM's on the same shape, so the ONLY remaining difference vs vLLM is the lifecycle (token/kernel lifecycle: launches, graphs, scheduling, gaps, fusion count). The scan reports the split per workload: sum of kernel times vs wall time, ours and vLLM's.
 
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
