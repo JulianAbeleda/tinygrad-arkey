@@ -35,3 +35,9 @@ Selection now caps split-K partials at 16 MiB of extra fp32 per call: in the chu
 partials stay resident in the graph's buffers (3x L=2048 pieces: 20.3 GB -> 16.8 GB resident; base 11.1 GB).
 `gate-v3-correctness.json`: 48 routes (8 roles x rows 16..512), all finite, <= 8.2e-6 relative to the fp32 oracle,
 unsplit rows bit-exact to the safe TC path.
+
+## Round 3: cp.async ring + ldmatrix + XOR swizzle (2026-09-26)
+`search-r3-ring-climb.jsonl`: shape-major hill climb (`dense_bf16_geometry_search.py --shape ROLE:M --climb`) over the
+ring family at 64/128/256 GEMM rows, rotated weights (>= 384 MB), the promoted route measured as the control in the
+same process. 23 of 24 decode rows improved and were promoted (ssm_out 128 kept its route). `gate-v4-ring-correctness.json`:
+24/24 finite, distinct programs, <= 4.4e-6 vs the fp32 oracle, unsplit rows bit-exact to the safe TC path.
