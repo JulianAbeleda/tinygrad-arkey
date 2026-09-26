@@ -1,12 +1,15 @@
 """Join the microbench timings and the ncu reports into the kernel-audit tables (markdown on stdout).
 usage: audit_table.py DIR   (DIR holds vllm_gemm.json ours.json vncu_raw.csv oncu_raw.csv oncu.log)
 
-Kernel-row parsing (ncu CSV -> counters) is shared with ncu_kernel_counters.py; this script only adds
-the role/shape mapping and the audit-specific roofline/lever tables.
+Kernel-row parsing (ncu raw CSV -> counters) is BoltBeam's (boltbeam.profiler.ncu_counters, unit-aware); this script
+only adds the role/shape mapping and the audit-specific roofline/lever tables.  BoltBeam's own side-by-side is
+`python3 -m boltbeam.cli ncu-audit` (see kernel-audit-nemotron.md section 6).
 """
-import sys, json, re, collections
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from ncu_kernel_counters import read_ncu_csv_rows, parse_kernel_row
+import sys, json, re, collections, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[4]))
+from extra.llm_research.boltbeam_checkout import require_boltbeam
+require_boltbeam("boltbeam.profiler.ncu_counters")
+from boltbeam.profiler.ncu_counters import read_raw_csv, parse_kernel_row
 D = sys.argv[1].rstrip("/") + "/"
 PEAK_TF, BW = 250e12, 1.69e12
 MS_DEC, MS_PF = [8, 16, 32, 64, 128], [512, 1024, 2048, 4096, 8192]
@@ -31,20 +34,23 @@ def o_us(role, m, mode="prod"):
   if m > 1024: return m / 1024 * oj[(role, 1024, mode)]["gpu_us"]
   return oj[(role, m, mode)]["gpu_us"]
 
-# Thin wrapper: parse via the shared module, then adapt to this file's legacy field names/units
-# (smem_kb combines static+dynamic; the tables below were written against these names).
+# Thin wrapper: parse via BoltBeam, then adapt to this file's legacy field names (the tables were written against them).
+_UNITS = {}
 def ncu_rows(path):
-  return read_ncu_csv_rows(path)
+  if not pathlib.Path(path).exists(): path = path.replace("_raw.csv", ".raw.csv")   # boltbeam ncu-collect's name
+  raws, units = read_raw_csv(open(path).read())
+  _UNITS.update(units)
+  return raws
 
 def summarize(k):
-  row = parse_kernel_row(k, side="tinygrad")  # side is unused by this file; role/shape are assigned below
+  row = parse_kernel_row(k, _UNITS)
   # Legacy smem_kb is the ncu-computed per-block total (static + driver-reserved), not static+dynamic;
   # read it straight off the raw row to keep this file's existing table numbers unchanged.
   smem_kb = float(k.get("launch__shared_mem_per_block") or 0)
   return {"name": row["kernel"], "grid": row["grid"], "block": row["block"],
           "warps": int(k["launch__block_size"]) // 32, "regs": row["registers_per_thread"], "smem_kb": smem_kb,
           "us": row["duration_us"], "occ": row["achieved_occupancy_pct"], "tensor": row["tensor_pipe_util_pct"],
-          "dram": row["dram_throughput_bytes_per_sec"], "sm": row["sm_throughput_pct"],
+          "dram": row["dram_throughput_bytes_per_sec"] / 1e12, "sm": row["sm_throughput_pct"],
           "stalls": ", ".join(f"{s['reason']} {s['pct']:.0f}%" for s in row["top_stall_reasons"])}
 
 # vLLM ncu rows in (role, M) order; the number of kernels per shape comes from the timing run
@@ -58,7 +64,7 @@ for role in V_ROLES:
 assert i == len(vrows), (i, len(vrows))
 orows, oncu = ncu_rows(D + "oncu_raw.csv"), {}
 i = 0
-for line in open(D + "oncu.log"):
+for line in open(D + "oncu.log" if pathlib.Path(D + "oncu.log").exists() else D + "oncu.stdout.log"):
   if line.startswith("SHAPE "):
     _, role, m, nk = line.split(); nk = int(nk)
     oncu[(role, int(m))] = [summarize(k) for k in orows[i:i + nk]]; i += nk

@@ -11,10 +11,11 @@ This is tinygrad's producer half of the cubin+launch-spec contract: the JSON
 record (schema "tinygrad.nv_cubin_capture.v1", one entry per captured kernel
 under "captured": name, cubin_path, cubin_sha256, regs/shmem/lcmem usage, and
 the launch geometry under "calls" -- global_size, local_size, vals, n_bufs) is
-what a downstream ncu collector (nv_cubin_ncu_launcher.py locally, or BoltBeam
-per docs/nemotron-vllm-parity/goal-board.md's 2026-09-26 priority note) loads
-to replay the exact production launch outside the driver-bypassing NV backend.
-Ongoing ncu collection/import/comparison ownership lives there, not here.
+what BoltBeam's cubin replay (boltbeam.collectors.cubin_launch; nv_cubin_ncu_launcher.py
+forwards to it) loads to replay the exact production launch outside the driver-bypassing
+NV backend, under `boltbeam ncu-collect`.  NCU collection, import and comparison are
+BoltBeam's; this file is only the exporter.  `--run SCRIPT ARGS` captures while running
+any program (e.g. the kernel audit's ours_ncu.py for one projection shape).
 """
 from __future__ import annotations
 
@@ -36,8 +37,8 @@ def install_hook(prefixes: list[str]) -> None:
   orig_init = ops_nv.NVProgram.__init__
   orig_call = ops_nv.NVProgram.__call__
 
-  def patched_init(self, dev, name, lib, **kwargs):
-    orig_init(self, dev, name, lib, **kwargs)
+  def patched_init(self, dev, name, lib, *args, **kwargs):
+    orig_init(self, dev, name, lib, *args, **kwargs)
     if any(name.startswith(p) for p in prefixes) and name not in CAPTURED:
       CAPTURED[name] = {
         "name": name,
@@ -47,6 +48,8 @@ def install_hook(prefixes: list[str]) -> None:
         "shmem_usage": getattr(self, "shmem_usage", None),
         "lcmem_usage": getattr(self, "lcmem_usage", None),
         "max_threads": getattr(self, "max_threads", None),
+        # the launch-sized (dynamic) shared memory the program requests, as a CUDA launch would pass it
+        "shared_mem": int(args[0] if args else kwargs.get("shared_mem", 0) or 0),
         "calls": [],
       }
 
@@ -103,32 +106,42 @@ def run_capture(prefixes: list[str], out: pathlib.Path, depth: int, model: str, 
   finally:
     gen.close()
 
+  return write_capture(out, prefixes, {"depth": depth, "max_context": max_context, "official_loader": official_loader})
+
+
+def write_capture(out: pathlib.Path, prefixes: list[str], extra: dict) -> dict:
+  """Write the captured cubins next to ``out`` and the tinygrad.nv_cubin_capture.v1 record to ``out``."""
+  out.parent.mkdir(parents=True, exist_ok=True)
   if not CAPTURED:
-    result = {"schema": "tinygrad.nv_cubin_capture.v1", "captured": [], "verdict": "NO_MATCH",
-              "prefixes": prefixes, "depth": depth, "max_context": max_context,
+    result = {"schema": "tinygrad.nv_cubin_capture.v1", "captured": [], "verdict": "NO_MATCH", "prefixes": prefixes, **extra,
               "note": "no production NVProgram matched the prefixes"}
-    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps(result, indent=2, sort_keys=True))
     return result
-
   captured = []
-  out.parent.mkdir(parents=True, exist_ok=True)
   for name, rec in CAPTURED.items():
     cubin_path = out.with_name(f"{name}.cubin")
     cubin_path.write_bytes(rec["cubin"])
     row = {k: rec[k] for k in ("name", "cubin_sha256", "regs_usage", "shmem_usage",
-                               "lcmem_usage", "max_threads", "calls")}
+                               "lcmem_usage", "max_threads", "shared_mem", "calls")}
     row["cubin_path"] = str(cubin_path)
     row["cubin_bytes"] = len(rec["cubin"])
     captured.append(row)
-
-  result = {"schema": "tinygrad.nv_cubin_capture.v1", "captured": captured,
-            "verdict": "CAPTURED", "prefixes": prefixes, "depth": depth, "max_context": max_context,
-            "official_loader": official_loader}
+  result = {"schema": "tinygrad.nv_cubin_capture.v1", "captured": captured, "verdict": "CAPTURED", "prefixes": prefixes, **extra}
   out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
   print(json.dumps(result, indent=2, sort_keys=True))
   return result
+
+
+def run_script_capture(prefixes: list[str], out: pathlib.Path, script: str, script_args: list[str]) -> dict:
+  """Capture while running any tinygrad program (e.g. the kernel audit's ours_ncu.py for one projection shape)."""
+  import runpy
+  install_hook(prefixes)
+  saved = sys.argv
+  sys.argv = [script, *script_args]
+  try: runpy.run_path(script, run_name="__main__")
+  finally: sys.argv = saved
+  return write_capture(out, prefixes, {"script": script, "script_args": script_args})
 
 
 def main() -> int:
@@ -140,9 +153,11 @@ def main() -> int:
   ap.add_argument("--max-context", type=int, default=4608)
   ap.add_argument("--official-loader", action="store_true")
   ap.add_argument("--model", default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+  ap.add_argument("--run", nargs=argparse.REMAINDER, help="SCRIPT ARGS...: capture while running this program instead of a decode")
   args = ap.parse_args()
   prefixes = [p for p in (args.prefixes.split(",") if args.prefixes else (args.prefix or "").split(",")) if p]
-  run_capture(prefixes, args.out, args.depth, args.model, args.max_context, args.official_loader)
+  if args.run: run_script_capture(prefixes, args.out, args.run[0], args.run[1:])
+  else: run_capture(prefixes, args.out, args.depth, args.model, args.max_context, args.official_loader)
   return 0
 
 

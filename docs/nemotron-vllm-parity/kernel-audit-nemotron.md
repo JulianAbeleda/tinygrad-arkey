@@ -438,39 +438,29 @@ RL decode step, B=8 (per step, ms; ours step 8.8 ms): GEMM total ours 6.68 ms (7
 
 ## 6. Reproduce
 
-All from a checkout of `exp`, each under the exclusive lock (`~/scratchpad/bin/gpu-run time ...`):
+All from a checkout of `exp` with a BoltBeam checkout next to it (or `BOLTBEAM_ROOT`), each GPU step under the
+exclusive lock (`~/scratchpad/bin/gpu-run time ...`):
 
 ```
 B=docs/nemotron-vllm-parity/bench/audit
 /home/ubuntu/vllm-bench/.venv/bin/python $B/vllm_gemm.py OUT/vllm_gemm.json         # vLLM-side timings
 $B/ours_sweep.sh OUT/ours.json                                                     # ours, prod + bf16 modes
 $B/vncu.sh OUT/vncu ssm_in,ssm_out,qkv,attn_q,attn_kv,attn_o,ffn_up,ffn_down,output 8,16,32,64,128,512,1024,2048,4096,8192
-$B/oncu.sh OUT/oncu ssm_in,ssm_out,attn_q,attn_kv,attn_o,ffn_up,ffn_down,output 8,16,32,64,128,512,1024 > OUT/oncu.log
-ncu --import OUT/vncu.ncu-rep --page raw --csv > OUT/vncu_raw.csv; same for oncu
+$B/oncu.sh OUT/oncu ssm_in,ssm_out,attn_q,attn_kv,attn_o,ffn_up,ffn_down,output 8,16,32,64,128,512,1024
 python3 $B/audit_table.py OUT tinygrad/llm/generated/dense_bf16_sm120_candidate_set.json
 ```
 
-`vncu.sh`/`oncu.sh` are thin shell callers of `$B/ncu_kernel_counters.py build-cmd`: the ncu section list
-(`SpeedOfLight`/`LaunchStats`/`Occupancy`/`WarpStateStats`/`MemoryWorkloadAnalysis`/`ComputeWorkloadAnalysis`),
-`--cache-control all --clock-control none`, and the memory-capped `sudo systemd-run --scope -p MemoryMax=20G`
-scope are defined once there, not duplicated between the two scripts. `audit_table.py`'s `summarize()` is
-likewise a thin wrapper over `ncu_kernel_counters.parse_kernel_row` (the raw-CSV-row -> counters mapping).
+**NCU is BoltBeam's** (2026-09-26, Julian): `vncu.sh`/`oncu.sh` are thin callers of `boltbeam ncu-collect` (one ncu
+command line with the section list incl. `InstructionStats`, `--cache-control all --clock-control none`, the
+memory-capped `sudo systemd-run --scope -p MemoryMax=20G`; raw export and a unit-aware import into
+`boltbeam.ncu_kernel_counters.v1`, launches labelled by NVTX `role/M` or the target's `SHAPE role M n` lines).
+`audit_table.py` parses through BoltBeam's `parse_kernel_row` (its tables are byte-identical to the original run).
+BoltBeam's own side-by-side with the gap decomposition and research queue is `boltbeam ncu-audit`; the whole scan
+(strategy table + NCU audit + lifecycle) is `docs/nemotron-vllm-parity/bench/scan.sh OUTDIR`.  tinygrad keeps only
+the exporter: `extra/llm_research/decode/nv_cubin_capture.py` writes the cubin + launch spec
+(`tinygrad.nv_cubin_capture.v1`, `--run SCRIPT ARGS` for any program); BoltBeam replays it under ncu
+(`boltbeam.collectors.cubin_launch`, which `nv_cubin_ncu_launcher.py` now forwards to).  The 2026-09-26 captures are
+imported in BoltBeam `evidence/ncu/nemotron_kernel_audit_20260926/` (with a GPU proof of the ssm_in M=128 row);
+`results/ncu-kernel-counters-20260926.json` is the first conversion, kept as history -- its shared-memory fields have
+the static/dynamic units swapped (ncu reports static in byte/block, dynamic in Kbyte/block).
 The whole audit is ~40 min of GPU time.
-
-To convert an already-collected run's raw CSVs into the committed JSON evidence format
-(`tinygrad.nv_ncu_kernel_counters.v1`; see `results/ncu-kernel-counters-20260926.json` for the fields:
-side, role, shape, kernel, grid/block, registers/static+dynamic shared bytes, duration, achieved occupancy,
-tensor-pipe utilization, DRAM throughput, top-3 stall reasons, bank conflicts if present, plus provenance):
-
-```
-python3 $B/build_ncu_evidence.py OUT $B/results/ncu-kernel-counters-YYYYMMDD.json
-```
-
-**Ownership note (2026-09-26, Julian; see `../goal-board.md`):** ongoing NCU collection, CSV import, and
-cross-run comparison is moving to BoltBeam. `ncu_kernel_counters.py`'s pure-parsing half
-(`parse_kernel_row`, `top_stall_reasons`, `bank_conflicts`) is a CPU-testable reference for the raw-CSV
-counter-column mapping (test/unit/test_ncu_kernel_counters.py) that a BoltBeam importer can reuse rather
-than re-derive; tinygrad's own long-term surface for this is the cubin+launch-spec exporter
-(`extra/llm_research/decode/nv_cubin_capture.py`, `nv_cubin_ncu_launcher.py`), not an ongoing in-tree ncu
-pipeline. The `oncu.sh`/`vncu.sh`/`audit_table.py`/`build_ncu_evidence.py` scripts above are the finishing
-pass on this one audit run, not a new open-ended tool.
