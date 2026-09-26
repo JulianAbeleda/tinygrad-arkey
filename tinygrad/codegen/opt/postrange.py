@@ -1034,6 +1034,24 @@ def _warmstart_key(k):
 def _warmstart_match(k):
   return _WARMSTART_OPTS.get(_warmstart_key(k))
 
+_WARMSTART_AST_KEYS: dict[bytes, tuple] = {}
+def warmstart_binding(ast:UOp, ren:Renderer) -> tuple|None:
+  """The warm-start schedule ``apply_opts`` will force on ``ast`` right now -- (opts, candidate context) -- or None.
+
+  Forced opts and candidate contexts live in module state, not on the AST, so any cache keyed by the AST must also be
+  keyed by this binding, or a second candidate for an identical AST silently reuses the first one's compile.  The
+  warm-start key is a pure function of the AST (memoized); the binding is read from the live tables."""
+  if _WARMSTART_OPTS is None or ast.tag is not None or (isinstance(ast.arg, KernelInfo) and
+     (ast.arg.opts_to_apply is not None or getattr(ast.arg, "required_native_attention", None) is not None)): return None
+  if (key := _WARMSTART_AST_KEYS.get(ast.key)) is None:
+    try:
+      k = Scheduler(ast, ren); k.convert_loop_to_global()
+      key = _warmstart_key(k)
+    except Exception: key = ()   # not a schedulable kernel: apply_opts will not match it either
+    _WARMSTART_AST_KEYS[ast.key] = key
+  if key == () or (opts := _WARMSTART_OPTS.get(key)) is None: return None
+  return (tuple(opts), (_WARMSTART_CANDIDATE_CONTEXTS or {}).get(key))
+
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)

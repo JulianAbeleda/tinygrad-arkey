@@ -215,3 +215,12 @@ def test_barrier_group_consumes_g_tiles_per_wait_and_barrier():
 def test_barrier_group_validation():
   with pytest.raises(ValueError, match="barrier_group"): KernelStage1PipelinePlan(3, 1024, 1, async_copy=True, barrier_group=2)
   with pytest.raises(ValueError, match="barrier_group"): KernelStage1PipelinePlan(2, 1024, 1, barrier_group=2)
+
+
+def test_program_cache_is_keyed_by_the_forced_candidate():
+  # Same AST, two different candidates in one process: the second must not be served the first one's compile.
+  a, _ = _render(_context((64, 64, 32), (2, 2), 3), m=128, n=64 * 19, k=512)
+  b, _ = _render(_context((64, 64, 32), (2, 2), 4), m=128, n=64 * 19, k=512)
+  assert a != b and "wait_group 1;" in a and "wait_group 2;" in b
+  again, _ = _render(_context((64, 64, 32), (2, 2), 3), m=128, n=64 * 19, k=512)
+  assert again == a

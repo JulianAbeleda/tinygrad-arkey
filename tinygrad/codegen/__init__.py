@@ -651,7 +651,9 @@ def to_program(ast:UOp, renderer:Renderer) -> UOp:
   # than the stale HIT it replaced, because a cache that quietly holds two keys for one program is harder to
   # notice than one that returns an obviously stale answer. The key must describe what was compiled.
   gate_values = observed_gate_values()
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], *gate_values)
+  # Forced warm-start opts / candidate contexts are module state, not part of the AST: key by the binding too.
+  from tinygrad.codegen.opt.postrange import warmstart_binding
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], *gate_values, warmstart_binding(ast, renderer))
   if (prg:=to_program_cache.get(key)) is not None: return prg
   _dk = None
   if LOWER_DISK_CACHE:
