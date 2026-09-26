@@ -258,6 +258,8 @@ def main() -> int:
   parser.add_argument("--top", type=int, default=DEFAULT_TOP, help="model-ranked distinct geometries per shape")
   parser.add_argument("--scan", action="store_true",
                       help="per shape (--roles/--rows): hill-climb from the promoted route + the model's top seeds, one process per shape")
+  parser.add_argument("--exhaustive", action="store_true",
+                      help="with --scan: measure the whole cost-model-pruned derived space per shape instead of climbing")
   parser.add_argument("--deferred", action="store_true", help="print, per shape, the families the GPU admits but the lowering cannot emit")
   parser.add_argument("--rows", help="comma list of GEMM row counts (default ROWS / LARGE_ROWS)")
   parser.add_argument("--roles", help="comma list of roles (default all)")
@@ -300,8 +302,12 @@ def main() -> int:
         if roles is not None and role not in roles: continue
         for m in rows:
           seeds = ([(tuple(p["geometry"]), p["split_k"], tuple(p.get("pipeline", SYNC2)))] if (p := promoted.get((role, m))) else [])
-          seeds += [c for c in model_top(m, n, k, args.top, args.family) if c not in seeds]
-          proc = subprocess.run([sys.executable, __file__, "--out", args.out, "--reps", str(args.reps), "--shape", f"{role}:{m}", "--climb"],
+          space = [c for c in derived_space(m, n, k) if args.family is None or (c[2] == SYNC2) == (args.family == "sync2")]
+          seeds += [c for c in (space if args.exhaustive else model_top(m, n, k, args.top, args.family)) if c not in seeds]
+          print(json.dumps({"role": role, "m": m, "space_pruned": len(derived_space(m, n, k)), "measuring": len(seeds),
+                            "mode": "exhaustive" if args.exhaustive else "climb"}), file=sys.stderr, flush=True)
+          mode = [] if args.exhaustive else ["--climb"]
+          proc = subprocess.run([sys.executable, __file__, "--out", args.out, "--reps", str(args.reps), "--shape", f"{role}:{m}", *mode],
                                 input="".join(json.dumps([list(g), s_, list(pp)]) + "\n" for g, s_, pp in seeds), capture_output=True, text=True)
           f.write(proc.stdout); f.flush()
           if proc.returncode: f.write(json.dumps({"role": role, "m": m, "process_error": proc.stderr[-300:]}) + "\n")

@@ -41,3 +41,10 @@ unsplit rows bit-exact to the safe TC path.
 ring family at 64/128/256 GEMM rows, rotated weights (>= 384 MB), the promoted route measured as the control in the
 same process. 23 of 24 decode rows improved and were promoted (ssm_out 128 kept its route). `gate-v4-ring-correctness.json`:
 24/24 finite, distinct programs, <= 4.4e-6 vs the fp32 oracle, unsplit rows bit-exact to the safe TC path.
+
+## Round 4: first scan over the BoltBeam-derived space (2026-09-26)
+`search-r4-derived-scan-ssm_in-128.jsonl`: `dense_bf16_geometry_search.py --scan --roles ssm_in --rows 128` (space
+derived by BoltBeam gemm_strategy from the 5090's facts + tinygrad's lowering facts; 10528 configs after the cost-model
+prune; climb from the promoted route + the model's 12 best distinct geometries, 23 measurements, gpu-run time).
+The promoted route re-measures 127.71 us (gate 128.19); the best derived candidate, 128x128x64 4x4 warps 2-stage ring,
+123.49 us (-3.3%, not promoted: within the noise band the gate would have to clear).
