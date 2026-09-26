@@ -32,6 +32,8 @@ Prefix sharing LANDED 73bf13a28: real RL shape (10.4k envelope) B=32 1399 tok/s 
 
 Non-GEMM 1+2 LANDED (d4053222f flush, 5f0b90fa7 sampler tail): step B=32/64/128 11.27->11.15, 17.41->17.11, 30.36->29.63 ms; capture/replay bit-exact; DayCare follows automatically. Found core bug: non-TC matmul(dtype=float) on bf16 rounds products to bf16 (1.8e-3 rel) -> core-fix agent.
 
+Move 5 lowering: barrier-per-g-K refuted (median 1.022x, nothing promoted); dense Stream-K bounded ~0.1 ms/step and ragged K ~0.02 ms/step by payoff probes (not built). Real GEMM gap: memory-bound decode shapes at 42-46% DRAM vs cuBLAS 69-79% -> next: ncu memory-path comparison (L2/sectors/bytes in flight).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
