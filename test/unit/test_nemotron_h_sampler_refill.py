@@ -121,17 +121,69 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
               reference = model.token_embd(Tensor([[prompt[-1]] + tokens[:-1]])).float()
             np.testing.assert_allclose(hidden, reference[0].numpy(), rtol=1e-4, atol=1e-4)
           replayed = sampler.replay([(p, [(t, h) for t, _, h in r]) for p, r in zip(prompts, results)], temperature,
-                                    starts=stats["starts"])
+                                    stats=stats)
           got = np.concatenate([values for rollouts in replayed for values in rollouts])
           want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
           np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
+
+  def test_bucketed_ring_reads_keep_parity_and_replay_bits(self):
+    model = tiny_model()  # block 2 is attention
+    prompts = [[3, 17, 5, 42, 9], [7, 7, 1], [60, 2, 33, 4, 8, 19, 25], [11, 4], [5, 6, 7]]
+    limits = [[6, 11], [3, 9], [10, 2], [7, 7], [12, 5]]
+    # a 32-row ring read through 8- and 16-row buckets (the whole ring past 16), wrapping around
+    sampler = NemotronHRolloutSampler(model, batch=3, capacity=32, prefix_capacity=8, prompts=2, rows=2, ring=2,
+                                      window=4, capture=1, min_bucket=4)
+    stats = {}
+    results = sampler.generate([(p, 2, l) for p, l in zip(prompts, limits)], max_new=12, temperature=0.7,
+                               stats=stats)
+    buckets, window = stats["buckets"], sampler.window
+    self.assertLess(min(buckets), sampler.capacity)
+    self.assertGreater(stats["steps"], sampler.capacity)
+    self.assertTrue(any(b < sampler.capacity and (k * window) % sampler.capacity < b - 1 for k, b in enumerate(buckets)))
+    self.assertTrue(any(b < sampler.capacity and (k * window) % sampler.capacity >= b - 1 for k, b in enumerate(buckets)))
+    for prompt, rollouts in zip(prompts, results):
+      for tokens, logprobs, _ in rollouts:
+        reference = model.prefix(prompt, through=len(model.blk) - 1)
+        hidden, caches = reference[0][:, -1:], reference[1]
+        if len(tokens) > 1:
+          hidden = hidden.cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+        expected = (model.output(model.output_norm(hidden))[0].float() / 0.7).log_softmax(-1).numpy()
+        np.testing.assert_allclose(logprobs, expected[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
+    replayed = sampler.replay([(p, [(t, h) for t, _, h in r]) for p, r in zip(prompts, results)], 0.7, stats=stats)
+    got = np.concatenate([values for rollouts in replayed for values in rollouts])
+    want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
+    np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
+
+  def test_prefill_primed_slots_match_the_prefill_state_and_recompute(self):
+    from tinygrad.llm.nemotron_h_prefill import NemotronHPrefill
+    model = tiny_model()
+    prefill = NemotronHPrefill(model, capacity=16, piece=8)
+    sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=12, prompts=1, rows=2, ring=2,
+                                      window=2, prefill=prefill)
+    for prompt in ([4, 9, 13, 2, 7, 30, 1, 5, 8, 12, 3], [6, 21, 3, 17]):  # a long prompt, then a short one: stale rows
+      sampler._prime(0, prompt)
+      length = len(prompt) - 1
+      for attention, state, cache in zip(sampler.attention, sampler.prompt_state, prefill.buffers):
+        if attention is not None:
+          for key in ("k", "v"):
+            slot = attention.prefix[key].numpy()[0]
+            np.testing.assert_array_equal(slot[:, :length], cache[key].numpy()[0, :, :length])
+            self.assertFalse(slot[:, length:].any())
+        elif state is not None:
+          for key in ("conv", "state"):
+            np.testing.assert_array_equal(state[key].numpy()[0], cache[key].numpy()[0])
+    prompts = [[4, 9, 13, 2, 7, 30, 1, 5, 8, 12, 3], [6, 21, 3, 17]]
+    results = sampler.generate([(p, 2) for p in prompts], max_new=6)
+    for prompt, rollouts in zip(prompts, results):
+      for tokens, logprobs in rollouts:
+        model_tests.TestNemotronHRolloutSampler._check(self, model, prompt, tokens, logprobs)
 
   def test_replay_through_attention_needs_ring_rows(self):
     model = tiny_model()  # block 2 is attention
     sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,
                                       window=2, capture=1)
     (rollouts,) = sampler.generate([([3, 17, 5], 2, [3, 4])], max_new=4)
-    with self.assertRaisesRegex(ValueError, "first ring row"):
+    with self.assertRaisesRegex(ValueError, "needs generate.s stats"):
       sampler.replay([([3, 17, 5], [(t, h) for t, _, h in rollouts])])
 
   def test_prompts_need_two_tokens(self):

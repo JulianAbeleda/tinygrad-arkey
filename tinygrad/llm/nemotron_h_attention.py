@@ -251,20 +251,26 @@ class RolloutKV:
     self.suffix["v"][:, :, :, row:row + 1].assign(v.transpose(-1, -2).cast(self.suffix["v"].dtype)).realize()
 
   def attend(self, q: Tensor, lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor,
-             row: UOp | int) -> Tensor:
+             row: UOp | int, bucket: int | None = None, low: UOp | int | None = None) -> Tensor:
     return rollout_attention(q, self.prefix["k"], self.prefix["v"], self.suffix["k"], self.suffix["v"], lane_rows,
-                             lane_slot, prefix_lengths, lengths, row, self.chunk)
+                             lane_slot, prefix_lengths, lengths, row, self.chunk, bucket, low)
 
 
 def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: Tensor, suffix_vt: Tensor,
                       lane_rows: Tensor, lane_slot: Tensor, prefix_lengths: Tensor, lengths: Tensor, row: UOp | int,
-                      chunk: int = 1024) -> Tensor:
+                      chunk: int = 1024, bucket: int | None = None, low: UOp | int | None = None) -> Tensor:
   """One decode query per lane against its prompt slot's prefix and its own ring of generated keys.
 
   q `[B, heads, 1, hd]`; prefix_k/v `[G, kv_heads, P, hd]` with `prefix_lengths[g]` valid rows; suffix_k
   `[B, kv_heads, C, hd]`, suffix_vt `[B, kv_heads, hd, C]` with the newest key at ring row `row` and `lengths[b]`
   valid keys (>= 1). lane_rows `[G*R]`, lane_slot `[B]` (int32) map lanes to prompt-slot rows. Returns
   `[B, heads, 1, hd]` float32, equal to causal softmax attention over `[prompt g_b, lane b's generated keys]`.
+
+  `bucket` (a power of two, at most half the ring, at least every lane's length) reads only the ring rows the
+  lanes can own: with `low` given, the `bucket` rows from ring row `low` (`row - bucket + 1`, the window does not
+  wrap); with `low=None` (the window wraps, `row < bucket - 1`), rows [0, bucket) and [C - bucket, C). The result
+  depends on the bucket and on which of the two forms runs, so a recompute that wants the same bits reads the same
+  way at the same step.
   """
   batch, heads, length, width = q.shape
   prompts, kv_heads, span, _ = prefix_k.shape
@@ -283,13 +289,21 @@ def rollout_attention(q: Tensor, prefix_k: Tensor, prefix_v: Tensor, suffix_k: T
             for t in _partials(scores, prefix_v, chunk)]
   # generated keys: ring rows younger than the lane's length
   ring = suffix_k.shape[2]
-  scores = _exact_dot(q, suffix_k.transpose(-1, -2))
-  age = Tensor.arange(ring) * -1 + row
-  age = (age < 0).where(age + ring, age)
-  valid = age.reshape(1, ring) < lengths.reshape(batch, 1)
-  scores = valid.reshape(batch, 1, 1, ring).where(scores, float("-inf"))
-  suffix = _partials(scores, suffix_vt, chunk, keys_last=True)
-  peaks, sums, outs = (p.cat(s, dim=2) for p, s in zip(prefix, suffix))
+  if bucket is None or bucket >= ring:
+    segments = [(0, ring)]
+  elif 2 * bucket > ring:
+    raise ValueError("a bucketed ring read needs a bucket of at most half the ring")
+  else:
+    segments = [(0, bucket), (ring - bucket, bucket)] if low is None else [(low, bucket)]
+  parts = [prefix]
+  for first, size in segments:
+    scores = _exact_dot(q, suffix_k[:, :, first:first + size].transpose(-1, -2))
+    age = (Tensor.arange(size) + first) * -1 + row
+    age = (age < 0).where(age + ring, age)
+    valid = age.reshape(1, size) < lengths.reshape(batch, 1)
+    scores = valid.reshape(batch, 1, 1, size).where(scores, float("-inf"))
+    parts.append(_partials(scores, suffix_vt[..., first:first + size], chunk, keys_last=True))
+  peaks, sums, outs = (Tensor.cat(*values, dim=2) for values in zip(*parts))
   peak = peaks.max(2, keepdim=True)
   scale = (peaks - peak).exp()
   out = (outs * scale).sum(2) / (sums * scale).sum(2)
