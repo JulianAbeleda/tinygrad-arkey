@@ -38,6 +38,8 @@ Mamba replay ring slot-major LANDED 085857264: B=128 step 29.62->28.84 ms (today
 
 Non-GEMM opt choice: hand heuristic puts LOCAL lanes on the strided row axis (uncoalesced): gated-norm apply E_640/E_2_640 41-49 us at 144 GB/s, group mean-square and block RMSNorm reduces latency-bound -> ~1.3 ms/step at B=128. Sampler agent: coalescing-aware derived opt choice (BEAM reference first).
 
+bf16 product-rounding FIXED e72668106 (pm_widen_reduce_products: widened-product reduces multiply in the accumulation dtype; TC kernels untouched; production sampler bits unchanged, fires in model.prefix only). Sibling fusion v1 approved behind SIBLING_FUSE=1 (5 fusibility invariants); PCONTIG measured per pattern, not flipped globally.
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
