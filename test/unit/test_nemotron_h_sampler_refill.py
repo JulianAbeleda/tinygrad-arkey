@@ -185,8 +185,8 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
     sampler = NemotronHRolloutSampler(model, batch=3, capacity=32, prefix_capacity=8, prompts=2, rows=2, ring=2,
                                       window=4, min_bucket=4)
     sampler.warm()
-    # buckets 4, 8, 16 in both forms, plus the whole ring: 7 graphs, all planned into the one pool
-    self.assertEqual(len(sampler.graphs), 7)
+    # buckets 4, 8, 16 in both forms, the whole ring, and the ring flush: 8 graphs, all planned into the one pool
+    self.assertEqual(len(sampler.graphs), 8)
     self.assertTrue(sampler.arenas)
     def arenas():  # every graph's planned intermediates live in these int8 buffers
       return {id(u) for graph in sampler.graphs.values() for u in graph.captured.linear.toposort()
