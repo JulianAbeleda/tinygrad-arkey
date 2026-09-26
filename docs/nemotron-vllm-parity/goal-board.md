@@ -34,6 +34,8 @@ Non-GEMM 1+2 LANDED (d4053222f flush, 5f0b90fa7 sampler tail): step B=32/64/128 
 
 Move 5 lowering: barrier-per-g-K refuted (median 1.022x, nothing promoted); dense Stream-K bounded ~0.1 ms/step and ragged K ~0.02 ms/step by payoff probes (not built). Real GEMM gap: memory-bound decode shapes at 42-46% DRAM vs cuBLAS 69-79% -> next: ncu memory-path comparison (L2/sectors/bytes in flight).
 
+Mamba replay ring slot-major LANDED 085857264: B=128 step 29.62->28.84 ms (today 30.36->28.84). Remaining non-GEMM wins need scheduler SIBLING-OUTPUT FUSION (multi-output kernels: residual+norm, Mamba conv/dt/pack) -> core-fix agent after the bf16 rounding fix (flag-gated, full suite).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
