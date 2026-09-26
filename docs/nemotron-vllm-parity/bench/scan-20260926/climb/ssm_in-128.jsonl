@@ -1,0 +1,23 @@
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 2, 4], "split_k": 1, "pipeline": [4, true, true, true], "median_us": 127.46, "tflops": 110.46, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 1, 16], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 137.34, "tflops": 102.5, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 135.3, "tflops": 104.05, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 135.87, "tflops": 103.61, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 129.89, "tflops": 108.39, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 126.62, "tflops": 111.18, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 127.3, "tflops": 110.59, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 138.02, "tflops": 102.0, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 136.35, "tflops": 103.25, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 4, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 138.53, "tflops": 101.63, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 129.89, "tflops": 108.39, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 127.81, "tflops": 110.15, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 127.23, "tflops": 110.65, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 4], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 132.32, "tflops": 106.39, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 130.05, "tflops": 108.25, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 127.68, "tflops": 110.26, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 124.64, "tflops": 112.95, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 125.86, "tflops": 111.86, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 196.0, "tflops": 71.83, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 195.62, "tflops": 71.97, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [64, 64, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 151.07, "tflops": 93.19, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 128, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 125.18, "tflops": 112.46, "finite": true}
+{"role": "ssm_in", "m": 128, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 4], "split_k": 7, "pipeline": [2, true, true, true], "median_us": 159.39, "tflops": 88.32, "finite": true, "max_rel_vs_unsplit": 3.844334969471674e-06}

@@ -1,0 +1,5877 @@
+{
+  "gemm_rows_per_token": 2,
+  "lowering": {
+    "arch": "sm_120",
+    "backend": "NV"
+  },
+  "rows": [
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8557,
+      "derived_kept": 8527,
+      "derived_model_best": {
+        "ctas": 548,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          32,
+          64,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 65.676,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.461
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 17504,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.36,
+      "ours_prod_us": 97.96,
+      "promoted": {
+        "ctas": 548,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 107.07,
+        "split_k": 2,
+        "waves": 0.461
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 72.02,
+      "role": "ssm_in",
+      "roofline_us": 65.03
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11142,
+      "derived_kept": 10958,
+      "derived_model_best": {
+        "ctas": 548,
+        "ctas_per_sm": 5,
+        "geometry": [
+          32,
+          32,
+          64,
+          2,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 66.398,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.645
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 17504,
+      "ours_gemm_us": null,
+      "ours_over_reference": 2.3,
+      "ours_prod_us": 166.91,
+      "promoted": {
+        "ctas": 274,
+        "ctas_per_sm": 3,
+        "geometry": [
+          32,
+          128,
+          32,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 25600,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 118.53,
+        "split_k": 2,
+        "waves": 0.537
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 72.69,
+      "role": "ssm_in",
+      "roofline_us": 65.23
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11142,
+      "derived_kept": 10930,
+      "derived_model_best": {
+        "ctas": 274,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 67.842,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.806
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 17504,
+      "ours_gemm_us": 75.24,
+      "ours_over_reference": 1.13,
+      "ours_prod_us": 83.18,
+      "promoted": {
+        "ctas": 137,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 73728,
+        "limiter": "grid<sms",
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 76.9,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              128,
+              64,
+              2,
+              2
+            ],
+            "pipeline": [
+              3,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 64,
+            "n": 17536,
+            "owners": 170,
+            "tile_k": 64,
+            "tile_m": 64,
+            "tile_n": 128
+          },
+          "stream_k_sm_efficiency": 0.987,
+          "tile_grid_sm_efficiency": 0.806,
+          "tiles": 137
+        },
+        "waves": 0.806
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 73.47,
+      "role": "ssm_in",
+      "roofline_us": 65.62
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11142,
+      "derived_kept": 10528,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 124.64,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 112.95
+      },
+      "derived_model_best": {
+        "ctas": 274,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "waves",
+        "model_us": 73.679,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 1.612
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 17504,
+      "ours_gemm_us": 123.88,
+      "ours_over_reference": 1.78,
+      "ours_prod_us": 131.98,
+      "promoted": {
+        "ctas": 137,
+        "ctas_per_sm": 1,
+        "geometry": [
+          128,
+          128,
+          32,
+          2,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 65536,
+        "limiter": "grid<sms",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 127.62,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              128,
+              128,
+              32,
+              2,
+              4
+            ],
+            "pipeline": [
+              4,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 128,
+            "n": 17536,
+            "owners": 170,
+            "tile_k": 32,
+            "tile_m": 128,
+            "tile_n": 128
+          },
+          "stream_k_sm_efficiency": 1.0,
+          "tile_grid_sm_efficiency": 0.806,
+          "tiles": 137
+        },
+        "waves": 0.806
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 74.05,
+      "role": "ssm_in",
+      "roofline_us": 66.4
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11814,
+      "derived_kept": 11141,
+      "derived_measured_best": {
+        "geometry": [
+          256,
+          128,
+          32,
+          4,
+          2
+        ],
+        "median_us": 209.63,
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 134.31
+      },
+      "derived_model_best": {
+        "ctas": 1096,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 128.938,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 3.224
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 17504,
+      "ours_gemm_us": 209.46,
+      "ours_over_reference": 2.41,
+      "ours_prod_us": 220.45,
+      "promoted": {
+        "ctas": 274,
+        "ctas_per_sm": 1,
+        "geometry": [
+          128,
+          128,
+          32,
+          2,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 65536,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 220.32,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              128,
+              128,
+              32,
+              2,
+              4
+            ],
+            "pipeline": [
+              4,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 256,
+            "n": 17536,
+            "owners": 170,
+            "tile_k": 32,
+            "tile_m": 128,
+            "tile_n": 128
+          },
+          "stream_k_sm_efficiency": 1.0,
+          "tile_grid_sm_efficiency": 0.806,
+          "tiles": 274
+        },
+        "waves": 1.612
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 91.36,
+      "role": "ssm_in",
+      "roofline_us": 67.96
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11829,
+      "derived_kept": 11002,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          64,
+          64,
+          1,
+          4
+        ],
+        "median_us": 677.54,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 166.23
+      },
+      "derived_model_best": {
+        "ctas": 2192,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 478.913,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 12.894
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 17504,
+      "ours_gemm_us": 956.3,
+      "ours_over_reference": 3.43,
+      "ours_prod_us": 1016.83,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 296.57,
+      "role": "ssm_in",
+      "roofline_us": 237.07
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11829,
+      "derived_kept": 11002,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          128,
+          64,
+          2,
+          2
+        ],
+        "median_us": 1205.15,
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 186.91
+      },
+      "derived_model_best": {
+        "ctas": 4384,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 957.826,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 25.788
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 17504,
+      "ours_gemm_us": 1897.64,
+      "ours_over_reference": 4.05,
+      "ours_prod_us": 2214.78,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 546.44,
+      "role": "ssm_in",
+      "roofline_us": 474.15
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 11829,
+      "derived_kept": 11002,
+      "derived_model_best": {
+        "ctas": 35072,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 1906.443,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 68.769
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 17504,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1061.43,
+      "role": "ssm_in",
+      "roofline_us": 948.29
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 11829,
+      "derived_kept": 11002,
+      "derived_model_best": {
+        "ctas": 70144,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 3803.675,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 137.537
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 17504,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 2087.43,
+      "role": "ssm_in",
+      "roofline_us": 1896.58
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 11829,
+      "derived_kept": 11002,
+      "derived_model_best": {
+        "ctas": 70144,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 7607.35,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 206.306
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 17504,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 3886.46,
+      "role": "ssm_in",
+      "roofline_us": 3793.17
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 37078,
+      "derived_kept": 36567,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 3,
+        "geometry": [
+          16,
+          16,
+          256,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 29.293,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.392
+      },
+      "gemm_rows": 16,
+      "k": 7680,
+      "m": 8,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.05,
+      "ours_prod_us": 46.0,
+      "promoted": {
+        "ctas": 100,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 41472,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 34.56,
+        "split_k": 4,
+        "waves": 0.294
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 43.97,
+      "role": "ssm_out",
+      "roofline_us": 28.55
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 47435,
+      "derived_kept": 46229,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          32,
+          256,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 29.56,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.588
+      },
+      "gemm_rows": 32,
+      "k": 7680,
+      "m": 16,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.9,
+      "ours_prod_us": 83.8,
+      "promoted": {
+        "ctas": 150,
+        "ctas_per_sm": 6,
+        "geometry": [
+          32,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 15360,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 59.36,
+        "split_k": 3,
+        "waves": 0.147
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 44.04,
+      "role": "ssm_out",
+      "roofline_us": 28.65
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 47435,
+      "derived_kept": 46741,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          32,
+          64,
+          256,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 32.027,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 1.176
+      },
+      "gemm_rows": 64,
+      "k": 7680,
+      "m": 32,
+      "n": 3136,
+      "ours_gemm_us": 46.3,
+      "ours_over_reference": 1.52,
+      "ours_prod_us": 52.3,
+      "promoted": {
+        "ctas": 400,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 45.73,
+        "split_k": 8,
+        "waves": 0.784
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 34.48,
+      "role": "ssm_out",
+      "roofline_us": 28.86
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 47435,
+      "derived_kept": 46862,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 61.98,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 3,
+        "tflops": 101.5
+      },
+      "derived_model_best": {
+        "ctas": 300,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          64,
+          128,
+          4,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 36.961,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 3,
+        "waves": 1.765
+      },
+      "gemm_rows": 128,
+      "k": 7680,
+      "m": 64,
+      "n": 3136,
+      "ours_gemm_us": 67.76,
+      "ours_over_reference": 2.05,
+      "ours_prod_us": 73.85,
+      "promoted": {
+        "ctas": 150,
+        "ctas_per_sm": 2,
+        "geometry": [
+          128,
+          64,
+          32,
+          4,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 30720,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 112.32,
+        "split_k": 3,
+        "waves": 0.441
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 36.03,
+      "role": "ssm_out",
+      "roofline_us": 29.26
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50030,
+      "derived_kept": 46600,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "median_us": 110.75,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 5,
+        "tflops": 113.61
+      },
+      "derived_model_best": {
+        "ctas": 500,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 54.131,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 5,
+        "waves": 2.941
+      },
+      "gemm_rows": 256,
+      "k": 7680,
+      "m": 128,
+      "n": 3136,
+      "ours_gemm_us": 95.33,
+      "ours_over_reference": 2.55,
+      "ours_prod_us": 105.1,
+      "promoted": {
+        "ctas": 800,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "l2",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 120.51,
+        "split_k": 4,
+        "waves": 1.569
+      },
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 41.29,
+      "role": "ssm_out",
+      "roofline_us": 30.08
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50087,
+      "derived_kept": 47340,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "median_us": 347.01,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "tflops": 145.04
+      },
+      "derived_model_best": {
+        "ctas": 3200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 214.27,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 8,
+        "waves": 18.824
+      },
+      "gemm_rows": 1024,
+      "k": 7680,
+      "m": 512,
+      "n": 3136,
+      "ours_gemm_us": 354.98,
+      "ours_over_reference": 2.72,
+      "ours_prod_us": 385.46,
+      "reference_pick": {
+        "split_k": 4,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 141.78,
+      "role": "ssm_out",
+      "roofline_us": 104.02
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50087,
+      "derived_kept": 47340,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "median_us": 628.19,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 160.24
+      },
+      "derived_model_best": {
+        "ctas": 3200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 428.541,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 18.824
+      },
+      "gemm_rows": 2048,
+      "k": 7680,
+      "m": 1024,
+      "n": 3136,
+      "ours_gemm_us": 706.83,
+      "ours_over_reference": 2.57,
+      "ours_prod_us": 796.67,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 310.47,
+      "role": "ssm_out",
+      "roofline_us": 208.03
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50087,
+      "derived_kept": 47340,
+      "derived_model_best": {
+        "ctas": 19200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 849.563,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 12,
+        "waves": 112.941
+      },
+      "gemm_rows": 4096,
+      "k": 7680,
+      "m": 2048,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 500.33,
+      "role": "ssm_out",
+      "roofline_us": 416.07
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50087,
+      "derived_kept": 47340,
+      "derived_model_best": {
+        "ctas": 19200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 1699.127,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 6,
+        "waves": 112.941
+      },
+      "gemm_rows": 8192,
+      "k": 7680,
+      "m": 4096,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 975.34,
+      "role": "ssm_out",
+      "roofline_us": 832.14
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 50087,
+      "derived_kept": 47340,
+      "derived_model_best": {
+        "ctas": 19200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 3398.253,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 3,
+        "waves": 112.941
+      },
+      "gemm_rows": 16384,
+      "k": 7680,
+      "m": 8192,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1803.89,
+      "role": "ssm_out",
+      "roofline_us": 1664.28
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8939,
+      "derived_kept": 8820,
+      "derived_model_best": {
+        "ctas": 224,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          32,
+          64,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 26.881,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.188
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 29.96,
+      "role": "qkv",
+      "roofline_us": 26.65
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11405,
+      "derived_model_best": {
+        "ctas": 224,
+        "ctas_per_sm": 5,
+        "geometry": [
+          32,
+          32,
+          64,
+          2,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 27.211,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.264
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 30.02,
+      "role": "qkv",
+      "roofline_us": 26.75
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11407,
+      "derived_model_best": {
+        "ctas": 224,
+        "ctas_per_sm": 4,
+        "geometry": [
+          32,
+          64,
+          64,
+          1,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 27.871,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.329
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 32.86,
+      "role": "qkv",
+      "roofline_us": 26.94
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11235,
+      "derived_model_best": {
+        "ctas": 224,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 36.839,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.659
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 33.77,
+      "role": "qkv",
+      "roofline_us": 27.33
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11672,
+      "derived_model_best": {
+        "ctas": 448,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 55.259,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 1.318
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 38.55,
+      "role": "qkv",
+      "roofline_us": 28.11
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 1792,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 202.617,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 5.271
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 113.43,
+      "role": "qkv",
+      "roofline_us": 97.08
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 7168,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 396.024,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 14.055
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 227.75,
+      "role": "qkv",
+      "roofline_us": 194.17
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 14336,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 782.839,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 28.11
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 459.37,
+      "role": "qkv",
+      "roofline_us": 388.33
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 28672,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 1556.468,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 56.22
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 884.9,
+      "role": "qkv",
+      "roofline_us": 776.66
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 28672,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 3112.935,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 84.329
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 7168,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1654.89,
+      "role": "qkv",
+      "roofline_us": 1553.33
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8939,
+      "derived_kept": 8820,
+      "derived_model_best": {
+        "ctas": 320,
+        "ctas_per_sm": 11,
+        "geometry": [
+          16,
+          16,
+          64,
+          1,
+          2
+        ],
+        "limiter": "memory",
+        "model_us": 19.217,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.171
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 5120,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.81,
+      "ours_prod_us": 42.36,
+      "promoted": {
+        "ctas": 160,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "memory",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 28.03,
+        "split_k": 2,
+        "waves": 0.134
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 23.46,
+      "role": "attn_q",
+      "roofline_us": 19.04
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11405,
+      "derived_model_best": {
+        "ctas": 320,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          32,
+          64,
+          1,
+          4
+        ],
+        "limiter": "memory",
+        "model_us": 19.47,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.269
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 5120,
+      "ours_gemm_us": null,
+      "ours_over_reference": 2.56,
+      "ours_prod_us": 60.01,
+      "promoted": {
+        "ctas": 160,
+        "ctas_per_sm": 6,
+        "geometry": [
+          32,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 15360,
+        "limiter": "memory",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 34.85,
+        "split_k": 2,
+        "waves": 0.157
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 23.48,
+      "role": "attn_q",
+      "roofline_us": 19.12
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11407,
+      "derived_model_best": {
+        "ctas": 160,
+        "ctas_per_sm": 4,
+        "geometry": [
+          32,
+          64,
+          64,
+          1,
+          8
+        ],
+        "limiter": "memory",
+        "model_us": 21.224,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.235
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 5120,
+      "ours_gemm_us": 30.86,
+      "ours_over_reference": 1.54,
+      "ours_prod_us": 36.81,
+      "promoted": {
+        "ctas": 280,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 49152,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 33.86,
+        "split_k": 7,
+        "waves": 0.824
+      },
+      "reference_pick": {
+        "split_k": 4,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 23.86,
+      "role": "attn_q",
+      "roofline_us": 19.28
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11197,
+      "derived_model_best": {
+        "ctas": 160,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "l2",
+        "model_us": 23.483,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.471
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 5120,
+      "ours_gemm_us": 35.04,
+      "ours_over_reference": 1.59,
+      "ours_prod_us": 39.26,
+      "promoted": {
+        "ctas": 160,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "l2",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 42.18,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              64,
+              32,
+              1,
+              4
+            ],
+            "pipeline": [
+              4,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 128,
+            "n": 5120,
+            "owners": 510,
+            "tile_k": 32,
+            "tile_m": 64,
+            "tile_n": 64
+          },
+          "stream_k_sm_efficiency": 0.992,
+          "tile_grid_sm_efficiency": 0.941,
+          "tiles": 160
+        },
+        "waves": 0.314
+      },
+      "reference_pick": {
+        "split_k": 4,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 24.7,
+      "role": "attn_q",
+      "roofline_us": 19.59
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11672,
+      "derived_model_best": {
+        "ctas": 160,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 36.839,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.941
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 5120,
+      "ours_gemm_us": 52.66,
+      "ours_over_reference": 2.39,
+      "ours_prod_us": 58.43,
+      "promoted": {
+        "ctas": 160,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 98304,
+        "limiter": "compute",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 71.9,
+        "split_k": 1,
+        "waves": 0.941
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 6,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 24.45,
+      "role": "attn_q",
+      "roofline_us": 20.21
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11684,
+      "derived_model_best": {
+        "ctas": 640,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 147.358,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 3.765
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 5120,
+      "ours_gemm_us": 208.3,
+      "ours_over_reference": 2.76,
+      "ours_prod_us": 231.88,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 84.04,
+      "role": "attn_q",
+      "roofline_us": 69.34
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          128,
+          64,
+          2,
+          8
+        ],
+        "median_us": 418.53,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 157.14
+      },
+      "derived_model_best": {
+        "ctas": 5120,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 285.506,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 10.039
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 5120,
+      "ours_gemm_us": 420.23,
+      "ours_over_reference": 3.09,
+      "ours_prod_us": 513.41,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 165.89,
+      "role": "attn_q",
+      "roofline_us": 138.69
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 10240,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 561.802,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 20.078
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 5120,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 329.19,
+      "role": "attn_q",
+      "roofline_us": 277.38
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 20480,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 1114.394,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 40.157
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 5120,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 654.2,
+      "role": "attn_q",
+      "roofline_us": 554.76
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 40960,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 2219.578,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 80.314
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 5120,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1206.09,
+      "role": "attn_q",
+      "roofline_us": 1109.52
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8939,
+      "derived_kept": 6848,
+      "derived_model_best": {
+        "ctas": 256,
+        "ctas_per_sm": 24,
+        "geometry": [
+          16,
+          8,
+          32,
+          1,
+          1
+        ],
+        "limiter": "waves",
+        "model_us": 4.046,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 0.063
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 1024,
+      "ours_gemm_us": null,
+      "ours_over_reference": 5.1,
+      "ours_prod_us": 38.08,
+      "promoted": {
+        "ctas": 32,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 24.99,
+        "split_k": 2,
+        "waves": 0.027
+      },
+      "reference_pick": {
+        "split_k": 13,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 7.47,
+      "role": "attn_kv",
+      "roofline_us": 3.83
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 8631,
+      "derived_model_best": {
+        "ctas": 256,
+        "ctas_per_sm": 20,
+        "geometry": [
+          16,
+          16,
+          32,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 4.42,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 0.075
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 1024,
+      "ours_gemm_us": null,
+      "ours_over_reference": 2.0,
+      "ours_prod_us": 38.23,
+      "promoted": {
+        "ctas": 64,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 25.54,
+        "split_k": 2,
+        "waves": 0.054
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 19.1,
+      "role": "attn_kv",
+      "roofline_us": 3.87
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 9321,
+      "derived_model_best": {
+        "ctas": 256,
+        "ctas_per_sm": 14,
+        "geometry": [
+          32,
+          32,
+          16,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 5.423,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 0.108
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 1024,
+      "ours_gemm_us": 9.31,
+      "ours_over_reference": 1.63,
+      "ours_prod_us": 12.95,
+      "promoted": {
+        "ctas": 224,
+        "ctas_per_sm": 4,
+        "geometry": [
+          64,
+          32,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 24576,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 11.42,
+        "split_k": 7,
+        "waves": 0.329
+      },
+      "reference_pick": {
+        "split_k": 5,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 32,
+        "tile_n": 32,
+        "warps": 4,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 7.95,
+      "role": "attn_kv",
+      "roofline_us": 3.95
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 10598,
+      "derived_model_best": {
+        "ctas": 256,
+        "ctas_per_sm": 10,
+        "geometry": [
+          32,
+          64,
+          16,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 7.054,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 0.151
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 1024,
+      "ours_gemm_us": 13.17,
+      "ours_over_reference": 2.22,
+      "ours_prod_us": 18.01,
+      "promoted": {
+        "ctas": 224,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 15.74,
+        "split_k": 7,
+        "waves": 0.439
+      },
+      "reference_pick": {
+        "split_k": 7,
+        "stages": 6,
+        "tile_k": 32,
+        "tile_m": 64,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 8.1,
+      "role": "attn_kv",
+      "roofline_us": 4.11
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11207,
+      "derived_model_best": {
+        "ctas": 256,
+        "ctas_per_sm": 4,
+        "geometry": [
+          64,
+          64,
+          16,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 10.314,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 0.376
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 1024,
+      "ours_gemm_us": 17.27,
+      "ours_over_reference": 2.45,
+      "ours_prod_us": 23.14,
+      "promoted": {
+        "ctas": 448,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 24.61,
+        "split_k": 7,
+        "waves": 0.878
+      },
+      "reference_pick": {
+        "split_k": 5,
+        "stages": 6,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 9.46,
+      "role": "attn_kv",
+      "roofline_us": 4.42
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11860,
+      "derived_model_best": {
+        "ctas": 1024,
+        "ctas_per_sm": 4,
+        "geometry": [
+          64,
+          64,
+          16,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 35.363,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 1.506
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 1024,
+      "ours_gemm_us": 60.09,
+      "ours_over_reference": 3.04,
+      "ours_prod_us": 71.58,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 6,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 23.52,
+      "role": "attn_kv",
+      "roofline_us": 13.87
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11684,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          256,
+          32,
+          1,
+          8
+        ],
+        "median_us": 117.47,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 111.97
+      },
+      "derived_model_best": {
+        "ctas": 1024,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 64.469,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 2.008
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 1024,
+      "ours_gemm_us": 114.61,
+      "ours_over_reference": 3.26,
+      "ours_prod_us": 140.04,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 128,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 42.96,
+      "role": "attn_kv",
+      "roofline_us": 27.74
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11684,
+      "derived_model_best": {
+        "ctas": 2048,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 119.728,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 4.016
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 1024,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 82.75,
+      "role": "attn_kv",
+      "roofline_us": 55.48
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 4096,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 230.247,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 8.031
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 1024,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 166.98,
+      "role": "attn_kv",
+      "roofline_us": 110.95
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 8192,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 451.283,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 16.063
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 1024,
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 128,
+        "warps": 8,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 276.9,
+      "role": "attn_kv",
+      "roofline_us": 221.9
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 20880,
+      "derived_kept": 20414,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 3,
+        "geometry": [
+          16,
+          16,
+          256,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 19.569,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.392
+      },
+      "gemm_rows": 16,
+      "k": 5120,
+      "m": 8,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.06,
+      "ours_prod_us": 32.59,
+      "promoted": {
+        "ctas": 100,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 41472,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 23.42,
+        "split_k": 4,
+        "waves": 0.294
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 30.82,
+      "role": "attn_o",
+      "roofline_us": 19.04
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 26716,
+      "derived_kept": 25786,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          32,
+          256,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 19.787,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.588
+      },
+      "gemm_rows": 32,
+      "k": 5120,
+      "m": 16,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.82,
+      "ours_prod_us": 56.4,
+      "promoted": {
+        "ctas": 200,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 41472,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 43.2,
+        "split_k": 4,
+        "waves": 0.588
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 30.98,
+      "role": "attn_o",
+      "roofline_us": 19.12
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 26716,
+      "derived_kept": 26070,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          32,
+          64,
+          256,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 22.158,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 1.176
+      },
+      "gemm_rows": 64,
+      "k": 5120,
+      "m": 32,
+      "n": 3136,
+      "ours_gemm_us": 32.1,
+      "ours_over_reference": 1.53,
+      "ours_prod_us": 38.06,
+      "promoted": {
+        "ctas": 400,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 34.3,
+        "split_k": 8,
+        "waves": 0.784
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 24.87,
+      "role": "attn_o",
+      "roofline_us": 19.28
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 26716,
+      "derived_kept": 26278,
+      "derived_model_best": {
+        "ctas": 400,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          64,
+          128,
+          4,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 28.834,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 2.353
+      },
+      "gemm_rows": 128,
+      "k": 5120,
+      "m": 64,
+      "n": 3136,
+      "ours_gemm_us": 43.88,
+      "ours_over_reference": 1.94,
+      "ours_prod_us": 50.6,
+      "promoted": {
+        "ctas": 400,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "waves",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 53.86,
+        "split_k": 4,
+        "waves": 0.784
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 26.08,
+      "role": "attn_o",
+      "roofline_us": 19.59
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28191,
+      "derived_kept": 26945,
+      "derived_model_best": {
+        "ctas": 500,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "occupancy:lds",
+        "model_us": 42.186,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 5,
+        "waves": 2.941
+      },
+      "gemm_rows": 256,
+      "k": 5120,
+      "m": 128,
+      "n": 3136,
+      "ours_gemm_us": 66.17,
+      "ours_over_reference": 2.5,
+      "ours_prod_us": 74.76,
+      "promoted": {
+        "ctas": 800,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "l2",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 89.5,
+        "split_k": 4,
+        "waves": 1.569
+      },
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 29.86,
+      "role": "attn_o",
+      "roofline_us": 20.21
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28224,
+      "derived_kept": 26425,
+      "derived_model_best": {
+        "ctas": 2000,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 144.351,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 5,
+        "waves": 11.765
+      },
+      "gemm_rows": 1024,
+      "k": 5120,
+      "m": 512,
+      "n": 3136,
+      "ours_gemm_us": 229.8,
+      "ours_over_reference": 2.55,
+      "ours_prod_us": 250.83,
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 64,
+        "tile_n": 256,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k+n_pad_to_tile",
+      "reference_us": 98.22,
+      "role": "attn_o",
+      "roofline_us": 69.34
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28224,
+      "derived_kept": 26425,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "median_us": 431.04,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 155.69
+      },
+      "derived_model_best": {
+        "ctas": 3200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 285.694,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 18.824
+      },
+      "gemm_rows": 2048,
+      "k": 5120,
+      "m": 1024,
+      "n": 3136,
+      "ours_gemm_us": 467.64,
+      "ours_over_reference": 2.92,
+      "ours_prod_us": 531.36,
+      "reference_pick": {
+        "split_k": 2,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 181.97,
+      "role": "attn_o",
+      "roofline_us": 138.69
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28224,
+      "derived_kept": 26425,
+      "derived_model_best": {
+        "ctas": 3200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 571.388,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 18.824
+      },
+      "gemm_rows": 4096,
+      "k": 5120,
+      "m": 2048,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 338.64,
+      "role": "attn_o",
+      "roofline_us": 277.38
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28224,
+      "derived_kept": 26425,
+      "derived_model_best": {
+        "ctas": 25600,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 1135.257,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 8,
+        "waves": 150.588
+      },
+      "gemm_rows": 8192,
+      "k": 5120,
+      "m": 4096,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 661.66,
+      "role": "attn_o",
+      "roofline_us": 554.76
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28224,
+      "derived_kept": 26425,
+      "derived_model_best": {
+        "ctas": 25600,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 2270.514,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 150.588
+      },
+      "gemm_rows": 16384,
+      "k": 5120,
+      "m": 8192,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1214.29,
+      "role": "attn_o",
+      "roofline_us": 1109.52
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8924,
+      "derived_kept": 8890,
+      "derived_model_best": {
+        "ctas": 392,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          32,
+          64,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 46.996,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.329
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 12544,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.47,
+      "ours_prod_us": 73.26,
+      "promoted": {
+        "ctas": 392,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 62.11,
+        "split_k": 2,
+        "waves": 0.329
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 49.8,
+      "role": "ffn_up",
+      "roofline_us": 46.61
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11713,
+      "derived_kept": 11504,
+      "derived_model_best": {
+        "ctas": 392,
+        "ctas_per_sm": 5,
+        "geometry": [
+          32,
+          32,
+          64,
+          2,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 47.53,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.461
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 12544,
+      "ours_gemm_us": null,
+      "ours_over_reference": 2.3,
+      "ours_prod_us": 114.99,
+      "promoted": {
+        "ctas": 196,
+        "ctas_per_sm": 3,
+        "geometry": [
+          32,
+          128,
+          32,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 25600,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 82.27,
+        "split_k": 2,
+        "waves": 0.384
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 49.91,
+      "role": "ffn_up",
+      "roofline_us": 46.76
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11713,
+      "derived_kept": 11474,
+      "derived_model_best": {
+        "ctas": 196,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 48.597,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.576
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 12544,
+      "ours_gemm_us": 60.98,
+      "ours_over_reference": 1.23,
+      "ours_prod_us": 65.16,
+      "promoted": {
+        "ctas": 98,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 49152,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 65.98,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              128,
+              64,
+              1,
+              4
+            ],
+            "pipeline": [
+              2,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 64,
+            "n": 12544,
+            "owners": 340,
+            "tile_k": 64,
+            "tile_m": 64,
+            "tile_n": 128
+          },
+          "stream_k_sm_efficiency": 0.942,
+          "tile_grid_sm_efficiency": 0.576,
+          "tiles": 98
+        },
+        "waves": 0.288
+      },
+      "reference_pick": {
+        "split_k": 5,
+        "stages": 6,
+        "tile_k": 32,
+        "tile_m": 64,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 53.17,
+      "role": "ffn_up",
+      "roofline_us": 47.06
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11713,
+      "derived_kept": 11223,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 110.4,
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 91.22
+      },
+      "derived_model_best": {
+        "ctas": 392,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 55.259,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 1.153
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 12544,
+      "ours_gemm_us": 101.0,
+      "ours_over_reference": 2.0,
+      "ours_prod_us": 106.98,
+      "promoted": {
+        "ctas": 392,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 49152,
+        "limiter": "waves",
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 110.98,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              64,
+              64,
+              2,
+              2
+            ],
+            "pipeline": [
+              3,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 128,
+            "n": 12544,
+            "owners": 340,
+            "tile_k": 64,
+            "tile_m": 64,
+            "tile_n": 64
+          },
+          "stream_k_sm_efficiency": 0.991,
+          "tile_grid_sm_efficiency": 0.769,
+          "tiles": 392
+        },
+        "waves": 1.153
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 53.46,
+      "role": "ffn_up",
+      "roofline_us": 47.65
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12385,
+      "derived_kept": 11660,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 176.99,
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 113.8
+      },
+      "derived_model_best": {
+        "ctas": 784,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 92.099,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 2.306
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 12544,
+      "ours_gemm_us": 158.05,
+      "ours_over_reference": 2.58,
+      "ours_prod_us": 165.17,
+      "promoted": {
+        "ctas": 784,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 65536,
+        "limiter": "occupancy:lds",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 177.86,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              64,
+              64,
+              2,
+              2
+            ],
+            "pipeline": [
+              4,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 256,
+            "n": 12544,
+            "owners": 170,
+            "tile_k": 64,
+            "tile_m": 64,
+            "tile_n": 64
+          },
+          "stream_k_sm_efficiency": 1.0,
+          "tile_grid_sm_efficiency": 0.922,
+          "tiles": 784
+        },
+        "waves": 4.612
+      },
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 64,
+        "tile_n": 256,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 64.05,
+      "role": "ffn_up",
+      "roofline_us": 48.83
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          256,
+          32,
+          1,
+          8
+        ],
+        "median_us": 490.18,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 164.36
+      },
+      "derived_model_best": {
+        "ctas": 6272,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 340.765,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 12.298
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 12544,
+      "ours_gemm_us": 583.29,
+      "ours_over_reference": 3.3,
+      "ours_prod_us": 617.61,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 187.07,
+      "role": "ffn_up",
+      "roofline_us": 169.89
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          128,
+          32,
+          2,
+          4
+        ],
+        "median_us": 914.78,
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 176.14
+      },
+      "derived_model_best": {
+        "ctas": 6272,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 681.53,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 18.447
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 12544,
+      "ours_gemm_us": 1157.69,
+      "ours_over_reference": 3.25,
+      "ours_prod_us": 1341.76,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 412.8,
+      "role": "ffn_up",
+      "roofline_us": 339.79
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_model_best": {
+        "ctas": 6272,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 1363.06,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 36.894
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 12544,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 791.23,
+      "role": "ffn_up",
+      "roofline_us": 679.58
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_model_best": {
+        "ctas": 12544,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 2726.121,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 73.788
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 12544,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1515.85,
+      "role": "ffn_up",
+      "roofline_us": 1359.16
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_model_best": {
+        "ctas": 100352,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 5443.032,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 196.769
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 12544,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 2781.74,
+      "role": "ffn_up",
+      "roofline_us": 2718.32
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 22118,
+      "derived_kept": 21652,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 3,
+        "geometry": [
+          16,
+          16,
+          256,
+          1,
+          2
+        ],
+        "limiter": "waves",
+        "model_us": 47.769,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.392
+      },
+      "gemm_rows": 16,
+      "k": 12544,
+      "m": 8,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.04,
+      "ours_prod_us": 73.25,
+      "promoted": {
+        "ctas": 100,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          128,
+          64,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 41472,
+        "limiter": "grid<sms",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 51.81,
+        "split_k": 4,
+        "waves": 0.294
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 70.48,
+      "role": "ffn_down",
+      "roofline_us": 46.61
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28136,
+      "derived_kept": 27286,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 2,
+        "geometry": [
+          16,
+          32,
+          256,
+          1,
+          4
+        ],
+        "limiter": "waves",
+        "model_us": 48.127,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 0.588
+      },
+      "gemm_rows": 32,
+      "k": 12544,
+      "m": 16,
+      "n": 3136,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.92,
+      "ours_prod_us": 134.71,
+      "promoted": {
+        "ctas": 400,
+        "ctas_per_sm": 6,
+        "geometry": [
+          32,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 15360,
+        "limiter": "waves",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 89.57,
+        "split_k": 8,
+        "waves": 0.392
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 70.32,
+      "role": "ffn_down",
+      "roofline_us": 46.76
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28136,
+      "derived_kept": 27570,
+      "derived_model_best": {
+        "ctas": 200,
+        "ctas_per_sm": 2,
+        "geometry": [
+          32,
+          64,
+          128,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 50.778,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 0.588
+      },
+      "gemm_rows": 64,
+      "k": 12544,
+      "m": 32,
+      "n": 3136,
+      "ours_gemm_us": 70.33,
+      "ours_over_reference": 1.47,
+      "ours_prod_us": 77.59,
+      "promoted": {
+        "ctas": 700,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 49152,
+        "limiter": "waves",
+        "pipeline": [
+          6,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 68.26,
+        "split_k": 14,
+        "waves": 2.059
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 52.7,
+      "role": "ffn_down",
+      "roofline_us": 47.06
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 28136,
+      "derived_kept": 27698,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          64,
+          64,
+          4,
+          2
+        ],
+        "median_us": 108.29,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "tflops": 94.9
+      },
+      "derived_model_best": {
+        "ctas": 400,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "waves",
+        "model_us": 58.016,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 1.176
+      },
+      "gemm_rows": 128,
+      "k": 12544,
+      "m": 64,
+      "n": 3136,
+      "ours_gemm_us": 88.94,
+      "ours_over_reference": 1.79,
+      "ours_prod_us": 96.1,
+      "promoted": {
+        "ctas": 400,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 49152,
+        "limiter": "waves",
+        "pipeline": [
+          3,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 110.24,
+        "split_k": 4,
+        "waves": 1.176
+      },
+      "reference_pick": {
+        "split_k": 6,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 53.66,
+      "role": "ffn_down",
+      "roofline_us": 47.65
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29651,
+      "derived_kept": 28471,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 178.94,
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "tflops": 114.85
+      },
+      "derived_model_best": {
+        "ctas": 800,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 92.099,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 8,
+        "waves": 2.353
+      },
+      "gemm_rows": 256,
+      "k": 12544,
+      "m": 128,
+      "n": 3136,
+      "ours_gemm_us": 148.85,
+      "ours_over_reference": 2.74,
+      "ours_prod_us": 160.62,
+      "promoted": {
+        "ctas": 800,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          64,
+          32,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 32768,
+        "limiter": "l2",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 177.73,
+        "split_k": 4,
+        "waves": 1.569
+      },
+      "reference_pick": {
+        "split_k": 3,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 58.68,
+      "role": "ffn_down",
+      "roofline_us": 48.83
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29684,
+      "derived_kept": 28046,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          4
+        ],
+        "median_us": 529.79,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "tflops": 155.17
+      },
+      "derived_model_best": {
+        "ctas": 5600,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 347.344,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 14,
+        "waves": 32.941
+      },
+      "gemm_rows": 1024,
+      "k": 12544,
+      "m": 512,
+      "n": 3136,
+      "ours_gemm_us": 609.84,
+      "ours_over_reference": 3.01,
+      "ours_prod_us": 646.29,
+      "reference_pick": {
+        "split_k": 5,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 214.69,
+      "role": "ffn_down",
+      "roofline_us": 169.89
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29684,
+      "derived_kept": 28046,
+      "derived_measured_best": {
+        "geometry": [
+          64,
+          128,
+          64,
+          2,
+          8
+        ],
+        "median_us": 979.87,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 167.79
+      },
+      "derived_model_best": {
+        "ctas": 5600,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 694.687,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 7,
+        "waves": 32.941
+      },
+      "gemm_rows": 2048,
+      "k": 12544,
+      "m": 1024,
+      "n": 3136,
+      "ours_gemm_us": 1207.12,
+      "ours_over_reference": 3.1,
+      "ours_prod_us": 1315.69,
+      "reference_pick": {
+        "split_k": 5,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 424.31,
+      "role": "ffn_down",
+      "roofline_us": 339.79
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29684,
+      "derived_kept": 28046,
+      "derived_model_best": {
+        "ctas": 11200,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 1389.374,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 7,
+        "waves": 65.882
+      },
+      "gemm_rows": 4096,
+      "k": 12544,
+      "m": 2048,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 802.91,
+      "role": "ffn_down",
+      "roofline_us": 679.58
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29684,
+      "derived_kept": 28046,
+      "derived_model_best": {
+        "ctas": 22400,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          128,
+          2,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 2778.749,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 7,
+        "waves": 131.765
+      },
+      "gemm_rows": 8192,
+      "k": 12544,
+      "m": 4096,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1555.53,
+      "role": "ffn_down",
+      "roofline_us": 1359.16
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 29684,
+      "derived_kept": 28046,
+      "derived_model_best": {
+        "ctas": 102400,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 5553.55,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 16,
+        "waves": 200.784
+      },
+      "gemm_rows": 16384,
+      "k": 12544,
+      "m": 8192,
+      "n": 3136,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 3018.38,
+      "role": "ffn_down",
+      "roofline_us": 2718.32
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 8939,
+      "derived_kept": 8905,
+      "derived_model_best": {
+        "ctas": 4096,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          32,
+          64,
+          1,
+          4
+        ],
+        "limiter": "memory",
+        "model_us": 490.505,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 3.442
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 131072,
+      "ours_gemm_us": null,
+      "ours_over_reference": 1.11,
+      "ours_prod_us": 543.65,
+      "promoted": {
+        "ctas": 4096,
+        "ctas_per_sm": 7,
+        "geometry": [
+          16,
+          64,
+          32,
+          1,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 12800,
+        "limiter": "memory",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 768.93,
+        "split_k": 2,
+        "waves": 3.442
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 2,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "ragged_k",
+      "reference_us": 490.02,
+      "role": "output",
+      "roofline_us": 486.76
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11519,
+      "derived_model_best": {
+        "ctas": 4096,
+        "ctas_per_sm": 5,
+        "geometry": [
+          32,
+          32,
+          64,
+          2,
+          4
+        ],
+        "limiter": "memory",
+        "model_us": 495.519,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 4.819
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 131072,
+      "ours_gemm_us": null,
+      "ours_over_reference": 2.17,
+      "ours_prod_us": 1072.28,
+      "promoted": {
+        "ctas": 2048,
+        "ctas_per_sm": 3,
+        "geometry": [
+          32,
+          128,
+          32,
+          1,
+          4
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 25600,
+        "limiter": "memory",
+        "pipeline": [
+          2,
+          false,
+          false,
+          false
+        ],
+        "search_median_us": 835.04,
+        "split_k": 2,
+        "waves": 4.016
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 1,
+        "tile_k": 128,
+        "tile_m": 16,
+        "tile_n": 16,
+        "warps": 1,
+        "wmma": true
+      },
+      "reference_pick_in_space": "single_stage",
+      "reference_us": 493.8,
+      "role": "output",
+      "roofline_us": 488.03
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11489,
+      "derived_model_best": {
+        "ctas": 2048,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          8
+        ],
+        "limiter": "memory",
+        "model_us": 505.545,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 6.024
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 131072,
+      "ours_gemm_us": 530.56,
+      "ours_over_reference": 1.05,
+      "ours_prod_us": 551.32,
+      "promoted": {
+        "ctas": 2048,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 98304,
+        "limiter": "occupancy:lds",
+        "pipeline": [
+          6,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 514.98,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              64,
+              64,
+              64,
+              2,
+              2
+            ],
+            "pipeline": [
+              6,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 64,
+            "n": 131072,
+            "owners": 170,
+            "tile_k": 64,
+            "tile_m": 64,
+            "tile_n": 64
+          },
+          "stream_k_sm_efficiency": 0.999,
+          "tile_grid_sm_efficiency": 0.927,
+          "tiles": 2048
+        },
+        "waves": 12.047
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 523.66,
+      "role": "output",
+      "roofline_us": 490.56
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 11728,
+      "derived_kept": 11059,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 656.64,
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 160.25
+      },
+      "derived_model_best": {
+        "ctas": 2048,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "occupancy:registers",
+        "model_us": 525.598,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 12.047
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 131072,
+      "ours_gemm_us": 642.02,
+      "ours_over_reference": 1.29,
+      "ours_prod_us": 681.3,
+      "promoted": {
+        "ctas": 2048,
+        "ctas_per_sm": 1,
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 98304,
+        "limiter": "occupancy:lds",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 655.39,
+        "split_k": 1,
+        "stream_k": {
+          "config": {
+            "geometry": [
+              128,
+              64,
+              64,
+              2,
+              2
+            ],
+            "pipeline": [
+              4,
+              true,
+              true,
+              true
+            ],
+            "split_k": 1
+          },
+          "emittable": false,
+          "schedule": {
+            "k": 3136,
+            "m": 128,
+            "n": 131072,
+            "owners": 170,
+            "tile_k": 64,
+            "tile_m": 128,
+            "tile_n": 64
+          },
+          "stream_k_sm_efficiency": 0.999,
+          "tile_grid_sm_efficiency": 0.927,
+          "tiles": 2048
+        },
+        "waves": 12.047
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 529.48,
+      "role": "output",
+      "roofline_us": 495.64
+    },
+    {
+      "deferred": [
+        "ragged_k",
+        "stream_k"
+      ],
+      "derived_admitted": 12400,
+      "derived_kept": 11521,
+      "derived_measured_best": {
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "median_us": 1239.46,
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "tflops": 169.79
+      },
+      "derived_model_best": {
+        "ctas": 8192,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 902.567,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 24.094
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 131072,
+      "ours_gemm_us": 1224.41,
+      "ours_over_reference": 2.38,
+      "ours_prod_us": 1317.34,
+      "promoted": {
+        "ctas": 4096,
+        "ctas_per_sm": 1,
+        "geometry": [
+          128,
+          64,
+          64,
+          2,
+          2
+        ],
+        "in_derived_space": true,
+        "lds_bytes": 98304,
+        "limiter": "compute",
+        "pipeline": [
+          4,
+          true,
+          true,
+          true
+        ],
+        "search_median_us": 1235.97,
+        "split_k": 1,
+        "waves": 24.094
+      },
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 3,
+        "tile_k": 64,
+        "tile_m": 64,
+        "tile_n": 128,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 553.3,
+      "role": "output",
+      "roofline_us": 505.78
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 32768,
+        "ctas_per_sm": 2,
+        "geometry": [
+          64,
+          128,
+          32,
+          1,
+          8
+        ],
+        "limiter": "compute",
+        "model_us": 3555.009,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 2,
+        "waves": 96.376
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 131072,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 1889.61,
+      "role": "output",
+      "roofline_us": 1775.23
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 32768,
+        "ctas_per_sm": 1,
+        "geometry": [
+          64,
+          128,
+          64,
+          1,
+          16
+        ],
+        "limiter": "compute",
+        "model_us": 7110.018,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 1,
+        "waves": 192.753
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 131072,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 3740.64,
+      "role": "output",
+      "roofline_us": 3550.46
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 262144,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 14210.825,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 514.008
+      },
+      "gemm_rows": 4096,
+      "k": 3136,
+      "m": 2048,
+      "n": 131072,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 7351.44,
+      "role": "output",
+      "roofline_us": 7100.92
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 524288,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 28412.44,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 1028.016
+      },
+      "gemm_rows": 8192,
+      "k": 3136,
+      "m": 4096,
+      "n": 131072,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 14591.94,
+      "role": "output",
+      "roofline_us": 14201.83
+    },
+    {
+      "deferred": [
+        "ragged_k"
+      ],
+      "derived_admitted": 12415,
+      "derived_kept": 11533,
+      "derived_model_best": {
+        "ctas": 1048576,
+        "ctas_per_sm": 3,
+        "geometry": [
+          64,
+          128,
+          16,
+          1,
+          4
+        ],
+        "limiter": "compute",
+        "model_us": 56815.671,
+        "pipeline": [
+          2,
+          true,
+          true,
+          true
+        ],
+        "split_k": 4,
+        "waves": 2056.031
+      },
+      "gemm_rows": 16384,
+      "k": 3136,
+      "m": 8192,
+      "n": 131072,
+      "reference_pick": {
+        "split_k": 1,
+        "stages": 4,
+        "tile_k": 32,
+        "tile_m": 256,
+        "tile_n": 64,
+        "warps": 4,
+        "wmma": false
+      },
+      "reference_pick_in_space": "admitted",
+      "reference_us": 29334.32,
+      "role": "output",
+      "roofline_us": 28403.66
+    }
+  ],
+  "schema": "boltbeam.gemm_scan_table.v1",
+  "target_id": "nvidia_sm120"
+}

@@ -1,0 +1,25 @@
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 1, 16], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 852.38, "tflops": 132.13, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 842.59, "tflops": 133.67, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 854.53, "tflops": 131.8, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 687.26, "tflops": 163.88, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 685.09, "tflops": 164.4, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 678.53, "tflops": 165.98, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 2, 8], "split_k": 2, "pipeline": [2, true, true, true], "median_us": 836.32, "tflops": 134.67, "finite": true, "max_rel_vs_unsplit": 2.6570762656774605e-06}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 4, 4], "split_k": 2, "pipeline": [2, true, true, true], "median_us": 799.46, "tflops": 140.88, "finite": true, "max_rel_vs_unsplit": 2.6570762656774605e-06}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 128, 32, 8, 2], "split_k": 2, "pipeline": [2, true, true, true], "median_us": 822.05, "tflops": 137.01, "finite": true, "max_rel_vs_unsplit": 2.6570762656774605e-06}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 860.48, "tflops": 130.89, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 2, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 856.22, "tflops": 131.54, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [64, 128, 64, 4, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 862.75, "tflops": 130.54, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 2], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 747.9, "tflops": 150.59, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 692.77, "tflops": 162.57, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 684.77, "tflops": 164.47, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 686.66, "tflops": 164.02, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 701.28, "tflops": 160.6, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 677.54, "tflops": 166.23, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 679.65, "tflops": 165.71, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 4, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 683.52, "tflops": 164.77, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 1, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 1167.74, "tflops": 96.45, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 2, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 1166.62, "tflops": 96.54, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 128, 64, 8, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 699.78, "tflops": 160.95, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [256, 64, 64, 8, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 711.23, "tflops": 158.35, "finite": true}
+{"role": "ssm_in", "m": 1024, "n": 17536, "k": 3136, "geometry": [128, 64, 64, 8, 2], "split_k": 7, "pipeline": [2, true, true, true], "median_us": 1170.5, "tflops": 96.22, "finite": true, "max_rel_vs_unsplit": 3.7059221540403087e-06}

@@ -1,0 +1,6090 @@
+{
+  "gemm_rows_per_token": 2,
+  "named_stalls": [
+    "mio_throttle",
+    "barrier",
+    "long_scoreboard",
+    "short_scoreboard",
+    "lg_throttle",
+    "math_pipe_throttle",
+    "wait",
+    "not_selected",
+    "dispatch_stall",
+    "no_instruction",
+    "tex_throttle",
+    "drain",
+    "membar",
+    "branch_resolving"
+  ],
+  "research_queue": {
+    "technique_gaps": [
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 221184,
+        "role": "attn_kv",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 403456,
+        "role": "attn_kv",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 313344,
+        "role": "attn_kv",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 605184,
+        "role": "attn_kv",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 703040,
+        "role": "attn_o",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 1074944,
+        "role": "attn_o",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 1612800,
+        "role": "attn_o",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 3091200,
+        "role": "attn_o",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 646400,
+        "role": "attn_q",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 1008640,
+        "role": "attn_q",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 1292800,
+        "role": "attn_q",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 2017280,
+        "role": "attn_q",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 1977600,
+        "role": "ffn_down",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 3787200,
+        "role": "ffn_down",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 3955200,
+        "role": "ffn_down",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 7574400,
+        "role": "ffn_down",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 1919232,
+        "role": "ffn_up",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 3706752,
+        "role": "ffn_up",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 3167360,
+        "role": "ffn_up",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 4942336,
+        "role": "ffn_up",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 16547840,
+        "role": "output",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 25821184,
+        "role": "output",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 33095680,
+        "role": "output",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 51642368,
+        "role": "output",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 2683008,
+        "role": "ssm_in",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 5181888,
+        "role": "ssm_in",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 5366016,
+        "role": "ssm_in",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 10363776,
+        "role": "ssm_in",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 64,
+        "reference_count": 158400,
+        "role": "ssm_out",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 64,
+        "reference_count": 291600,
+        "role": "ssm_out",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 512,
+        "reference_count": 1228800,
+        "role": "ssm_out",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 512,
+        "reference_count": 2323200,
+        "role": "ssm_out",
+        "technique": "matrix_fragment_load"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "async_copy",
+        "m": 1024,
+        "reference_count": 2342400,
+        "role": "ssm_out",
+        "technique": "async_global_to_shared"
+      },
+      {
+        "lowering_can_emit": true,
+        "lowering_fact": "matrix_fragments",
+        "m": 1024,
+        "reference_count": 4617600,
+        "role": "ssm_out",
+        "technique": "matrix_fragment_load"
+      }
+    ],
+    "unexplained": [
+      {
+        "m": 32,
+        "role": "ffn_up",
+        "total_us": 9.728,
+        "unexplained_share_of_ours": -0.6615,
+        "unexplained_us": -44.136
+      },
+      {
+        "m": 16,
+        "role": "ffn_down",
+        "total_us": 268.8,
+        "unexplained_share_of_ours": 0.4448,
+        "unexplained_us": 154.402
+      },
+      {
+        "m": 16,
+        "role": "ssm_out",
+        "total_us": 143.52,
+        "unexplained_share_of_ours": 0.42,
+        "unexplained_us": 80.901
+      },
+      {
+        "m": 16,
+        "role": "ffn_up",
+        "total_us": 65.408,
+        "unexplained_share_of_ours": 0.4135,
+        "unexplained_us": 49.253
+      },
+      {
+        "m": 8,
+        "role": "attn_kv",
+        "total_us": 28.832,
+        "unexplained_share_of_ours": 0.3929,
+        "unexplained_us": 15.337
+      },
+      {
+        "m": 16,
+        "role": "attn_o",
+        "total_us": 70.112,
+        "unexplained_share_of_ours": 0.3922,
+        "unexplained_us": 40.659
+      },
+      {
+        "m": 16,
+        "role": "ssm_in",
+        "total_us": 67.232,
+        "unexplained_share_of_ours": 0.3494,
+        "unexplained_us": 50.389
+      },
+      {
+        "m": 32,
+        "role": "attn_kv",
+        "total_us": 3.168,
+        "unexplained_share_of_ours": -0.3236,
+        "unexplained_us": -4.224
+      },
+      {
+        "m": 1024,
+        "role": "ffn_down",
+        "total_us": 848.64,
+        "unexplained_share_of_ours": -0.2521,
+        "unexplained_us": -328.777
+      },
+      {
+        "m": 1024,
+        "role": "ffn_up",
+        "total_us": 894.72,
+        "unexplained_share_of_ours": -0.2415,
+        "unexplained_us": -322.302
+      },
+      {
+        "m": 16,
+        "role": "output",
+        "total_us": 590.4,
+        "unexplained_share_of_ours": 0.2408,
+        "unexplained_us": 262.169
+      },
+      {
+        "m": 8,
+        "role": "ffn_up",
+        "total_us": 33.792,
+        "unexplained_share_of_ours": 0.2387,
+        "unexplained_us": 20.305
+      },
+      {
+        "m": 512,
+        "role": "ssm_in",
+        "total_us": 667.488,
+        "unexplained_share_of_ours": -0.2386,
+        "unexplained_us": -236.485
+      },
+      {
+        "m": 64,
+        "role": "ffn_up",
+        "total_us": 61.664,
+        "unexplained_share_of_ours": 0.2277,
+        "unexplained_us": 26.841
+      },
+      {
+        "m": 1024,
+        "role": "ssm_in",
+        "total_us": 1567.2,
+        "unexplained_share_of_ours": -0.2267,
+        "unexplained_us": -487.547
+      },
+      {
+        "m": 1024,
+        "role": "attn_q",
+        "total_us": 442.464,
+        "unexplained_share_of_ours": -0.2257,
+        "unexplained_us": -142.295
+      },
+      {
+        "m": 16,
+        "role": "attn_kv",
+        "total_us": 19.136,
+        "unexplained_share_of_ours": 0.2214,
+        "unexplained_us": 8.727
+      },
+      {
+        "m": 1024,
+        "role": "ssm_out",
+        "total_us": 599.904,
+        "unexplained_share_of_ours": -0.2173,
+        "unexplained_us": -201.039
+      },
+      {
+        "m": 512,
+        "role": "attn_q",
+        "total_us": 195.264,
+        "unexplained_share_of_ours": -0.2146,
+        "unexplained_us": -64.06
+      },
+      {
+        "m": 64,
+        "role": "ssm_out",
+        "total_us": 46.976,
+        "unexplained_share_of_ours": 0.2055,
+        "unexplained_us": 17.852
+      },
+      {
+        "m": 512,
+        "role": "ffn_up",
+        "total_us": 393.792,
+        "unexplained_share_of_ours": -0.205,
+        "unexplained_us": -128.923
+      },
+      {
+        "m": 1024,
+        "role": "attn_o",
+        "total_us": 428.032,
+        "unexplained_share_of_ours": -0.204,
+        "unexplained_us": -128.458
+      },
+      {
+        "m": 512,
+        "role": "ssm_out",
+        "total_us": 299.584,
+        "unexplained_share_of_ours": -0.201,
+        "unexplained_us": -92.476
+      },
+      {
+        "m": 1024,
+        "role": "output",
+        "total_us": 12698.208,
+        "unexplained_share_of_ours": -0.1942,
+        "unexplained_us": -3236.049
+      },
+      {
+        "m": 512,
+        "role": "ffn_down",
+        "total_us": 403.52,
+        "unexplained_share_of_ours": -0.1937,
+        "unexplained_us": -125.306
+      },
+      {
+        "m": 32,
+        "role": "ssm_in",
+        "total_us": 9.824,
+        "unexplained_share_of_ours": -0.1926,
+        "unexplained_us": -16.613
+      },
+      {
+        "m": 128,
+        "role": "ssm_out",
+        "total_us": 58.88,
+        "unexplained_share_of_ours": 0.1854,
+        "unexplained_us": 20.597
+      },
+      {
+        "m": 64,
+        "role": "output",
+        "total_us": 158.208,
+        "unexplained_share_of_ours": -0.1834,
+        "unexplained_us": -127.869
+      },
+      {
+        "m": 128,
+        "role": "attn_o",
+        "total_us": 41.632,
+        "unexplained_share_of_ours": 0.1752,
+        "unexplained_us": 14.081
+      },
+      {
+        "m": 512,
+        "role": "output",
+        "total_us": 5592.352,
+        "unexplained_share_of_ours": -0.1701,
+        "unexplained_us": -1297.895
+      },
+      {
+        "m": 8,
+        "role": "ffn_down",
+        "total_us": 28.832,
+        "unexplained_share_of_ours": 0.1677,
+        "unexplained_us": 17.749
+      },
+      {
+        "m": 1024,
+        "role": "attn_kv",
+        "total_us": 140.128,
+        "unexplained_share_of_ours": -0.1623,
+        "unexplained_us": -31.475
+      },
+      {
+        "m": 128,
+        "role": "ffn_down",
+        "total_us": 88.576,
+        "unexplained_share_of_ours": 0.1531,
+        "unexplained_us": 25.585
+      },
+      {
+        "m": 32,
+        "role": "attn_q",
+        "total_us": 10.624,
+        "unexplained_share_of_ours": -0.1475,
+        "unexplained_us": -5.875
+      },
+      {
+        "m": 512,
+        "role": "attn_kv",
+        "total_us": 65.664,
+        "unexplained_share_of_ours": -0.1435,
+        "unexplained_us": -13.641
+      },
+      {
+        "m": 512,
+        "role": "attn_o",
+        "total_us": 194.848,
+        "unexplained_share_of_ours": -0.1299,
+        "unexplained_us": -40.169
+      },
+      {
+        "m": 64,
+        "role": "ffn_down",
+        "total_us": 43.04,
+        "unexplained_share_of_ours": 0.125,
+        "unexplained_us": 12.776
+      },
+      {
+        "m": 16,
+        "role": "attn_q",
+        "total_us": 20.608,
+        "unexplained_share_of_ours": 0.1148,
+        "unexplained_us": 5.289
+      },
+      {
+        "m": 8,
+        "role": "attn_q",
+        "total_us": 19.968,
+        "unexplained_share_of_ours": 0.1124,
+        "unexplained_us": 5.006
+      },
+      {
+        "m": 64,
+        "role": "attn_q",
+        "total_us": 18.592,
+        "unexplained_share_of_ours": 0.1111,
+        "unexplained_us": 5.335
+      },
+      {
+        "m": 128,
+        "role": "ssm_in",
+        "total_us": 128.608,
+        "unexplained_share_of_ours": -0.1086,
+        "unexplained_us": -25.166
+      },
+      {
+        "m": 8,
+        "role": "ssm_out",
+        "total_us": 10.208,
+        "unexplained_share_of_ours": 0.1073,
+        "unexplained_us": 6.379
+      },
+      {
+        "m": 8,
+        "role": "ssm_in",
+        "total_us": 17.568,
+        "unexplained_share_of_ours": 0.1021,
+        "unexplained_us": 9.633
+      },
+      {
+        "m": 8,
+        "role": "attn_o",
+        "total_us": 4.736,
+        "unexplained_share_of_ours": 0.1,
+        "unexplained_us": 3.769
+      },
+      {
+        "m": 32,
+        "role": "output",
+        "total_us": 7.392,
+        "unexplained_share_of_ours": -0.0703,
+        "unexplained_us": -37.902
+      },
+      {
+        "m": 64,
+        "role": "ssm_in",
+        "total_us": 58.24,
+        "unexplained_share_of_ours": -0.0662,
+        "unexplained_us": -8.942
+      },
+      {
+        "m": 128,
+        "role": "output",
+        "total_us": 732.896,
+        "unexplained_share_of_ours": 0.0568,
+        "unexplained_us": 75.383
+      },
+      {
+        "m": 64,
+        "role": "attn_kv",
+        "total_us": 7.008,
+        "unexplained_share_of_ours": -0.0544,
+        "unexplained_us": -0.963
+      },
+      {
+        "m": 32,
+        "role": "ffn_down",
+        "total_us": 36.896,
+        "unexplained_share_of_ours": 0.0402,
+        "unexplained_us": 3.765
+      },
+      {
+        "m": 32,
+        "role": "attn_o",
+        "total_us": 12.672,
+        "unexplained_share_of_ours": 0.0332,
+        "unexplained_us": 1.347
+      },
+      {
+        "m": 128,
+        "role": "attn_kv",
+        "total_us": 13.696,
+        "unexplained_share_of_ours": -0.0315,
+        "unexplained_us": -0.827
+      },
+      {
+        "m": 64,
+        "role": "attn_o",
+        "total_us": 20.128,
+        "unexplained_share_of_ours": 0.0292,
+        "unexplained_us": 1.463
+      },
+      {
+        "m": 128,
+        "role": "ffn_up",
+        "total_us": 104.16,
+        "unexplained_share_of_ours": 0.0223,
+        "unexplained_us": 4.085
+      },
+      {
+        "m": 128,
+        "role": "attn_q",
+        "total_us": 40.32,
+        "unexplained_share_of_ours": 0.0222,
+        "unexplained_us": 1.604
+      },
+      {
+        "m": 32,
+        "role": "ssm_out",
+        "total_us": 15.456,
+        "unexplained_share_of_ours": 0.021,
+        "unexplained_us": 1.126
+      },
+      {
+        "m": 8,
+        "role": "output",
+        "total_us": 57.152,
+        "unexplained_share_of_ours": 0.0066,
+        "unexplained_us": 3.635
+      }
+    ],
+    "unknown_techniques": [
+      {
+        "count": 640,
+        "kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(T1::Params)",
+        "m": 32,
+        "opcode": "UVIMNMX",
+        "role": "attn_kv"
+      },
+      {
+        "count": 36148,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "B2R",
+        "role": "attn_o"
+      },
+      {
+        "count": 312,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "CGAERRBAR",
+        "role": "attn_o"
+      },
+      {
+        "count": 3200,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 1024,
+        "opcode": "B2R",
+        "role": "attn_o"
+      },
+      {
+        "count": 800,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 1024,
+        "opcode": "CGAERRBAR",
+        "role": "attn_o"
+      },
+      {
+        "count": 6000,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "B2R",
+        "role": "ffn_down"
+      },
+      {
+        "count": 1000,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "CGAERRBAR",
+        "role": "ffn_down"
+      },
+      {
+        "count": 8000,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 1024,
+        "opcode": "B2R",
+        "role": "ffn_down"
+      },
+      {
+        "count": 2000,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 1024,
+        "opcode": "CGAERRBAR",
+        "role": "ffn_down"
+      },
+      {
+        "count": 15588,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+        "m": 32,
+        "opcode": "B2R",
+        "role": "ffn_up"
+      },
+      {
+        "count": 980,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+        "m": 32,
+        "opcode": "CGAERRBAR",
+        "role": "ffn_up"
+      },
+      {
+        "count": 25460,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "m": 128,
+        "opcode": "B2R",
+        "role": "ffn_up"
+      },
+      {
+        "count": 294,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "m": 128,
+        "opcode": "CGAERRBAR",
+        "role": "ffn_up"
+      },
+      {
+        "count": 8192,
+        "kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(T1::Params)",
+        "m": 16,
+        "opcode": "UVIMNMX",
+        "role": "output"
+      },
+      {
+        "count": 4456,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "B2R",
+        "role": "ssm_out"
+      },
+      {
+        "count": 800,
+        "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "m": 512,
+        "opcode": "CGAERRBAR",
+        "role": "ssm_out"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": -3.136,
+          "rows": 0.0,
+          "stall_excess:long_scoreboard": 7.024,
+          "stall_excess:no_instruction": 0.112,
+          "wave_tail": 9.495
+        },
+        "total_us": 28.832,
+        "unexplained_share_of_ours": 0.3929,
+        "unexplained_us": 15.337
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 9.645
+        },
+        "total_us": 35.208,
+        "unexplained_us": 25.563
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 8.332391,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.167,
+        "gemm_kernel": "r_128_16_8_8_49_4_381d02bb1238c716e09c43806e9dec60a5781c70cfef3a9e3f34bad4ed7a7c61",
+        "gemm_us": 39.04,
+        "grid": "(128, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 56,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 97.285,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.696,
+            "reason": "wait"
+          },
+          {
+            "pct": 0.38,
+            "reason": "no_instruction"
+          }
+        ],
+        "total_us": 39.04
+      },
+      "reference": {
+        "achieved_occupancy_pct": 9.040055,
+        "aux_us": 3.136,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.917,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 7.072,
+        "grid": "(8, 8, 13)",
+        "kernels": 2,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.087297,
+        "top_stall_reasons": [
+          {
+            "pct": 73.39,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 10.431,
+            "reason": "wait"
+          },
+          {
+            "pct": 5.541,
+            "reason": "short_scoreboard"
+          }
+        ],
+        "total_us": 10.208
+      },
+      "role": "attn_kv",
+      "roofline_us": 3.832,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 3.336,
+          "stall_excess:long_scoreboard": 9.839,
+          "stall_excess:no_instruction": 0.144,
+          "wave_tail": -2.91
+        },
+        "total_us": 19.136,
+        "unexplained_share_of_ours": 0.2214,
+        "unexplained_us": 8.727
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 3.336,
+          "wave_tail": 9.74
+        },
+        "total_us": 35.552,
+        "unexplained_us": 22.476
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 12.547305,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.168,
+        "gemm_kernel": "r_2_128_16_8_8_49_4_ffca7c3784f7d4226c05ae68bce9e4ef31dc76b66dbf8488f175ed8bdb84acf9",
+        "gemm_us": 39.424,
+        "grid": "(128, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 96.832,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.954,
+            "reason": "wait"
+          },
+          {
+            "pct": 0.546,
+            "reason": "no_instruction"
+          }
+        ],
+        "total_us": 39.424
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.083333,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.322,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 20.288,
+        "grid": "(8, 8, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 2.379622,
+        "top_stall_reasons": [
+          {
+            "pct": 59.488,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.201,
+            "reason": "wait"
+          },
+          {
+            "pct": 9.57,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 20.288
+      },
+      "role": "attn_kv",
+      "roofline_us": 3.872,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 2.528,
+          "rows": 1.42,
+          "stall_excess:barrier": 0.561,
+          "stall_excess:math_pipe_throttle": 0.676,
+          "wave_tail": 2.206
+        },
+        "total_us": 3.168,
+        "unexplained_share_of_ours": -0.3236,
+        "unexplained_us": -4.224
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 5.376,
+          "rows": 1.42,
+          "wave_tail": 2.62
+        },
+        "total_us": 9.106,
+        "unexplained_us": -0.311
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 10.940268,
+        "aux_us": 5.376,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.889,
+        "gemm_kernel": "E_7_32_32_2_2_2_2_2_2_14_79d0b5b0ca5cfdf35ee52b292819c6fb1332776e844ae3a70984b1245c883816",
+        "gemm_us": 7.68,
+        "grid": "(32, 7, 1)",
+        "kernels": 3,
+        "registers_per_thread": 79,
+        "shared_bytes": 24576.0,
+        "tensor_pipe_util_pct": 27.766498,
+        "top_stall_reasons": [
+          {
+            "pct": 37.817,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 18.587,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 15.427,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 13.056
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.329499,
+        "aux_us": 2.848,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.943,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 7.04,
+        "grid": "(8, 4, 5)",
+        "kernels": 2,
+        "registers_per_thread": 84,
+        "shared_bytes": 33792.0,
+        "tensor_pipe_util_pct": 14.444534,
+        "top_stall_reasons": [
+          {
+            "pct": 58.238,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 16.003,
+            "reason": "wait"
+          },
+          {
+            "pct": 6.778,
+            "reason": "short_scoreboard"
+          }
+        ],
+        "total_us": 9.888
+      },
+      "role": "attn_kv",
+      "roofline_us": 3.95,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": [
+          {
+            "count": 640,
+            "kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(T1::Params)",
+            "opcode": "UVIMNMX"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 3.648,
+          "rows": 2.516,
+          "stall_excess:math_pipe_throttle": 0.661,
+          "wave_tail": 1.146
+        },
+        "total_us": 7.008,
+        "unexplained_share_of_ours": -0.0544,
+        "unexplained_us": -0.963
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 6.816,
+          "rows": 2.516,
+          "wave_tail": 3.712
+        },
+        "total_us": 13.589,
+        "unexplained_us": 0.545
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 11.00471,
+        "aux_us": 6.816,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.665,
+        "gemm_kernel": "E_7_2_16_32_2_2_2_2_4_2_14_0225b7fc9c375a0229739aeb23351de9f538680a0156f5b6d948a74f9b6ca2b3",
+        "gemm_us": 10.88,
+        "grid": "(16, 2, 7)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 39.449923,
+        "top_stall_reasons": [
+          {
+            "pct": 39.078,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 19.157,
+            "reason": "wait"
+          },
+          {
+            "pct": 16.201,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 17.696
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.328779,
+        "aux_us": 3.168,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.911,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+        "gemm_us": 7.52,
+        "grid": "(8, 2, 7)",
+        "kernels": 2,
+        "registers_per_thread": 88,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 25.97527,
+        "top_stall_reasons": [
+          {
+            "pct": 25.424,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 24.86,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 24.68,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 10.688
+      },
+      "role": "attn_kv",
+      "roofline_us": 4.107,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 6.752,
+          "rows": 5.168,
+          "stall_excess:math_pipe_throttle": 1.168,
+          "wave_tail": 1.434
+        },
+        "total_us": 13.696,
+        "unexplained_share_of_ours": -0.0315,
+        "unexplained_us": -0.827
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 9.888,
+          "rows": 5.168,
+          "wave_tail": 1.988
+        },
+        "total_us": 21.818,
+        "unexplained_us": 4.774
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 19.537429,
+        "aux_us": 9.888,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.491,
+        "gemm_kernel": "E_7_4_16_32_2_2_2_2_4_2_14_3c6e44c9f45265a497bca0eae2347fc66294581b795f060f1102fa1f71934946",
+        "gemm_us": 16.352,
+        "grid": "(16, 4, 7)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 56.926758,
+        "top_stall_reasons": [
+          {
+            "pct": 42.994,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 12.567,
+            "reason": "wait"
+          },
+          {
+            "pct": 11.942,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 26.24
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.328912,
+        "aux_us": 3.136,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.771,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(T1::Params)",
+        "gemm_us": 9.408,
+        "grid": "(16, 2, 5)",
+        "kernels": 2,
+        "registers_per_thread": 96,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 43.30017,
+        "top_stall_reasons": [
+          {
+            "pct": 30.293,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 29.886,
+            "reason": "wait"
+          },
+          {
+            "pct": 16.219,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 12.544
+      },
+      "role": "attn_kv",
+      "roofline_us": 4.422,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 54.912,
+          "rows": 19.226,
+          "stall_excess:long_scoreboard": 2.511,
+          "wave_tail": 2.656
+        },
+        "total_us": 65.664,
+        "unexplained_share_of_ours": -0.1435,
+        "unexplained_us": -13.641
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 54.912,
+          "rows": 19.226,
+          "wave_tail": 9.914
+        },
+        "total_us": 81.171,
+        "unexplained_us": -2.881
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 8.329874,
+        "aux_us": 54.912,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.24,
+        "gemm_kernel": "E_8_16_32_2_2_2_2_4_2_48_2_d26e1c46c7248e13ed83310b551a2d4d7e61c33acdcb54a04fd6eeb3997910c9",
+        "gemm_us": 40.128,
+        "grid": "(16, 8, 1)",
+        "kernels": 5,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 45.201097,
+        "top_stall_reasons": [
+          {
+            "pct": 35.167,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.67,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 25.713,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 95.04
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331479,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.329,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(T1::Params)",
+        "gemm_us": 29.376,
+        "grid": "(64, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 96,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 61.95035,
+        "top_stall_reasons": [
+          {
+            "pct": 46.061,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 40.251,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.817,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 29.376
+      },
+      "role": "attn_kv",
+      "roofline_us": 13.869,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 221184,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 403456,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 154.976,
+          "rows": 17.568,
+          "stall_excess:long_scoreboard": 2.728,
+          "wave_tail": -3.668
+        },
+        "total_us": 140.128,
+        "unexplained_share_of_ours": -0.1623,
+        "unexplained_us": -31.475
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 154.976,
+          "rows": 17.568,
+          "wave_tail": 9.614
+        },
+        "total_us": 166.15,
+        "unexplained_us": -16.007
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 1024,
+      "ours": {
+        "achieved_occupancy_pct": 8.329991,
+        "aux_us": 154.976,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.248,
+        "gemm_kernel": "E_8_16_32_2_2_2_2_4_2_48_2_d26e1c46c7248e13ed83310b551a2d4d7e61c33acdcb54a04fd6eeb3997910c9",
+        "gemm_us": 38.912,
+        "grid": "(16, 8, 1)",
+        "kernels": 10,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 44.571057,
+        "top_stall_reasons": [
+          {
+            "pct": 35.256,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.313,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 25.726,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 193.888
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332251,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.24,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x128_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 53.76,
+        "grid": "(64, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 67.231824,
+        "top_stall_reasons": [
+          {
+            "pct": 50.846,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.537,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.062,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 53.76
+      },
+      "role": "attn_kv",
+      "roofline_us": 27.738,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 313344,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 605184,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 3.819,
+          "stall_excess:long_scoreboard": 7.793,
+          "wave_tail": -10.645
+        },
+        "total_us": 4.736,
+        "unexplained_share_of_ours": 0.1,
+        "unexplained_us": 3.769
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 2.927
+        },
+        "total_us": 18.653,
+        "unexplained_us": 15.726
+      },
+      "gemm_rows": 16,
+      "k": 5120,
+      "m": 8,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 37.360595,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.856,
+        "gemm_kernel": "r_784_32_4_8_20_8_4aa2a64731660dd2c15f95c40ba8e70b74db26a98e780b1c664ec07a4e21513a",
+        "gemm_us": 37.696,
+        "grid": "(784, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 81.883,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 10.983,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 2.381,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 37.696
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.409252,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.977,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 32.96,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.447939,
+        "top_stall_reasons": [
+          {
+            "pct": 59.469,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.509,
+            "reason": "wait"
+          },
+          {
+            "pct": 9.933,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 32.96
+      },
+      "role": "attn_o",
+      "roofline_us": 19.043,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.142,
+          "stall_excess:lg_throttle": 16.348,
+          "stall_excess:long_scoreboard": 15.657,
+          "stall_excess:mio_throttle": 2.077,
+          "wave_tail": -5.772
+        },
+        "total_us": 70.112,
+        "unexplained_share_of_ours": 0.3922,
+        "unexplained_us": 40.659
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.142,
+          "wave_tail": 8.05
+        },
+        "total_us": 84.559,
+        "unexplained_us": 75.366
+      },
+      "gemm_rows": 32,
+      "k": 5120,
+      "m": 16,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 69.194305,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.313,
+        "gemm_kernel": "r_2_784_32_4_8_20_8_32a8085055e413ee81fcc1681107b894dce036df4f8ec5b051937498d9aaee31",
+        "gemm_us": 103.68,
+        "grid": "(784, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 48,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 76.289,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 17.302,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 2.198,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 103.68
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.408406,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.962,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 33.568,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.453169,
+        "top_stall_reasons": [
+          {
+            "pct": 59.718,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.417,
+            "reason": "wait"
+          },
+          {
+            "pct": 9.887,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 33.568
+      },
+      "role": "attn_o",
+      "roofline_us": 19.121,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 5.6,
+          "rows": 3.38,
+          "stall_excess:barrier": 4.86,
+          "stall_excess:long_scoreboard": 1.343,
+          "wave_tail": -3.858
+        },
+        "total_us": 12.672,
+        "unexplained_share_of_ours": 0.0332,
+        "unexplained_us": 1.347
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.928,
+          "rows": 3.38,
+          "wave_tail": 6.812
+        },
+        "total_us": 21.235,
+        "unexplained_us": 2.115
+      },
+      "gemm_rows": 64,
+      "k": 5120,
+      "m": 32,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 19.275366,
+        "aux_us": 8.928,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.058,
+        "gemm_kernel": "E_8_50_32_2_2_2_2_4_2_20_f9c28ca6362cfb98f850fe3fc2cd7bb475c41b646e54d2475434e5268239dfe0",
+        "gemm_us": 31.584,
+        "grid": "(50, 8, 1)",
+        "kernels": 3,
+        "registers_per_thread": 99,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 35.188071,
+        "top_stall_reasons": [
+          {
+            "pct": 38.607,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 22.719,
+            "reason": "barrier"
+          },
+          {
+            "pct": 16.227,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 40.512
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331017,
+        "aux_us": 3.328,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.325,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 24.512,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 42.637637,
+        "top_stall_reasons": [
+          {
+            "pct": 32.327,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 29.153,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.015,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 27.84
+      },
+      "role": "attn_o",
+      "roofline_us": 19.277,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 3.68,
+          "rows": 9.595,
+          "stall_excess:barrier": 3.035,
+          "stall_excess:math_pipe_throttle": 4.296,
+          "wave_tail": -1.941
+        },
+        "total_us": 20.128,
+        "unexplained_share_of_ours": 0.0292,
+        "unexplained_us": 1.463
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.736,
+          "rows": 9.595,
+          "wave_tail": 8.938
+        },
+        "total_us": 30.587,
+        "unexplained_us": 3.318
+      },
+      "gemm_rows": 128,
+      "k": 5120,
+      "m": 64,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 18.231921,
+        "aux_us": 8.736,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.823,
+        "gemm_kernel": "E_4_2_50_32_2_2_2_2_4_2_40_b40b25a3b6f5fde472b1a9154c27d8c3a673d0c94131c96612647cd57a8b67cf",
+        "gemm_us": 41.44,
+        "grid": "(50, 2, 4)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 60.164545,
+        "top_stall_reasons": [
+          {
+            "pct": 47.171,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 14.315,
+            "reason": "wait"
+          },
+          {
+            "pct": 13.249,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 50.176
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.330924,
+        "aux_us": 5.056,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.313,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 24.992,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 42.433957,
+        "top_stall_reasons": [
+          {
+            "pct": 33.715,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 28.415,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 25.408,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 30.048
+      },
+      "role": "attn_o",
+      "roofline_us": 19.589,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 8.288,
+          "rows": 21.087,
+          "stall_excess:barrier": 5.742,
+          "stall_excess:math_pipe_throttle": 3.002,
+          "wave_tail": -10.568
+        },
+        "total_us": 41.632,
+        "unexplained_share_of_ours": 0.1752,
+        "unexplained_us": 14.081
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 13.728,
+          "rows": 21.087,
+          "wave_tail": 3.919
+        },
+        "total_us": 60.139,
+        "unexplained_us": 21.405
+      },
+      "gemm_rows": 256,
+      "k": 5120,
+      "m": 128,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 21.369355,
+        "aux_us": 13.728,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.531,
+        "gemm_kernel": "E_4_4_50_32_2_2_2_2_4_2_40_c62b7ac2fb6564b0710f8f9456f344f558b8f19ee32efa4c471aaff10b03ddb8",
+        "gemm_us": 66.624,
+        "grid": "(50, 4, 4)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 77.380056,
+        "top_stall_reasons": [
+          {
+            "pct": 54.193,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 13.797,
+            "reason": "barrier"
+          },
+          {
+            "pct": 13.223,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 80.352
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331483,
+        "aux_us": 5.44,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.006,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 33.28,
+        "grid": "(16, 4, 3)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 69.816987,
+        "top_stall_reasons": [
+          {
+            "pct": 46.98,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 40.12,
+            "reason": "wait"
+          },
+          {
+            "pct": 6.914,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 38.72
+      },
+      "role": "attn_o",
+      "roofline_us": 20.213,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 170.208,
+          "rows": 69.456,
+          "stall_excess:mio_throttle": 15.414,
+          "wave_tail": -20.061
+        },
+        "total_us": 194.848,
+        "unexplained_share_of_ours": -0.1299,
+        "unexplained_us": -40.169
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 170.208,
+          "rows": 69.456,
+          "wave_tail": 8.171
+        },
+        "total_us": 239.775,
+        "unexplained_us": -8.061
+      },
+      "gemm_rows": 1024,
+      "k": 5120,
+      "m": 512,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 15.467307,
+        "aux_us": 170.208,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.274,
+        "gemm_kernel": "E_2_8_50_32_2_2_2_2_4_2_39_2_1ddf1660f5ee46be7e66d32ccc82bb7760ff6b22acdfea2d2c946cf2424f18a4",
+        "gemm_us": 138.912,
+        "grid": "(50, 8, 2)",
+        "kernels": 5,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 66.039796,
+        "top_stall_reasons": [
+          {
+            "pct": 41.951,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 25.151,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 16.513,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 309.12
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.299346,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.328,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 114.272,
+        "grid": "(64, 2, 3)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 80.697398,
+        "top_stall_reasons": [
+          {
+            "pct": 49.772,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.814,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.647,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 114.272
+      },
+      "role": "attn_o",
+      "roofline_us": 69.345,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 703040,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 1074944,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": [
+          {
+            "count": 36148,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 312,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 492.96,
+          "rows": 67.711,
+          "stall_excess:mio_throttle": 15.917,
+          "wave_tail": -20.098
+        },
+        "total_us": 428.032,
+        "unexplained_share_of_ours": -0.204,
+        "unexplained_us": -128.458
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 492.96,
+          "rows": 67.711,
+          "wave_tail": 8.051
+        },
+        "total_us": 491.134,
+        "unexplained_us": -77.588
+      },
+      "gemm_rows": 2048,
+      "k": 5120,
+      "m": 1024,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 15.474432,
+        "aux_us": 492.96,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.278,
+        "gemm_kernel": "E_2_8_50_32_2_2_2_2_4_2_39_2_1ddf1660f5ee46be7e66d32ccc82bb7760ff6b22acdfea2d2c946cf2424f18a4",
+        "gemm_us": 136.864,
+        "grid": "(50, 8, 2)",
+        "kernels": 10,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 66.75511,
+        "top_stall_reasons": [
+          {
+            "pct": 41.346,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.05,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 16.312,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 629.824
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.275829,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.211,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 201.792,
+        "grid": "(128, 4, 2)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 84.329366,
+        "top_stall_reasons": [
+          {
+            "pct": 49.772,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.403,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.029,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 201.792
+      },
+      "role": "attn_o",
+      "roofline_us": 138.69,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 1612800,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 3091200,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": [
+          {
+            "count": 3200,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 800,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 0.282,
+          "stall_excess:long_scoreboard": 13.505,
+          "wave_tail": 1.175
+        },
+        "total_us": 19.968,
+        "unexplained_share_of_ours": 0.1124,
+        "unexplained_us": 5.006
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 2.62
+        },
+        "total_us": 25.501,
+        "unexplained_us": 22.881
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 31.257174,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.723,
+        "gemm_kernel": "r_640_16_8_8_49_4_c01e7ae4ff5feb38b6b1572d33f24284ab34499830bba862ac3c83ea84343953",
+        "gemm_us": 44.544,
+        "grid": "(640, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 56,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 95.739,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.698,
+            "reason": "wait"
+          },
+          {
+            "pct": 0.673,
+            "reason": "lg_throttle"
+          }
+        ],
+        "total_us": 44.544
+      },
+      "reference": {
+        "achieved_occupancy_pct": 3.898616,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.309,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 24.576,
+        "grid": "(8, 40, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 10.441043,
+        "top_stall_reasons": [
+          {
+            "pct": 63.525,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 18.903,
+            "reason": "wait"
+          },
+          {
+            "pct": 8.572,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 24.576
+      },
+      "role": "attn_q",
+      "roofline_us": 19.043,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.599,
+          "stall_excess:long_scoreboard": 12.984,
+          "stall_excess:mio_throttle": 0.524,
+          "wave_tail": 1.212
+        },
+        "total_us": 20.608,
+        "unexplained_share_of_ours": 0.1148,
+        "unexplained_us": 5.289
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.599,
+          "wave_tail": 2.711
+        },
+        "total_us": 26.959,
+        "unexplained_us": 23.65
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 61.906758,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.701,
+        "gemm_kernel": "r_2_640_16_8_8_49_4_09ea039b6ff68b2376484600a5b50c5b23468710433d94c935f3b3ac1602e8da",
+        "gemm_us": 46.08,
+        "grid": "(640, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 94.496,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 2.187,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.225,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 46.08
+      },
+      "reference": {
+        "achieved_occupancy_pct": 3.908964,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.265,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 25.472,
+        "grid": "(8, 40, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 10.263751,
+        "top_stall_reasons": [
+          {
+            "pct": 64.139,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 18.581,
+            "reason": "wait"
+          },
+          {
+            "pct": 8.406,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 25.472
+      },
+      "role": "attn_q",
+      "roofline_us": 19.121,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 7.008,
+          "rows": 2.457,
+          "stall_excess:barrier": 3.324,
+          "wave_tail": 3.71
+        },
+        "total_us": 10.624,
+        "unexplained_share_of_ours": -0.1475,
+        "unexplained_us": -5.875
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 10.112,
+          "rows": 2.457,
+          "wave_tail": 5.246
+        },
+        "total_us": 20.563,
+        "unexplained_us": 2.748
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 13.492195,
+        "aux_us": 10.112,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 1.094,
+        "gemm_kernel": "E_7_40_32_4_2_2_4_4_14_128e11d2740c4454065bf0975681e1a089b616afed1f4ec4b4eb200d9a03a3ef",
+        "gemm_us": 29.728,
+        "grid": "(40, 7, 1)",
+        "kernels": 3,
+        "registers_per_thread": 130,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 35.535592,
+        "top_stall_reasons": [
+          {
+            "pct": 31.923,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.015,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 15.092,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 39.84
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331232,
+        "aux_us": 3.104,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.239,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 26.112,
+        "grid": "(8, 5, 4)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 41.449795,
+        "top_stall_reasons": [
+          {
+            "pct": 39.746,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 25.396,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 22.8,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 29.216
+      },
+      "role": "attn_q",
+      "roofline_us": 19.277,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 2.016,
+          "rows": 4.011,
+          "stall_excess:math_pipe_throttle": 4.905,
+          "stall_excess:wait": 1.35,
+          "wave_tail": 0.975
+        },
+        "total_us": 18.592,
+        "unexplained_share_of_ours": 0.1111,
+        "unexplained_us": 5.335
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 6.304,
+          "rows": 4.011,
+          "wave_tail": 2.453
+        },
+        "total_us": 28.411,
+        "unexplained_us": 15.643
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 8.330634,
+        "aux_us": 6.304,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.79,
+        "gemm_kernel": "E_2_80_32_4_2_2_2_4_98_e1cd2966ce07b39d5d9f00074c439c1af6b140d707f39d08ad7d532189e8361c",
+        "gemm_us": 41.696,
+        "grid": "(80, 2, 1)",
+        "kernels": 3,
+        "registers_per_thread": 97,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 57.899472,
+        "top_stall_reasons": [
+          {
+            "pct": 40.411,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 27.629,
+            "reason": "wait"
+          },
+          {
+            "pct": 12.271,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 48.0
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331163,
+        "aux_us": 4.288,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.296,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 25.12,
+        "grid": "(8, 5, 4)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 41.771526,
+        "top_stall_reasons": [
+          {
+            "pct": 37.661,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 26.489,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 23.797,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 29.408
+      },
+      "role": "attn_q",
+      "roofline_us": 19.589,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 8.448,
+          "rows": 23.087,
+          "stall_excess:math_pipe_throttle": 4.236,
+          "stall_excess:mio_throttle": 1.07,
+          "wave_tail": 1.875
+        },
+        "total_us": 40.32,
+        "unexplained_share_of_ours": 0.0222,
+        "unexplained_us": 1.604
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.448,
+          "rows": 23.087,
+          "wave_tail": 3.746
+        },
+        "total_us": 51.915,
+        "unexplained_us": 16.634
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 8.331943,
+        "aux_us": 8.448,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.53,
+        "gemm_kernel": "E_4_40_32_4_2_2_4_4_49_98c73c6223f60acd92ed9f20b11b475fba8e4f3430b79917187806d8fae4dac2",
+        "gemm_us": 63.68,
+        "grid": "(40, 4, 1)",
+        "kernels": 3,
+        "registers_per_thread": 128,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 73.142636,
+        "top_stall_reasons": [
+          {
+            "pct": 55.939,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 31.117,
+            "reason": "wait"
+          },
+          {
+            "pct": 2.905,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 72.128
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331285,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.036,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(T1::Params)",
+        "gemm_us": 31.808,
+        "grid": "(16, 10, 1)",
+        "kernels": 1,
+        "registers_per_thread": 96,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 75.692947,
+        "top_stall_reasons": [
+          {
+            "pct": 44.444,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 38.775,
+            "reason": "wait"
+          },
+          {
+            "pct": 5.922,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 31.808
+      },
+      "role": "attn_q",
+      "roofline_us": 20.213,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 169.12,
+          "rows": 64.72,
+          "stall_excess:barrier": 8.689,
+          "stall_excess:mio_throttle": 15.257,
+          "wave_tail": 1.538
+        },
+        "total_us": 195.264,
+        "unexplained_share_of_ours": -0.2146,
+        "unexplained_us": -64.06
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 169.12,
+          "rows": 64.72,
+          "wave_tail": 7.614
+        },
+        "total_us": 229.215,
+        "unexplained_us": -12.239
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 28.238395,
+        "aux_us": 169.12,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.273,
+        "gemm_kernel": "E_2_4_40_32_4_2_2_2_8_2_48_2_7f9393edc54e603bfc9da4e595e01a8f5aa2cce42ad7abd93d757e4288b872a2",
+        "gemm_us": 129.44,
+        "grid": "(40, 4, 2)",
+        "kernels": 5,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 65.731056,
+        "top_stall_reasons": [
+          {
+            "pct": 45.997,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.717,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 15.215,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 298.56
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332499,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.343,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 103.296,
+        "grid": "(16, 10, 1)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 86.142566,
+        "top_stall_reasons": [
+          {
+            "pct": 51.824,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 43.974,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.525,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 103.296
+      },
+      "role": "attn_q",
+      "roofline_us": 69.345,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 646400,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 1008640,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 499.84,
+          "rows": 63.267,
+          "stall_excess:barrier": 9.022,
+          "stall_excess:mio_throttle": 16.006,
+          "wave_tail": -3.375
+        },
+        "total_us": 442.464,
+        "unexplained_share_of_ours": -0.2257,
+        "unexplained_us": -142.295
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 499.84,
+          "rows": 63.267,
+          "wave_tail": 7.691
+        },
+        "total_us": 491.902,
+        "unexplained_us": -78.896
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 5120,
+      "ours": {
+        "achieved_occupancy_pct": 28.236328,
+        "aux_us": 499.84,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.271,
+        "gemm_kernel": "E_2_4_40_32_4_2_2_2_8_2_48_2_7f9393edc54e603bfc9da4e595e01a8f5aa2cce42ad7abd93d757e4288b872a2",
+        "gemm_us": 130.752,
+        "grid": "(40, 4, 2)",
+        "kernels": 10,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 65.240295,
+        "top_stall_reasons": [
+          {
+            "pct": 46.001,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.768,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 15.088,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 630.592
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332547,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.205,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 188.128,
+        "grid": "(32, 10, 1)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 88.291309,
+        "top_stall_reasons": [
+          {
+            "pct": 52.19,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 44.295,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.224,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 188.128
+      },
+      "role": "attn_q",
+      "roofline_us": 138.69,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 1292800,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 2017280,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 6.206,
+          "stall_excess:long_scoreboard": 28.363,
+          "wave_tail": -23.486
+        },
+        "total_us": 28.832,
+        "unexplained_share_of_ours": 0.1677,
+        "unexplained_us": 17.749
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 8.217
+        },
+        "total_us": 59.213,
+        "unexplained_us": 50.996
+      },
+      "gemm_rows": 16,
+      "k": 12544,
+      "m": 8,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 36.468293,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.749,
+        "gemm_kernel": "r_784_32_4_8_49_8_217db56fb8b65667882893771f7509045ddeefb13e0643950a0162394ce7c5dd",
+        "gemm_us": 105.824,
+        "grid": "(784, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 89.225,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 6.358,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 1.753,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 105.824
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.407865,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.025,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 76.992,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.776308,
+        "top_stall_reasons": [
+          {
+            "pct": 60.167,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.599,
+            "reason": "wait"
+          },
+          {
+            "pct": 10.156,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 76.992
+      },
+      "role": "ffn_down",
+      "roofline_us": 46.611,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 2.582,
+          "stall_excess:lg_throttle": 109.635,
+          "stall_excess:long_scoreboard": 2.077,
+          "stall_excess:mio_throttle": 5.406,
+          "wave_tail": -5.302
+        },
+        "total_us": 268.8,
+        "unexplained_share_of_ours": 0.4448,
+        "unexplained_us": 154.402
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 2.582,
+          "wave_tail": 26.954
+        },
+        "total_us": 300.377,
+        "unexplained_us": 270.841
+      },
+      "gemm_rows": 32,
+      "k": 12544,
+      "m": 16,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 66.071414,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.231,
+        "gemm_kernel": "r_2_784_32_4_8_49_8_533e87191b6d7970efb596c7507d5d10cea129d0a247883aa3f50bbe63b11a52",
+        "gemm_us": 347.136,
+        "grid": "(784, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 48,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 61.402,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 34.52,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 1.702,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 347.136
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.407984,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.01,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 78.336,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.790561,
+        "top_stall_reasons": [
+          {
+            "pct": 60.748,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.232,
+            "reason": "wait"
+          },
+          {
+            "pct": 9.974,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 78.336
+      },
+      "role": "ffn_down",
+      "roofline_us": 46.759,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 9.088,
+          "rows": 4.238,
+          "stall_excess:barrier": 9.805,
+          "stall_excess:mio_throttle": 18.907,
+          "wave_tail": -8.908
+        },
+        "total_us": 36.896,
+        "unexplained_share_of_ours": 0.0402,
+        "unexplained_us": 3.765
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 12.416,
+          "rows": 4.238,
+          "wave_tail": 14.327
+        },
+        "total_us": 46.544,
+        "unexplained_us": 15.563
+      },
+      "gemm_rows": 64,
+      "k": 12544,
+      "m": 32,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 16.26473,
+        "aux_us": 12.416,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.065,
+        "gemm_kernel": "E_14_50_32_2_2_2_2_4_2_28_172eb086999352df9059bfbb447225f357848be69e2e4e2a7c283abf7692f7c4",
+        "gemm_us": 81.184,
+        "grid": "(50, 14, 1)",
+        "kernels": 3,
+        "registers_per_thread": 105,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 33.943701,
+        "top_stall_reasons": [
+          {
+            "pct": 30.194,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 18.834,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 15.658,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 93.6
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332227,
+        "aux_us": 3.328,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.491,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 53.376,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 48.687736,
+        "top_stall_reasons": [
+          {
+            "pct": 30.965,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 27.393,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 26.676,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 56.704
+      },
+      "role": "ffn_down",
+      "roofline_us": 47.056,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 4.768,
+          "rows": 11.486,
+          "stall_excess:math_pipe_throttle": 17.568,
+          "wave_tail": -3.558
+        },
+        "total_us": 43.04,
+        "unexplained_share_of_ours": 0.125,
+        "unexplained_us": 12.776
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 10.176,
+          "rows": 11.486,
+          "wave_tail": 19.857
+        },
+        "total_us": 54.592,
+        "unexplained_us": 13.073
+      },
+      "gemm_rows": 128,
+      "k": 12544,
+      "m": 64,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 14.40533,
+        "aux_us": 10.176,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.941,
+        "gemm_kernel": "E_4_2_50_32_2_2_2_2_4_2_49_62115d512c0c0b3a7f48cd8e429483164243b2b6aefdd79aa3284bb1b4d18e5c",
+        "gemm_us": 92.064,
+        "grid": "(50, 2, 4)",
+        "kernels": 3,
+        "registers_per_thread": 98,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 66.682236,
+        "top_stall_reasons": [
+          {
+            "pct": 59.841,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 20.995,
+            "reason": "wait"
+          },
+          {
+            "pct": 7.216,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 102.24
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332134,
+        "aux_us": 5.408,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.496,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 53.792,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 49.42784,
+        "top_stall_reasons": [
+          {
+            "pct": 30.908,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 27.156,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 26.645,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 59.2
+      },
+      "role": "ffn_down",
+      "roofline_us": 47.648,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 11.296,
+          "rows": 55.635,
+          "stall_excess:barrier": 12.135,
+          "stall_excess:math_pipe_throttle": 6.882,
+          "wave_tail": -22.958
+        },
+        "total_us": 88.576,
+        "unexplained_share_of_ours": 0.1531,
+        "unexplained_us": 25.585
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 16.8,
+          "rows": 55.635,
+          "wave_tail": 8.843
+        },
+        "total_us": 118.302,
+        "unexplained_us": 37.024
+      },
+      "gemm_rows": 256,
+      "k": 12544,
+      "m": 128,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 21.355752,
+        "aux_us": 16.8,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.608,
+        "gemm_kernel": "E_4_4_50_32_2_2_2_2_4_2_98_2df3bc5c0ffb53cc368d861aeaa1cb06e3dc424575c49ff77497c142a5e8085b",
+        "gemm_us": 150.336,
+        "grid": "(50, 4, 4)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 83.401954,
+        "top_stall_reasons": [
+          {
+            "pct": 59.122,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 14.134,
+            "reason": "barrier"
+          },
+          {
+            "pct": 13.871,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 167.136
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.33247,
+        "aux_us": 5.504,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.127,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 73.056,
+        "grid": "(16, 4, 3)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 78.786124,
+        "top_stall_reasons": [
+          {
+            "pct": 51.106,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.751,
+            "reason": "wait"
+          },
+          {
+            "pct": 2.787,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 78.56
+      },
+      "role": "ffn_down",
+      "roofline_us": 48.834,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 347.168,
+          "rows": 145.299,
+          "stall_excess:mio_throttle": 33.044,
+          "wave_tail": 3.315
+        },
+        "total_us": 403.52,
+        "unexplained_share_of_ours": -0.1937,
+        "unexplained_us": -125.306
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 347.168,
+          "rows": 145.299,
+          "wave_tail": 17.628
+        },
+        "total_us": 476.953,
+        "unexplained_us": -33.142
+      },
+      "gemm_rows": 1024,
+      "k": 12544,
+      "m": 512,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 15.513449,
+        "aux_us": 347.168,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.336,
+        "gemm_kernel": "E_2_8_50_32_2_2_2_2_4_2_97_2_083569dfbd7d2db2fe288e3930fc13d4fc630e017a945748d86ae562cb7e952b",
+        "gemm_us": 299.68,
+        "grid": "(50, 8, 2)",
+        "kernels": 5,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 70.238067,
+        "top_stall_reasons": [
+          {
+            "pct": 43.524,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 24.163,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 17.034,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 646.848
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.273525,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.389,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 243.328,
+        "grid": "(64, 4, 5)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 86.890972,
+        "top_stall_reasons": [
+          {
+            "pct": 49.354,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.138,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.757,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 243.328
+      },
+      "role": "ffn_down",
+      "roofline_us": 169.895,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 1977600,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 3787200,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": [
+          {
+            "count": 6000,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 1000,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 1006.112,
+          "rows": 148.976,
+          "stall_excess:mio_throttle": 31.593,
+          "wave_tail": -9.263
+        },
+        "total_us": 848.64,
+        "unexplained_share_of_ours": -0.2521,
+        "unexplained_us": -328.777
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 1006.112,
+          "rows": 148.976,
+          "wave_tail": 17.527
+        },
+        "total_us": 964.274,
+        "unexplained_us": -208.34
+      },
+      "gemm_rows": 2048,
+      "k": 12544,
+      "m": 1024,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 15.520224,
+        "aux_us": 1006.112,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.338,
+        "gemm_kernel": "E_2_8_50_32_2_2_2_2_4_2_97_2_083569dfbd7d2db2fe288e3930fc13d4fc630e017a945748d86ae562cb7e952b",
+        "gemm_us": 297.952,
+        "grid": "(50, 8, 2)",
+        "kernels": 10,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 70.153808,
+        "top_stall_reasons": [
+          {
+            "pct": 43.58,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 24.034,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 17.08,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 1304.064
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.271141,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.239,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 455.424,
+        "grid": "(128, 4, 5)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 87.635265,
+        "top_stall_reasons": [
+          {
+            "pct": 49.391,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.175,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.629,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 455.424
+      },
+      "role": "ffn_down",
+      "roofline_us": 339.79,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 3955200,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 7574400,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": [
+          {
+            "count": 8000,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 2000,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 1.123,
+          "stall_excess:long_scoreboard": 9.741,
+          "wave_tail": 2.624
+        },
+        "total_us": 33.792,
+        "unexplained_share_of_ours": 0.2387,
+        "unexplained_us": 20.305
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 6.604
+        },
+        "total_us": 38.445,
+        "unexplained_us": 31.841
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 69.92563,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.928,
+        "gemm_kernel": "r_1568_16_8_8_49_4_5b95379801bb65d4989c08ce7194995dbb8b28c4593f87633515fef9021dc032",
+        "gemm_us": 85.056,
+        "grid": "(1568, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 56,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 95.273,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.431,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 1.202,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 85.056
+      },
+      "reference": {
+        "achieved_occupancy_pct": 9.378637,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.537,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 51.264,
+        "grid": "(8, 98, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 12.59799,
+        "top_stall_reasons": [
+          {
+            "pct": 82.857,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 8.505,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.169,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 51.264
+      },
+      "role": "ffn_up",
+      "roofline_us": 46.611,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.338,
+          "stall_excess:long_scoreboard": 13.795,
+          "stall_excess:mio_throttle": 1.725,
+          "wave_tail": -0.703
+        },
+        "total_us": 65.408,
+        "unexplained_share_of_ours": 0.4135,
+        "unexplained_us": 49.253
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.338,
+          "wave_tail": 3.466
+        },
+        "total_us": 72.345,
+        "unexplained_us": 67.541
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 70.924674,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 0.67,
+        "gemm_kernel": "r_2_1568_16_8_8_49_4_a1d70ffd0337f43773b7f94a31b57d612ac5214aec82c5bc0e7d057eec31c440",
+        "gemm_us": 119.104,
+        "grid": "(1568, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 94.177,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.844,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.509,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 119.104
+      },
+      "reference": {
+        "achieved_occupancy_pct": 9.352702,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.468,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 53.696,
+        "grid": "(8, 98, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 12.790421,
+        "top_stall_reasons": [
+          {
+            "pct": 82.108,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 8.61,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.214,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 53.696
+      },
+      "role": "ffn_up",
+      "roofline_us": 46.759,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 6.112,
+          "rows": 1.331,
+          "stall_excess:math_pipe_throttle": 11.621,
+          "stall_excess:wait": 10.249,
+          "wave_tail": 24.552
+        },
+        "total_us": 9.728,
+        "unexplained_share_of_ours": -0.6615,
+        "unexplained_us": -44.136
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 6.112,
+          "rows": 1.331,
+          "wave_tail": 25.669
+        },
+        "total_us": 19.664,
+        "unexplained_us": -13.448
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 8.331845,
+        "aux_us": 6.112,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 1.326,
+        "gemm_kernel": "E_98_32_4_2_2_4_4_49_fa7a376bbf26744c9b3968f026e02f99e7283c3e0ba3aab461f70935752042c8",
+        "gemm_us": 60.608,
+        "grid": "(98, 1, 1)",
+        "kernels": 3,
+        "registers_per_thread": 133,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 44.027554,
+        "top_stall_reasons": [
+          {
+            "pct": 54.281,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 30.495,
+            "reason": "wait"
+          },
+          {
+            "pct": 6.071,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 66.72
+      },
+      "reference": {
+        "achieved_occupancy_pct": 15.567681,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.39,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+        "gemm_us": 56.992,
+        "grid": "(8, 25, 5)",
+        "kernels": 1,
+        "registers_per_thread": 88,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 45.932629,
+        "top_stall_reasons": [
+          {
+            "pct": 34.397,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 24.109,
+            "reason": "barrier"
+          },
+          {
+            "pct": 19.704,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 56.992
+      },
+      "role": "ffn_up",
+      "roofline_us": 47.056,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": [
+          {
+            "count": 15588,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 980,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 8.96,
+          "rows": 13.128,
+          "stall_excess:math_pipe_throttle": 9.355,
+          "wave_tail": 3.38
+        },
+        "total_us": 61.664,
+        "unexplained_share_of_ours": 0.2277,
+        "unexplained_us": 26.841
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.96,
+          "rows": 13.128,
+          "wave_tail": 25.196
+        },
+        "total_us": 70.208,
+        "unexplained_us": 22.924
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 15.34796,
+        "aux_us": 8.96,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.757,
+        "gemm_kernel": "E_2_196_32_2_2_2_2_4_2_49_975dc626a1a059dde7347842ed0fc8baecb0879860c201da43dd1765c4a74ef7",
+        "gemm_us": 108.896,
+        "grid": "(196, 2, 1)",
+        "kernels": 3,
+        "registers_per_thread": 98,
+        "shared_bytes": 49152.0,
+        "tensor_pipe_util_pct": 53.085246,
+        "top_stall_reasons": [
+          {
+            "pct": 58.457,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 20.205,
+            "reason": "wait"
+          },
+          {
+            "pct": 7.508,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 117.856
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332181,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.409,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 56.192,
+        "grid": "(8, 13, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 45.150141,
+        "top_stall_reasons": [
+          {
+            "pct": 45.201,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 38.147,
+            "reason": "wait"
+          },
+          {
+            "pct": 8.85,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 56.192
+      },
+      "role": "ffn_up",
+      "roofline_us": 47.648,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 13.024,
+          "rows": 68.212,
+          "stall_excess:long_scoreboard": 4.877,
+          "stall_excess:math_pipe_throttle": 1.655,
+          "wave_tail": 12.307
+        },
+        "total_us": 104.16,
+        "unexplained_share_of_ours": 0.0223,
+        "unexplained_us": 4.085
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 13.024,
+          "rows": 68.212,
+          "wave_tail": 13.241
+        },
+        "total_us": 134.718,
+        "unexplained_us": 40.241
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 8.331156,
+        "aux_us": 13.024,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.497,
+        "gemm_kernel": "E_4_196_32_2_2_2_2_4_2_49_fae0557d333de537a7e1a53e721eba446e6417b5dd0df91b9faa8cd699e55afe",
+        "gemm_us": 170.528,
+        "grid": "(196, 4, 1)",
+        "kernels": 3,
+        "registers_per_thread": 80,
+        "shared_bytes": 65536.0,
+        "tensor_pipe_util_pct": 63.335766,
+        "top_stall_reasons": [
+          {
+            "pct": 47.106,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 28.902,
+            "reason": "wait"
+          },
+          {
+            "pct": 13.939,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 183.552
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.284239,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.008,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 79.392,
+        "grid": "(16, 7, 3)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 68.001492,
+        "top_stall_reasons": [
+          {
+            "pct": 45.248,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 39.66,
+            "reason": "wait"
+          },
+          {
+            "pct": 8.464,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 79.392
+      },
+      "role": "ffn_up",
+      "roofline_us": 48.834,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": [
+          {
+            "count": 25460,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 294,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 336.448,
+          "rows": 134.368,
+          "stall_excess:mio_throttle": 34.169,
+          "wave_tail": 17.729
+        },
+        "total_us": 393.792,
+        "unexplained_share_of_ours": -0.205,
+        "unexplained_us": -128.923
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 336.448,
+          "rows": 134.368,
+          "wave_tail": 22.708
+        },
+        "total_us": 459.001,
+        "unexplained_us": -34.523
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 16.036968,
+        "aux_us": 336.448,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.337,
+        "gemm_kernel": "E_8_196_32_2_2_2_2_4_2_48_2_40942999808080e17f08165635cb2e05cec277276e1133385b7128a10f9fd7d6",
+        "gemm_us": 292.448,
+        "grid": "(196, 8, 1)",
+        "kernels": 5,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 70.379545,
+        "top_stall_reasons": [
+          {
+            "pct": 41.66,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 25.241,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 16.311,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 628.896
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331977,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.359,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 235.104,
+        "grid": "(64, 13, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 86.390514,
+        "top_stall_reasons": [
+          {
+            "pct": 51.405,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 43.337,
+            "reason": "wait"
+          },
+          {
+            "pct": 2.544,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 235.104
+      },
+      "role": "ffn_up",
+      "roofline_us": 169.895,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 1919232,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 3706752,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 1044.448,
+          "rows": 145.072,
+          "stall_excess:mio_throttle": 30.848,
+          "wave_tail": -3.346
+        },
+        "total_us": 894.72,
+        "unexplained_share_of_ours": -0.2415,
+        "unexplained_us": -322.302
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 1044.448,
+          "rows": 145.072,
+          "wave_tail": 22.529
+        },
+        "total_us": 994.802,
+        "unexplained_us": -217.247
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 12544,
+      "ours": {
+        "achieved_occupancy_pct": 16.033104,
+        "aux_us": 1044.448,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.337,
+        "gemm_kernel": "E_8_196_32_2_2_2_2_4_2_48_2_40942999808080e17f08165635cb2e05cec277276e1133385b7128a10f9fd7d6",
+        "gemm_us": 290.144,
+        "grid": "(196, 8, 1)",
+        "kernels": 10,
+        "registers_per_thread": 122,
+        "shared_bytes": 36864.0,
+        "tensor_pipe_util_pct": 70.573142,
+        "top_stall_reasons": [
+          {
+            "pct": 41.594,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 25.173,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 16.299,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 1334.592
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332691,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.209,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 439.872,
+        "grid": "(32, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 88.236148,
+        "top_stall_reasons": [
+          {
+            "pct": 52.373,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 44.474,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.126,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 439.872
+      },
+      "role": "ffn_up",
+      "roofline_us": 339.79,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 3167360,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 4942336,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:barrier": 19.1,
+          "stall_excess:long_scoreboard": 39.068,
+          "wave_tail": -4.651
+        },
+        "total_us": 57.152,
+        "unexplained_share_of_ours": 0.0066,
+        "unexplained_us": 3.635
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 3.549
+        },
+        "total_us": 65.336,
+        "unexplained_us": 61.787
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 73.449178,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 1.504,
+        "gemm_kernel": "r_16384_16_8_8_49_4_74fd29143c15daf35c9c921fe4060ba4b2bac772923d200564eba9aa809ffdf5",
+        "gemm_us": 552.096,
+        "grid": "(16384, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 56,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 92.32,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 3.482,
+            "reason": "barrier"
+          },
+          {
+            "pct": 1.465,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 552.096
+      },
+      "reference": {
+        "achieved_occupancy_pct": 10.170842,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.675,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 494.944,
+        "grid": "(8, 1024, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 12.851561,
+        "top_stall_reasons": [
+          {
+            "pct": 85.198,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 7.528,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.681,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 494.944
+      },
+      "role": "output",
+      "roofline_us": 486.76,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 11.018,
+          "stall_excess:barrier": 36.782,
+          "stall_excess:long_scoreboard": 270.34,
+          "stall_excess:wait": 16.954,
+          "wave_tail": -6.864
+        },
+        "total_us": 590.4,
+        "unexplained_share_of_ours": 0.2408,
+        "unexplained_us": 262.169
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 11.018,
+          "wave_tail": 1.394
+        },
+        "total_us": 600.836,
+        "unexplained_us": 588.424
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 74.048459,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 1.522,
+        "gemm_kernel": "r_2_16384_16_8_8_49_4_3b9d163559c7af9dd9ff526d99df39424d0df9f4170c89dacf9741deb26e2c55",
+        "gemm_us": 1088.864,
+        "grid": "(16384, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 93.289,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 3.417,
+            "reason": "barrier"
+          },
+          {
+            "pct": 1.575,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 1088.864
+      },
+      "reference": {
+        "achieved_occupancy_pct": 20.126245,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.666,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(T1::Params)",
+        "gemm_us": 498.464,
+        "grid": "(8, 1024, 1)",
+        "kernels": 1,
+        "registers_per_thread": 96,
+        "shared_bytes": 8704.0,
+        "tensor_pipe_util_pct": 12.615986,
+        "top_stall_reasons": [
+          {
+            "pct": 68.175,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 12.746,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 12.33,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 498.464
+      },
+      "role": "output",
+      "roofline_us": 488.028,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": [
+          {
+            "count": 8192,
+            "kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(T1::Params)",
+            "opcode": "UVIMNMX"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 24.384,
+          "rows": 10.203,
+          "stall_excess:math_pipe_throttle": 37.944,
+          "stall_excess:wait": 9.186,
+          "wave_tail": -36.424
+        },
+        "total_us": 7.392,
+        "unexplained_share_of_ours": -0.0703,
+        "unexplained_us": -37.902
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 24.384,
+          "rows": 10.203,
+          "wave_tail": 37.712
+        },
+        "total_us": 48.283,
+        "unexplained_us": -24.016
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 8.331927,
+        "aux_us": 24.384,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.657,
+        "gemm_kernel": "E_2048_32_2_2_2_2_4_2_49_829b3e2209a02821d1851dc45d93e5e1f7f237d979456ac898a2cf6456680a79",
+        "gemm_us": 514.464,
+        "grid": "(2048, 1, 1)",
+        "kernels": 3,
+        "registers_per_thread": 80,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 49.777308,
+        "top_stall_reasons": [
+          {
+            "pct": 33.115,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 23.257,
+            "reason": "wait"
+          },
+          {
+            "pct": 21.429,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 538.848
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332446,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.571,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 531.456,
+        "grid": "(8, 128, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 45.804138,
+        "top_stall_reasons": [
+          {
+            "pct": 35.306,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 24.982,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 21.288,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 531.456
+      },
+      "role": "output",
+      "roofline_us": 490.565,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 45.376,
+          "rows": 24.863,
+          "stall_excess:math_pipe_throttle": 181.085,
+          "stall_excess:wait": 62.149,
+          "wave_tail": -27.397
+        },
+        "total_us": 158.208,
+        "unexplained_share_of_ours": -0.1834,
+        "unexplained_us": -127.869
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 45.376,
+          "rows": 24.863,
+          "wave_tail": 47.77
+        },
+        "total_us": 201.419,
+        "unexplained_us": 83.409
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 8.332094,
+        "aux_us": 45.376,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.357,
+        "gemm_kernel": "E_2048_32_2_2_2_2_4_4_49_305faa8ffa05963e3289e0538ec810a9516d7bede7b42d19f5f96311748b3641",
+        "gemm_us": 651.68,
+        "grid": "(2048, 1, 1)",
+        "kernels": 3,
+        "registers_per_thread": 128,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 78.653731,
+        "top_stall_reasons": [
+          {
+            "pct": 56.358,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 32.104,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.305,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 697.056
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332657,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.563,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 538.848,
+        "grid": "(8, 128, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 45.393647,
+        "top_stall_reasons": [
+          {
+            "pct": 35.322,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 25.085,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 21.371,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 538.848
+      },
+      "role": "output",
+      "roofline_us": 495.637,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 93.632,
+          "rows": 515.657,
+          "stall_excess:math_pipe_throttle": 47.129,
+          "wave_tail": 1.095
+        },
+        "total_us": 732.896,
+        "unexplained_share_of_ours": 0.0568,
+        "unexplained_us": 75.383
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 93.632,
+          "rows": 515.657,
+          "wave_tail": 44.737
+        },
+        "total_us": 822.474,
+        "unexplained_us": 168.448
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 8.33214,
+        "aux_us": 93.632,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.438,
+        "gemm_kernel": "E_2_2048_32_2_2_2_2_4_4_49_dbb6237194e0e6793c24809ee1f414e3f8d1622c076c8f9f32f43aab52b5b8fa",
+        "gemm_us": 1234.624,
+        "grid": "(2048, 2, 1)",
+        "kernels": 3,
+        "registers_per_thread": 128,
+        "shared_bytes": 98304.0,
+        "tensor_pipe_util_pct": 80.313911,
+        "top_stall_reasons": [
+          {
+            "pct": 56.177,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 31.611,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.277,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 1328.256
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332082,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.437,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 595.36,
+        "grid": "(16, 128, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 87.594636,
+        "top_stall_reasons": [
+          {
+            "pct": 49.187,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 41.436,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.623,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 595.36
+      },
+      "role": "output",
+      "roofline_us": 505.782,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 4056.352,
+          "rows": 1776.81,
+          "stall_excess:barrier": 217.714,
+          "stall_excess:mio_throttle": 783.714,
+          "wave_tail": 55.657
+        },
+        "total_us": 5592.352,
+        "unexplained_share_of_ours": -0.1701,
+        "unexplained_us": -1297.895
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 4056.352,
+          "rows": 1776.81,
+          "wave_tail": 129.437
+        },
+        "total_us": 5853.251,
+        "unexplained_us": -109.348
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 32.859523,
+        "aux_us": 4056.352,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.995,
+        "gemm_kernel": "E_4_1024_32_4_2_2_2_8_2_97_2_e4fb0dd3e7d0089d0eec5573d4515cbf198c3ee59e5af8532e27ebbc278eec93",
+        "gemm_us": 3572.128,
+        "grid": "(1024, 4, 1)",
+        "kernels": 5,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 53.123942,
+        "top_stall_reasons": [
+          {
+            "pct": 47.045,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 30.939,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 13.069,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 7628.48
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332709,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.466,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 2036.128,
+        "grid": "(16, 256, 1)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 93.999616,
+        "top_stall_reasons": [
+          {
+            "pct": 52.584,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 44.672,
+            "reason": "wait"
+          },
+          {
+            "pct": 0.923,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 2036.128
+      },
+      "role": "output",
+      "roofline_us": 1775.229,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 16547840,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 25821184,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 13082.784,
+          "rows": 1788.256,
+          "stall_excess:barrier": 217.716,
+          "stall_excess:mio_throttle": 781.527,
+          "wave_tail": 63.974
+        },
+        "total_us": 12698.208,
+        "unexplained_share_of_ours": -0.1942,
+        "unexplained_us": -3236.049
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 13082.784,
+          "rows": 1788.256,
+          "wave_tail": 129.596
+        },
+        "total_us": 13108.838,
+        "unexplained_us": -1891.798
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 131072,
+      "ours": {
+        "achieved_occupancy_pct": 32.851376,
+        "aux_us": 13082.784,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.994,
+        "gemm_kernel": "E_4_1024_32_4_2_2_2_8_2_97_2_e4fb0dd3e7d0089d0eec5573d4515cbf198c3ee59e5af8532e27ebbc278eec93",
+        "gemm_us": 3576.512,
+        "grid": "(1024, 4, 1)",
+        "kernels": 10,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 53.130305,
+        "top_stall_reasons": [
+          {
+            "pct": 47.118,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 30.865,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 13.126,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 16659.296
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332708,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.272,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+        "gemm_us": 3961.088,
+        "grid": "(32, 256, 1)",
+        "kernels": 1,
+        "registers_per_thread": 230,
+        "shared_bytes": 81920.0,
+        "tensor_pipe_util_pct": 95.849963,
+        "top_stall_reasons": [
+          {
+            "pct": 52.677,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 44.749,
+            "reason": "wait"
+          },
+          {
+            "pct": 0.778,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 3961.088
+      },
+      "role": "output",
+      "roofline_us": 3550.458,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 33095680,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 51642368,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 1.4,
+          "stall_excess:long_scoreboard": 11.66,
+          "wave_tail": -5.125
+        },
+        "total_us": 17.568,
+        "unexplained_share_of_ours": 0.1021,
+        "unexplained_us": 9.633
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 0.939
+        },
+        "total_us": 29.306,
+        "unexplained_us": 28.367
+      },
+      "gemm_rows": 16,
+      "k": 3136,
+      "m": 8,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 61.972839,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 1.213,
+        "gemm_kernel": "r_2188_16_8_8_49_4_3752c54a98083b9ff18427fc305d9674b5407e965031519d434ed005fe327df1",
+        "gemm_us": 94.336,
+        "grid": "(2188, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 56,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 94.129,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 1.537,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.499,
+            "reason": "lg_throttle"
+          }
+        ],
+        "total_us": 94.336
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.899889,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.49,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 76.768,
+        "grid": "(8, 137, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 11.70783,
+        "top_stall_reasons": [
+          {
+            "pct": 81.645,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 9.167,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.479,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 76.768
+      },
+      "role": "ssm_in",
+      "roofline_us": 65.03,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.568,
+          "stall_excess:long_scoreboard": 17.333,
+          "stall_excess:mio_throttle": 2.587,
+          "wave_tail": -4.646
+        },
+        "total_us": 67.232,
+        "unexplained_share_of_ours": 0.3494,
+        "unexplained_us": 50.389
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.568,
+          "wave_tail": 1.436
+        },
+        "total_us": 78.999,
+        "unexplained_us": 75.995
+      },
+      "gemm_rows": 32,
+      "k": 3136,
+      "m": 16,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 71.733625,
+        "aux_us": 0.0,
+        "block": "(16, 8, 1)",
+        "dram_tbps": 1.037,
+        "gemm_kernel": "r_2_2188_16_8_8_49_4_936e92d31dd446fcddd483d2d49645c4078ab1855c9df597d2114bc814ca30e7",
+        "gemm_us": 144.224,
+        "grid": "(2188, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 93.22,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 2.026,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.832,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 144.224
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.794027,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 1.487,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 76.992,
+        "grid": "(8, 137, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 11.715775,
+        "top_stall_reasons": [
+          {
+            "pct": 80.946,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 9.277,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.476,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 76.992
+      },
+      "role": "ssm_in",
+      "roofline_us": 65.225,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 7.136,
+          "rows": 1.684,
+          "stall_excess:barrier": 7.481,
+          "stall_excess:math_pipe_throttle": 6.466,
+          "wave_tail": 3.67
+        },
+        "total_us": 9.824,
+        "unexplained_share_of_ours": -0.1926,
+        "unexplained_us": -16.613
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 7.136,
+          "rows": 1.684,
+          "wave_tail": 15.362
+        },
+        "total_us": 20.657,
+        "unexplained_us": -3.525
+      },
+      "gemm_rows": 64,
+      "k": 3136,
+      "m": 32,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 8.332198,
+        "aux_us": 7.136,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.505,
+        "gemm_kernel": "E_137_32_2_2_2_2_8_2_49_4d7d177d48749ef7d0bcdeb1f24d09522cf8e087b61aa1ebb739dc9c7c58f989",
+        "gemm_us": 79.136,
+        "grid": "(137, 1, 1)",
+        "kernels": 3,
+        "registers_per_thread": 124,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 47.506953,
+        "top_stall_reasons": [
+          {
+            "pct": 43.579,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 26.753,
+            "reason": "wait"
+          },
+          {
+            "pct": 12.048,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 86.272
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332119,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.493,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 76.448,
+        "grid": "(8, 18, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 46.95747,
+        "top_stall_reasons": [
+          {
+            "pct": 33.165,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 28.18,
+            "reason": "wait"
+          },
+          {
+            "pct": 21.807,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 76.448
+      },
+      "role": "ssm_in",
+      "roofline_us": 65.615,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 10.016,
+          "rows": 9.912,
+          "stall_excess:barrier": 14.456,
+          "stall_excess:math_pipe_throttle": 20.27,
+          "wave_tail": 12.527
+        },
+        "total_us": 58.24,
+        "unexplained_share_of_ours": -0.0662,
+        "unexplained_us": -8.942
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 10.016,
+          "rows": 9.912,
+          "wave_tail": 24.288
+        },
+        "total_us": 68.741,
+        "unexplained_us": 24.525
+      },
+      "gemm_rows": 128,
+      "k": 3136,
+      "m": 64,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 16.647411,
+        "aux_us": 10.016,
+        "block": "(32, 2, 4)",
+        "dram_tbps": 0.948,
+        "gemm_kernel": "E_137_32_2_4_2_2_4_4_98_23cf69b99ba5eee05d31fbf6c0473638a6d16aba775dd5ad634c66f648921485",
+        "gemm_us": 125.12,
+        "grid": "(137, 1, 1)",
+        "kernels": 3,
+        "registers_per_thread": 128,
+        "shared_bytes": 65536.0,
+        "tensor_pipe_util_pct": 58.342265,
+        "top_stall_reasons": [
+          {
+            "pct": 54.74,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 15.9,
+            "reason": "barrier"
+          },
+          {
+            "pct": 14.838,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 135.136
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331785,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.485,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 76.896,
+        "grid": "(8, 18, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 46.628574,
+        "top_stall_reasons": [
+          {
+            "pct": 32.446,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 27.604,
+            "reason": "wait"
+          },
+          {
+            "pct": 24.244,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 76.896
+      },
+      "role": "ssm_in",
+      "roofline_us": 66.395,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 17.12,
+          "rows": 91.968,
+          "stall_excess:barrier": 11.048,
+          "stall_excess:math_pipe_throttle": 7.751,
+          "wave_tail": 25.887
+        },
+        "total_us": 128.608,
+        "unexplained_share_of_ours": -0.1086,
+        "unexplained_us": -25.166
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 17.12,
+          "rows": 91.968,
+          "wave_tail": 41.656
+        },
+        "total_us": 163.757,
+        "unexplained_us": 13.013
+      },
+      "gemm_rows": 256,
+      "k": 3136,
+      "m": 128,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 16.647522,
+        "aux_us": 17.12,
+        "block": "(32, 2, 4)",
+        "dram_tbps": 0.847,
+        "gemm_kernel": "E_2_137_32_2_4_2_2_4_4_98_11d5e6ad25e7f01a2b1ad6a33e3baef00b9f3d25c011a231ac55bb924b20d51d",
+        "gemm_us": 214.592,
+        "grid": "(137, 2, 1)",
+        "kernels": 3,
+        "registers_per_thread": 128,
+        "shared_bytes": 65536.0,
+        "tensor_pipe_util_pct": 66.524643,
+        "top_stall_reasons": [
+          {
+            "pct": 59.921,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 15.354,
+            "reason": "wait"
+          },
+          {
+            "pct": 13.645,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 231.712
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331092,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.121,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 103.104,
+        "grid": "(16, 18, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 74.15559,
+        "top_stall_reasons": [
+          {
+            "pct": 50.348,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 42.27,
+            "reason": "wait"
+          },
+          {
+            "pct": 3.926,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 103.104
+      },
+      "role": "ssm_in",
+      "roofline_us": 67.955,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 523.552,
+          "rows": 233.856,
+          "stall_excess:barrier": 20.561,
+          "stall_excess:mio_throttle": 45.552,
+          "wave_tail": 80.452
+        },
+        "total_us": 667.488,
+        "unexplained_share_of_ours": -0.2386,
+        "unexplained_us": -236.485
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 523.552,
+          "rows": 233.856,
+          "wave_tail": 90.791
+        },
+        "total_us": 754.191,
+        "unexplained_us": -94.008
+      },
+      "gemm_rows": 1024,
+      "k": 3136,
+      "m": 512,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 29.218902,
+        "aux_us": 523.552,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.531,
+        "gemm_kernel": "E_4_137_32_4_2_2_2_8_2_97_2_bdb1de940101bfa5b2bbd726ea9abaa6b62a51bc1b7556356922640418435ed0",
+        "gemm_us": 467.712,
+        "grid": "(137, 4, 1)",
+        "kernels": 5,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 57.186868,
+        "top_stall_reasons": [
+          {
+            "pct": 43.741,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 31.84,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 14.372,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 991.264
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331028,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.375,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 323.776,
+        "grid": "(64, 18, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 87.156672,
+        "top_stall_reasons": [
+          {
+            "pct": 51.467,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 43.4,
+            "reason": "wait"
+          },
+          {
+            "pct": 2.462,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 323.776
+      },
+      "role": "ssm_in",
+      "roofline_us": 237.073,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 2683008,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 5181888,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 1681.248,
+          "rows": 234.656,
+          "stall_excess:barrier": 20.545,
+          "stall_excess:mio_throttle": 45.824,
+          "wave_tail": 72.473
+        },
+        "total_us": 1567.2,
+        "unexplained_share_of_ours": -0.2267,
+        "unexplained_us": -487.547
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 1681.248,
+          "rows": 234.656,
+          "wave_tail": 91.102
+        },
+        "total_us": 1676.414,
+        "unexplained_us": -330.592
+      },
+      "gemm_rows": 2048,
+      "k": 3136,
+      "m": 1024,
+      "n": 17504,
+      "ours": {
+        "achieved_occupancy_pct": 29.215913,
+        "aux_us": 1681.248,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.53,
+        "gemm_kernel": "E_4_137_32_4_2_2_2_8_2_97_2_bdb1de940101bfa5b2bbd726ea9abaa6b62a51bc1b7556356922640418435ed0",
+        "gemm_us": 469.312,
+        "grid": "(137, 4, 1)",
+        "kernels": 10,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 56.944872,
+        "top_stall_reasons": [
+          {
+            "pct": 43.722,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 31.921,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 14.312,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 2150.56
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.33103,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.23,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 583.36,
+        "grid": "(128, 18, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 92.591851,
+        "top_stall_reasons": [
+          {
+            "pct": 51.608,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 43.541,
+            "reason": "wait"
+          },
+          {
+            "pct": 2.241,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 583.36
+      },
+      "role": "ssm_in",
+      "roofline_us": 474.146,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 5366016,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 10363776,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "stall_excess:lg_throttle": 5.68,
+          "stall_excess:long_scoreboard": 13.811,
+          "wave_tail": -15.662
+        },
+        "total_us": 10.208,
+        "unexplained_share_of_ours": 0.1073,
+        "unexplained_us": 6.379
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 0.0,
+          "wave_tail": 4.617
+        },
+        "total_us": 30.907,
+        "unexplained_us": 26.29
+      },
+      "gemm_rows": 16,
+      "k": 7680,
+      "m": 8,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 37.210085,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.814,
+        "gemm_kernel": "r_784_32_4_8_30_8_6ea39c2fda50cada8d4397d44640aa88bbb4bcb9da64fab0e28fc9e50edb1569",
+        "gemm_us": 59.456,
+        "grid": "(784, 1, 1)",
+        "kernels": 1,
+        "registers_per_thread": 54,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 84.7,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 10.358,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 2.178,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 59.456
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.40785,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.981,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 49.248,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.699177,
+        "top_stall_reasons": [
+          {
+            "pct": 59.516,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.729,
+            "reason": "wait"
+          },
+          {
+            "pct": 10.153,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 49.248
+      },
+      "role": "ssm_out",
+      "roofline_us": 28.549,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.74,
+          "stall_excess:lg_throttle": 51.516,
+          "stall_excess:long_scoreboard": 10.166,
+          "stall_excess:mio_throttle": 4.454,
+          "wave_tail": -5.257
+        },
+        "total_us": 143.52,
+        "unexplained_share_of_ours": 0.42,
+        "unexplained_us": 80.901
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 0.0,
+          "rows": 1.74,
+          "wave_tail": 14.955
+        },
+        "total_us": 163.957,
+        "unexplained_us": 147.262
+      },
+      "gemm_rows": 32,
+      "k": 7680,
+      "m": 16,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 66.313036,
+        "aux_us": 0.0,
+        "block": "(32, 4, 1)",
+        "dram_tbps": 0.253,
+        "gemm_kernel": "r_2_784_32_4_8_30_8_e1f0d8c27a828d4c87b5d17916b36962c08c7cd3845f31e264d3aa5b49f2315a",
+        "gemm_us": 192.608,
+        "grid": "(784, 2, 1)",
+        "kernels": 1,
+        "registers_per_thread": 48,
+        "shared_bytes": 4096.0,
+        "tensor_pipe_util_pct": 0.0,
+        "top_stall_reasons": [
+          {
+            "pct": 65.208,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 29.285,
+            "reason": "lg_throttle"
+          },
+          {
+            "pct": 2.532,
+            "reason": "mio_throttle"
+          }
+        ],
+        "total_us": 192.608
+      },
+      "reference": {
+        "achieved_occupancy_pct": 2.40681,
+        "aux_us": 0.0,
+        "block": "(32, 1, 1)",
+        "dram_tbps": 0.987,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+        "gemm_us": 49.088,
+        "grid": "(8, 25, 1)",
+        "kernels": 1,
+        "registers_per_thread": 124,
+        "shared_bytes": 16896.0,
+        "tensor_pipe_util_pct": 7.625065,
+        "top_stall_reasons": [
+          {
+            "pct": 59.429,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 21.78,
+            "reason": "wait"
+          },
+          {
+            "pct": 10.146,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 49.088
+      },
+      "role": "ssm_out",
+      "roofline_us": 28.651,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 5.312,
+          "rows": 3.466,
+          "stall_excess:barrier": 7.874,
+          "stall_excess:long_scoreboard": 3.143,
+          "wave_tail": -5.465
+        },
+        "total_us": 15.456,
+        "unexplained_share_of_ours": 0.021,
+        "unexplained_us": 1.126
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.736,
+          "rows": 3.466,
+          "wave_tail": 9.704
+        },
+        "total_us": 24.872,
+        "unexplained_us": 2.966
+      },
+      "gemm_rows": 64,
+      "k": 7680,
+      "m": 32,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 19.362238,
+        "aux_us": 8.736,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 1.114,
+        "gemm_kernel": "E_8_50_32_2_2_2_2_4_2_30_1b5f20578e53867e0d3577ff6bba480c983bb3d4e840417e86cbdf4c031737fc",
+        "gemm_us": 44.992,
+        "grid": "(50, 8, 1)",
+        "kernels": 3,
+        "registers_per_thread": 99,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 37.347824,
+        "top_stall_reasons": [
+          {
+            "pct": 39.687,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 24.744,
+            "reason": "barrier"
+          },
+          {
+            "pct": 15.942,
+            "reason": "math_pipe_throttle"
+          }
+        ],
+        "total_us": 53.728
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331556,
+        "aux_us": 3.424,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.398,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 34.848,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 45.258482,
+        "top_stall_reasons": [
+          {
+            "pct": 29.809,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 29.114,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 25.505,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 38.272
+      },
+      "role": "ssm_out",
+      "roofline_us": 28.856,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 3.808,
+          "rows": 10.415,
+          "stall_excess:math_pipe_throttle": 2.635,
+          "stall_excess:mio_throttle": 18.257,
+          "wave_tail": -5.991
+        },
+        "total_us": 46.976,
+        "unexplained_share_of_ours": 0.2055,
+        "unexplained_us": 17.852
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 8.864,
+          "rows": 10.415,
+          "wave_tail": 9.178
+        },
+        "total_us": 57.616,
+        "unexplained_us": 29.159
+      },
+      "gemm_rows": 128,
+      "k": 7680,
+      "m": 64,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 16.611422,
+        "aux_us": 8.864,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.655,
+        "gemm_kernel": "E_3_50_32_4_2_2_2_4_2_79_2_a4b26aaae059b793b57017c2e28a11bd0e1fab1de9391b5eb5a4c496a783133c",
+        "gemm_us": 78.016,
+        "grid": "(50, 3, 1)",
+        "kernels": 3,
+        "registers_per_thread": 76,
+        "shared_bytes": 30720.0,
+        "tensor_pipe_util_pct": 42.528975,
+        "top_stall_reasons": [
+          {
+            "pct": 34.515,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 31.25,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 12.23,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 86.88
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331515,
+        "aux_us": 5.056,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.412,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 34.848,
+        "grid": "(8, 4, 6)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 46.443301,
+        "top_stall_reasons": [
+          {
+            "pct": 30.004,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 29.073,
+            "reason": "long_scoreboard"
+          },
+          {
+            "pct": 26.312,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 39.904
+      },
+      "role": "ssm_out",
+      "roofline_us": 29.264,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 158400,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 291600,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 9.568,
+          "rows": 30.461,
+          "stall_excess:barrier": 8.462,
+          "stall_excess:math_pipe_throttle": 4.48,
+          "wave_tail": -14.688
+        },
+        "total_us": 58.88,
+        "unexplained_share_of_ours": 0.1854,
+        "unexplained_us": 20.597
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 15.04,
+          "rows": 30.461,
+          "wave_tail": 5.649
+        },
+        "total_us": 80.99,
+        "unexplained_us": 29.84
+      },
+      "gemm_rows": 256,
+      "k": 7680,
+      "m": 128,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 21.380519,
+        "aux_us": 15.04,
+        "block": "(32, 2, 2)",
+        "dram_tbps": 0.554,
+        "gemm_kernel": "E_4_4_50_32_2_2_2_2_4_2_60_1e8db061c0e27a56e32dbd80544784485506a3856427e7202cfa9b607a7f2a70",
+        "gemm_us": 96.032,
+        "grid": "(50, 4, 4)",
+        "kernels": 3,
+        "registers_per_thread": 100,
+        "shared_bytes": 32768.0,
+        "tensor_pipe_util_pct": 80.271413,
+        "top_stall_reasons": [
+          {
+            "pct": 56.547,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 14.122,
+            "reason": "barrier"
+          },
+          {
+            "pct": 13.513,
+            "reason": "wait"
+          }
+        ],
+        "total_us": 111.072
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.331996,
+        "aux_us": 5.472,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 1.074,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 46.72,
+        "grid": "(16, 4, 3)",
+        "kernels": 2,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 76.272896,
+        "top_stall_reasons": [
+          {
+            "pct": 49.07,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 41.402,
+            "reason": "wait"
+          },
+          {
+            "pct": 4.995,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 52.192
+      },
+      "role": "ssm_out",
+      "roofline_us": 30.082,
+      "techniques": {
+        "technique_gaps": [],
+        "unknown_techniques": []
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 252.48,
+          "rows": 102.715,
+          "stall_excess:barrier": 11.605,
+          "stall_excess:mio_throttle": 23.226,
+          "wave_tail": 2.035
+        },
+        "total_us": 299.584,
+        "unexplained_share_of_ours": -0.201,
+        "unexplained_us": -92.476
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 252.48,
+          "rows": 102.715,
+          "wave_tail": 24.425
+        },
+        "total_us": 356.079,
+        "unexplained_us": -23.541
+      },
+      "gemm_rows": 1024,
+      "k": 7680,
+      "m": 512,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 27.13055,
+        "aux_us": 252.48,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.279,
+        "gemm_kernel": "E_3_4_25_32_4_2_2_2_8_2_79_2_4d2bba75aede2c3d511eca8abb8dee20e932d01acdfc6b8c71a4fbccecbf9876",
+        "gemm_us": 207.616,
+        "grid": "(25, 4, 3)",
+        "kernels": 5,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 60.049298,
+        "top_stall_reasons": [
+          {
+            "pct": 44.762,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 28.861,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 14.42,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 460.096
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.260919,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.349,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 160.512,
+        "grid": "(64, 4, 4)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 81.254335,
+        "top_stall_reasons": [
+          {
+            "pct": 48.165,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 41.45,
+            "reason": "wait"
+          },
+          {
+            "pct": 5.926,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 160.512
+      },
+      "role": "ssm_out",
+      "roofline_us": 104.017,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 1228800,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 2323200,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": [
+          {
+            "count": 4456,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "B2R"
+          },
+          {
+            "count": 800,
+            "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+            "opcode": "CGAERRBAR"
+          }
+        ]
+      }
+    },
+    {
+      "gap_vs_reference": {
+        "known": {
+          "aux_kernels": 721.536,
+          "rows": 101.888,
+          "stall_excess:barrier": 11.256,
+          "stall_excess:mio_throttle": 22.684,
+          "wave_tail": -56.421
+        },
+        "total_us": 599.904,
+        "unexplained_share_of_ours": -0.2173,
+        "unexplained_us": -201.039
+      },
+      "gap_vs_roofline": {
+        "known": {
+          "aux_kernels": 721.536,
+          "rows": 101.888,
+          "wave_tail": 23.974
+        },
+        "total_us": 717.277,
+        "unexplained_us": -130.121
+      },
+      "gemm_rows": 2048,
+      "k": 7680,
+      "m": 1024,
+      "n": 3136,
+      "ours": {
+        "achieved_occupancy_pct": 27.170087,
+        "aux_us": 721.536,
+        "block": "(32, 4, 2)",
+        "dram_tbps": 0.283,
+        "gemm_kernel": "E_3_4_25_32_4_2_2_2_8_2_79_2_4d2bba75aede2c3d511eca8abb8dee20e932d01acdfc6b8c71a4fbccecbf9876",
+        "gemm_us": 203.776,
+        "grid": "(25, 4, 3)",
+        "kernels": 10,
+        "registers_per_thread": 124,
+        "shared_bytes": 40960.0,
+        "tensor_pipe_util_pct": 60.733267,
+        "top_stall_reasons": [
+          {
+            "pct": 44.599,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 29.114,
+            "reason": "mio_throttle"
+          },
+          {
+            "pct": 14.447,
+            "reason": "barrier"
+          }
+        ],
+        "total_us": 925.312
+      },
+      "reference": {
+        "achieved_occupancy_pct": 8.332636,
+        "aux_us": 0.0,
+        "block": "(128, 1, 1)",
+        "dram_tbps": 0.197,
+        "gemm_kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(T1::Params)",
+        "gemm_us": 325.408,
+        "grid": "(128, 4, 1)",
+        "kernels": 1,
+        "registers_per_thread": 158,
+        "shared_bytes": 73728.0,
+        "tensor_pipe_util_pct": 76.531904,
+        "top_stall_reasons": [
+          {
+            "pct": 52.856,
+            "reason": "math_pipe_throttle"
+          },
+          {
+            "pct": 44.059,
+            "reason": "wait"
+          },
+          {
+            "pct": 1.261,
+            "reason": "long_scoreboard"
+          }
+        ],
+        "total_us": 325.408
+      },
+      "role": "ssm_out",
+      "roofline_us": 208.035,
+      "techniques": {
+        "technique_gaps": [
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "async_copy",
+            "reference_count": 2342400,
+            "technique": "async_global_to_shared"
+          },
+          {
+            "lowering_can_emit": true,
+            "lowering_fact": "matrix_fragments",
+            "reference_count": 4617600,
+            "technique": "matrix_fragment_load"
+          }
+        ],
+        "unknown_techniques": []
+      }
+    }
+  ],
+  "schema": "boltbeam.ncu_audit.v1"
+}

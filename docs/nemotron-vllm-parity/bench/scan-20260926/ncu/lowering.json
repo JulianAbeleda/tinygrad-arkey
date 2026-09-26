@@ -1,0 +1,40 @@
+{
+ "schema": "boltbeam.gemm_lowering_facts.v1",
+ "backend": "NV",
+ "arch": "sm_120",
+ "mma_m": 16,
+ "mma_n": 8,
+ "mma_k": 16,
+ "a_fragment_regs": 4,
+ "b_fragment_regs": 2,
+ "accumulator_regs": 4,
+ "operand_bytes": 2,
+ "accumulator_bytes": 4,
+ "vector_bytes": 16,
+ "static_lds_bytes": 49152,
+ "runtime_lds_bytes": 101376,
+ "lds_padding_bytes": 16,
+ "async_copy": true,
+ "matrix_fragments": true,
+ "swizzle_row_bytes": [
+  16,
+  32,
+  64,
+  128,
+  256,
+  512
+ ],
+ "weight_row_granule": 128,
+ "ragged_split_k": false,
+ "stream_k": false,
+ "provenance": {
+  "renderer": "tinygrad.renderer.cuda.CUDARenderer",
+  "tensor_core": "(8, 16, 16) dtypes.bfloat16->dtypes.float",
+  "capability_row": "nvidia.sm_120.prefill.wmma_lds.two_buffer_stage1.runtime.v1",
+  "matrix_fragments": "kernel_lds.derive_matrix_fragment_layout",
+  "swizzle": "kernel_lds.xor_swizzle_conflict_free",
+  "weight_row_granule": "tinygrad.llm.dense_candidate_gemm.WEIGHT_ROW_TILE",
+  "ragged_split_k": "precontract split-K slices are whole K tiles (dense_bf16_geometry_search.feasible)",
+  "stream_k": "no dense precontract stream-K lowering"
+ }
+}

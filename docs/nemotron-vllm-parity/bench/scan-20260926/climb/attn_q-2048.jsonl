@@ -1,0 +1,26 @@
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 16, 1, 4], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 16, 2, 2], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 16, 4, 1], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 64, 16, 1, 4], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 64, 16, 2, 2], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 64, 16, 4, 1], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 16, 1, 2], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 16, 2, 1], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 64, 16, 1, 2], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 64, 16, 2, 1], "split_k": 4, "pipeline": [2, true, true, true], "error": "KernelOptError: current atomic staging requires at least two tensor-core K steps"}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 1, 16], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 430.34, "tflops": 152.83, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 421.22, "tflops": 156.14, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 4, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 425.95, "tflops": 154.4, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 256, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 423.58, "tflops": 155.26, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [128, 128, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 418.53, "tflops": 157.14, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 8], "split_k": 1, "pipeline": [3, true, true, true], "median_us": 448.7, "tflops": 146.57, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 1, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 436.45, "tflops": 150.69, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 428.54, "tflops": 153.47, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 4, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 437.92, "tflops": 150.18, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 1, 4], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 424.22, "tflops": 155.03, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 432.83, "tflops": 151.95, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 4, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 431.3, "tflops": 152.49, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 1, 2], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 719.46, "tflops": 91.41, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 1], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 722.66, "tflops": 91.01, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 64, 64, 2, 8], "split_k": 1, "pipeline": [2, true, true, true], "median_us": 454.82, "tflops": 144.6, "finite": true}
+{"role": "attn_q", "m": 2048, "n": 5120, "k": 3136, "geometry": [64, 128, 64, 2, 8], "split_k": 7, "pipeline": [2, true, true, true], "median_us": 685.38, "tflops": 95.96, "finite": true, "max_rel_vs_unsplit": 3.700874458445469e-06}

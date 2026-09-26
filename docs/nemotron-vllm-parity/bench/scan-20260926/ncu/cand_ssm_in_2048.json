@@ -1,0 +1,451 @@
+{
+ "schema": "boltbeam.ncu_kernel_counters.v1",
+ "provenance": {
+  "device_name": "NVIDIA GeForce RTX 5090",
+  "compute_capability": "12.0",
+  "cache_control": "all",
+  "clock_control": "none",
+  "source_report": null
+ },
+ "rows": [
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "E_16_137_32_2_2_2_2_8_4_49_b33cd8e459dbaa004ceed60abb318b16fe7a8fce0d622f21e0fc6f273e12c708",
+   "grid": "(137, 16, 1)",
+   "block": "(32, 2, 2)",
+   "registers_per_thread": 203,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 98304.0,
+   "duration_us": 1203.36,
+   "achieved_occupancy_pct": 8.332421,
+   "tensor_pipe_util_pct": 86.645321,
+   "dram_throughput_bytes_per_sec": 1308675000000.0,
+   "sm_throughput_pct": 86.645321,
+   "top_stall_reasons": [
+    {
+     "reason": "math_pipe_throttle",
+     "pct": 60.337
+    },
+    {
+     "reason": "wait",
+     "pct": 32.64
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 3.017
+    }
+   ],
+   "opcode_census": {
+    "HMMA": 54992896,
+    "IADD": 29057152,
+    "MOV": 20657408,
+    "LDSM": 20622336,
+    "IMAD": 11433472,
+    "LDGSTS": 7154688,
+    "PRMT": 2577792,
+    "LOP3": 1893888,
+    "LDS": 1315200,
+    "SHF": 885568,
+    "UIADD3": 859264,
+    "ISETP": 859264,
+    "STG": 561152,
+    "CS2R": 561152,
+    "LDGDEPBAR": 447168,
+    "DEPBAR": 438400,
+    "BAR": 438400,
+    "SEL": 429632,
+    "BRA": 429632,
+    "S2R": 61376,
+    "LDC": 35072,
+    "LEA": 8768,
+    "LDCU": 8768,
+    "EXIT": 8768
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "E_16_137_32_2_2_2_2_8_4_49_b33cd8e459dbaa004ceed60abb318b16fe7a8fce0d622f21e0fc6f273e12c708",
+   "grid": "(137, 16, 1)",
+   "block": "(32, 2, 2)",
+   "registers_per_thread": 203,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 98304.0,
+   "duration_us": 1204.1599999999999,
+   "achieved_occupancy_pct": 8.332433,
+   "tensor_pipe_util_pct": 86.491783,
+   "dram_throughput_bytes_per_sec": 1305993000000.0,
+   "sm_throughput_pct": 86.491783,
+   "top_stall_reasons": [
+    {
+     "reason": "math_pipe_throttle",
+     "pct": 60.415
+    },
+    {
+     "reason": "wait",
+     "pct": 32.682
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 2.933
+    }
+   ],
+   "opcode_census": {
+    "HMMA": 54992896,
+    "IADD": 29057152,
+    "MOV": 20657408,
+    "LDSM": 20622336,
+    "IMAD": 11433472,
+    "LDGSTS": 7154688,
+    "PRMT": 2577792,
+    "LOP3": 1893888,
+    "LDS": 1315200,
+    "SHF": 885568,
+    "UIADD3": 859264,
+    "ISETP": 859264,
+    "STG": 561152,
+    "CS2R": 561152,
+    "LDGDEPBAR": 447168,
+    "DEPBAR": 438400,
+    "BAR": 438400,
+    "SEL": 429632,
+    "BRA": 429632,
+    "S2R": 61376,
+    "LDC": 35072,
+    "LEA": 8768,
+    "LDCU": 8768,
+    "EXIT": 8768
+   },
+   "aux": false
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "E_16_137_32_2_2_2_2_8_4_49_b33cd8e459dbaa004ceed60abb318b16fe7a8fce0d622f21e0fc6f273e12c708",
+   "grid": "(137, 16, 1)",
+   "block": "(32, 2, 2)",
+   "registers_per_thread": 203,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 98304.0,
+   "duration_us": 1198.176,
+   "achieved_occupancy_pct": 8.332427,
+   "tensor_pipe_util_pct": 86.696114,
+   "dram_throughput_bytes_per_sec": 1316888000000.0,
+   "sm_throughput_pct": 86.696114,
+   "top_stall_reasons": [
+    {
+     "reason": "math_pipe_throttle",
+     "pct": 60.407
+    },
+    {
+     "reason": "wait",
+     "pct": 32.677
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 2.938
+    }
+   ],
+   "opcode_census": {
+    "HMMA": 54992896,
+    "IADD": 29057152,
+    "MOV": 20657408,
+    "LDSM": 20622336,
+    "IMAD": 11433472,
+    "LDGSTS": 7154688,
+    "PRMT": 2577792,
+    "LOP3": 1893888,
+    "LDS": 1315200,
+    "SHF": 885568,
+    "UIADD3": 859264,
+    "ISETP": 859264,
+    "STG": 561152,
+    "CS2R": 561152,
+    "LDGDEPBAR": 447168,
+    "DEPBAR": 438400,
+    "BAR": 438400,
+    "SEL": 429632,
+    "BRA": 429632,
+    "S2R": 61376,
+    "LDC": 35072,
+    "LEA": 8768,
+    "LDCU": 8768,
+    "EXIT": 8768
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "E_16_137_32_2_2_2_2_8_4_49_b33cd8e459dbaa004ceed60abb318b16fe7a8fce0d622f21e0fc6f273e12c708",
+   "grid": "(137, 16, 1)",
+   "block": "(32, 2, 2)",
+   "registers_per_thread": 203,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 98304.0,
+   "duration_us": 1200.3200000000002,
+   "achieved_occupancy_pct": 8.33241,
+   "tensor_pipe_util_pct": 86.50343,
+   "dram_throughput_bytes_per_sec": 1312243000000.0,
+   "sm_throughput_pct": 86.50343,
+   "top_stall_reasons": [
+    {
+     "reason": "math_pipe_throttle",
+     "pct": 60.384
+    },
+    {
+     "reason": "wait",
+     "pct": 32.665
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 2.956
+    }
+   ],
+   "opcode_census": {
+    "HMMA": 54992896,
+    "IADD": 29057152,
+    "MOV": 20657408,
+    "LDSM": 20622336,
+    "IMAD": 11433472,
+    "LDGSTS": 7154688,
+    "PRMT": 2577792,
+    "LOP3": 1893888,
+    "LDS": 1315200,
+    "SHF": 885568,
+    "UIADD3": 859264,
+    "ISETP": 859264,
+    "STG": 561152,
+    "CS2R": 561152,
+    "LDGDEPBAR": 447168,
+    "DEPBAR": 438400,
+    "BAR": 438400,
+    "SEL": 429632,
+    "BRA": 429632,
+    "S2R": 61376,
+    "LDC": 35072,
+    "LEA": 8768,
+    "LDCU": 8768,
+    "EXIT": 8768
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "E_16_137_32_2_2_2_2_8_4_49_b33cd8e459dbaa004ceed60abb318b16fe7a8fce0d622f21e0fc6f273e12c708",
+   "grid": "(137, 16, 1)",
+   "block": "(32, 2, 2)",
+   "registers_per_thread": 203,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 98304.0,
+   "duration_us": 1199.104,
+   "achieved_occupancy_pct": 8.332437,
+   "tensor_pipe_util_pct": 86.657073,
+   "dram_throughput_bytes_per_sec": 1315075000000.0,
+   "sm_throughput_pct": 86.657073,
+   "top_stall_reasons": [
+    {
+     "reason": "math_pipe_throttle",
+     "pct": 60.38
+    },
+    {
+     "reason": "wait",
+     "pct": 32.663
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 2.925
+    }
+   ],
+   "opcode_census": {
+    "HMMA": 54992896,
+    "IADD": 29057152,
+    "MOV": 20657408,
+    "LDSM": 20622336,
+    "IMAD": 11433472,
+    "LDGSTS": 7154688,
+    "PRMT": 2577792,
+    "LOP3": 1893888,
+    "LDS": 1315200,
+    "SHF": 885568,
+    "UIADD3": 859264,
+    "ISETP": 859264,
+    "STG": 561152,
+    "CS2R": 561152,
+    "LDGDEPBAR": 447168,
+    "DEPBAR": 438400,
+    "BAR": 438400,
+    "SEL": 429632,
+    "BRA": 429632,
+    "S2R": 61376,
+    "LDC": 35072,
+    "LEA": 8768,
+    "LDCU": 8768,
+    "EXIT": 8768
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "r_256_8_16_1096_a05137b8256a4db6e2d2d245b873dc3bc3aa7690be28893cb40c3f47f8828012",
+   "grid": "(8, 256, 1)",
+   "block": "(16, 1, 1)",
+   "registers_per_thread": 72,
+   "static_shared_bytes": 16.0,
+   "dynamic_shared_bytes": 0.0,
+   "duration_us": 122.624,
+   "achieved_occupancy_pct": 19.656861,
+   "tensor_pipe_util_pct": 0.0,
+   "dram_throughput_bytes_per_sec": 1209401000000.0,
+   "sm_throughput_pct": 8.685204,
+   "top_stall_reasons": [
+    {
+     "reason": "lg_throttle",
+     "pct": 80.684
+    },
+    {
+     "reason": "long_scoreboard",
+     "pct": 14.296
+    },
+    {
+     "reason": "misc",
+     "pct": 2.232
+    }
+   ],
+   "opcode_census": {
+    "LDG": 2244608,
+    "FSETP": 2244608,
+    "PLOP3": 139264,
+    "IADD": 38912,
+    "UISETP": 34816,
+    "UIADD3": 34816,
+    "BRA": 34816,
+    "PRMT": 24576,
+    "LOP3": 16384,
+    "IMAD": 8192,
+    "S2R": 6144,
+    "LDCU": 6144,
+    "UMOV": 4096,
+    "LEA": 4096,
+    "EXIT": 4096,
+    "ULEA": 2048,
+    "STS": 2048,
+    "STG": 2048,
+    "SEL": 2048,
+    "S2UR": 2048,
+    "LDS": 2048,
+    "LDC": 2048,
+    "ISETP": 2048,
+    "HFMA2": 2048,
+    "BAR": 2048
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "r_8_32_8_55ed6c791232db72843a517f8d477a02c33f185783ca82b4a403c194d2b66ca8",
+   "grid": "(8, 1, 1)",
+   "block": "(32, 1, 1)",
+   "registers_per_thread": 16,
+   "static_shared_bytes": 0.0,
+   "dynamic_shared_bytes": 0.0,
+   "duration_us": 1.856,
+   "achieved_occupancy_pct": 2.083333,
+   "tensor_pipe_util_pct": 0.0,
+   "dram_throughput_bytes_per_sec": 2621000000.0,
+   "sm_throughput_pct": 0.020246,
+   "top_stall_reasons": [
+    {
+     "reason": "long_scoreboard",
+     "pct": 70.136
+    },
+    {
+     "reason": "no_instruction",
+     "pct": 16.67
+    },
+    {
+     "reason": "short_scoreboard",
+     "pct": 5.376
+    }
+   ],
+   "opcode_census": {
+    "LDG": 64,
+    "LOP3": 48,
+    "USHF": 16,
+    "SHF": 16,
+    "LDCU": 16,
+    "IADD": 16,
+    "STG": 8,
+    "SEL": 8,
+    "S2UR": 8,
+    "S2R": 8,
+    "LDC": 8,
+    "ISETP": 8,
+    "IMAD": 8,
+    "EXIT": 8
+   },
+   "aux": true
+  },
+  {
+   "side": "ours",
+   "role": "ssm_in",
+   "m": 2048,
+   "kernel": "r_16_16_99559d69c7ddcfd22c27b8d3696dc9d77ee56a2f393eba6c1508575ce293f791",
+   "grid": "(1, 1, 1)",
+   "block": "(16, 1, 1)",
+   "registers_per_thread": 24,
+   "static_shared_bytes": 16.0,
+   "dynamic_shared_bytes": 0.0,
+   "duration_us": 1.824,
+   "achieved_occupancy_pct": 2.083333,
+   "tensor_pipe_util_pct": 0.0,
+   "dram_throughput_bytes_per_sec": 1965000000.0000002,
+   "sm_throughput_pct": 0.005056,
+   "top_stall_reasons": [
+    {
+     "reason": "long_scoreboard",
+     "pct": 55.352
+    },
+    {
+     "reason": "no_instruction",
+     "pct": 25.015
+    },
+    {
+     "reason": "short_scoreboard",
+     "pct": 9.58
+    }
+   ],
+   "opcode_census": {
+    "LOP3": 16,
+    "LDG": 16,
+    "PRMT": 12,
+    "LDC": 3,
+    "EXIT": 2,
+    "UMOV": 1,
+    "ULEA": 1,
+    "STS": 1,
+    "STG": 1,
+    "S2UR": 1,
+    "S2R": 1,
+    "LDS": 1,
+    "LDCU": 1,
+    "ISETP": 1,
+    "IMAD": 1,
+    "BAR": 1
+   },
+   "aux": true
+  }
+ ]
+}

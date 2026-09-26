@@ -1,0 +1,94 @@
+{
+ "model": "NVIDIA-Nemotron-3-Nano-4B-BF16 (RTX 5090)",
+ "notes": [
+  "ours = tinygrad-self-training exp (DEV=NV, HCQ graph profile, PROFILE=1), vLLM 0.30 (nsys, cuda-graph-trace=node); ours traces 2026-09-26 via bench/spec/ours_prof.py / ours_pf_prof.py (host wall/step printed in each meta).",
+  "vLLM B=32 trace was produced 2026-09-26 with VLLM_CACHE_ROOT pointed at a fresh dir (the default cache holds a root-owned flashinfer autotune file that makes the engine fail at warmup).",
+  "ours relu2 is fused into ffn_down's input prep (counted in ffn_down); vLLM's relu2 kernel is mlp_act.",
+  "norm_residual includes the kernels before the first GEMM of a step (embedding, first norm); sampling_bookkeeping = everything after the output GEMM (sampler, vLLM input prep and mamba align copies).",
+  "ours decode steps carry the amortized state flush (state_flush) that runs every ~16 steps."
+ ],
+ "ours_gemm_json": "/home/ubuntu/storage/scan-20260926/ours.json",
+ "pattern": "M-M-M-MM-M-M*-M-M*-M-M-M*-M-M-MM*-MMM-M-M-",
+ "workloads": [
+  {
+   "batch": 8,
+   "id": "decode_b8",
+   "kind": "decode",
+   "ours": {
+    "command": "cd /home/ubuntu/tinygrad-self-training && /home/ubuntu/scratchpad/bin/gpu-run time env PROFILE=1 HCQ_GRAPH_PROFILE_JSON=/home/ubuntu/storage/lifecycle/ours_b8_p200.jsonl DEV=NV PYTHONPATH=. python3 docs/nemotron-vllm-parity/bench/spec/ours_prof.py 8 200 1024 /home/ubuntu/storage/lifecycle/ours_b8_p200_meta.json",
+    "jsonl": "/home/ubuntu/storage/lifecycle/ours_b8_p200.jsonl",
+    "meta": "/home/ubuntu/storage/lifecycle/ours_b8_p200_meta.json",
+    "prompt_len": 200
+   },
+   "vllm": {
+    "command": "cd /home/ubuntu/vllm-bench && /home/ubuntu/scratchpad/bin/gpu-run time env PATH=/home/ubuntu/vllm-bench/.venv/bin:/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda VLLM_USE_FLASHINFER_SAMPLER=0 GPU_UTIL=0.85 EXTRA='{\"disable_log_stats\": false}' nsys profile --capture-range=cudaProfilerApi --capture-range-end=repeat --cuda-graph-trace=node --trace=cuda,nvtx --sample=none --cpuctxsw=none -f true -o /home/ubuntu/storage/lifecycle/prof_b8_p200 .venv/bin/python prof.py 8:200 300 && nsys export --type sqlite -o /home/ubuntu/storage/lifecycle/prof_b8_p200.1.sqlite /home/ubuntu/storage/lifecycle/prof_b8_p200.1.nsys-rep",
+    "prompt_len": 200,
+    "sqlite": "/home/ubuntu/vllm-bench/runs/prof_default.1.sqlite"
+   }
+  },
+  {
+   "batch": 32,
+   "id": "decode_b32",
+   "kind": "decode",
+   "ours": {
+    "command": "cd /home/ubuntu/tinygrad-self-training && /home/ubuntu/scratchpad/bin/gpu-run time env PROFILE=1 HCQ_GRAPH_PROFILE_JSON=/home/ubuntu/storage/lifecycle/ours_b32_p200.jsonl DEV=NV PYTHONPATH=. python3 docs/nemotron-vllm-parity/bench/spec/ours_prof.py 32 200 1024 /home/ubuntu/storage/lifecycle/ours_b32_p200_meta.json",
+    "jsonl": "/home/ubuntu/storage/lifecycle/ours_b32_p200.jsonl",
+    "meta": "/home/ubuntu/storage/lifecycle/ours_b32_p200_meta.json",
+    "prompt_len": 200
+   },
+   "vllm": {
+    "command": "cd /home/ubuntu/vllm-bench && /home/ubuntu/scratchpad/bin/gpu-run time env PATH=/home/ubuntu/vllm-bench/.venv/bin:/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda VLLM_USE_FLASHINFER_SAMPLER=0 GPU_UTIL=0.85 EXTRA='{\"disable_log_stats\": false}' nsys profile --capture-range=cudaProfilerApi --capture-range-end=repeat --cuda-graph-trace=node --trace=cuda,nvtx --sample=none --cpuctxsw=none -f true -o /home/ubuntu/storage/lifecycle/prof_b32_p200 .venv/bin/python prof.py 32:200 300 && nsys export --type sqlite -o /home/ubuntu/storage/lifecycle/prof_b32_p200.1.sqlite /home/ubuntu/storage/lifecycle/prof_b32_p200.1.nsys-rep",
+    "prompt_len": 200,
+    "sqlite": "/home/ubuntu/storage/lifecycle/prof_b32_p200.1.sqlite"
+   }
+  },
+  {
+   "batch": 64,
+   "id": "decode_b64",
+   "kind": "decode",
+   "ours": {
+    "command": "cd /home/ubuntu/tinygrad-self-training && /home/ubuntu/scratchpad/bin/gpu-run time env PROFILE=1 HCQ_GRAPH_PROFILE_JSON=/home/ubuntu/storage/lifecycle/ours_b64_p2000.jsonl DEV=NV PYTHONPATH=. python3 docs/nemotron-vllm-parity/bench/spec/ours_prof.py 64 2000 1024 /home/ubuntu/storage/lifecycle/ours_b64_p2000_meta.json",
+    "jsonl": "/home/ubuntu/storage/lifecycle/ours_b64_p2000.jsonl",
+    "meta": "/home/ubuntu/storage/lifecycle/ours_b64_p2000_meta.json",
+    "prompt_len": 2000
+   },
+   "vllm": {
+    "command": "cd /home/ubuntu/vllm-bench && /home/ubuntu/scratchpad/bin/gpu-run time env PATH=/home/ubuntu/vllm-bench/.venv/bin:/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda VLLM_USE_FLASHINFER_SAMPLER=0 GPU_UTIL=0.85 EXTRA='{\"disable_log_stats\": false}' nsys profile --capture-range=cudaProfilerApi --capture-range-end=repeat --cuda-graph-trace=node --trace=cuda,nvtx --sample=none --cpuctxsw=none -f true -o /home/ubuntu/storage/lifecycle/prof_b64_p2000 .venv/bin/python prof.py 64:2000 300 && nsys export --type sqlite -o /home/ubuntu/storage/lifecycle/prof_b64_p2000.1.sqlite /home/ubuntu/storage/lifecycle/prof_b64_p2000.1.nsys-rep",
+    "prompt_len": 2000,
+    "sqlite": "/home/ubuntu/vllm-bench/runs/prof_spec64.1.sqlite"
+   }
+  },
+  {
+   "batch": 128,
+   "id": "decode_b128",
+   "kind": "decode",
+   "ours": {
+    "command": "cd /home/ubuntu/tinygrad-self-training && /home/ubuntu/scratchpad/bin/gpu-run time env PROFILE=1 HCQ_GRAPH_PROFILE_JSON=/home/ubuntu/storage/lifecycle/ours_b128_p2000.jsonl DEV=NV PYTHONPATH=. python3 docs/nemotron-vllm-parity/bench/spec/ours_prof.py 128 2000 1024 /home/ubuntu/storage/lifecycle/ours_b128_p2000_meta.json",
+    "jsonl": "/home/ubuntu/storage/lifecycle/ours_b128_p2000.jsonl",
+    "meta": "/home/ubuntu/storage/lifecycle/ours_b128_p2000_meta.json",
+    "prompt_len": 2000
+   },
+   "vllm": {
+    "command": "cd /home/ubuntu/vllm-bench && /home/ubuntu/scratchpad/bin/gpu-run time env PATH=/home/ubuntu/vllm-bench/.venv/bin:/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda VLLM_USE_FLASHINFER_SAMPLER=0 GPU_UTIL=0.85 EXTRA='{\"disable_log_stats\": false}' nsys profile --capture-range=cudaProfilerApi --capture-range-end=repeat --cuda-graph-trace=node --trace=cuda,nvtx --sample=none --cpuctxsw=none -f true -o /home/ubuntu/storage/lifecycle/prof_b128_p2000 .venv/bin/python prof.py 128:2000 300 && nsys export --type sqlite -o /home/ubuntu/storage/lifecycle/prof_b128_p2000.1.sqlite /home/ubuntu/storage/lifecycle/prof_b128_p2000.1.nsys-rep",
+    "prompt_len": 2000,
+    "sqlite": "/home/ubuntu/vllm-bench/runs/prof_default.3.sqlite"
+   }
+  },
+  {
+   "batch": 1,
+   "id": "prefill_10k",
+   "kind": "prefill",
+   "ours": {
+    "command": "cd /home/ubuntu/tinygrad-self-training && /home/ubuntu/scratchpad/bin/gpu-run time env PROFILE=1 HCQ_GRAPH_PROFILE_JSON=/home/ubuntu/storage/lifecycle/ourspf_10000.jsonl DEV=NV PYTHONPATH=. python3 docs/nemotron-vllm-parity/bench/spec/ours_pf_prof.py 10000 1024 ssd float /home/ubuntu/storage/lifecycle/ourspf_10000_meta.json",
+    "jsonl": "/home/ubuntu/storage/lifecycle/ourspf_10000.jsonl",
+    "meta": "/home/ubuntu/storage/lifecycle/ourspf_10000_meta.json",
+    "prompt_len": 10000
+   },
+   "vllm": {
+    "command": "cd /home/ubuntu/vllm-bench && nsys profile --capture-range=cudaProfilerApi --capture-range-end=repeat --cuda-graph-trace=node --trace=cuda,nvtx --sample=none --cpuctxsw=none -f true -o runs/prof_prefill10k .venv/bin/python prof_prefill.py && nsys export --type sqlite -o runs/prof_prefill10k.sqlite runs/prof_prefill10k.nsys-rep",
+    "prompt_len": 10000,
+    "sqlite": "/home/ubuntu/vllm-bench/runs/prof_prefill10k.sqlite"
+   }
+  }
+ ]
+}

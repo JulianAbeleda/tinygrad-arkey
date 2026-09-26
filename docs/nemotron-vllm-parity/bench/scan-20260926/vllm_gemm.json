@@ -1,0 +1,3025 @@
+[
+ {
+  "role": "ssm_in",
+  "m": 8,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 80,
+    "us": 5761.977000000002,
+    "grid": [
+     8,
+     137,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 72.02471250000002,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 72.02471250000002,
+  "event_us": 72.70479798316956
+ },
+ {
+  "role": "ssm_in",
+  "m": 16,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 80,
+    "us": 5815.183,
+    "grid": [
+     8,
+     137,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 72.6897875,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 72.6897875,
+  "event_us": 73.1715977191925
+ },
+ {
+  "role": "ssm_in",
+  "m": 32,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 80,
+    "us": 5877.7199999999975,
+    "grid": [
+     8,
+     18,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 73.47149999999996,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 73.47149999999996,
+  "event_us": 73.9579975605011
+ },
+ {
+  "role": "ssm_in",
+  "m": 64,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 80,
+    "us": 5924.242,
+    "grid": [
+     8,
+     18,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 74.053025,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 74.053025,
+  "event_us": 75.87839961051941
+ },
+ {
+  "role": "ssm_in",
+  "m": 128,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 80,
+    "us": 7308.9940000000015,
+    "grid": [
+     16,
+     18,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 91.36242500000002,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 91.36242500000002,
+  "event_us": 91.85159802436829
+ },
+ {
+  "role": "ssm_in",
+  "m": 512,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 80,
+    "us": 23725.281000000003,
+    "grid": [
+     64,
+     18,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 296.56601250000006,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 296.56601250000006,
+  "event_us": 297.0587968826294
+ },
+ {
+  "role": "ssm_in",
+  "m": 1024,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 80,
+    "us": 43715.262,
+    "grid": [
+     128,
+     18,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 546.440775,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 546.440775,
+  "event_us": 545.4872131347656
+ },
+ {
+  "role": "ssm_in",
+  "m": 2048,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 80,
+    "us": 84914.364,
+    "grid": [
+     64,
+     35,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 1061.42955,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1061.42955,
+  "event_us": 1061.1056327819824
+ },
+ {
+  "role": "ssm_in",
+  "m": 4096,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 80,
+    "us": 166994.241,
+    "grid": [
+     128,
+     35,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 2087.4280125,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 2087.4280125,
+  "event_us": 2018.5800552368164
+ },
+ {
+  "role": "ssm_in",
+  "m": 8192,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 80,
+    "us": 310916.85800000007,
+    "grid": [
+     256,
+     35,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 3886.460725000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 3886.460725000001,
+  "event_us": 3884.6694946289062
+ },
+ {
+  "role": "ssm_out",
+  "m": 8,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 180,
+    "us": 7914.733,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 43.97073888888889,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 43.97073888888889,
+  "event_us": 44.17884349822998
+ },
+ {
+  "role": "ssm_out",
+  "m": 16,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 180,
+    "us": 7927.215000000001,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 44.04008333333334,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 44.04008333333334,
+  "event_us": 44.259021017286514
+ },
+ {
+  "role": "ssm_out",
+  "m": 32,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 5887.3749999999945,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 32.70763888888886,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 180,
+    "us": 319.3939999999995,
+    "grid": [
+     98,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.7744111111111083,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 34.482049999999965,
+  "event_us": 34.7217771742079
+ },
+ {
+  "role": "ssm_out",
+  "m": 64,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 5985.415999999998,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 33.252311111111105,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 180,
+    "us": 499.8750000000001,
+    "grid": [
+     98,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.777083333333334,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 36.02939444444444,
+  "event_us": 36.21546692318387
+ },
+ {
+  "role": "ssm_out",
+  "m": 128,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 6831.772000000001,
+    "grid": [
+     16,
+     4,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 37.9542888888889,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 180,
+    "us": 599.9419999999998,
+    "grid": [
+     98,
+     8,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 3.33301111111111,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 41.28730000000001,
+  "event_us": 41.23857816060384
+ },
+ {
+  "role": "ssm_out",
+  "m": 512,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 25520.054,
+    "grid": [
+     64,
+     4,
+     4
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 141.77807777777778,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 141.77807777777778,
+  "event_us": 143.90861723158093
+ },
+ {
+  "role": "ssm_out",
+  "m": 1024,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 55885.197,
+    "grid": [
+     128,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 310.4733166666667,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 310.4733166666667,
+  "event_us": 310.18507215711804
+ },
+ {
+  "role": "ssm_out",
+  "m": 2048,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 90059.45300000004,
+    "grid": [
+     256,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 500.33029444444463,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 500.33029444444463,
+  "event_us": 500.5240970187717
+ },
+ {
+  "role": "ssm_out",
+  "m": 4096,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 175560.57000000007,
+    "grid": [
+     512,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 975.3365000000003,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 975.3365000000003,
+  "event_us": 947.1073574490017
+ },
+ {
+  "role": "ssm_out",
+  "m": 8192,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 324700.53899999993,
+    "grid": [
+     1024,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1803.891883333333,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1803.891883333333,
+  "event_us": 1799.069383409288
+ },
+ {
+  "role": "qkv",
+  "m": 8,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 180,
+    "us": 5392.568999999998,
+    "grid": [
+     8,
+     56,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 29.958716666666653,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 29.958716666666653,
+  "event_us": 30.376532342698837
+ },
+ {
+  "role": "qkv",
+  "m": 16,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 180,
+    "us": 5404.140000000002,
+    "grid": [
+     8,
+     56,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 30.02300000000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 30.02300000000001,
+  "event_us": 30.453332265218098
+ },
+ {
+  "role": "qkv",
+  "m": 32,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 5503.119999999999,
+    "grid": [
+     8,
+     7,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 30.572888888888883,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 180,
+    "us": 411.1729999999991,
+    "grid": [
+     224,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.2842944444444395,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 32.857183333333325,
+  "event_us": 33.133154445224335
+ },
+ {
+  "role": "qkv",
+  "m": 64,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 5509.254999999998,
+    "grid": [
+     8,
+     7,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 30.60697222222221,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 180,
+    "us": 569.5760000000006,
+    "grid": [
+     224,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 3.164311111111114,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 33.77128333333332,
+  "event_us": 33.859199947781036
+ },
+ {
+  "role": "qkv",
+  "m": 128,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 6938.820999999998,
+    "grid": [
+     16,
+     7,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 38.549005555555546,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 38.549005555555546,
+  "event_us": 38.83786731296115
+ },
+ {
+  "role": "qkv",
+  "m": 512,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 20417.999,
+    "grid": [
+     64,
+     7,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 113.43332777777778,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 113.43332777777778,
+  "event_us": 113.81208631727431
+ },
+ {
+  "role": "qkv",
+  "m": 1024,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 180,
+    "us": 40994.41499999999,
+    "grid": [
+     32,
+     14,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 227.74674999999996,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 227.74674999999996,
+  "event_us": 248.7614313761393
+ },
+ {
+  "role": "qkv",
+  "m": 2048,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 82687.399,
+    "grid": [
+     256,
+     7,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 459.3744388888889,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 459.3744388888889,
+  "event_us": 458.96890428331164
+ },
+ {
+  "role": "qkv",
+  "m": 4096,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 180,
+    "us": 159281.89300000004,
+    "grid": [
+     128,
+     14,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 884.8994055555557,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 884.8994055555557,
+  "event_us": 857.2442796495226
+ },
+ {
+  "role": "qkv",
+  "m": 8192,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 180,
+    "us": 297879.6069999999,
+    "grid": [
+     256,
+     14,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 1654.886705555555,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1654.886705555555,
+  "event_us": 1623.8045586480034
+ },
+ {
+  "role": "attn_q",
+  "m": 8,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 260,
+    "us": 6098.492999999997,
+    "grid": [
+     8,
+     40,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 23.455742307692294,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 23.455742307692294,
+  "event_us": 23.777354680574856
+ },
+ {
+  "role": "attn_q",
+  "m": 16,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 260,
+    "us": 6105.120000000002,
+    "grid": [
+     8,
+     40,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 23.481230769230777,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 23.481230769230777,
+  "event_us": 23.77341527205247
+ },
+ {
+  "role": "attn_q",
+  "m": 32,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 5842.375999999995,
+    "grid": [
+     8,
+     5,
+     4
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 22.4706769230769,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 260,
+    "us": 361.21899999999977,
+    "grid": [
+     160,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.3893038461538452,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 23.859980769230745,
+  "event_us": 24.200246884272648
+ },
+ {
+  "role": "attn_q",
+  "m": 64,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 5852.335999999998,
+    "grid": [
+     8,
+     5,
+     4
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 22.50898461538461,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 260,
+    "us": 569.7020000000015,
+    "grid": [
+     160,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.191161538461544,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 24.700146153846152,
+  "event_us": 24.912738800048828
+ },
+ {
+  "role": "attn_q",
+  "m": 128,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8::Params)",
+    "count": 260,
+    "us": 6357.174000000004,
+    "grid": [
+     16,
+     10,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 96,
+    "smem": 98304,
+    "us_per_call": 24.450669230769243,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 24.450669230769243,
+  "event_us": 24.9447382413424
+ },
+ {
+  "role": "attn_q",
+  "m": 512,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 21850.95899999999,
+    "grid": [
+     16,
+     10,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 84.04214999999996,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 84.04214999999996,
+  "event_us": 84.09476647010216
+ },
+ {
+  "role": "attn_q",
+  "m": 1024,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 43132.576,
+    "grid": [
+     32,
+     10,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 165.8945230769231,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 165.8945230769231,
+  "event_us": 166.22424492469202
+ },
+ {
+  "role": "attn_q",
+  "m": 2048,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 85589.06299999997,
+    "grid": [
+     64,
+     10,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 329.1887038461537,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 329.1887038461537,
+  "event_us": 329.99420166015625
+ },
+ {
+  "role": "attn_q",
+  "m": 4096,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 170092.5460000001,
+    "grid": [
+     128,
+     10,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 654.2021000000003,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 654.2021000000003,
+  "event_us": 653.9318378155048
+ },
+ {
+  "role": "attn_q",
+  "m": 8192,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 313584.48099999997,
+    "grid": [
+     1024,
+     5,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1206.0941576923076,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1206.0941576923076,
+  "event_us": 1188.949467585637
+ },
+ {
+  "role": "attn_kv",
+  "m": 8,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 1260,
+    "us": 7648.996000000027,
+    "grid": [
+     8,
+     8,
+     13
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 6.070631746031768,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 1260,
+    "us": 1763.1899999999664,
+    "grid": [
+     32,
+     1,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.399357142857116,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 7.469988888888883,
+  "event_us": 19.828089456709606
+ },
+ {
+  "role": "attn_kv",
+  "m": 16,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 1260,
+    "us": 24067.560000000012,
+    "grid": [
+     8,
+     8,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 19.101238095238106,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 19.101238095238106,
+  "event_us": 19.19672375633603
+ },
+ {
+  "role": "attn_kv",
+  "m": 32,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8::Params)",
+    "count": 1260,
+    "us": 8238.614000000001,
+    "grid": [
+     8,
+     4,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 84,
+    "smem": 33792,
+    "us_per_call": 6.538582539682541,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 1260,
+    "us": 1773.8339999999737,
+    "grid": [
+     32,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.407804761904741,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 7.946387301587282,
+  "event_us": 19.815567561558314
+ },
+ {
+  "role": "attn_kv",
+  "m": 64,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8::Params)",
+    "count": 1260,
+    "us": 8227.485,
+    "grid": [
+     8,
+     2,
+     7
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 88,
+    "smem": 49152,
+    "us_per_call": 6.529750000000001,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 1260,
+    "us": 1984.64999999998,
+    "grid": [
+     32,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.5751190476190318,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 8.104869047619033,
+  "event_us": 20.514869689941406
+ },
+ {
+  "role": "attn_kv",
+  "m": 128,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8::Params)",
+    "count": 1260,
+    "us": 9989.031000000048,
+    "grid": [
+     16,
+     2,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 96,
+    "smem": 98304,
+    "us_per_call": 7.927802380952419,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 1260,
+    "us": 1926.5570000000012,
+    "grid": [
+     32,
+     8,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.529013492063493,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 9.456815873015913,
+  "event_us": 20.43227998037187
+ },
+ {
+  "role": "attn_kv",
+  "m": 512,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_64x6_tn_align8::Params)",
+    "count": 1260,
+    "us": 29641.00700000002,
+    "grid": [
+     64,
+     2,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 96,
+    "smem": 98304,
+    "us_per_call": 23.524608730158747,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 23.524608730158747,
+  "event_us": 23.668037898956783
+ },
+ {
+  "role": "attn_kv",
+  "m": 1024,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x128_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x128_64x3_tn_align8::Params)",
+    "count": 1260,
+    "us": 54127.343,
+    "grid": [
+     64,
+     2,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 42.95820873015873,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 42.95820873015873,
+  "event_us": 43.02224658784412
+ },
+ {
+  "role": "attn_kv",
+  "m": 2048,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 1260,
+    "us": 104270.30299999997,
+    "grid": [
+     64,
+     2,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 82.75420873015871,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 82.75420873015871,
+  "event_us": 82.82265436081659
+ },
+ {
+  "role": "attn_kv",
+  "m": 4096,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 1260,
+    "us": 210395.38299999994,
+    "grid": [
+     128,
+     2,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 166.98046269841265,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 166.98046269841265,
+  "event_us": 162.33751811678448
+ },
+ {
+  "role": "attn_kv",
+  "m": 8192,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8::Params)",
+    "count": 1260,
+    "us": 348891.23300000076,
+    "grid": [
+     256,
+     1,
+     3
+    ],
+    "block": [
+     256,
+     1,
+     1
+    ],
+    "regs": 222,
+    "smem": 73728,
+    "us_per_call": 276.89780396825455,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 276.89780396825455,
+  "event_us": 282.64639718191967
+ },
+ {
+  "role": "attn_o",
+  "m": 8,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 260,
+    "us": 8013.086000000003,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 30.81956153846155,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 30.81956153846155,
+  "event_us": 31.066091244037334
+ },
+ {
+  "role": "attn_o",
+  "m": 16,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 260,
+    "us": 8055.408000000001,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 30.982338461538465,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 30.982338461538465,
+  "event_us": 32.49858342684232
+ },
+ {
+  "role": "attn_o",
+  "m": 32,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 5996.566999999998,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 23.063719230769223,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 260,
+    "us": 470.33999999999935,
+    "grid": [
+     98,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.8089999999999975,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 24.87271923076922,
+  "event_us": 25.155199491060696
+ },
+ {
+  "role": "attn_o",
+  "m": 64,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 6067.153999999997,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 23.33520769230768,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 260,
+    "us": 714.2829999999999,
+    "grid": [
+     98,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.747242307692307,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 26.082449999999987,
+  "event_us": 26.304123951838566
+ },
+ {
+  "role": "attn_o",
+  "m": 128,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 6900.475000000003,
+    "grid": [
+     16,
+     4,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 26.540288461538474,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 260,
+    "us": 864.2990000000002,
+    "grid": [
+     98,
+     8,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 3.3242269230769237,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 29.864515384615398,
+  "event_us": 29.877292192899265
+ },
+ {
+  "role": "attn_o",
+  "m": 512,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 25537.318000000003,
+    "grid": [
+     64,
+     2,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 98.22045384615386,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 98.22045384615386,
+  "event_us": 100.64812440138597
+ },
+ {
+  "role": "attn_o",
+  "m": 1024,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 47310.98999999999,
+    "grid": [
+     128,
+     4,
+     2
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 181.96534615384613,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 181.96534615384613,
+  "event_us": 184.29082723764273
+ },
+ {
+  "role": "attn_o",
+  "m": 2048,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 88047.52699999996,
+    "grid": [
+     256,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 338.6443346153845,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 338.6443346153845,
+  "event_us": 338.03666921762317
+ },
+ {
+  "role": "attn_o",
+  "m": 4096,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 172032.60199999998,
+    "grid": [
+     128,
+     7,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 661.6638538461538,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 661.6638538461538,
+  "event_us": 661.3923879770132
+ },
+ {
+  "role": "attn_o",
+  "m": 8192,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 315714.1449999998,
+    "grid": [
+     1024,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1214.2851730769223,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1214.2851730769223,
+  "event_us": 1211.605717585637
+ },
+ {
+  "role": "ffn_up",
+  "m": 8,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 120,
+    "us": 5976.076,
+    "grid": [
+     8,
+     98,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 49.80063333333333,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 49.80063333333333,
+  "event_us": 50.23226737976074
+ },
+ {
+  "role": "ffn_up",
+  "m": 16,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 120,
+    "us": 5989.751000000001,
+    "grid": [
+     8,
+     98,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 49.914591666666674,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 49.914591666666674,
+  "event_us": 50.35653511683146
+ },
+ {
+  "role": "ffn_up",
+  "m": 32,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_tn_align8::Params)",
+    "count": 120,
+    "us": 6380.000000000003,
+    "grid": [
+     8,
+     25,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 88,
+    "smem": 49152,
+    "us_per_call": 53.16666666666669,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 53.16666666666669,
+  "event_us": 55.76773484547933
+ },
+ {
+  "role": "ffn_up",
+  "m": 64,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 6414.773999999999,
+    "grid": [
+     8,
+     13,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 53.45645,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 53.45645,
+  "event_us": 53.86826594670614
+ },
+ {
+  "role": "ffn_up",
+  "m": 128,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8::Params)",
+    "count": 120,
+    "us": 7685.484000000002,
+    "grid": [
+     16,
+     7,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 64.04570000000002,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 64.04570000000002,
+  "event_us": 66.40133460362752
+ },
+ {
+  "role": "ffn_up",
+  "m": 512,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 22447.964999999993,
+    "grid": [
+     64,
+     13,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 187.06637499999994,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 187.06637499999994,
+  "event_us": 188.13014030456543
+ },
+ {
+  "role": "ffn_up",
+  "m": 1024,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 120,
+    "us": 49535.81099999999,
+    "grid": [
+     32,
+     25,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 412.7984249999999,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 412.7984249999999,
+  "event_us": 413.34638595581055
+ },
+ {
+  "role": "ffn_up",
+  "m": 2048,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 94947.15800000001,
+    "grid": [
+     256,
+     13,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 791.2263166666668,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 791.2263166666668,
+  "event_us": 789.9162928263346
+ },
+ {
+  "role": "ffn_up",
+  "m": 4096,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 181901.414,
+    "grid": [
+     512,
+     13,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1515.8451166666666,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1515.8451166666666,
+  "event_us": 1480.4373423258464
+ },
+ {
+  "role": "ffn_up",
+  "m": 8192,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 120,
+    "us": 333808.9919999999,
+    "grid": [
+     256,
+     25,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 2781.7415999999994,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 2781.7415999999994,
+  "event_us": 2795.430246988932
+ },
+ {
+  "role": "ffn_down",
+  "m": 8,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 120,
+    "us": 8457.85,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 70.48208333333334,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 70.48208333333334,
+  "event_us": 70.89866797129314
+ },
+ {
+  "role": "ffn_down",
+  "m": 16,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 120,
+    "us": 8438.69,
+    "grid": [
+     8,
+     25,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 70.32241666666667,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 70.32241666666667,
+  "event_us": 70.7528034845988
+ },
+ {
+  "role": "ffn_down",
+  "m": 32,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 6111.227999999998,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 50.92689999999998,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 120,
+    "us": 213.09000000000006,
+    "grid": [
+     98,
+     2,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 1.7757500000000006,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 52.702649999999984,
+  "event_us": 52.7178684870402
+ },
+ {
+  "role": "ffn_down",
+  "m": 64,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 6129.265999999999,
+    "grid": [
+     8,
+     4,
+     6
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 51.07721666666666,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 120,
+    "us": 310.1760000000001,
+    "grid": [
+     98,
+     4,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.584800000000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 53.66201666666666,
+  "event_us": 53.98106575012207
+ },
+ {
+  "role": "ffn_down",
+  "m": 128,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 6674.262999999998,
+    "grid": [
+     16,
+     4,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 55.618858333333314,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 120,
+    "us": 366.8840000000001,
+    "grid": [
+     98,
+     8,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 3.0573666666666677,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 58.67622499999998,
+  "event_us": 58.969600995381676
+ },
+ {
+  "role": "ffn_down",
+  "m": 512,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 25763.274000000023,
+    "grid": [
+     64,
+     4,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 214.6939500000002,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 214.6939500000002,
+  "event_us": 216.6144053141276
+ },
+ {
+  "role": "ffn_down",
+  "m": 1024,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 50917.43400000001,
+    "grid": [
+     128,
+     4,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 424.3119500000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 424.3119500000001,
+  "event_us": 425.814946492513
+ },
+ {
+  "role": "ffn_down",
+  "m": 2048,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 96349.22199999994,
+    "grid": [
+     256,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 802.9101833333328,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 802.9101833333328,
+  "event_us": 798.8679885864258
+ },
+ {
+  "role": "ffn_down",
+  "m": 4096,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 186663.15500000006,
+    "grid": [
+     512,
+     4,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1555.5262916666672,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1555.5262916666672,
+  "event_us": 1514.0789031982422
+ },
+ {
+  "role": "ffn_down",
+  "m": 8192,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 120,
+    "us": 362205.695,
+    "grid": [
+     256,
+     7,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 3018.380791666667,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 3018.380791666667,
+  "event_us": 3008.917236328125
+ },
+ {
+  "role": "output",
+  "m": 8,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8::Params)",
+    "count": 40,
+    "us": 19600.638,
+    "grid": [
+     8,
+     1024,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 124,
+    "smem": 16896,
+    "us_per_call": 490.01595,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 490.01595,
+  "event_us": 491.17279052734375
+ },
+ {
+  "role": "output",
+  "m": 16,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8::Params)",
+    "count": 40,
+    "us": 19752.069000000003,
+    "grid": [
+     8,
+     1024,
+     1
+    ],
+    "block": [
+     32,
+     1,
+     1
+    ],
+    "regs": 96,
+    "smem": 8704,
+    "us_per_call": 493.8017250000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 493.8017250000001,
+  "event_us": 494.655179977417
+ },
+ {
+  "role": "output",
+  "m": 32,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 40,
+    "us": 20946.486000000004,
+    "grid": [
+     8,
+     128,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 523.6621500000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 523.6621500000001,
+  "event_us": 524.9392032623291
+ },
+ {
+  "role": "output",
+  "m": 64,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 40,
+    "us": 21179.329999999998,
+    "grid": [
+     8,
+     128,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 529.48325,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 529.48325,
+  "event_us": 532.2279930114746
+ },
+ {
+  "role": "output",
+  "m": 128,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 40,
+    "us": 22132.070999999996,
+    "grid": [
+     16,
+     128,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 553.3017749999999,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 553.3017749999999,
+  "event_us": 553.9775848388672
+ },
+ {
+  "role": "output",
+  "m": 512,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 40,
+    "us": 75584.28299999998,
+    "grid": [
+     16,
+     256,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 1889.6070749999994,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1889.6070749999994,
+  "event_us": 1930.251121520996
+ },
+ {
+  "role": "output",
+  "m": 1024,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 40,
+    "us": 149625.49899999998,
+    "grid": [
+     32,
+     256,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 3740.6374749999995,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 3740.6374749999995,
+  "event_us": 3750.9910583496094
+ },
+ {
+  "role": "output",
+  "m": 2048,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 40,
+    "us": 294057.525,
+    "grid": [
+     64,
+     256,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 7351.438125000001,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 7351.438125000001,
+  "event_us": 7369.803619384766
+ },
+ {
+  "role": "output",
+  "m": 4096,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 40,
+    "us": 583677.793,
+    "grid": [
+     128,
+     256,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 14591.944824999999,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 14591.944824999999,
+  "event_us": 14578.500366210938
+ },
+ {
+  "role": "output",
+  "m": 8192,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 40,
+    "us": 1173372.831,
+    "grid": [
+     256,
+     256,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 29334.320775,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 29334.320775,
+  "event_us": 29113.372802734375
+ }
+]

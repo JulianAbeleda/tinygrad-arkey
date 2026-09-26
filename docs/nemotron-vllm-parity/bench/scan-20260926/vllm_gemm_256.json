@@ -1,0 +1,291 @@
+[
+ {
+  "role": "ssm_in",
+  "m": 256,
+  "n": 17504,
+  "k": 3136,
+  "copies": 4,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 80,
+    "us": 13495.948999999999,
+    "grid": [
+     8,
+     35,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 168.69936249999998,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 168.69936249999998,
+  "event_us": 169.27560567855835
+ },
+ {
+  "role": "ssm_out",
+  "m": 256,
+  "n": 3136,
+  "k": 7680,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 180,
+    "us": 13147.124999999996,
+    "grid": [
+     32,
+     4,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 73.03958333333331,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 73.03958333333331,
+  "event_us": 75.217956966824
+ },
+ {
+  "role": "qkv",
+  "m": 256,
+  "n": 7168,
+  "k": 3136,
+  "copies": 9,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8::Params)",
+    "count": 180,
+    "us": 14991.489000000001,
+    "grid": [
+     8,
+     14,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 83.28605,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 83.28605,
+  "event_us": 83.41209093729655
+ },
+ {
+  "role": "attn_q",
+  "m": 256,
+  "n": 5120,
+  "k": 3136,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 260,
+    "us": 11336.454000000003,
+    "grid": [
+     32,
+     5,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 43.601746153846165,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 43.601746153846165,
+  "event_us": 44.099815075214096
+ },
+ {
+  "role": "attn_kv",
+  "m": 256,
+  "n": 1024,
+  "k": 3136,
+  "copies": 63,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x128_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x128_64x3_tn_align8::Params)",
+    "count": 1260,
+    "us": 15145.912999999991,
+    "grid": [
+     16,
+     2,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 12.020565873015865,
+    "per_call": 1.0
+   },
+   {
+    "name": "void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, true, false, false, false>(cublasLt::cublasSplitKParams<float>, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, float const*, float const*, __nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)",
+    "count": 1260,
+    "us": 3086.9549999999626,
+    "grid": [
+     32,
+     16,
+     1
+    ],
+    "block": [
+     32,
+     16,
+     1
+    ],
+    "regs": 42,
+    "smem": 0,
+    "us_per_call": 2.449964285714256,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 14.47053015873012,
+  "event_us": 19.73912375313895
+ },
+ {
+  "role": "attn_o",
+  "m": 256,
+  "n": 3136,
+  "k": 5120,
+  "copies": 13,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x64_32x4_tn_align8::Params)",
+    "count": 260,
+    "us": 14068.150000000007,
+    "grid": [
+     32,
+     2,
+     3
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 230,
+    "smem": 81920,
+    "us_per_call": 54.10826923076926,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 54.10826923076926,
+  "event_us": 56.36049050551195
+ },
+ {
+  "role": "ffn_up",
+  "m": 256,
+  "n": 12544,
+  "k": 3136,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 14185.239999999998,
+    "grid": [
+     32,
+     13,
+     2
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 118.21033333333331,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 118.21033333333331,
+  "event_us": 120.55173714955647
+ },
+ {
+  "role": "ffn_down",
+  "m": 256,
+  "n": 3136,
+  "k": 12544,
+  "copies": 6,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 120,
+    "us": 13218.542999999996,
+    "grid": [
+     32,
+     4,
+     5
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 110.15452499999996,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 110.15452499999996,
+  "event_us": 112.21120357513428
+ },
+ {
+  "role": "output",
+  "m": 256,
+  "n": 131072,
+  "k": 3136,
+  "copies": 2,
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8>(cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x3_tn_align8::Params)",
+    "count": 40,
+    "us": 41287.662,
+    "grid": [
+     32,
+     128,
+     1
+    ],
+    "block": [
+     128,
+     1,
+     1
+    ],
+    "regs": 158,
+    "smem": 73728,
+    "us_per_call": 1032.19155,
+    "per_call": 1.0
+   }
+  ],
+  "gpu_us": 1032.19155,
+  "event_us": 1032.1623802185059
+ }
+]
