@@ -42,6 +42,8 @@ bf16 product-rounding FIXED e72668106 (pm_widen_reduce_products: widened-product
 
 Compile-cache key bug FIXED 829da80a7 (to_program keyed by AST only -> now by the warm-start opt binding); today's routes/scan unaffected (search paths cleared caches per candidate). 8f00e5e01 ldmatrix 32-bit shared addresses. Memory path: same DRAM bytes as cuBLAS, more bytes in flight, yet ours with cuBLAS's exact tile is 83 vs 54 us (ffn_down 64 rows) -> lowering quality gap (2x LDSM/HMMA: B x2 vs cuBLAS x4 pairing, extra ALU, split-K epilogue).
 
+Sibling fusion v1 LANDED 3747f3588 (SIBLING_FUSE=1, default off): same failure set, bit-identical on the 4B, kernels/generate 10692->10184, step -0.3..-1.1%; residual+norm+hi/lo 5->3 kernels. v2 approved: row-per-workgroup lowering (vLLM fused_add_rms_norm style) -> 1 kernel. New-heuristic caf839729 held: isolated norm kernels 3-14x faster but step regressed (B=128 28.83->30.00 ms) -> per-kernel timeline in progress.
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
