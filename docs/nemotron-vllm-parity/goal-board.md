@@ -36,6 +36,8 @@ Move 5 lowering: barrier-per-g-K refuted (median 1.022x, nothing promoted); dens
 
 Mamba replay ring slot-major LANDED 085857264: B=128 step 29.62->28.84 ms (today 30.36->28.84). Remaining non-GEMM wins need scheduler SIBLING-OUTPUT FUSION (multi-output kernels: residual+norm, Mamba conv/dt/pack) -> core-fix agent after the bf16 rounding fix (flag-gated, full suite).
 
+Non-GEMM opt choice: hand heuristic puts LOCAL lanes on the strided row axis (uncoalesced): gated-norm apply E_640/E_2_640 41-49 us at 144 GB/s, group mean-square and block RMSNorm reduces latency-bound -> ~1.3 ms/step at B=128. Sampler agent: coalescing-aware derived opt choice (BEAM reference first).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
