@@ -104,6 +104,30 @@ class TestNemotronHDecode(unittest.TestCase):
   # the flush unrolls one term per ring slot; cover a ring size that is not a power of two
   def test_replay_jit_odd_ring_matches_cached(self): self._replay(jit=True, ring=3)
 
+  def test_flush_reads_the_ring_in_place_with_the_packed_operands_bits(self):
+    # the flush weights each ring column where it reads it; the earlier form built a packed, transposed copy of
+    # x*dt times the weights first: the same products in the same order, so the folded state is bit-identical
+    from tinygrad.llm.nemotron_h_decode import _heads, _ring_weights
+    block, cache, _ = _setup()
+    buffer = mamba_replay_buffers(block, cache["conv"].expand(BATCH, *cache["conv"].shape[1:]),
+                                  cache["state"].expand(BATCH, *cache["state"].shape[1:]), RING)
+    rng = np.random.default_rng(9)
+    for key, scale in (("ring_x", 1.0), ("ring_a", -0.3), ("ring_b", 1.0)):
+      buffer[key].assign(Tensor((rng.standard_normal(buffer[key].shape) * scale).astype(np.float32))).realize()
+    heads = block.config.ssm_heads
+    batch, _, head_dim, ring = buffer["ring_x"].shape
+    for count in (RING, 3):
+      weights, decay = _ring_weights(buffer["ring_a"], count)
+      pack = (buffer["ring_x"] * weights.contiguous().unsqueeze(2)).transpose(-1, -2).reshape(
+        batch, heads, ring * head_dim).cat(decay.reshape(batch, heads, 1), dim=-1).contiguous()
+      b = _heads(buffer["ring_b"], heads)
+      packed = pack[:, :, ring * head_dim:].reshape(batch, heads, 1, 1) * buffer["state"]
+      for j in range(ring):
+        packed = packed + pack[:, :, j * head_dim:(j + 1) * head_dim].reshape(batch, heads, head_dim, 1) * b[:, :, j:j + 1]
+      packed = packed.numpy()
+      got = mamba_replay_flush(block, buffer, count).numpy()
+      np.testing.assert_array_equal(got.view(np.uint32), packed.view(np.uint32))
+
 
 if __name__ == "__main__":
   unittest.main()

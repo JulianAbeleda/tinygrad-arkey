@@ -38,6 +38,16 @@ def _fresh(value: Tensor) -> Tensor:
 ATTENTION_CHUNK = 1024  # nemotron_h_attention's default split-K chunk
 
 
+def scaled_log_normalizer(logits: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor]:
+  """`(logits / temperature, log-sum-exp)` with the normalizer `[rows, 1]` materialized; a token's log probability
+  is `scaled[token] - lse`. The samplers' only form: a trainer that recomputes log probabilities through this function
+  (same rows) gets the sampled values bit for bit. Materialized, the normalizer is computed once per row; left inside
+  `log_softmax`, the scheduler split it into partials and re-reduced them for every one of the row's 131k elements."""
+  scaled = logits / temperature
+  peak = scaled.max(-1, keepdim=True).contiguous()
+  return scaled, (peak + (scaled - peak).exp().sum(-1, keepdim=True).log()).contiguous()
+
+
 class NemotronHBatchSampler:
   def __init__(self, model, batch: int, capacity: int, bias=None, ring: int = 16, prefix_capacity: int | None = None,
                min_bucket: int = 64):
@@ -114,21 +124,27 @@ class NemotronHBatchSampler:
           buffer[key].assign(value.expand(self.batch, *value.shape[1:])).realize()
     return hidden[:, -1:].expand(self.batch, 1, hidden.shape[-1]).contiguous().realize()
 
-  def _logprobs(self, hidden: Tensor, temperature: Tensor) -> Tensor:
+  def _scaled(self, hidden: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor]:
+    """(logits / temperature, their log-sum-exp `[rows, 1]`) over the real vocabulary."""
     # contiguous: the vocab projection reads the whole embedding table; left lazy, every consumer of the logits
-    # (max, sum, argmax, gather) recomputes it
-    # only the real vocabulary: a tile-padded head's extra columns must never be sampled
+    # (max, sum, argmax, gather) recomputes it. Only the real vocabulary: a tile-padded head's extra columns must
+    # never be sampled.
     logits = self.model.output(self.model.output_norm(hidden))[:, 0, :self.model.config.vocab_size]
     logits = (logits.float() + self.bias).contiguous()
-    # contiguous: one log_softmax kernel whose output the sampler's consumers (argmax, gather) and a recompute
-    # (`tail_logprobs`) both read; fused into different consumers it rounds differently
-    return (logits / temperature).log_softmax(-1).contiguous()
+    return scaled_log_normalizer(logits, temperature)
+
+  def _logprobs(self, hidden: Tensor, temperature: Tensor) -> Tensor:
+    """Every token's log probability, `scaled - lse`: the element the sampler reads for its token, bit for bit."""
+    scaled, lse = self._scaled(hidden, temperature)
+    return (scaled - lse).contiguous()
 
   def _sample(self, hidden: Tensor, temperature: Tensor) -> tuple[Tensor, Tensor]:
-    logprobs = self._logprobs(hidden, temperature)
-    gumbel = -(-(Tensor.rand_like(logprobs).maximum(1e-12)).log()).log()
-    token = (logprobs + gumbel).argmax(-1)
-    chosen = logprobs.gather(-1, token.unsqueeze(-1))[:, 0]
+    # Gumbel-max over the scaled logits: the normalizer is the same for a whole row, so it does not move the argmax,
+    # and the full log-probability tensor (B x vocab, written and read back) is never built
+    scaled, lse = self._scaled(hidden, temperature)
+    gumbel = -(-(Tensor.rand_like(scaled).maximum(1e-12)).log()).log()
+    token = (scaled + gumbel).argmax(-1)
+    chosen = scaled.gather(-1, token.unsqueeze(-1))[:, 0] - lse[:, 0]
     return token.cast(dtypes.int32).realize(), chosen.realize()
 
   def first(self, hidden: Tensor, temperature: float = 1.0) -> tuple[Tensor, Tensor]:
@@ -382,7 +398,8 @@ class NemotronHRolloutSampler:
     self.lengths.assign(self.lengths + 1).realize()
     hidden = self.feed["hidden"][:, column:column + 1].contiguous()
     hidden = self._blocks(hidden, self.capture, row, slot, column, bucket, low[0] if low else None)
-    chosen = self._logprobs(hidden, temperature).gather(-1, self.feed["tokens"][:, column:column + 1])
+    scaled, lse = self._scaled(hidden, temperature)
+    chosen = scaled.gather(-1, self.feed["tokens"][:, column:column + 1]) - lse
     self.history["logprobs"][:, column:column + 1].assign(chosen).realize()
 
   def _blocks(self, hidden: Tensor, first: int, row: UOp, slot: UOp, column: UOp, bucket: int,
@@ -411,6 +428,7 @@ class NemotronHRolloutSampler:
     return hidden
 
   _sample, _logprobs = NemotronHBatchSampler._sample, NemotronHBatchSampler._logprobs
+  _scaled = NemotronHBatchSampler._scaled
 
   @staticmethod
   def _stateless(block, hidden: Tensor) -> Tensor:
@@ -776,4 +794,4 @@ class NemotronHRolloutSampler:
     return results
 
 
-__all__ = ["NemotronHBatchSampler", "NemotronHRolloutSampler"]
+__all__ = ["NemotronHBatchSampler", "NemotronHRolloutSampler", "scaled_log_normalizer"]

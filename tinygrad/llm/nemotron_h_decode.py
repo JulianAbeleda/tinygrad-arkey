@@ -204,18 +204,20 @@ def mamba_replay_flush(block, buffer: dict, count) -> Tensor:
   """Fold the first `count` ring slots into the checkpoint state in place, and realize it."""
   heads = block.config.ssm_heads
   weights, decay = _ring_weights(buffer["ring_a"], count)
-  weights = weights.contiguous()
+  # the small per-(sequence, head, slot) weights and exp(L_n), realized once
+  coef = weights.cat(decay.unsqueeze(-1), dim=-1).contiguous()        # (B, heads, ring + 1)
   batch, _, head_dim, ring = buffer["ring_x"].shape
-  # One packed (B, heads, ring*head_dim + 1) operand: decayed x*dt per slot, then exp(L_n).
-  pack = (buffer["ring_x"] * weights.unsqueeze(2)).transpose(-1, -2).reshape(batch, heads, ring * head_dim).cat(
-    decay.reshape(batch, heads, 1), dim=-1).contiguous()
   b = _heads(buffer["ring_b"], heads)                                   # (B, heads, ring, N)
   # The rank-`ring` update is unrolled into `ring` elementwise terms, not a
   # matmul: an assign source containing a reduce keeps a full-state temporary
-  # plus a copy back (`remove_bufferize`), doubling the flush traffic.
-  update = pack[:, :, ring * head_dim:].reshape(batch, heads, 1, 1) * buffer["state"]
+  # plus a copy back (`remove_bufferize`), doubling the flush traffic. Each term
+  # reads its x*dt column straight from the ring and weights it in place: a
+  # packed, transposed copy of the ring (x*dt times the weight, then the decay)
+  # was its own kernel at 21% of DRAM bandwidth, for the same products.
+  update = coef[:, :, ring:].reshape(batch, heads, 1, 1) * buffer["state"]
   for j in range(ring):
-    update = update + pack[:, :, j * head_dim:(j + 1) * head_dim].reshape(batch, heads, head_dim, 1) * b[:, :, j:j + 1]
+    decayed = buffer["ring_x"][:, :, :, j:j + 1] * coef[:, :, j:j + 1].reshape(batch, heads, 1, 1)
+    update = update + decayed * b[:, :, j:j + 1]
   return buffer["state"].assign(update).realize()
 
 
