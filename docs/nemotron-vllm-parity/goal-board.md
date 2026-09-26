@@ -10,6 +10,11 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 3. **10k batched prefill**: find out why it does not work (earlier: 10k at large pieces / B=128 capacity 4096 ran out of
    VRAM) and why prefill is missing the substrate the decode path uses (promoted routes, machine-search kernels),
    then fix it. Current: 10k single-prompt prefill 1.65 s vs vLLM 0.37 s.
+4. **BoltBeam kernels at parity with vLLM's, shape by shape**: finish the interrupted ncu audit of cuBLAS/vLLM kernels
+   on Nemotron shapes (tile, stages, warp layout, stalls) -> a replication spec per shape -> BoltBeam searches toward it.
+   Only head-to-head so far: ssm_in M=4096 BoltBeam 141 TF vs cuBLAS 209 TF (~67%, fda18e7ab); peak ~250 TF.
+   Gate (Julian's per-kernel rule): every emitted kernel matches or beats vLLM's on the same shape. Scripts:
+   bench/spec/ (vncu.sh, vllm_ncu.py, ours_prof.*). Feeds steps 2 and 3.
 
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
