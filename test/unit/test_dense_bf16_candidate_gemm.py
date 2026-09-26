@@ -22,12 +22,19 @@ def test_artifact_is_reproduced_by_the_mint_from_the_checked_in_selection():
 def test_every_set_is_the_promoted_nv_family_with_bf16_operands():
   raw, nv = _raw(), json.loads(NV_ARTIFACT.read_text())
   assert raw["target"] == nv["target"] == NV
-  fixed = ("lane_ownership", "wmma", "pipeline", "dependency_policy", "numerical_mode", "epilogue")
+  from extra.llm_research.runtime_specs import NV_SM120_ASYNC_RING_CAPABILITY
+  fixed = ("lane_ownership", "wmma", "dependency_policy", "numerical_mode", "epilogue")
   for compact in raw["sets"]:
     template, promoted = compact["template"], nv["template"]
     assert template["dtypes"] == {"a":"bf16", "b":"bf16", "accumulator":"fp32", "c":"fp32"}
-    assert template["static_constraints"] == promoted["static_constraints"]
     assert {key:template["schedule"][key] for key in fixed} == {key:promoted["schedule"][key] for key in fixed}
+    if template["schedule"]["pipeline"].get("async_copy"):
+      # cp.async ring family: launch-sized LDS bounded by the async-ring capability row, not the 48 KB static limit
+      assert template["static_constraints"]["max_lds_bytes"] == NV_SM120_ASYNC_RING_CAPABILITY.max_lds_bytes
+      assert template["schedule"]["pipeline"]["epoch_graph"] == promoted["schedule"]["pipeline"]["epoch_graph"]
+      continue
+    assert template["static_constraints"] == promoted["static_constraints"]
+    assert template["schedule"]["pipeline"] == promoted["schedule"]["pipeline"]
     if (template["schedule"]["tile"], template["schedule"]["waves"]) == (promoted["schedule"]["tile"], promoted["schedule"]["waves"]):
       assert template["schedule"] == promoted["schedule"]   # the promoted geometry is reused verbatim
 
