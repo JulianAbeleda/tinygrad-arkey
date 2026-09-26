@@ -12,10 +12,29 @@ state, prefix caching on, RL shape n=8 T=1 logprobs=1):
 | Target | vLLM number |
 |---|---|
 | step @ B=1 | 5.2 ms | 5.5 ms (95% of vLLM speed) | last status before the crash, 12:56 |
-| step @ B=8 | 6.6 ms | 7.1 ms (93%) | commit c736693a2 (P=200 chained, gpu-run time) |
-| step @ B=64 | 13.4 ms | 17.8 ms (75%) | commit c736693a2 (17.6–18.0) |
-| step @ B=128 | 22.3 ms | 30.5 ms (73%) | commit c736693a2 (30.0–31.0) |
+| step @ B=8 | 6.6 ms | 7.58 ms (87%) | exp 80540d370, after b5ef62d16 (P=200 chained, gpu-run time, 3 runs 7.52–7.63; was 7.1 at c736693a2) |
+| step @ B=64 | 13.4 ms | 18.75 ms (71%) | same (3 runs 18.73–18.79; was 17.8) |
+| step @ B=128 | 22.3 ms | 32.03 ms (70%) | same, capacity 1024 (3 runs 32.02–32.04; was 30.5; capacity 4096 OOMs at B=128) |
 | 10k prefill, warm | 0.37 s | **1.65 s** (22%) | commit 4aafc5e7c: piece 1024-2048, SSD scan, hi/lo, one graph per block kind (2.10 s at piece 256; previous code 1.80 s at piece 256, OOM at piece 1024) |
+
+Step times are `NemotronHBatchSampler` (`bench/spec/ours_prof.py`). b5ef62d16 (QMD membars restored before a
+signal, the NaN-race fix) costs +0.5 / +1.0 / +1.5 ms per step at B=8/64/128 (+7/+5/+5%).
+
+Continuously batched `NemotronHRolloutSampler` (the RLOO sampler), step + flush every 16, P=200, 3 runs each within
+0.1 ms: B=8 8.8 ms, B=32 13.3, B=64 21.6 (capacity 4096), B=128 35.2 (capacity 2048). It reads the whole
+generated-key ring every step (no length bucket), hence above the batch sampler.
+
+W8 slot refill (`scratchpad/w8/bench.py`, P=256, 4 waves of groups of 8, forced lognormal lengths median 1.2k,
+cap 4096, mean 1.44k):
+
+| B | fixed batch (runs to its longest) | refill | active lanes, prompts queued / whole run | tok/s vs B/step |
+|---|---|---|---|---|
+| 32 | 1001 tok/s (43% of lane-steps useful) | **1701 tok/s (1.70x)** | 99.1% / 80% | 0.71 |
+| 64 | 1094 tok/s (37%) | **1726 tok/s (1.58x)** | 99.0% / 66% | 0.58 |
+
+Losses against B/step: the final drain (no queue left; a 4-wave run is short, and at B=64 one 4096 rollout ends
+alone) and prompt priming, 0.67 s per 256-token prompt (11 s of 110 s at B=32, 21 s of 211 s at B=64), which is
+far above the 10k prefill rate and is the next lever.
 
 10k prefill history: 92 s → 34 s (886a907ea) → 5.5 s (47ea79db6) → 4.9 s (4d3a90a11) → 2.15 s (11:31 measurement) → 1.65 s (4aafc5e7c).
 
