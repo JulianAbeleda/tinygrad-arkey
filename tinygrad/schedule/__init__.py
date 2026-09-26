@@ -4,7 +4,7 @@ from collections import deque
 from tinygrad.uop.ops import (DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, UOp, Ops, UOpMetaClass, track_rewrites,
                               graph_rewrite, gate_kernel_sink, KernelInfo, memory_semantic_owner)
 from tinygrad.uop.spec import type_verify, spec_tensor
-from tinygrad.helpers import DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition, getenv
+from tinygrad.helpers import PCONTIG, SIBLING_FUSE, DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition, getenv
 
 # **** schedule linearizer
 
@@ -681,7 +681,8 @@ schedule_cache: dict[bytes, UOp] = {}
 def lower_sink_to_linear(function:UOp) -> UOp|None:
   st = time.perf_counter()
   if isinstance(function.arg, KernelInfo): return None
-  cache_key = function.key
+  # rangeify knobs change the kernel graph, so they are part of the key (default settings keep the bare key)
+  cache_key = function.key + (f"|P{PCONTIG.value}|S{SIBLING_FUSE.value}".encode() if PCONTIG.value or SIBLING_FUSE.value else b"")
   if not SCACHE or (sc_ret:=schedule_cache.get(cache_key, None)) is None:
     if SPEC: type_verify(function, spec_tensor)
     # support recursive CALLs

@@ -5,7 +5,7 @@ from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _
 from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, memory_semantic_owner, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, RMSNormSpec, ReduceOutputSpec, NativeRowSoftmaxRepackSpec, composite_reduce_provenance
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
-from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
+from tinygrad.helpers import PCONTIG, SIBLING_FUSE, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
 from tinygrad.codegen.simplify import pm_flatten_range, pm_reduce_simplify
 from tinygrad.codegen.opt import Opt, KernelOptError
 from tinygrad.schedule.indexing import run_rangeify, BufferizeOpts, IndexingContext, apply_movement_op
@@ -1637,6 +1637,8 @@ def split_store(x:UOp) -> UOp|None:
   # SINK requires all buffers on the same device, but COPY/SLICE are cross-device or special hardware ops
   if ret.op is Ops.STORE: stored = ret.src[1]
   elif ret.op is Ops.END and ret.src[0].op is Ops.STORE: stored = ret.src[0].src[1]
+  # sibling-fused outputs (schedule/sibling.py): one END over a GROUP of stores
+  elif ret.op is Ops.END and ret.src[0].op is Ops.GROUP and all(s.op is Ops.STORE for s in ret.src[0].src): stored = ret.src[0].src[0].src[1]
   else: raise RuntimeError(f"unknown kernel type {ret.op}")
   attention_composites = dedup([u.arg[0] for u in ret.toposort()
     if u.op is Ops.REDUCE and isinstance(u.arg, tuple) and isinstance(u.arg[0], CompositeReduce) and u.arg[0].attention_context is not None])
@@ -1753,6 +1755,9 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   # bufferize -> store
   lunique_start: int = max([-1]+[x.arg for x in tsink.toposort() if x.op is Ops.LUNIQUE]) + 1
   tsink = graph_rewrite(tsink, pm_add_buffers+pm_add_range_tags, ctx=itertools.count(lunique_start), bottom_up=True, name="stage to store")
+  if SIBLING_FUSE:
+    from tinygrad.schedule.sibling import fuse_siblings
+    tsink, _ = fuse_siblings(tsink)
   tsink = graph_rewrite(tsink, split_kernels, bottom_up=True, name="split kernels")
 
   # WAR deps: if kernel U reads buffer S, and S is also written by another kernel, S's write must wait for U to finish

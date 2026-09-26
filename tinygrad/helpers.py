@@ -265,6 +265,7 @@ SPEC = ContextVar("SPEC", 1)
 # TODO: disable by default due to speed
 CHECK_OOB = ContextVar("CHECK_OOB", 0)
 PCONTIG = ContextVar("PCONTIG", 0)  # partial contiguous in rangeify
+SIBLING_FUSE = ContextVar("SIBLING_FUSE", 0)  # independent stores over the same output ranges share a kernel (schedule/sibling.py)
 DEBUG_RANGEIFY = ContextVar("DEBUG_RANGEIFY", 0)
 # set to 1, this uses tuplize in the linearizer sort order
 TUPLE_ORDER = ContextVar("TUPLE_ORDER", 1)
