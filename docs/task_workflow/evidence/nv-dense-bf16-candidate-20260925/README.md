@@ -54,3 +54,12 @@ Winners of the derived-space climbs at 2048 rows (`docs/nemotron-vllm-parity/ben
 one ring launch per 1024-token piece instead of 4x512 sync2 chunks. Control (today's chunked route, rotated weights, us):
 ssm_in 2129, ssm_out 876, attn_q 595, attn_kv 157, attn_o 612, ffn_up 1334, ffn_down 1311. `gate-v5-prefill-2048.json`:
 7/7 bit-exact vs the safe TC path, <= 1.7e-5 vs the oracle; medians 1208/624/415/116/429/913/982.
+
+## Prefill parity gate (explicit bounds), 2026-09-26
+`extra/llm_research/prefill/nemotron_prefill_parity_gate.py` (hidden <= 2e-3, kv <= 1.5e-2, mamba <= 1e-2 vs
+model.prefix; pad invariance and zero rows past the prompt, bit for bit; exits 1 on breach). 8 lengths 255..3000, both
+route tables pass (`prefill-parity-gate-20260926.log`: 7384aa0bf chunked 512-row routes vs 23ea7e291 2048-row routes).
+The earlier n=1000 hidden 3.03e-4 -> 5.02e-4 was one prompt draw: the 512-row routes for attn_o/attn_q/ffn_down
+(split-K 2) and ssm_out (split-K 3) reassociate K; the 2048-row routes are unsplit (the safe-TC order). Across 8
+lengths the two tables are equal at 4, new higher at 600/1500 (2.4e-4 vs 1.2e-4, 2.6e-4 vs 1.9e-4), lower at 1024
+(2.8e-4 vs 3.3e-4): same band, no systematic drift. The error grows with length (8.4e-4 at 3000) under both.
