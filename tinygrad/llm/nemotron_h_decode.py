@@ -139,7 +139,9 @@ def mamba_replay_buffers(block, conv: Tensor, state: Tensor, ring: int) -> dict:
   batch, heads, head_dim, width = state.shape
   def fresh(value: Tensor) -> Tensor: return Tensor.empty(*value.shape, dtype=value.dtype).assign(value).realize()
   return {"conv": fresh(conv), "state": fresh(state),
-          "ring_x": fresh(Tensor.zeros(batch, heads, head_dim, ring)),  # ring last: flat rows
+          # slot-major: a step writes one contiguous (head_dim) row per head; slot-last made that write a
+          # stride-`ring` scatter (16x the traffic, 40 us of a 1.3 ms Mamba step at B=128)
+          "ring_x": fresh(Tensor.zeros(batch, heads, ring, head_dim)),
           "ring_a": fresh(Tensor.zeros(batch, heads, ring)),
           "ring_b": fresh(Tensor.zeros(batch, cfg.ssm_groups, ring, width))}
 
@@ -176,10 +178,7 @@ def mamba_replay_step(block, hidden: Tensor, buffer: dict, slot) -> Tensor:
   coef = (weights * bc).cat(_heads((b * c).sum(-1, keepdim=True), heads), checkpoint_decay.unsqueeze(-1),
                             dim=-1).contiguous()                        # (B, heads, ring + 2)
   ring = bc.shape[-1]
-  rows = batch * heads * head_dim
-  recent = (buffer["ring_x"].reshape(rows, ring) *
-            coef[:, :, :ring].reshape(batch, heads, 1, ring).expand(batch, heads, head_dim, ring).reshape(rows, ring))
-  recent = recent.sum(-1).reshape(batch, heads, head_dim)
+  recent = (buffer["ring_x"] * coef[:, :, :ring].reshape(batch, heads, ring, 1)).sum(2)  # (B, heads, head_dim)
   current = x_dt * coef[:, :, ring:ring + 1]
   checkpoint_decay = coef[:, :, ring + 1]
   # Realized before the gated norm: fused, the ring sum is recomputed inside the
@@ -187,7 +186,7 @@ def mamba_replay_step(block, hidden: Tensor, buffer: dict, slot) -> Tensor:
   y = (_readout(buffer["state"], _heads(c, heads)) * checkpoint_decay.unsqueeze(-1) + recent + current).contiguous()
   out = _block_output(block, hidden, normalized, gate, x, y)
   buffer["conv"].assign(new_tail.contiguous())
-  buffer["ring_x"][:, :, :, slot:slot + 1].assign(x_dt.reshape(batch, heads, head_dim, 1))
+  buffer["ring_x"][:, :, slot:slot + 1].assign(x_dt.reshape(batch, heads, 1, head_dim))
   buffer["ring_a"][:, :, slot:slot + 1].assign(log_decay.reshape(batch, heads, 1))
   buffer["ring_b"][:, :, slot:slot + 1].assign(b.reshape(batch, cfg.ssm_groups, 1, cfg.ssm_state))
   return out
@@ -206,7 +205,7 @@ def mamba_replay_flush(block, buffer: dict, count) -> Tensor:
   weights, decay = _ring_weights(buffer["ring_a"], count)
   # the small per-(sequence, head, slot) weights and exp(L_n), realized once
   coef = weights.cat(decay.unsqueeze(-1), dim=-1).contiguous()        # (B, heads, ring + 1)
-  batch, _, head_dim, ring = buffer["ring_x"].shape
+  batch, _, ring, head_dim = buffer["ring_x"].shape
   b = _heads(buffer["ring_b"], heads)                                   # (B, heads, ring, N)
   # The rank-`ring` update is unrolled into `ring` elementwise terms, not a
   # matmul: an assign source containing a reduce keeps a full-state temporary
@@ -216,7 +215,8 @@ def mamba_replay_flush(block, buffer: dict, count) -> Tensor:
   # was its own kernel at 21% of DRAM bandwidth, for the same products.
   update = coef[:, :, ring:].reshape(batch, heads, 1, 1) * buffer["state"]
   for j in range(ring):
-    decayed = buffer["ring_x"][:, :, :, j:j + 1] * coef[:, :, j:j + 1].reshape(batch, heads, 1, 1)
+    column = buffer["ring_x"][:, :, j].reshape(batch, heads, head_dim, 1)
+    decayed = column * coef[:, :, j:j + 1].reshape(batch, heads, 1, 1)
     update = update + decayed * b[:, :, j:j + 1]
   return buffer["state"].assign(update).realize()
 

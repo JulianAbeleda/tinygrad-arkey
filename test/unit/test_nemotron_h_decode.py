@@ -115,10 +115,12 @@ class TestNemotronHDecode(unittest.TestCase):
     for key, scale in (("ring_x", 1.0), ("ring_a", -0.3), ("ring_b", 1.0)):
       buffer[key].assign(Tensor((rng.standard_normal(buffer[key].shape) * scale).astype(np.float32))).realize()
     heads = block.config.ssm_heads
-    batch, _, head_dim, ring = buffer["ring_x"].shape
+    # slot-major ring: a step's x*dt write is one contiguous row per head, not a stride-`ring` scatter
+    self.assertEqual(buffer["ring_x"].shape[2:], (RING, block.config.ssm_inner // heads))
+    batch, _, ring, head_dim = buffer["ring_x"].shape
     for count in (RING, 3):
       weights, decay = _ring_weights(buffer["ring_a"], count)
-      pack = (buffer["ring_x"] * weights.contiguous().unsqueeze(2)).transpose(-1, -2).reshape(
+      pack = (buffer["ring_x"] * weights.contiguous().unsqueeze(-1)).reshape(
         batch, heads, ring * head_dim).cat(decay.reshape(batch, heads, 1), dim=-1).contiguous()
       b = _heads(buffer["ring_b"], heads)
       packed = pack[:, :, ring * head_dim:].reshape(batch, heads, 1, 1) * buffer["state"]
