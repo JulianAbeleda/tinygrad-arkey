@@ -248,6 +248,26 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
         want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
         np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
 
+  def test_sampled_log_probabilities_are_scaled_logit_minus_one_normalizer(self):
+    from tinygrad.llm.nemotron_h_sampler import scaled_log_normalizer
+    rng = np.random.default_rng(11)
+    logits = rng.standard_normal((5, 64)).astype(np.float32) * 4
+    scaled, lse = scaled_log_normalizer(Tensor(logits), Tensor([0.7]))
+    self.assertEqual(lse.shape, (5, 1))
+    reference = np.log(np.exp(logits.astype(np.float64) / 0.7).sum(-1, keepdims=True))
+    np.testing.assert_allclose(lse.numpy(), reference, rtol=1e-6, atol=1e-6)
+    # the sampler's token and chosen value, and the full log probabilities a recompute reads, agree bit for bit
+    sampler = NemotronHRolloutSampler(tiny_model(), batch=5, capacity=8, prefix_capacity=8, prompts=1, rows=5, ring=2,
+                                      window=2, capture=3)
+    hidden = Tensor(rng.standard_normal((5, 1, 32)).astype(np.float32))
+    temperature = Tensor([0.7])
+    token, chosen = sampler._sample(hidden, temperature)
+    full = sampler._logprobs(hidden, temperature).numpy()
+    token, chosen = token.numpy(), chosen.numpy().astype(np.float32)
+    self.assertEqual(token.dtype, np.int32)
+    self.assertTrue(((0 <= token) & (token < 64)).all())
+    np.testing.assert_array_equal(full[np.arange(5), token].view(np.uint32), chosen.view(np.uint32))
+
   def test_replay_through_attention_needs_ring_rows(self):
     model = tiny_model()  # block 2 is attention
     sampler = NemotronHRolloutSampler(model, batch=2, capacity=8, prefix_capacity=8, prompts=1, rows=2, ring=2,
