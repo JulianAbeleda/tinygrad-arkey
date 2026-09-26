@@ -3,6 +3,14 @@
 Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16 for DayCare's RLOO on Countdown
 (`~/DayCare/research/rloo-llama-countdown.md`), and a pass/fail answer on its R5 gate. Parity numbers: `README.md`.
 
+## Definition of done (Julian, 2026-09-25 evening)
+1. Finish phase 1 (RLOO R4-R7) and the v2 learning-rate run.
+2. **Near parity with vLLM for training**: RL sampling throughput at RL batch sizes (decode B=32-128 now ~70% of vLLM,
+   batch 1-8 ~87-95%; prefill 22%).
+3. **10k batched prefill**: find out why it does not work (earlier: 10k at large pieces / B=128 capacity 4096 ran out of
+   VRAM) and why prefill is missing the substrate the decode path uses (promoted routes, machine-search kernels),
+   then fix it. Current: 10k single-prompt prefill 1.65 s vs vLLM 0.37 s.
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
