@@ -28,11 +28,11 @@ Continuously batched `NemotronHRolloutSampler` (the RLOO sampler), step + flush 
 | 8 (4096) | 8.1 ms | 8.3 | 8.8 |
 | 32 (4096) | 12.0 | 12.5 | 13.3 |
 | 64 (4096) | 18.9 | 19.8 | 21.6 |
-| 128 (2048) | 33.0 | OOM | - |
+| 128 (2048) | 33.0 | 35.5 | 35.3 |
 
-Each (bucket, wrap) step graph holds its own intermediate buffers: a run that meets every bucket captures 13
-graphs, which fits at B=32 and not at B=64 when all are warmed up front (at B=128 a second graph already OOMs).
-Open: share the graphs' intermediates, or fewer buckets (`min_bucket=512`: 7 graphs).
+The (bucket, wrap) step graphs share one pool of intermediate arenas (7cc433d27, `shared_arenas`): all 13 warm at
+B=64 capacity 4096 in a 1.24 GB pool (mem_used 20.1 -> 21.3 GB), 11 at B=128 capacity 2048 in 1.71 GB. B=128 at
+capacity 4096 does not fit its per-lane state (about 30 GB before any graph).
 
 Priming a prompt into a rollout slot (caae90e1e: one padded tail piece, reset and slot copy as graphs), 6 prompts
 each after capture: 256 tokens 46 ms (was ~670), 1001 tokens 160-170 ms, 2050 tokens 340-360 ms.
@@ -44,7 +44,7 @@ cap 4096, mean 1.44k):
 | B | fixed batch (runs to its longest) | refill | active lanes, prompts queued / whole run | tok/s vs B/step |
 |---|---|---|---|---|
 | 32 | 1001 tok/s (43% of lane-steps useful) | **1701 tok/s (1.70x)**; with buckets and graph priming, all graphs warm: **1876 (1.87x)** | 99.1% / 80% | 0.71; 0.78 |
-| 64 | 1094 tok/s (37%) | **1726 tok/s (1.58x)** | 99.0% / 66% | 0.58 |
+| 64 | 1094 tok/s (37%) | **1726 tok/s (1.58x)**; with buckets, shared arenas, all graphs warm: **1922 (1.76x)** | 99.0% / 66% | 0.58; 0.65 |
 
 With caae90e1e, priming 16 prompts takes 0.66 s of the 99 s run (was 11 s). Without warming the 13 step graphs
 first, the run pays their capture and compile (1360 tok/s), once per process. Losses against B/step: the final drain (no queue left; a 4-wave run is short, and at B=64 one 4096 rollout ends
