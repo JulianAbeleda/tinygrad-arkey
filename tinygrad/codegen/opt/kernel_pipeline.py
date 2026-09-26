@@ -96,8 +96,14 @@ class KernelStage1PipelinePlan:
   # Fragments leave LDS as warp-cooperative native matrix loads (ldmatrix-class, Renderer.native_fragment_x2/x4)
   # instead of one scalar load per fragment element (kernel_lds.derive_matrix_fragment_layout).
   matrix_fragments: bool = False
+  # Async rings only: K tiles consumed per wait+barrier (build_async_stage_uop_graph). A group of g tiles of width tk
+  # keeps tk-wide copies and slots but synchronizes once per g*tk of K; needs buffer_count >= 2*g.
+  barrier_group: int = 1
 
   def __post_init__(self) -> None:
+    if not isinstance(self.barrier_group, int) or isinstance(self.barrier_group, bool) or self.barrier_group < 1 or \
+       (self.barrier_group > 1 and (not self.async_copy or self.buffer_count < 2*self.barrier_group)):
+      raise ValueError("barrier_group > 1 needs an async ring of at least 2*barrier_group stages")
     if not isinstance(self.async_copy, bool): raise ValueError("async_copy must be a bool")
     if not isinstance(self.matrix_fragments, bool): raise ValueError("matrix_fragments must be a bool")
     allowed = tuple(range(2, 9)) if self.async_copy else (1, 2)
@@ -290,26 +296,37 @@ def build_async_stage_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
   ``produce(epoch, slot, after)`` returns the copies' GROUP; ``commit(*deps)`` / ``wait_prior(n, *deps)`` return
   the ordered group-commit / wait statements. The loop covers every K tile, so there is no drain MMA."""
   if not plan.async_copy: raise ValueError("async stage graph requires an async_copy plan")
-  stages = plan.buffer_count
-  if k_tiles < 1: raise ValueError("k_tiles must be positive")
+  stages, group = plan.buffer_count, plan.barrier_group
+  if k_tiles < 1 or k_tiles % group: raise ValueError("k_tiles must be a positive multiple of the barrier group")
   accumulator_vec_dtype = accumulator_dtype.vec(accumulator_lane_width)
   zero = UOp.const(dtypes.weakint, 0)
   pending: UOp|None = None
   prologue_groups = []
-  for e in range(stages - 1):
+  # One commit group per tile throughout, so "tile t landed" is always "at most (issued - t - 1) groups pending".
+  for e in range(stages - group):
     copies = produce(UOp.const(dtypes.weakint, e % k_tiles), UOp.const(dtypes.weakint, e), pending)
     pending = commit(copies)
     prologue_groups.append(pending)
   assert pending is not None
   prologue = KernelStage1ProducerStage(zero, zero, (prologue_groups[0], prologue_groups[-1]), pending)
-  rng = UOp.range(k_tiles, body_range_id, AxisType.REDUCE)
-  ready = UOp.barrier(wait_prior(stages - 2, pending, rng))
-  # Issue the next tile's copies first, so they overlap this tile's MMAs; the fragment reads are ordered after them
-  # (they target a different slot, so this adds no data dependency, only issue order).
-  ahead = rng + (stages - 1)
-  copies = produce(ahead % k_tiles, ahead % stages, ready)
-  committed = commit(copies)
-  body_frag = fragments(rng, rng % stages, committed)
+  rng = UOp.range(k_tiles // group, body_range_id, AxisType.REDUCE)
+  # Iteration j consumes tiles j*g..j*g+g-1; (stages-g) + g*j groups were issued before its wait, so at most
+  # stages-2g may stay pending.  The barrier also retires the g slots read in iteration j-1, which the g copies issued
+  # next (tiles j*g+stages-g ..) refill -- they are issued first, so they overlap this group's MMAs.
+  ready = UOp.barrier(wait_prior(stages - 2*group, pending, rng))
+  first = rng if group == 1 else rng * group
+  committed = ready
+  copy_groups = []
+  for i in range(group):
+    ahead = first + (stages - group + i)
+    copies = produce(ahead % k_tiles, ahead % stages, committed)
+    committed = commit(copies)
+    copy_groups.append(copies)
+  epochs = [first + i if i else first for i in range(group)]
+  tiles = [fragments(e, e % stages, committed) for e in epochs]
+  body_frag = tiles[0] if group == 1 else \
+    KernelStage1FragmentStage(first, first % stages, committed, tuple(f for t in tiles for f in t.fragments))
+  copies = copy_groups[0] if group == 1 else UOp.group(*copy_groups)
   reg = UOp.placeholder((accumulator_elements,), accumulator_dtype, accumulator_id, addrspace=AddrSpace.REG)
   init = reg.index(zero, dtype=accumulator_dtype.vec(accumulator_elements)).store(UOp.const(accumulator_dtype.vec(accumulator_elements), 0))
   elem, arg = accumulator_contract

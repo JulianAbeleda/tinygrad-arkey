@@ -194,3 +194,13 @@ def test_dense_mint_decodes_a_ring_selection_row():
   assert ring.pipeline_plan.async_copy and ring.pipeline_plan.matrix_fragments and ring.pipeline_plan.buffer_count == 4
   assert all(w.xor_swizzle and w.stride_bytes == 128 for w in ring.geometry.lds_windows) and ring.active_lds_bytes == 4 * 192 * 128
   assert not sync.pipeline_plan.async_copy and not sync.pipeline_plan.matrix_fragments and sync.pipeline_plan.buffer_count == 2
+
+
+def test_barrier_group_is_emitted_only_above_one():
+  from extra.llm_research.runtime_specs import NV_SM120_ASYNC_RING_CAPABILITY
+  geometry = dict(_seed_geometry(), buffer_count=4, async_copy=True, fragment_load="matrix", swizzle="xor_b128")
+  one = derive_target_schedule(NV_SM120_ASYNC_RING_CAPABILITY, dict(geometry, barrier_group=1), _seed_shape())
+  assert "barrier_group" not in one["schedule"]["pipeline"]
+  assert _canonical_json(one) == _canonical_json(derive_target_schedule(NV_SM120_ASYNC_RING_CAPABILITY, geometry, _seed_shape()))
+  two = derive_target_schedule(NV_SM120_ASYNC_RING_CAPABILITY, dict(geometry, barrier_group=2), _seed_shape())
+  assert two["schedule"]["pipeline"]["barrier_group"] == 2

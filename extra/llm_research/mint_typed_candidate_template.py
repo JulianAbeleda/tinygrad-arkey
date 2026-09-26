@@ -97,9 +97,9 @@ def mint_dense_bf16(selection: list[dict] | None = None) -> dict:
                 "buffer_count": base["schedule"]["pipeline"]["buffer_count"], "stage_count": base["schedule"]["pipeline"]["stage_count"]}
     capability = NV_SM120_TWO_BUFFER_STAGE1_CAPABILITY
     if pipe:
-      stages, async_copy, matrix, swizzle = pipe
+      stages, async_copy, matrix, swizzle, *group = pipe
       geometry.update(buffer_count=stages, async_copy=async_copy, fragment_load="matrix" if matrix else "scalar",
-                      swizzle="xor_b128" if swizzle else "none")
+                      swizzle="xor_b128" if swizzle else "none", barrier_group=group[0] if group else 1)
       capability = NV_SM120_ASYNC_RING_CAPABILITY
     first = rows[0]
     derived = derive_target_schedule(capability, geometry,

@@ -259,7 +259,8 @@ def candidate_registry(candidate_set: CandidateSet) -> CandidateRegistry:
     pipeline = KernelStage1PipelinePlan(schedule["pipeline"]["buffer_count"], geometry.lds_bytes,
                                         schedule["pipeline"]["stage_count"],
                                         async_copy=schedule["pipeline"].get("async_copy", False) is True,
-                                        matrix_fragments=schedule["pipeline"].get("fragment_load", "scalar") == "matrix")
+                                        matrix_fragments=schedule["pipeline"].get("fragment_load", "scalar") == "matrix",
+                                        barrier_group=schedule["pipeline"].get("barrier_group", 1))
     if schedule["pipeline"].get("fragment_load", "scalar") not in ("scalar", "matrix"):
       raise ValueError("unknown candidate fragment load")
     if pipeline.active_lds_bytes > entry.payload["static_constraints"]["max_lds_bytes"]:

@@ -36,7 +36,7 @@ from tinygrad.dtype import dtypes
 from extra.llm_research.runtime_specs import FullKernelCapability
 
 _GEOMETRY_KEYS = {"tile", "waves", "buffer_count", "stage_count"}
-_OPTIONAL_GEOMETRY_KEYS = ("async_copy", "fragment_load", "swizzle")
+_OPTIONAL_GEOMETRY_KEYS = ("async_copy", "fragment_load", "swizzle", "barrier_group")
 _TILE_KEYS = {"m", "n", "k"}
 _WAVES_KEYS = {"m", "n"}
 _SHAPE_KEYS = {"m", "n", "k", "dtypes"}
@@ -79,7 +79,8 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
   options = {key: geometry[key] for key in _OPTIONAL_GEOMETRY_KEYS if key in geometry}
   geometry = {key: value for key, value in geometry.items() if key not in _OPTIONAL_GEOMETRY_KEYS}
   if options.get("async_copy", False) not in (True, False) or options.get("fragment_load", "scalar") not in ("scalar", "matrix") or \
-     options.get("swizzle", "none") not in ("none", "xor_b128"):
+     options.get("swizzle", "none") not in ("none", "xor_b128") or \
+     not isinstance(options.get("barrier_group", 1), int) or options.get("barrier_group", 1) < 1:
     raise ValueError(f"geometry pipeline options are invalid: {options}")
   _strict_keys(geometry, _GEOMETRY_KEYS, "geometry")
   _strict_keys(geometry["tile"], _TILE_KEYS, "geometry.tile")
@@ -138,6 +139,7 @@ def derive_target_schedule(row: FullKernelCapability, geometry: dict[str, Any],
   if swizzled: schedule["lds"]["swizzle"] = "xor_b128"
   if options.get("async_copy", False): schedule["pipeline"]["async_copy"] = True
   if options.get("fragment_load", "scalar") == "matrix": schedule["pipeline"]["fragment_load"] = "matrix"
+  if options.get("barrier_group", 1) > 1: schedule["pipeline"]["barrier_group"] = options["barrier_group"]
   static_constraints = {"max_lds_bytes": row.max_lds_bytes,
                         "max_vgpr_per_thread": row.max_vgpr_per_thread,
                         "allow_spill": row.allow_spill}

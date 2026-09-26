@@ -63,3 +63,11 @@ The earlier n=1000 hidden 3.03e-4 -> 5.02e-4 was one prompt draw: the 512-row ro
 (split-K 2) and ssm_out (split-K 3) reassociate K; the 2048-row routes are unsplit (the safe-TC order). Across 8
 lengths the two tables are equal at 4, new higher at 600/1500 (2.4e-4 vs 1.2e-4, 2.6e-4 vs 1.9e-4), lower at 1024
 (2.8e-4 vs 3.3e-4): same band, no systematic drift. The error grows with length (8.4e-4 at 3000) under both.
+
+## Move 5 prototype 1: one barrier per g K tiles (barrier_group), 2026-09-26 -- refuted as a general lever
+`barrier-group-prototype.jsonl`: every promoted ring route re-measured with g = 2..4 (stages 4..8, same tile) vs g = 1,
+rotated weights, one process per shape. Best-g / g=1 per shape: median 1.022, min 0.956 (attn_kv 64 rows); 2-4% wins
+only at attn_kv 64/128, ssm_in 128, attn_o/ssm_out 2048, attn_q 64 -- at the edge of run-to-run noise. The scan's
+"barrier" stall bucket is the wait for the tile's copies to land (issued by the same warps), not the barrier count:
+halving barriers does not shorten it. Kept as a lowering/search axis (gate `async-copy-barrier-group-gate.json`,
+18/18 bit-exact incl. g = 2, 3, bf16/fp16); nothing promoted.

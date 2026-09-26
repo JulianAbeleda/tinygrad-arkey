@@ -637,7 +637,8 @@ class Scheduler:
                   return KernelStage1FragmentStage(epoch,slot,ready,tuple(substeps))
                 def _wmma(stage,acc,_subtile):
                   chain=acc
-                  for substep in range(factors.k_substeps):
+                  # a barrier group consumes several K tiles per stage: every fragment pair is one K16 substep
+                  for substep in range(len(stage.fragments)//2):
                     chain=UOp(Ops.WMMA,tc.dtype_out.vec(tc.elements_per_thread[2]),
                       (stage.fragments[2*substep],stage.fragments[2*substep+1],chain),wmma_arg,tag=("pipeline_k_substep",substep))
                   return chain

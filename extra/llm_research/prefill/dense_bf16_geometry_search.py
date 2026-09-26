@@ -98,13 +98,15 @@ def _context(geom, pipe):
   from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
   from tinygrad.llm.prefill_candidate_runtime import KernelLDSWindow, KernelTileGeometry, KernelCandidateContext
   tm, tn, tk, wm, wn = geom
-  stages, async_copy, matrix, swizzle = pipe
+  # pipe = (stages, async_copy, matrix_fragments, xor_swizzle[, barrier_group]); a 4-tuple is barrier group 1
+  stages, async_copy, matrix, swizzle, *group = pipe
   stride = tk * 2 + (0 if swizzle else 16)
   geometry = KernelTileGeometry((tm, tn, tk), (wm, wn), wm * wn * 32, 32,
     (KernelLDSWindow("A", 0, tm * stride, stride, xor_swizzle=swizzle),
      KernelLDSWindow("B", tm * stride, (tm + tn) * stride, stride, xor_swizzle=swizzle)))
   return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "0" * 64, geometry,
-                                KernelStage1PipelinePlan(stages, geometry.lds_bytes, 1, async_copy=async_copy, matrix_fragments=matrix))
+                                KernelStage1PipelinePlan(stages, geometry.lds_bytes, 1, async_copy=async_copy, matrix_fragments=matrix,
+                                                         barrier_group=group[0] if group else 1))
 
 
 class _Operands:
@@ -167,14 +169,15 @@ def run_config(geom, split, reps: int, rows=ROWS, pipe=SYNC2, roles=None) -> Non
       print(json.dumps(measure(role, _Operands(m, n, k), geom, split, pipe, reps)), flush=True)
 
 
-def run_shape(role: str, m: int, configs, reps: int) -> None:
+def run_shape(role: str, m: int, configs, reps: int, prototype: bool = False) -> None:
   """Shape-major: every config for one exact (role, rows) in this process.  Programs are cached by the
   pre-optimization AST (which does not carry the candidate), so both program caches are cleared per candidate."""
   import tinygrad.codegen as codegen, tinygrad.engine.realize as realize
   n, k = next((n, k) for r, n, k in ROLES if r == role)
   ops = _Operands(m, n, k)
   for geom, split, pipe in configs:
-    if not feasible(geom, split, m, n, k, pipe) or split * m * n * 4 > 2 << 30: continue
+    # --prototype measures lowering axes the derived space does not enumerate yet (the lowering still fails closed)
+    if (not prototype and not feasible(geom, split, m, n, k, pipe)) or split * m * n * 4 > 2 << 30: continue
     codegen.to_program_cache.clear(); realize.runtime_cache.clear()
     print(json.dumps(measure(role, ops, tuple(geom), split, tuple(pipe), reps)), flush=True)
 
@@ -265,6 +268,7 @@ def main() -> int:
   parser.add_argument("--roles", help="comma list of roles (default all)")
   parser.add_argument("--list", action="store_true", help="print the enumerated configs and exit")
   parser.add_argument("--shape", metavar="ROLE:ROWS", help="shape-major: measure the configs given as JSON lines on stdin")
+  parser.add_argument("--prototype", action="store_true", help="with --shape: measure configs outside the derived space")
   parser.add_argument("--climb", action="store_true", help="with --shape: hill-climb the ring family from the stdin seeds")
   args = parser.parse_args()
   rows = tuple(int(x) for x in args.rows.split(",")) if args.rows else LARGE_ROWS if args.large else ROWS
@@ -282,7 +286,7 @@ def main() -> int:
     configs = [json.loads(line) for line in sys.stdin if line.strip()]
     configs = [(tuple(c[0]), c[1], tuple(c[2]) if len(c) > 2 else SYNC2) for c in configs]
     if args.climb: climb_shape(role, int(m), configs, args.reps)
-    else: run_shape(role, int(m), configs, args.reps)
+    else: run_shape(role, int(m), configs, args.reps, prototype=args.prototype)
     return 0
   if args.config:
     geom, split, *pipe = json.loads(args.config)

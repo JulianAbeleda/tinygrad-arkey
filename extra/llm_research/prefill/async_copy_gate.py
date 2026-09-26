@@ -30,7 +30,12 @@ CASES = ((512, 5120, 3136, (128, 128, 32), (4, 2), 3, "bfloat16"), (512, 5120, 3
          (64, 3200, 7680, (64, 64, 64), (2, 2), 6, "bfloat16", "matrix", True),
          (32, 5120, 3136, (32, 64, 32), (1, 2), 5, "bfloat16", "matrix", True),
          (512, 5120, 3136, (128, 128, 32), (4, 2), 3, "half", "matrix", True),
-         (256, 3200, 7680, (64, 64, 32), (2, 2), 2, "bfloat16", "matrix_sync", False))
+         (256, 3200, 7680, (64, 64, 32), (2, 2), 2, "bfloat16", "matrix_sync", False),
+         # barrier groups: g K tiles per wait+barrier (ring of >= 2g stages)
+         (256, 3200, 7680, (64, 64, 32), (2, 2), 4, "bfloat16", "matrix", True, 2),
+         (128, 17536, 3136, (128, 128, 32), (2, 4), 4, "bfloat16", "matrix", True, 2),
+         (64, 3200, 7680, (64, 64, 32), (2, 2), 6, "bfloat16", "matrix", True, 3),
+         (512, 5120, 3136, (128, 128, 32), (4, 2), 4, "half", "matrix", True, 2))
 
 
 def _operands(m, n, k, dtype):
@@ -41,7 +46,7 @@ def _operands(m, n, k, dtype):
 
 def run(case, candidate: bool) -> np.ndarray:
   m, n, k, tile, waves, stages, dtype = case[:7]
-  fragment_load, swizzle = case[7:] if len(case) > 7 else ("scalar", False)
+  fragment_load, swizzle, group = (*case[7:], 1)[:3] if len(case) > 7 else ("scalar", False, 1)
   a, w = _operands(m, n, k, getattr(dtypes, dtype))
   key = pr.warmstart_key({m, n}, k)
   context = None
@@ -51,7 +56,7 @@ def run(case, candidate: bool) -> np.ndarray:
       (KernelLDSWindow("A", 0, tile[0] * stride, stride, xor_swizzle=swizzle),
        KernelLDSWindow("B", tile[0] * stride, (tile[0] + tile[1]) * stride, stride, xor_swizzle=swizzle)))
     plan = KernelStage1PipelinePlan(stages, geometry.lds_bytes, 1, async_copy=fragment_load != "matrix_sync",
-                                    matrix_fragments=fragment_load.startswith("matrix"))
+                                    matrix_fragments=fragment_load.startswith("matrix"), barrier_group=group)
     context = {key: KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "0" * 64, geometry, plan)}
   with pr.warmstart_candidate_state({key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, context):
     return a.dot(w.T, dtype=dtypes.float).realize().numpy()
@@ -70,7 +75,7 @@ def main() -> int:
     subprocess.run([sys.executable, __file__, "--safe-case", str(index), "--dump", str(dump)], check=True)
     safe = np.load(dump)
     row = {"m": case[0], "n": case[1], "k": case[2], "tile": list(case[3]), "waves": list(case[4]), "stages": case[5], "dtype": case[6],
-           "fragment_load": case[7] if len(case) > 7 else "scalar", "xor_swizzle": case[8] if len(case) > 8 else False,
+           "fragment_load": case[7] if len(case) > 7 else "scalar", "xor_swizzle": case[8] if len(case) > 8 else False, "barrier_group": case[9] if len(case) > 9 else 1,
            "finite": bool(np.isfinite(got).all()), "bitexact_vs_safe_tc": bool((got.view(np.uint32) == safe.view(np.uint32)).all()),
            "max_abs_diff": float(np.abs(got - safe).max())}
     rows.append(row); print(json.dumps(row), flush=True)

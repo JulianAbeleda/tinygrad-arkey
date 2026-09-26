@@ -195,3 +195,23 @@ def test_xor_bound_is_integer_only_and_tight():
   assert (r ^ 3).vmin == 0 and (r ^ 3).vmax == 7
   b = UOp.variable("b", 0, 1, dt.bool) if hasattr(UOp, "variable") else None
   if b is not None: assert (b ^ True).vmax in (True, 1)
+
+
+def test_barrier_group_consumes_g_tiles_per_wait_and_barrier():
+  (tm, tn, tk), (wm, wn) = (64, 64, 32), (2, 2)
+  geometry = KernelTileGeometry((tm, tn, tk), (wm, wn), 128, 32,
+    (KernelLDSWindow("A", 0, tm * 64, 64, xor_swizzle=True), KernelLDSWindow("B", tm * 64, (tm + tn) * 64, 64, xor_swizzle=True)))
+  plan = KernelStage1PipelinePlan(4, geometry.lds_bytes, 1, async_copy=True, matrix_fragments=True, barrier_group=2)
+  src, _ = _render(KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "0" * 64, geometry, plan), m=128, n=64 * 17, k=512)
+  prologue, body = _loop_body(src)
+  assert "Ridx" in body[0] and "< 8;" in body[0]                                   # 16 K tiles, 2 per iteration
+  assert sum("cp.async.commit_group" in line for line in prologue) == 2           # stages - g tiles ahead
+  assert sum("cp.async.commit_group" in line for line in body) == 2               # one group per tile
+  assert sum("__syncthreads" in line for line in body[:40]) == 1
+  assert [l.strip() for l in body if "wait_group" in l][0] == 'asm volatile("cp.async.wait_group 0;" ::: "memory");'  # stages - 2g
+  assert sum("__WMMA_" in line and "=" in line for line in body) == 32            # 2 tiles x 2 K16 x 8 subtile MMAs
+
+
+def test_barrier_group_validation():
+  with pytest.raises(ValueError, match="barrier_group"): KernelStage1PipelinePlan(3, 1024, 1, async_copy=True, barrier_group=2)
+  with pytest.raises(ValueError, match="barrier_group"): KernelStage1PipelinePlan(2, 1024, 1, barrier_group=2)
