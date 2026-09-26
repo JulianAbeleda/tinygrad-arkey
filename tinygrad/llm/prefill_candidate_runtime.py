@@ -71,11 +71,14 @@ class KernelLDSWindow:
   base: int
   end: int
   stride_bytes: int
+  # Unpadded rows with 16-byte chunks XOR-permuted per row (kernel_lds.lds_row_element) instead of a padded stride.
+  xor_swizzle: bool = False
 
   def __post_init__(self):
     if self.role not in ("A", "B") or any(not isinstance(value, int) or isinstance(value, bool)
                                            for value in (self.base, self.end, self.stride_bytes)):
       raise ValueError("invalid candidate LDS window")
+    if not isinstance(self.xor_swizzle, bool): raise ValueError("candidate LDS window xor_swizzle must be a bool")
     if self.base < 0 or self.end <= self.base or self.stride_bytes <= 0 or \
        self.base % 16 or self.end % 16 or self.stride_bytes % 16:
       raise ValueError("candidate LDS windows must be non-empty and b128 aligned")
@@ -245,14 +248,20 @@ def candidate_registry(candidate_set: CandidateSet) -> CandidateRegistry:
     shape, target = workload["shape"], workload["target"]
     tile = tuple(schedule["tile"][axis] for axis in ("m", "n", "k"))
     waves = tuple(schedule["waves"][axis] for axis in ("m", "n"))
-    windows = tuple(KernelLDSWindow(role.upper(), *schedule["lds"]["windows"][role], schedule["lds"]["strides"][role])
-                    for role in ("a", "b"))
+    # Optional schedule keys are absent at their defaults, so earlier artifacts keep their identities.
+    swizzle = schedule["lds"].get("swizzle", "none")
+    if swizzle not in ("none", "xor_b128"): raise ValueError(f"unknown candidate LDS swizzle {swizzle!r}")
+    windows = tuple(KernelLDSWindow(role.upper(), *schedule["lds"]["windows"][role], schedule["lds"]["strides"][role],
+                                    xor_swizzle=swizzle == "xor_b128") for role in ("a", "b"))
     geometry = KernelTileGeometry(tile, waves, schedule["threads"], target["wave_size"], windows)
     if any(shape[axis] % tile[index] for index,axis in enumerate(("m", "n", "k"))):
       raise ValueError("candidate workload is not exactly tile divisible")
     pipeline = KernelStage1PipelinePlan(schedule["pipeline"]["buffer_count"], geometry.lds_bytes,
                                         schedule["pipeline"]["stage_count"],
-                                        async_copy=schedule["pipeline"].get("async_copy", False) is True)
+                                        async_copy=schedule["pipeline"].get("async_copy", False) is True,
+                                        matrix_fragments=schedule["pipeline"].get("fragment_load", "scalar") == "matrix")
+    if schedule["pipeline"].get("fragment_load", "scalar") not in ("scalar", "matrix"):
+      raise ValueError("unknown candidate fragment load")
     if pipeline.active_lds_bytes > entry.payload["static_constraints"]["max_lds_bytes"]:
       raise ValueError("candidate active LDS exceeds its declared limit")
     context = KernelCandidateContext(entry.payload["schema_version"], entry.canonical_identity, geometry, pipeline)

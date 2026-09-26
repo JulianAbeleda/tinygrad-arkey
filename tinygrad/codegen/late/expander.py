@@ -4,16 +4,20 @@ from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.helpers import dedup, flatten, all_same, prod, partition
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, AxisType, range_start
 from tinygrad.schedule.rangeify import BufferizeOpts
-from tinygrad.codegen.late.native_fragment import NATIVE_Q4_A_FRAGMENT,native_fragment_x4
+from tinygrad.codegen.late.native_fragment import NATIVE_LDS_MATRIX_FRAGMENT,NATIVE_Q4_A_FRAGMENT,native_fragment_x2,native_fragment_x4
 
 def expand_native_q4_a_fragment(x:UOp):
-  if x.arg!=(NATIVE_Q4_A_FRAGMENT,) or len(x.src)!=2:return None
+  """Scalarize a native LDS fragment marker's (possibly unrolled) row address into one native load per unroll lane."""
+  if len(x.src)!=2 or not isinstance(x.arg,tuple): return None
+  if x.arg==(NATIVE_Q4_A_FRAGMENT,): native,dtype=native_fragment_x4,dtypes.char.vec(16)
+  elif len(x.arg)==2 and x.arg[0]==NATIVE_LDS_MATRIX_FRAGMENT: native,dtype={2:native_fragment_x2,4:native_fragment_x4}[x.arg[1]],x.dtype
+  else: return None
   buf,indices=x.src
-  def carrier(index): return native_fragment_x4(buf.index(index,ptr=True),UOp.const(dtypes.int,0)).bitcast(dtypes.char.vec(16))
+  def carrier(index): return native(buf.index(index,ptr=True),UOp.const(dtypes.int,0)).bitcast(dtype)
   if indices.op is not Ops.UNROLL: return carrier(indices)
   vector=indices.src[0]
   carriers=tuple(carrier(vector.gep(i)) for i in range(vector.dtype.count))
-  return UOp(Ops.UNROLL,x.dtype,(UOp(Ops.VCAT,dtypes.char.vec(16*len(carriers)),carriers),),indices.arg)
+  return UOp(Ops.UNROLL,x.dtype,(UOp(Ops.VCAT,dtype.scalar().vec(dtype.count*len(carriers)),carriers),),indices.arg)
 
 def _expand_arg_to_idx(args:tuple[tuple[int, int], ...], rpk:dict[int, int]) -> int:
   idx, mul = 0, 1

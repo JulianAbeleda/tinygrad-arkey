@@ -610,6 +610,9 @@ class Scheduler:
                 async_copy = getattr(candidate_pipeline, "async_copy", False)
                 if async_copy and self.ren.async_copy_ops is None:
                   raise KernelOptError("async-copy candidate requires the renderer's declared async_copy_ops")
+                if getattr(candidate_pipeline, "matrix_fragments", False) and \
+                   (getattr(self.ren, "native_fragment_x2", None) is None or getattr(self.ren, "native_fragment_x4", None) is None):
+                  raise KernelOptError("matrix-fragment candidate requires the renderer's native_fragment_x2/x4 loads")
                 lds_bytes = candidate_pipeline.active_lds_bytes
                 if self.ren.max_static_local_bytes is not None and lds_bytes > self.ren.max_static_local_bytes:
                   # Beyond the static limit the arena is sized at launch (ProgramInfo.aux -> program shared_mem).
@@ -620,7 +623,7 @@ class Scheduler:
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
                   subtile_m,subtile_n,tuple(contracts),candidate_pipeline,
                   vector_global_loads=self.ren.precontract_vector_global_loads,
-                  async_copy_ops=self.ren.async_copy_ops if async_copy else None)
+                  async_copy_ops=self.ren.async_copy_ops if async_copy else None, lds_bank_dwords=self.ren.lds_bank_dwords)
                 factors=template.factors
                 def _produce(epoch,slot,reuse):
                   p=template.producer(epoch,slot)

@@ -104,3 +104,85 @@ def test_candidate_registry_decodes_async_copy_pipelines():
   (sync,) = candidate_registry(expand_compact_candidate_set(_compact("sync_test", nv["target"], nv["template"],
                                                                      [("r", (512, 512, 512))]), **nv["target"])).admissions
   assert sync.pipeline_plan.async_copy is False and sync.pipeline_plan.buffer_count == 2
+
+
+# --- matrix (ldmatrix) fragment loads and XOR-swizzled LDS windows ---
+
+def _matrix_context(tile, waves, stages, *, swizzle, async_copy=True):
+  (tm, tn, tk), (wm, wn) = tile, waves
+  stride = tk * 2 + (0 if swizzle else 16)
+  geometry = KernelTileGeometry(tile, waves, wm * wn * 32, 32,
+    (KernelLDSWindow("A", 0, tm * stride, stride, xor_swizzle=swizzle),
+     KernelLDSWindow("B", tm * stride, (tm + tn) * stride, stride, xor_swizzle=swizzle)))
+  return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "0" * 64, geometry,
+                                KernelStage1PipelinePlan(stages, geometry.lds_bytes, 1, async_copy=async_copy, matrix_fragments=True))
+
+
+def test_matrix_fragment_layout_is_derived_from_the_descriptor():
+  from tinygrad.codegen.opt.kernel_lds import derive_matrix_fragment_layout
+  tcs = {tc.dtype_in: tc for tc in CUDARenderer(Target.parse("NV:CUDA:sm_120")).tensor_cores if tc.dims == (8, 16, 16) and tc.dtype_out == dtypes.float}
+  for dtype in (dtypes.bfloat16, dtypes.half):
+    a, b = derive_matrix_fragment_layout(tcs[dtype], 0), derive_matrix_fragment_layout(tcs[dtype], 1)
+    assert (a.width, a.select_terms) == (4, ((8, 0), (0, 8)))   # m16n8k16 A: rows +8, then K +8
+    assert (b.width, b.select_terms) == (2, ((0, 8),))          # B: K +8
+  from tinygrad.codegen.opt import tc as tc_mod
+  with pytest.raises(ValueError):   # an fp32 (tf32-style) fragment is not b16 matrices
+    derive_matrix_fragment_layout(next(t for t in tc_mod.get_cuda("sm_120") if t.dtype_in == dtypes.float), 0)
+
+
+@pytest.mark.parametrize("row_bytes", [32, 64, 128, 256])
+def test_xor_swizzle_is_conflict_free_for_eight_row_groups(row_bytes):
+  from tinygrad.codegen.opt.kernel_lds import xor_swizzle_conflict_free
+  window = KernelLDSWindow("A", 0, 64 * row_bytes, row_bytes, xor_swizzle=True)
+  assert xor_swizzle_conflict_free(window, bank_dwords=32)
+
+
+def test_xor_swizzle_is_a_permutation_of_each_row():
+  from tinygrad.codegen.opt.kernel_lds import lds_row_element
+  window = KernelLDSWindow("A", 0, 64 * 64, 64, xor_swizzle=True)
+  for row in range(16):
+    slots = {lds_row_element(window, row, k, 2, bank_dwords=32) for k in range(32)}
+    assert slots == set(range(row * 32, row * 32 + 32))
+
+
+@pytest.mark.parametrize("swizzle", [False, True])
+def test_matrix_fragments_render_one_named_native_load_per_fragment(swizzle):
+  src, _ = _render(_matrix_context((64, 64, 32), (2, 2), 3, swizzle=swizzle), m=128, n=64 * (13 if swizzle else 7), k=512)
+  _, body = _loop_body(src)
+  # warp tile 32x32: 2 A fragments (x4) and 4 B fragments (x2) per K16 substep, 2 substeps; 16 MMAs
+  assert sum("tg_ldmatrix_x4(" in line for line in body) == 4 and sum("tg_ldmatrix_x2(" in line for line in body) == 8
+  assert sum("__WMMA_" in line and "=" in line for line in body) == 16
+  assert not any("nv_bfloat16 val" in line for line in body)   # no scalar LDS fragment element loads
+  assert ("^" in src.split("__launch_bounds__")[1]) == swizzle
+
+
+def test_swizzled_window_needs_the_target_bank_facts(monkeypatch):
+  monkeypatch.setattr(CUDARenderer, "lds_bank_dwords", None)
+  with pytest.raises(Exception, match="lds_bank_dwords"):
+    _render(_matrix_context((64, 64, 32), (2, 2), 3, swizzle=True), m=128, n=64 * 9, k=512)
+
+
+def test_matrix_fragments_need_native_fragment_loads(monkeypatch):
+  monkeypatch.setattr(CUDARenderer, "native_fragment_x4", None)
+  with pytest.raises(Exception, match="native_fragment_x2/x4"):
+    _render(_matrix_context((64, 64, 32), (2, 2), 3, swizzle=False), m=128, n=64 * 11, k=512)
+
+
+def test_candidate_registry_decodes_matrix_fragments_and_swizzle_keys():
+  import json
+  from extra.llm_research.mint_typed_candidate_template import _compact
+  from tinygrad.llm.prefill_candidate_runtime import NV_ARTIFACT, candidate_registry, expand_compact_candidate_set
+  nv = json.loads(NV_ARTIFACT.read_text())
+  template = json.loads(json.dumps(nv["template"]))
+  template["schedule"]["pipeline"].update(buffer_count=4, async_copy=True, fragment_load="matrix")
+  tk = template["schedule"]["tile"]["k"]
+  rows = template["schedule"]["tile"]["m"], template["schedule"]["tile"]["n"]
+  template["schedule"]["lds"].update(swizzle="xor_b128", padding=0, strides={"a": tk * 2, "b": tk * 2},
+                                     windows={"a": [0, rows[0] * tk * 2], "b": [rows[0] * tk * 2, sum(rows) * tk * 2]})
+  template["static_constraints"]["max_lds_bytes"] = 101376
+  (admission,) = candidate_registry(expand_compact_candidate_set(_compact("mx", nv["target"], template, [("r", (512, 512, 512))]),
+                                                                  **nv["target"])).admissions
+  assert admission.pipeline_plan.matrix_fragments and all(w.xor_swizzle for w in admission.geometry.lds_windows)
+  template["schedule"]["pipeline"]["fragment_load"] = "bogus"
+  with pytest.raises(ValueError, match="fragment load"):
+    candidate_registry(expand_compact_candidate_set(_compact("bad", nv["target"], template, [("r", (512, 512, 512))]), **nv["target"]))

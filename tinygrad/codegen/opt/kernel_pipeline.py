@@ -93,9 +93,13 @@ class KernelStage1PipelinePlan:
   # Asynchronous global->LDS copies (cp.async on sm_80+): buffer_count LDS slots form a buffer_count-deep ring
   # filled buffer_count-1 tiles ahead of the consumer (build_async_stage_uop_graph).
   async_copy: bool = False
+  # Fragments leave LDS as warp-cooperative native matrix loads (ldmatrix-class, Renderer.native_fragment_x2/x4)
+  # instead of one scalar load per fragment element (kernel_lds.derive_matrix_fragment_layout).
+  matrix_fragments: bool = False
 
   def __post_init__(self) -> None:
     if not isinstance(self.async_copy, bool): raise ValueError("async_copy must be a bool")
+    if not isinstance(self.matrix_fragments, bool): raise ValueError("matrix_fragments must be a bool")
     allowed = tuple(range(2, 9)) if self.async_copy else (1, 2)
     if not isinstance(self.buffer_count, int) or isinstance(self.buffer_count, bool) or self.buffer_count not in allowed:
       raise ValueError("stage-1 pipeline buffer_count must be 1 or 2" if not self.async_copy else

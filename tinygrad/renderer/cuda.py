@@ -328,6 +328,9 @@ class CUDARenderer(CStyleLanguage):
     wait='asm volatile("cp.async.wait_group {n};" ::: "memory");')
   # Static __shared__ is capped at 48 KB by ptxas; larger arenas are extern __shared__ sized at launch (NVProgram /
   # CUDAProgram shared_mem). sm_120 allows 99 KB (101376 B) of shared memory per block.
+  # Shared memory is 32 banks of 4 bytes on every sm_50+ part (CUDA C Programming Guide, "Shared Memory"). Only the
+  # bank count is declared: lds_bank_cycle_lanes (the AMD-proven store-row rotation) stays undeclared here.
+  lds_bank_dwords = 32
   max_static_local_bytes = 48 * 1024
   max_runtime_local_bytes = 101376
   runtime_local_launch_aux = True
@@ -356,7 +359,9 @@ class CUDARenderer(CStyleLanguage):
   native_fragment_x2 = staticmethod(lambda buffer,index: UOp(Ops.CUSTOMI, dtypes.uint32.vec(2), (buffer,index),
     arg="tg_ldmatrix_x2((const void*)((const char*)({0})+({1})*4))"))
   packed_i8_sub = staticmethod(lambda value,bias: UOp(Ops.CUSTOMI,dtypes.uint32,(value,bias),arg="__vsubss4({0},{1})"))
-  native_fragment_bitcast = staticmethod(lambda value,dtype: UOp(Ops.CUSTOMI,dtype,(value,),arg=f"tg_bitcast<signed_char{dtype.count}>({{0}})"))
+  # Whole-carrier reinterpretation of a native fragment (s8 IMMA and b16 MMA operands alike): never lane-split.
+  def native_fragment_bitcast(self, value, dtype):
+    return UOp(Ops.CUSTOMI,dtype,(value,),arg=f"tg_bitcast<{self.render_vector_dtype(dtype.scalar(), dtype.count)}>({{0}})")
   code_for_op = { **CStyleLanguage.code_for_op,
     Ops.TRUNC: lambda x,dtype: f"htrunc({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"trunc({x})",
     Ops.SIN: lambda x,dtype: f"hsin({x})" if dtype in (dtypes.half, dtypes.bfloat16) else f"sin({x})",

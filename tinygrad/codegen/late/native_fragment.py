@@ -10,6 +10,9 @@ PACKED_I8_SUB = "packed_i8_sub_v1"
 _NATIVE_FRAGMENT_TAG = "native_fragment_carrier_v1"
 NATIVE_FRAGMENT_BITCAST = "native_fragment_bitcast_v1"
 NATIVE_Q4_A_FRAGMENT = "native_q4_a_fragment_v1"
+# A warp-cooperative LDS matrix fragment (ldmatrix-class): ``width`` 8x(16-byte) row matrices, one 32-bit register each
+# per lane, reinterpreted as the tensor-core operand carrier.  Arg: (NATIVE_LDS_MATRIX_FRAGMENT, width).
+NATIVE_LDS_MATRIX_FRAGMENT = "native_lds_matrix_fragment_v1"
 
 @dataclass(frozen=True)
 class PackedFragmentSpec:
@@ -54,6 +57,15 @@ def native_q4_a_fragment(buffer:UOp,index:UOp)->UOp:
     raise TypeError("native Q4 A fragment requires a local address-space pointer")
   if index.dtype.scalar() not in (dtypes.int,dtypes.weakint,dtypes.uint): raise TypeError("native Q4 A fragment index must be integer bytes")
   return UOp(Ops.CUSTOMI,dtypes.char.vec(16),(buffer,index),arg=(NATIVE_Q4_A_FRAGMENT,))
+
+def native_lds_matrix_fragment(buffer:UOp, index:UOp, dtype, width:int) -> UOp:
+  """``width`` (1, 2 or 4) 8-row b128 matrices from LDS starting at this lane's row address ``buffer[index]``, as one
+  ``dtype`` carrier of ``width`` 32-bit registers per lane (lowered by the renderer's native_fragment_x{width})."""
+  if not hasattr(buffer.dtype,"addrspace") or buffer.dtype.addrspace is not AddrSpace.LOCAL:
+    raise TypeError("native LDS matrix fragment requires a local address-space pointer")
+  if width not in (2, 4) or dtype.scalar().itemsize * dtype.count != 4 * width:
+    raise TypeError(f"native LDS matrix fragment of width {width} cannot carry {dtype}")
+  return UOp(Ops.CUSTOMI, dtype, (buffer, index), arg=(NATIVE_LDS_MATRIX_FRAGMENT, width))
 
 def packed_fragment_load(buffer:UOp, index:UOp, spec:PackedFragmentSpec) -> UOp:
   """Load one packed fragment while preserving its cooperative ABI."""
@@ -111,10 +123,12 @@ def _project(x:UOp, value:UOp) -> UOp|None:
 
 def _bitcast(ctx, x:UOp, value:UOp) -> UOp|None:
   width=4 if isinstance(value.arg,str) and "tg_ldmatrix_x4(" in value.arg else 2 if isinstance(value.arg,str) and "tg_ldmatrix_x2(" in value.arg else 0
-  if not width or x.dtype != dtypes.char.vec(width*4): return None
+  if not width or x.dtype.count == 1 or x.dtype.scalar().itemsize * x.dtype.count != width*4: return None
   provider=getattr(ctx,"native_fragment_bitcast",None)
   if provider is None: raise NotImplementedError(f"native fragment bitcasts are unavailable on {type(ctx).__name__}")
-  return provider(value,x.dtype)
+  # A carrier keeps its vector dtype through linearization, so a fragment shared by several MMAs renders as one named
+  # value (one native load) instead of being re-inlined -- and re-issued, the load being volatile -- per consumer.
+  return provider(value.replace(tag=(_NATIVE_FRAGMENT_TAG, width)),x.dtype).replace(tag=(_NATIVE_FRAGMENT_TAG, width, "bitcast"))
 
 def _lower_bitcast(ctx, x:UOp) -> UOp|None:
   if x.arg != (NATIVE_FRAGMENT_BITCAST,): return None
@@ -132,4 +146,4 @@ pm_lower_native_fragment = PatternMatcher([
   (UPat(Ops.CUSTOMI, name="x"), _lower),
 ])
 
-__all__ = ["PackedFragmentSpec", "packed_fragment_load", "native_fragment_x2", "native_fragment_x4", "native_fragment_materialized_x2", "native_fragment_bitcast", "native_q4_a_fragment", "packed_i8_sub", "is_native_fragment_carrier", "is_native_fragment_marker", "pm_lower_native_fragment"]
+__all__ = ["PackedFragmentSpec", "packed_fragment_load", "native_fragment_x2", "native_fragment_x4", "native_fragment_materialized_x2", "native_fragment_bitcast", "native_q4_a_fragment", "native_lds_matrix_fragment", "packed_i8_sub", "is_native_fragment_carrier", "is_native_fragment_marker", "pm_lower_native_fragment"]

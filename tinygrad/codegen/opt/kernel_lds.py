@@ -8,7 +8,7 @@ from typing import Callable, TypeAlias, TYPE_CHECKING
 from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q4KInt8FragmentProvider, Q6KInt8FragmentProvider,
                                                 Q8ActivationRecordTransform, Q8Int8FragmentProvider)
 from tinygrad.codegen.opt.tc import LaneMap
-from tinygrad.codegen.late.native_fragment import PackedFragmentSpec, native_q4_a_fragment
+from tinygrad.codegen.late.native_fragment import PackedFragmentSpec, native_lds_matrix_fragment, native_q4_a_fragment
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
@@ -255,6 +255,89 @@ def _fold_operand_axis(contract_terms:tuple[tuple[int, int], ...], lane_terms:tu
     expr = contribution if expr is None else expr + contribution
   if expr is None: raise ValueError("operand axis has neither a contract-axis nor a lane-bit contribution")
   return expr
+
+
+@dataclass(frozen=True)
+class MatrixFragmentLayout:
+  """How one WMMA operand fragment is a set of warp-cooperative 8-row x 16-byte LDS matrices (ldmatrix-class).
+
+  ``width`` matrices, one 32-bit register each per lane.  Lane ``l`` supplies the row address of row ``l % 8`` of
+  matrix ``(l // 8) % width``; matrix ``j`` starts at (row, K) ``sum over set bits b of j of select_terms[b]``."""
+  width: int
+  select_terms: tuple[tuple[int, int], ...]
+
+
+def derive_matrix_fragment_layout(tc, operand_idx:int) -> MatrixFragmentLayout:
+  """Derive ``operand_idx``'s matrix-load layout from the descriptor's own lane layout, or raise.
+
+  A native matrix load gives lane ``l`` the 4 bytes at row ``l // 4``, bytes ``4*(l % 4)..+3`` of each 8x16-byte
+  matrix.  The operand qualifies only if every 32-bit register of its fragment is exactly that ownership pattern
+  over some 8-row, 16-byte-aligned origin (evaluated for every lane and element from
+  :func:`derive_wmma_operand_lane_layout`, the same map the scalar fragment path addresses with), and the origins
+  compose linearly over the matrix-select bits.  NVIDIA's m16n8k16 bf16/fp16 A (4 matrices) and B (2) qualify."""
+  layout = derive_wmma_operand_lane_layout(tc)[operand_idx]
+  item = tc.dtype_in.itemsize
+  if item > 4 or 4 % item: raise ValueError("matrix fragments need elements that pack whole 32-bit registers")
+  per_reg, row_elems, ept = 4 // item, 16 // item, tc.elements_per_thread[operand_idx]
+  width = ept // per_reg
+  if ept % per_reg or width not in (2, 4): raise ValueError(f"operand {operand_idx} fragment is not 2 or 4 matrices")
+  def coord(lane:int, element:int) -> tuple[int, int]:
+    lane_u, elem_u = UOp.const(dtypes.weakint, lane), UOp.const(dtypes.weakint, element)
+    row = _fold_operand_axis(layout.row_contract_terms, layout.row_lane_terms, lane_u, elem_u, layout.element_bits).simplify()
+    k = _fold_operand_axis(layout.k_contract_terms, layout.k_lane_terms, lane_u, elem_u, layout.element_bits).simplify()
+    return row.arg, k.arg
+  origins = []
+  for j in range(width):
+    r0, k0 = coord(0, j*per_reg)
+    if r0 % 8 or k0 % row_elems: raise ValueError(f"operand {operand_idx} register {j} is not an aligned 8x16-byte matrix")
+    for lane in range(tc.threads):
+      for i in range(per_reg):
+        if coord(lane, j*per_reg+i) != (r0 + lane//4, k0 + (lane % 4)*per_reg + i):
+          raise ValueError(f"operand {operand_idx} register {j} does not have matrix-load lane ownership")
+    origins.append((r0, k0))
+  terms = tuple(origins[1 << b] for b in range(width.bit_length()-1))
+  for j, origin in enumerate(origins):
+    if origin != tuple(sum(t[axis] for b, t in enumerate(terms) if j >> b & 1) for axis in (0, 1)):
+      raise ValueError(f"operand {operand_idx} matrix origins do not compose over the select bits")
+  return MatrixFragmentLayout(width, terms)
+
+
+def lds_row_element(window, row, logical_k, item_bytes:int, *, bank_dwords:int|None):
+  """Element offset, inside one pipeline slot, of operand row ``row``'s K element ``logical_k``.
+
+  Padded windows (``stride_bytes`` > the K row) place rows at their stride.  An ``xor_swizzle`` window has unpadded
+  rows of a power-of-two count of 16-byte chunks and stores chunk ``c`` of row ``r`` at chunk ``c ^ phase(r)``,
+  ``phase(r) = (r // rows_per_line) % min(chunks, line_chunks)`` where a bank line (``bank_dwords`` 4-byte banks,
+  the target's declared fact) holds ``line_chunks`` chunks and ``rows_per_line`` rows: any 8 consecutive rows then
+  put the same logical chunk in 8 distinct 16-byte bank groups (checked by :func:`xor_swizzle_conflict_free`), so
+  both the cooperative b128 stores and 8-row matrix loads are conflict free without padding bytes."""
+  if not getattr(window, "xor_swizzle", False):
+    return (window.base + row*window.stride_bytes + logical_k*item_bytes)//item_bytes
+  chunks, line_chunks = xor_swizzle_chunks(window, bank_dwords)
+  chunk_elems = 16 // item_bytes
+  phase = (row // max(1, line_chunks // chunks)) % min(chunks, line_chunks)
+  chunk = (logical_k // chunk_elems) ^ phase
+  return (window.base + row*window.stride_bytes)//item_bytes + chunk*chunk_elems + logical_k % chunk_elems
+
+
+def xor_swizzle_chunks(window, bank_dwords:int|None) -> tuple[int, int]:
+  """(16-byte chunks per row, 16-byte chunks per bank line) for an ``xor_swizzle`` window, or raise."""
+  if bank_dwords is None: raise ValueError("an XOR-swizzled LDS window needs the target's declared lds_bank_dwords")
+  chunks, line_chunks = window.stride_bytes // 16, bank_dwords * 4 // 16
+  if window.stride_bytes % 16 or chunks & (chunks - 1) or line_chunks <= 0 or line_chunks & (line_chunks - 1):
+    raise ValueError("an XOR-swizzled LDS window needs a power-of-two count of unpadded 16-byte chunks per row")
+  return chunks, line_chunks
+
+
+def xor_swizzle_conflict_free(window, bank_dwords:int, rows:int=8) -> bool:
+  """Whether ``rows`` consecutive rows' copies of each logical chunk land in distinct 16-byte bank groups."""
+  chunks, line_chunks = xor_swizzle_chunks(window, bank_dwords)
+  for start in range(0, 2*rows, rows):
+    for chunk in range(chunks):
+      groups = {(lds_row_element(window, r, chunk*8, 2, bank_dwords=bank_dwords)*2 // 16) % line_chunks
+                for r in range(start, start+rows)}
+      if len(groups) != min(rows, line_chunks): return False
+  return True
 
 
 def contract_symbolic_upcast(value:UOp, axis:UOp) -> UOp:
@@ -654,6 +737,7 @@ class PrecontractPipelineTemplate:
   pipeline_plan: object
   vector_global_loads: bool = False   # Renderer.precontract_vector_global_loads
   async_copy_ops: AsyncCopyOps|None = None   # Renderer.async_copy_ops, required by async_copy plans
+  lds_bank_dwords: int|None = None   # Renderer.lds_bank_dwords, required by XOR-swizzled LDS windows
 
   def __post_init__(self) -> None:
     factors = derive_precontract_factors(self.geometry, self.tc)
@@ -673,19 +757,22 @@ class PrecontractPipelineTemplate:
 
   def producer(self, epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
     return instantiate_precontract_producer(self.geometry, tc=self.tc, allocation=self.allocation,
-      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, vector_global_loads=self.vector_global_loads)
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, vector_global_loads=self.vector_global_loads,
+      lds_bank_dwords=self.lds_bank_dwords)
 
   def async_producer(self, epoch:UOp, slot:UOp, after:UOp|None) -> UOp:
     if self.async_copy_ops is None: raise ValueError("async precontract producer requires declared async copy ops")
     return instantiate_precontract_async_producer(self.geometry, tc=self.tc, allocation=self.allocation,
-      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, after=after, ops=self.async_copy_ops)
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot, after=after, ops=self.async_copy_ops,
+      lds_bank_dwords=self.lds_bank_dwords)
 
   def fragments(self, epoch:UOp, slot:UOp, ready:UOp, k_substep:int) -> PrecontractFragmentInstance:
     if not 0 <= k_substep < self.factors.k_substeps: raise ValueError("precontract K substep is out of range")
     return instantiate_precontract_fragments(self.geometry, tc=self.tc, allocation=self.allocation, threads=self.threads,
       k_substep=UOp.const(dtypes.weakint,k_substep), subtile_m=self.subtile_m, subtile_n=self.subtile_n,
       contracts=self.contracts, epoch=epoch, slot=slot, ready=ready,
-      fragment_specs=tuple(x.fragment_spec if isinstance(x,PackedPrecontractOperandTemplate) else None for x in self.operands))
+      fragment_specs=tuple(x.fragment_spec if isinstance(x,PackedPrecontractOperandTemplate) else None for x in self.operands),
+      matrix_fragments=getattr(self.pipeline_plan, "matrix_fragments", False), lds_bank_dwords=self.lds_bank_dwords)
 
 def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
   factors = derive_precontract_shape_factors(geometry, tc)
@@ -694,6 +781,8 @@ def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFa
   for window,row in zip(geometry.lds_windows, rows):
     if window.stride_bytes < tk*tc.dtype_in.itemsize or window.end-window.base != row*window.stride_bytes:
       raise ValueError("LDS windows must exactly cover padded operand rows")
+    if getattr(window, "xor_swizzle", False) and window.stride_bytes != tk*tc.dtype_in.itemsize:
+      raise ValueError("an XOR-swizzled LDS window stores unpadded K rows")
   return factors
 
 
@@ -794,7 +883,8 @@ def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_byte
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                      operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
                                      epoch:UOp, slot:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
-                                     logical_k_block:UOp|None=None, vector_global_loads:bool=False) -> PrecontractProducerInstance:
+                                     logical_k_block:UOp|None=None, vector_global_loads:bool=False,
+                                     lds_bank_dwords:int|None=None) -> PrecontractProducerInstance:
   factors=derive_precontract_factors(geometry,tc)
   item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
   vector_elements = vector_bytes // item_bytes
@@ -829,7 +919,7 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
       # silently aliases distinct K elements.  Scalar addresses preserve the
       # producer's exact one-writer cover; the backend may still regroup the
       # adjacent stores after their addresses are proven.
-      base=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
+      base=slot_base+lds_row_element(window,row,logical_k,item_bytes,bank_dwords=lds_bank_dwords)
       stores.append(UOp.group(*(allocation.index(base+elem).store(value.gep(elem)).replace(tag=tag).end()
                                for elem in range(vector_elements))))
     role_nodes.append(UOp.group(*stores))
@@ -868,7 +958,8 @@ class AsyncCopyOps:
 
 def instantiate_precontract_async_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                            operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
-                                           epoch:UOp, slot:UOp, after:UOp|None, ops:AsyncCopyOps) -> UOp:
+                                           epoch:UOp, slot:UOp, after:UOp|None, ops:AsyncCopyOps,
+                                           lds_bank_dwords:int|None=None) -> UOp:
   """The cooperative producer as 16-byte asynchronous copies into LDS slot ``slot``, ordered after ``after``.
 
   Same (row, vector) ownership and LDS addresses as the synchronous producer; every operand must be a dense
@@ -892,7 +983,7 @@ def instantiate_precontract_async_producer(geometry:KernelTileGeometry, *, tc, a
       coords={operand.row_axis:operand.row_tile_base+row, operand.k_axis:epoch*geometry.tile[2]+logical_k}
       if (address := _dense_vector_address(operand, coords, tc.dtype_in, vector_elements)) is None:
         raise ValueError(f"async copy source for {operand.role} is not a dense aligned unit-stride operand")
-      base=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
+      base=slot_base+lds_row_element(window,row,logical_k,item_bytes,bank_dwords=lds_bank_dwords)
       # A trailing void source orders the copy after ``after`` (its slot's last readers passed that barrier).
       copies.append(UOp(Ops.CUSTOM, dtypes.void, (allocation.index(base, ptr=True), address[0].index(address[1], ptr=True),
                         *(() if after is None else (after,))), arg=ops.copy16).replace(tag=("kernel_tile_async_copy", operand.role, row_iteration)))
@@ -904,7 +995,8 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
                                       contracts:tuple[PrecontractContractSpec,...], epoch:UOp, slot:UOp,
                                       ready:UOp, logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None,
                                       logical_k_block:UOp|None=None,
-                                      fragment_specs:tuple[PackedFragmentSpec|None,PackedFragmentSpec|None]=(None,None)) -> PrecontractFragmentInstance:
+                                      fragment_specs:tuple[PackedFragmentSpec|None,PackedFragmentSpec|None]=(None,None),
+                                      matrix_fragments:bool=False, lds_bank_dwords:int|None=None) -> PrecontractFragmentInstance:
   factors=derive_precontract_factors(geometry,tc); item_bytes=tc.dtype_in.itemsize
   slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
   ordered=allocation.after(ready); lane=threads.lane
@@ -925,11 +1017,21 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
       row_base=(wave*subtiles+subtile)*tc_dim
       byte_index=slot_base+window.base+(row_base+(lane&15))*window.stride_bytes+k_substep*32+(lane>>4)*16
       return native_q4_a_fragment(ordered,byte_index.cast(dtypes.int))
+    semantic=(role,epoch,slot,k_substep,subtile)
+    if matrix_fragments:
+      # One native matrix load per fragment: this lane addresses row l%8 of matrix (l//8)%width (see
+      # derive_matrix_fragment_layout); the carrier is the whole fragment, so no per-element CONTRACT.
+      matrix = derive_matrix_fragment_layout(tc, operand_idx)
+      select = [(lane // (8 << b)) % 2 for b in range(len(matrix.select_terms))]
+      row = (wave*subtiles+subtile)*tc_dim + lane % 8 + sum((sel*r for sel, (r, _) in zip(select, matrix.select_terms) if r), start=UOp.const(dtypes.weakint, 0))
+      logical_k = k_substep*tc.dims[2] + sum((sel*k for sel, (_, k) in zip(select, matrix.select_terms) if k), start=UOp.const(dtypes.weakint, 0))
+      idx = slot_base+lds_row_element(window,row,logical_k,item_bytes,bank_dwords=lds_bank_dwords)
+      return native_lds_matrix_fragment(ordered, idx, tc.dtype_in.vec(tc.elements_per_thread[operand_idx]), matrix.width
+                                        ).replace(tag=("kernel_tile_fragment",*semantic))
     layout = operand_layouts[operand_idx]
     row=(wave*subtiles+subtile)*tc_dim+_fold_operand_axis(layout.row_contract_terms, layout.row_lane_terms, lane, contract.element, layout.element_bits)
     logical_k=k_substep*tc.dims[2]+_fold_operand_axis(layout.k_contract_terms, layout.k_lane_terms, lane, contract.element, layout.element_bits)
-    idx=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
-    semantic=(role,epoch,slot,k_substep,subtile)
+    idx=slot_base+lds_row_element(window,row,logical_k,item_bytes,bank_dwords=lds_bank_dwords)
     load=ordered.index(idx,dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load",*semantic)).load()
     return UOp(Ops.CONTRACT,tc.dtype_in.vec(tc.elements_per_thread[operand_idx]),(load,),contract.arg,
                tag=("kernel_tile_fragment",*semantic))
@@ -963,6 +1065,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   """
   factors = derive_precontract_factors(geometry, tc)
   validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
+  if any(getattr(w, "xor_swizzle", False) for w in geometry.lds_windows):
+    raise ValueError("XOR-swizzled LDS windows are expressed only by precontract pipelines")
   try:
     from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
     record_range_provenance(operands)
