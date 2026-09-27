@@ -17,7 +17,7 @@ import tinygrad.codegen as codegen
 from tinygrad.codegen import to_program
 from tinygrad.codegen.late.reduce_lowering import widen_reduce_products
 from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.helpers import Target
+from tinygrad.helpers import Target, Context
 from tinygrad.renderer.cuda import CUDARenderer
 from tinygrad.uop.ops import Ops, PatternMatcher, UOp
 
@@ -79,7 +79,7 @@ def _gemm_ast(in_dtype, dtype):
 def _source(ast, disable_rule:bool):
   ren = CUDARenderer(Target.parse("NV:CUDA:sm_120"))
   codegen.to_program_cache.clear()
-  with unittest.mock.patch.object(type(ren.compiler), "compile", lambda self, src: b""):
+  with unittest.mock.patch.object(type(ren.compiler), "compile", lambda self, src: b""), Context(CACHELEVEL=0):
     if disable_rule:
       with unittest.mock.patch.object(codegen, "pm_widen_reduce_products", PatternMatcher([])): prog = to_program(ast, ren)
     else: prog = to_program(ast, ren)

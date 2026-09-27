@@ -23,7 +23,9 @@ def _is_contraction(red:UOp) -> bool:
 
 def lane_count(r:int, d:int, max_lanes:int) -> int|None:
   """The largest common divisor of r and d up to max_lanes, preferring whole warps (multiples of 32)."""
-  common = [l for l in range(max_lanes, 1, -1) if r % l == 0 and d % l == 0]
+  # a lane count equal to a whole extent degenerates the split to a size-1 range, and the group-reduce stage is then
+  # indexed by the lane twice (an L*L shared buffer: 160 KB at L=200 on the 4B's softmax); require a real split
+  common = [l for l in range(max_lanes, 1, -1) if r % l == 0 and d % l == 0 and l < r and l < d]
   warps = [l for l in common if l % 32 == 0]
   return (warps or common or [None])[0]
 

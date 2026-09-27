@@ -578,7 +578,8 @@ class Compiler:
       return lib
     assert not getenv("ASSERT_COMPILE"), f"tried to compile with ASSERT_COMPILE set\n{src}"
     lib = self.compile(src)
-    if self.cachekey is not None: diskcache_put(self.cachekey, key, lib)
+    # an empty binary is never a real compile (tests stub compile to b""): caching it poisons later real runs
+    if self.cachekey is not None and lib: diskcache_put(self.cachekey, key, lib)
     Compiler.cache_misses += 1
     return lib
   def disassemble(self, lib:bytes): pass

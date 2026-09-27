@@ -180,6 +180,7 @@ def test_v2_lane_count():
   assert lane_count(3136, 3136, 512) == 448  # 14 warps: the largest whole-warp common divisor
   assert lane_count(100, 30, 512) == 10      # no whole-warp divisor: the largest common one
   assert lane_count(7, 11, 512) is None
+  assert lane_count(200, 200, 512) == 100    # never the whole extent: an L*L shared stage otherwise (160 KB at 200)
 
 
 def _nv_sources(*outs):
@@ -189,7 +190,7 @@ def _nv_sources(*outs):
   with Context(SIBLING_FUSE=2):
     lin = Tensor.schedule_linear(*outs)
     ren = CUDARenderer(Target.parse("NV:CUDA:sm_120"))
-    with unittest.mock.patch.object(type(ren.compiler), "compile", lambda self, src: b""):
+    with unittest.mock.patch.object(type(ren.compiler), "compile", lambda self, src: b""), Context(CACHELEVEL=0):
       progs = [to_program(c.src[0], ren) for c in lin.src if c.op is Ops.CALL and c.src[0].op is Ops.SINK]
   return [next(u.arg for u in p.src if u.op is Ops.SOURCE and isinstance(u.arg, str)) for p in progs]
 
