@@ -43,6 +43,21 @@ Priming a prompt into a rollout slot (caae90e1e: one padded tail piece, reset an
 each after capture: 256 tokens 46 ms (was ~670), 1001 tokens 160-170 ms, 2050 tokens 340-360 ms.
 B=8 batch sampler rerun (profile the integration run lost): 7.51 / 7.62 / 7.54 ms.
 
+10k prefill vs piece size (2694bdd20: the prefill graphs share one intermediate arena pool; gpu-run time, warm):
+
+| piece | wall | graph arenas, before -> after | mem_used, before -> after |
+|---|---|---|---|
+| 1024 | 1.15-1.20 s | 1.07 -> 0.41 GB | 10.3 -> 9.6 GB |
+| 2048 | 1.14 s | 2.24 GB (before) | 11.1 GB (before) |
+| 4096 | 1.20 s | 6.15 -> 2.75 GB | 15.4 -> 11.6 GB |
+| 8192 | 1.22-1.25 s | 9.96 -> 4.6 GB | 19.6 -> 14.3 GB |
+
+Larger pieces (vLLM runs 10k in two <=8192-token steps) do not OOM and do not speed the prefill up: the gap is the
+per-token kernels. Per role on the same exp (BoltBeam lifecycle-compare, fresh trace): 1235 vs vLLM 377 ms, Mamba
+kernels 422 vs 37 (four fp32 SSD reduces ~340 ms at 4.7-6.5 TF), GEMMs +412, attention +59. Distinct ~10.5k prompts
+in the rollout sampler (no shared prefix): B=32 19.4 GB, B=64 27.4 GB, B=128 OOMs (34 slots x 10.5k prefix K/V =
+5.6 GB). Next (paused): fp32 SSD schedule (A1), a pooled prefix K/V store by actual tokens (C1).
+
 W8 slot refill (`scratchpad/w8/bench.py`, P=256, 4 waves of groups of 8, forced lognormal lengths median 1.2k,
 cap 4096, mean 1.44k):
 
