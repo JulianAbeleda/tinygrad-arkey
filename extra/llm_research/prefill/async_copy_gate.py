@@ -35,7 +35,11 @@ CASES = ((512, 5120, 3136, (128, 128, 32), (4, 2), 3, "bfloat16"), (512, 5120, 3
          (256, 3200, 7680, (64, 64, 32), (2, 2), 4, "bfloat16", "matrix", True, 2),
          (128, 17536, 3136, (128, 128, 32), (2, 4), 4, "bfloat16", "matrix", True, 2),
          (64, 3200, 7680, (64, 64, 32), (2, 2), 6, "bfloat16", "matrix", True, 3),
-         (512, 5120, 3136, (128, 128, 32), (4, 2), 4, "half", "matrix", True, 2))
+         (512, 5120, 3136, (128, 128, 32), (4, 2), 4, "half", "matrix", True, 2),
+         # K-zero-padded weight tails (lazy pad, masked zero-fill copies): (..., barrier_group, weight K before padding)
+         (64, 3200, 12672, (64, 128, 64), (2, 2), 3, "bfloat16", "matrix", True, 1, 12544),
+         (128, 3200, 3200, (64, 64, 32), (2, 2), 4, "bfloat16", "matrix", True, 1, 3136),
+         (256, 1024, 3200, (64, 64, 64), (2, 2), 3, "half", "matrix", True, 1, 3136))
 
 
 def _operands(m, n, k, dtype):
@@ -47,7 +51,9 @@ def _operands(m, n, k, dtype):
 def run(case, candidate: bool) -> np.ndarray:
   m, n, k, tile, waves, stages, dtype = case[:7]
   fragment_load, swizzle, group = (*case[7:], 1)[:3] if len(case) > 7 else ("scalar", False, 1)
+  k_weight = case[10] if len(case) > 10 else k
   a, w = _operands(m, n, k, getattr(dtypes, dtype))
+  if k_weight != k: w = w[:, :k_weight].contiguous().realize().pad(((0, 0), (0, k - k_weight)))   # lazily padded tail
   key = pr.warmstart_key({m, n}, k)
   context = None
   if candidate:
@@ -75,7 +81,7 @@ def main() -> int:
     subprocess.run([sys.executable, __file__, "--safe-case", str(index), "--dump", str(dump)], check=True)
     safe = np.load(dump)
     row = {"m": case[0], "n": case[1], "k": case[2], "tile": list(case[3]), "waves": list(case[4]), "stages": case[5], "dtype": case[6],
-           "fragment_load": case[7] if len(case) > 7 else "scalar", "xor_swizzle": case[8] if len(case) > 8 else False, "barrier_group": case[9] if len(case) > 9 else 1,
+           "fragment_load": case[7] if len(case) > 7 else "scalar", "xor_swizzle": case[8] if len(case) > 8 else False, "barrier_group": case[9] if len(case) > 9 else 1, "k_weight": case[10] if len(case) > 10 else case[2],
            "finite": bool(np.isfinite(got).all()), "bitexact_vs_safe_tc": bool((got.view(np.uint32) == safe.view(np.uint32)).all()),
            "max_abs_diff": float(np.abs(got - safe).max())}
     rows.append(row); print(json.dumps(row), flush=True)

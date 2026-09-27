@@ -224,3 +224,27 @@ def test_program_cache_is_keyed_by_the_forced_candidate():
   assert a != b and "wait_group 1;" in a and "wait_group 2;" in b
   again, _ = _render(_context((64, 64, 32), (2, 2), 3), m=128, n=64 * 19, k=512)
   assert again == a
+
+
+def test_k_padded_weight_tail_uses_masked_zero_fill_copies():
+  m, n, k, kw = 128, 64 * 23, 512, 480
+  a = Tensor.empty(m, k, dtype=dtypes.bfloat16, device="CPU")
+  w = Tensor.empty(n, kw, dtype=dtypes.bfloat16, device="CPU").pad(((0, 0), (0, k - kw)))
+  (call,) = a.dot(w.T, dtype=dtypes.float).schedule_linear().src
+  key = pr.warmstart_key({m, n}, k)
+  with pr.warmstart_candidate_state({key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: _matrix_context((64, 64, 32), (2, 2), 3, swizzle=True)}):
+    program = to_program(call.src[0], CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  src = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+  assert "cp.async.cg.shared.global [%0], [%1], 16, %2;" in src          # the weight's zero-fill form
+  assert "cp.async.cg.shared.global [%0], [%1], 16;" in src              # the unpadded activation's plain form
+
+
+def test_k_tail_not_aligned_to_the_vector_fails_closed():
+  m, n, k, kw = 128, 64 * 29, 512, 484                                    # 484 % 8 != 0: a vector straddles the tail
+  a = Tensor.empty(m, k, dtype=dtypes.bfloat16, device="CPU")
+  w = Tensor.empty(n, kw, dtype=dtypes.bfloat16, device="CPU").pad(((0, 0), (0, k - kw)))
+  (call,) = a.dot(w.T, dtype=dtypes.float).schedule_linear().src
+  key = pr.warmstart_key({m, n}, k)
+  with pr.warmstart_candidate_state({key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: _matrix_context((64, 64, 32), (2, 2), 3, swizzle=True)}):
+    with pytest.raises(Exception, match="dense aligned"):
+      to_program(call.src[0], CUDARenderer(Target.parse("NV:CUDA:sm_120")))

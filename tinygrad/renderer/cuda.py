@@ -325,7 +325,8 @@ class CUDARenderer(CStyleLanguage):
   async_copy_ops = AsyncCopyOps(
     copy16='asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" :: "r"((unsigned)__cvta_generic_to_shared({0})), "l"({1}) : "memory");',
     commit='asm volatile("cp.async.commit_group;" ::: "memory");',
-    wait='asm volatile("cp.async.wait_group {n};" ::: "memory");')
+    wait='asm volatile("cp.async.wait_group {n};" ::: "memory");',
+    copy16_zfill='asm volatile("cp.async.cg.shared.global [%0], [%1], 16, %2;" :: "r"((unsigned)__cvta_generic_to_shared({0})), "l"({1}), "r"({2}) : "memory");')
   # Static __shared__ is capped at 48 KB by ptxas; larger arenas are extern __shared__ sized at launch (NVProgram /
   # CUDAProgram shared_mem). sm_120 allows 99 KB (101376 B) of shared memory per block.
   # Shared memory is 32 banks of 4 bytes on every sm_50+ part (CUDA C Programming Guide, "Shared Memory"). Only the

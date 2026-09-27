@@ -929,21 +929,43 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
     role_nodes.append(UOp.group(*stores))
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
 
-def _dense_vector_address(operand, coords:dict, dtype, width:int) -> tuple[UOp, UOp]|None:
-  """(PARAM, first element index) of a dense operand's ``width`` consecutive K elements, or None.
+def _k_tail_gate(operand, src:UOp) -> tuple[UOp, UOp]|None:
+  """``(INDEX, gate)`` for a K-zero-padded dense source ``WHERE(k < K, INDEX(PARAM, WHERE(k < K, idx, Invalid)), 0)``
+  (a lazily padded reduction tail), or None.  The gate must compare exactly this operand's K range with a constant."""
+  if src.op is not Ops.WHERE or len(src.src) != 3 or src.src[2].op is not Ops.CONST or src.src[2].arg != 0: return None
+  gate, inner = src.src[0], src.src[1]
+  if inner.op is not Ops.INDEX or len(inner.src) != 2 or inner.src[1].dtype != dtypes.weakint or inner.src[1].get_valid() is not gate: return None
+  if gate.op is not Ops.CMPLT or gate.src[0] is not operand.k_axis or gate.src[1].op is not Ops.CONST: return None
+  return inner, gate
 
-  Admitted only for an ungated ``INDEX(PARAM, idx)`` whose address advances by exactly one element per K step and
-  whose first element address is provably width-aligned and in bounds, so one b128 access covers exactly the
-  scalar elements."""
-  src = operand.source
+def _dense_vector_address(operand, coords:dict, dtype, width:int, *, allow_k_tail:bool=False) -> tuple[UOp, UOp, UOp|None]|None:
+  """(PARAM, first element index, tail gate or None) of a dense operand's ``width`` consecutive K elements, or None.
+
+  Admitted only for an ``INDEX(PARAM, idx)`` whose address advances by exactly one element per K step and whose first
+  element address is provably width-aligned and in bounds, so one b128 access covers exactly the scalar elements.
+  With ``allow_k_tail`` a zero-padded K tail (``_k_tail_gate``) is admitted too when every width-vector lies wholly
+  inside or wholly outside it (the bound and the vector's first K are width-aligned); the returned gate is the
+  vector's validity and the address is clamped to the last in-range vector outside it, so a masked copy never forms
+  an out-of-bounds address."""
+  src, gate = operand.source, None
+  if allow_k_tail and (tail := _k_tail_gate(operand, src)) is not None: src, gate = tail
   if src.op is not Ops.INDEX or len(src.src) != 2 or src.src[0].op is not Ops.PARAM or src.dtype != dtype: return None
-  idx = src.src[1]
-  if idx.dtype != dtypes.weakint or idx.get_valid().op is not Ops.CONST: return None
+  idx = src.src[1] if gate is None else src.src[1].get_idx()
+  if idx.dtype != dtypes.weakint or (gate is None and idx.get_valid().op is not Ops.CONST): return None
   start = idx.substitute(coords).simplify()
   step = (idx.substitute({**coords, operand.k_axis:coords[operand.k_axis]+1}) - start).simplify()
   if step.op is not Ops.CONST or step.arg != 1: return None
-  if start.divides(width) is None or start.vmin < 0 or start.vmax + width > src.src[0].ptrdtype.size: return None
-  return src.src[0], start
+  if start.divides(width) is None: return None
+  if gate is not None:
+    k_start = coords[operand.k_axis].simplify()
+    if gate.src[1].arg % width or k_start.divides(width) is None: return None
+    bound = gate.src[1].arg
+    gate = gate.substitute(coords).simplify()
+    if gate.op is Ops.CONST and gate.arg is True: gate = None     # this vector is provably inside K
+    else:   # the address issued: an in-tail vector points at the last in-range vector (and reads 0 bytes of it)
+      start = idx.substitute({**coords, operand.k_axis:k_start.minimum(bound - width)}).simplify()
+  if start.vmin < 0 or start.vmax + width > src.src[0].ptrdtype.size: return None
+  return src.src[0], start, gate
 
 def _dense_vector_load(operand, coords:dict, dtype, width:int) -> UOp|None:
   """One b128 global load for a dense operand's ``width`` consecutive K elements, or None for the scalar fallback."""
@@ -959,6 +981,8 @@ class AsyncCopyOps:
   copy16: str
   commit: str
   wait: str
+  # Optional zero-filling form: {2} is the number of source bytes to read (16, or 0 to only zero the 16 LDS bytes).
+  copy16_zfill: str|None = None
 
 def instantiate_precontract_async_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                            operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
@@ -985,12 +1009,17 @@ def instantiate_precontract_async_producer(geometry:KernelTileGeometry, *, tc, a
                                 stride_bytes=window.stride_bytes,vector_bytes=16)
       logical_k=vector*vector_elements
       coords={operand.row_axis:operand.row_tile_base+row, operand.k_axis:epoch*geometry.tile[2]+logical_k}
-      if (address := _dense_vector_address(operand, coords, tc.dtype_in, vector_elements)) is None:
+      if (address := _dense_vector_address(operand, coords, tc.dtype_in, vector_elements,
+                                           allow_k_tail=ops.copy16_zfill is not None)) is None:
         raise ValueError(f"async copy source for {operand.role} is not a dense aligned unit-stride operand")
       base=slot_base+lds_row_element(window,row,logical_k,item_bytes,bank_dwords=lds_bank_dwords)
+      param, start, gate = address
+      # A zero-padded K tail copies 0 source bytes: the slot still gets its 16 zero bytes, so the MMA adds exact zeros.
+      fmt, extra = (ops.copy16, ()) if gate is None else \
+        (ops.copy16_zfill, (gate.where(UOp.const(dtypes.int, 16), UOp.const(dtypes.int, 0)),))
       # A trailing void source orders the copy after ``after`` (its slot's last readers passed that barrier).
-      copies.append(UOp(Ops.CUSTOM, dtypes.void, (allocation.index(base, ptr=True), address[0].index(address[1], ptr=True),
-                        *(() if after is None else (after,))), arg=ops.copy16).replace(tag=("kernel_tile_async_copy", operand.role, row_iteration)))
+      copies.append(UOp(Ops.CUSTOM, dtypes.void, (allocation.index(base, ptr=True), param.index(start, ptr=True), *extra,
+                        *(() if after is None else (after,))), arg=fmt).replace(tag=("kernel_tile_async_copy", operand.role, row_iteration)))
   return UOp.group(*copies)
 
 
