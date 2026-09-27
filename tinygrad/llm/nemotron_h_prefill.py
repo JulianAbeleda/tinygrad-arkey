@@ -107,6 +107,10 @@ class NemotronHPrefill:
     # block kind's, not the sum over kinds (10k at 8192-row pieces: 9.96 -> 5.09 GB)
     self.arenas: dict = {}
     self.saved: list[dict | None] | None = None  # a snapshot of every Mamba block's state (`save`)
+    # the tokens whose attention rows [0, len) the buffers hold, and the tokens `save` snapshotted: a caller can
+    # tell whether a saved prefix is still intact without running it again
+    self.held: tuple[int, ...] = ()
+    self.saved_tokens: tuple[int, ...] | None = None
     self._save = TinyJit(functools.partial(self._copy, True))
     self._restore = TinyJit(functools.partial(self._copy, False))
     self.pad_token = 0  # fills a padded piece; nothing the prefill keeps may depend on it
@@ -260,6 +264,7 @@ class NemotronHPrefill:
                      for key in ("conv", "state")} if block.block_type == "mamba" else None
                     for block, buffer in zip(self.model.blk, self.buffers)]
     self._save()
+    self.saved_tokens = self.held
 
   def restore(self):
     """Put the `save`d Mamba state back (the saved prefix's attention rows stay unless something rewrites them)."""
@@ -315,6 +320,8 @@ class NemotronHPrefill:
       raise ValueError("prompt must run past `start` and fit the prefill capacity")
     if not start:
       self.reset()
+    # rows before `start` are an earlier call's, which the caller vouches are `prompt[:start]`'s
+    self.held = tuple(prompt)
     hidden = None
     for size, count in self.spans(len(prompt) - start):
       # fused: keyed by the piece's 512-token block while the kernel admits it; SDPA: a power-of-two key bound

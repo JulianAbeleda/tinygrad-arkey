@@ -521,7 +521,12 @@ class NemotronHRolloutSampler:
       length = min(length, self.shared_capacity) // grain * grain
     if length <= 0:
       return self._share([])
-    self.shared = list(prompts[0][:length])
+    tokens = tuple(prompts[0][:length])
+    # already primed, saved and loaded, and nothing has rewritten the prefill's rows since: reuse it (the prefix
+    # state does not depend on anything else, so this is the state a fresh prime would compute)
+    if tuple(self.shared) == tokens and self.prefill.saved_tokens == tokens and self.prefill.held[:length] == tokens:
+      return length
+    self.shared = list(tokens)
     self.prefill(self.shared)
     self.prefill.save()
     self.load_shared(self.shared_rows.bind(length))
@@ -657,7 +662,7 @@ class NemotronHRolloutSampler:
     return out
 
   def generate(self, requests: list[tuple], max_new: int, temperature: float = 1.0,
-               stop: set[int] | None = None, stats: dict | None = None) -> list[list[tuple[list[int], list[float]]]]:
+               stop: set[int] | None = None, stats: dict | None = None, follow=None) -> list[list[tuple[list[int], list[float]]]]:
     """Sample `n` rollouts of up to `max_new` tokens for each `(prompt, n)`; returns per request its (tokens, logprobs).
 
     With `capture` set, each rollout is `(tokens, logprobs, hidden)`, hidden a float32 `[len(tokens), dim]` array.
@@ -667,6 +672,11 @@ class NemotronHRolloutSampler:
     rollouts were still waiting to start, `steady_*`), the time spent priming prompts, `starts` (each rollout's first
     step, laid out like the result), `buckets` (the ring rows attention read, per window) and `shared` (the length of
     the prefix primed once for every prompt, `_share`): what `replay` needs to start lanes and read keys the same way.
+
+    `follow(request, rollout)`, when given, is called as each rollout finishes and may return new `(prompt, n)`
+    requests (a multi-turn episode's next turn); they join the queue at once, so their lanes start as soon as lanes
+    free up instead of after every running rollout has finished, and their results are appended to the returned
+    list in the order they were added. Their prompts must extend the shared prefix.
     """
     import time
     if max_new > self.capacity:
@@ -744,6 +754,10 @@ class NemotronHRolloutSampler:
           rollout += (np.concatenate(l["hidden"])[:end + 1],)
         results[s["request"]].append(rollout)
         starts[s["request"]].append(l["start"])
+        for prompt, n in (follow(s["request"], rollout) or ()) if follow is not None else ():
+          results.append([])
+          starts.append([])
+          queue.append((len(results) - 1, prompt, [max_new] * n))
         s["rows"][l["row"]], lanes[lane] = None, None
         if not s["left"] and all(r is None for r in s["rows"]):
           slots[l["slot"]] = None

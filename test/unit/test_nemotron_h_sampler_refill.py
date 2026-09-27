@@ -248,6 +248,83 @@ class TestNemotronHSamplerRefill(unittest.TestCase):
         want = np.array([v for rollouts in results for _, logprobs, _ in rollouts for v in logprobs], np.float32)
         np.testing.assert_array_equal(got.view(np.uint32), want.view(np.uint32))
 
+  def _shared_sampler(self, model):
+    from tinygrad.llm.nemotron_h_prefill import NemotronHPrefill
+    prefill = NemotronHPrefill(model, capacity=24, piece=8, ssd_chunk=4)
+    return NemotronHRolloutSampler(model, batch=3, capacity=16, prefix_capacity=8, prompts=4, rows=2, ring=2,
+                                   window=4, capture=len(model.blk) - 1, prefill=prefill, shared_capacity=16), prefill
+
+  def _reference(self, model, prompt, tokens, logprobs, temperature):
+    reference, caches = model.prefix(prompt, through=len(model.blk) - 1)
+    hidden = reference[:, -1:]
+    if len(tokens) > 1:
+      hidden = hidden.cat(model.advance(tokens[:-1], caches, through=len(model.blk) - 1)[0], dim=1)
+    expected = (model.output(model.output_norm(hidden))[0].float() / temperature).log_softmax(-1).numpy()
+    np.testing.assert_allclose(logprobs, expected[np.arange(len(tokens)), tokens], rtol=1e-4, atol=1e-4)
+
+  def test_shared_prefix_is_reused_across_calls_bit_for_bit(self):
+    model = tiny_model()
+    rng = np.random.default_rng(11)
+    envelope = [int(v) for v in rng.integers(1, 64, 14)]
+    prompts = [envelope + [int(v) for v in rng.integers(1, 64, n)] for n in (3, 5)]
+    second = [int(v) for v in rng.integers(1, 64, 14)]
+    other = [second + [5, 6, 7], second + [8, 9]]
+    warm, prefill = self._shared_sampler(model)
+    primes = []
+    run = prefill._run
+    prefill._run = lambda prompt, start=0: (primes.append((len(prompt), start)), run(prompt, start))[1]
+    batches = (prompts, other, prompts, prompts)
+    outputs = []
+    for batch in batches:
+      Tensor.manual_seed(3)
+      outputs.append(warm.generate([(p, 2) for p in batch], max_new=6, temperature=0.8))
+    # the reference re-primes every call (the saved prefix is forgotten): reuse changes nothing, bit for bit
+    cold, cold_prefill = self._shared_sampler(model)
+    for batch, got in zip(batches, outputs):
+      cold_prefill.saved_tokens = None
+      Tensor.manual_seed(3)
+      want = cold.generate([(p, 2) for p in batch], max_new=6, temperature=0.8)
+      for a, b in zip(got, want):
+        for (ta, la, ha), (tb, lb, hb) in zip(a, b):
+          self.assertEqual(ta, tb)
+          np.testing.assert_array_equal(np.asarray(la, np.float32).view(np.uint32), np.asarray(lb, np.float32).view(np.uint32))
+          np.testing.assert_array_equal(ha, hb)
+    # an envelope runs from position 0 when it changes (calls 1, 2 and 3); call 4 reuses call 3's
+    self.assertEqual([n for n, start in primes if start == 0], [14, 14, 14])
+
+  def test_follow_up_requests_join_the_running_batch(self):
+    model = tiny_model()
+    rng = np.random.default_rng(5)
+    envelope = [int(v) for v in rng.integers(1, 64, 14)]
+    prompts = [envelope + [int(v) for v in rng.integers(1, 64, n)] for n in (3, 5)]
+    added = []
+
+    def follow(request, rollout):
+      if request >= len(prompts):
+        return None  # one follow-up turn per first-turn rollout
+      prompt = prompts[request] + [9, 9] + list(rollout[0][:2])
+      added.append((request, prompt))
+      return [(prompt, 1)]
+
+    runs = []
+    for _ in range(2):
+      sampler, _ = self._shared_sampler(model)
+      added.clear()
+      Tensor.manual_seed(4)
+      stats = {}
+      runs.append((sampler.generate([(p, 2) for p in prompts], max_new=6, temperature=0.8, stats=stats, follow=follow),
+                   list(added)))
+    results, requests = runs[0]
+    self.assertEqual(len(results), len(prompts) + 4)
+    self.assertTrue(all(len(r) == 1 for r in results[len(prompts):]))
+    for (_, prompt), rollouts in zip(requests, results[len(prompts):]):
+      for tokens, logprobs, _ in rollouts:
+        self._reference(model, prompt, tokens, logprobs, 0.8)
+    # deterministic: the same seed schedules and samples the same
+    for a, b in zip(runs[0][0], runs[1][0]):
+      self.assertEqual([t for t, *_ in a], [t for t, *_ in b])
+    self.assertEqual(runs[0][1], runs[1][1])
+
   def test_sampled_log_probabilities_are_scaled_logit_minus_one_normalizer(self):
     from tinygrad.llm.nemotron_h_sampler import scaled_log_normalizer
     rng = np.random.default_rng(11)
