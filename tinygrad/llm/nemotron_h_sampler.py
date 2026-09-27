@@ -340,7 +340,6 @@ class NemotronHRolloutSampler:
         raise ValueError("compacting with a capture needs a stateless MLP tail (the rows tail_logprobs recomputes)")
       self.lane_from = UOp.variable("lane_from", 0, batch - 1)
       self.slot_from = UOp.variable("slot_from", 0, self.prompts - 1)
-      self.move_lane, self.move_slot = TinyJit(self._move_lane), TinyJit(self._move_slot)
     self.full = batch  # `batch` is the running step's row count inside `_rows`
 
   @contextlib.contextmanager
@@ -398,6 +397,17 @@ class NemotronHRolloutSampler:
       self.graphs[key](self.row.bind(row), self.slot.bind(step % self.ring), self.column.bind(column), temperature,
                        *low)
 
+  def _move(self, kind: str, target: int, source: int) -> None:
+    """Move lane (`kind` "lane") or prompt slot ("slot") `source` into the free `target`; the copy's one-lane
+    temporaries plan into the step graphs' shared arenas, so moving needs no memory of its own."""
+    key = ("move", kind)
+    if key not in self.graphs:
+      self.graphs[key] = TinyJit(self._move_lane if kind == "lane" else self._move_slot)
+    binds = (self.lane.bind(target), self.lane_from.bind(source)) if kind == "lane" else \
+      (self.source.bind(target), self.slot_from.bind(source))
+    with shared_arenas(self.arenas):
+      self.graphs[key](*binds)
+
   def _fold(self, replay: bool, size: int | None = None) -> None:
     """Fold the full Mamba replay ring into every lane's checkpoint state (the blocks from `capture` on replay)."""
     size = self.full if size is None else size
@@ -420,7 +430,8 @@ class NemotronHRolloutSampler:
                                                                               else (False,))] + [("flush", False)])
     self._capture([(False, size, wraps, rows) for rows in self.compact for size in set(sizes)
                    for wraps in ((False, True) if size < self.capacity else (False,))] +
-                  [("flush", False, rows) for rows in self.compact])
+                  [("flush", False, rows) for rows in self.compact] +
+                  ([("move", "lane"), ("move", "slot")] if self.compact else []))
     self.warmed = True
 
   def _capture(self, keys: list[tuple[bool, int, bool]]) -> None:
@@ -435,6 +446,10 @@ class NemotronHRolloutSampler:
     if not keys:
       return
     def capture(key):
+      if key[0] == "move":  # moves lane (slot) 1 into 0: capture runs on whatever the lanes hold
+        for _ in range(2):
+          self._move(key[1], 0, 1)
+        return
       if key[0] == "flush":
         for _ in range(2):
           self._fold(key[1], *key[2:])
@@ -445,7 +460,7 @@ class NemotronHRolloutSampler:
         self._run(replay, size, step, 0, self.rate, *rows)
     before = {key: arena.arg for key, arena in self.arenas.items()}
     # the largest bucket (then the most rows) first, flushes last
-    order = lambda k: (1, 0) if k[0] == "flush" else (-k[1], -(k[3] if len(k) > 3 else self.full))
+    order = lambda k: (1, 0) if k[0] in ("flush", "move") else (-k[1], -(k[3] if len(k) > 3 else self.full))
     for key in sorted(keys, key=order):
       capture(key)
       del self.graphs[key]
@@ -891,7 +906,7 @@ class NemotronHRolloutSampler:
         high = next((g for g in range(self.prompts - 1, low, -1) if slots[g] is not None), None)
         if high is None:
           break
-        self.move_slot(self.source.bind(low), self.slot_from.bind(high))
+        self._move("slot", low, high)
         slots[low], slots[high] = slots[high], None
         for l in lanes:
           if l is not None and l["slot"] == high:
@@ -905,7 +920,7 @@ class NemotronHRolloutSampler:
         high = next((b for b in range(self.batch - 1, low, -1) if lanes[b] is not None), None)
         if high is None:
           break
-        self.move_lane(self.lane.bind(low), self.lane_from.bind(high))
+        self._move("lane", low, high)
         lanes[low], lanes[high] = lanes[high], None
         slots[lanes[low]["slot"]]["rows"][lanes[low]["row"]] = low
         moves += 1

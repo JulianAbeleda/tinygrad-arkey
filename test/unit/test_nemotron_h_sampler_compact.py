@@ -109,6 +109,23 @@ class TestNemotronHSamplerCompact(unittest.TestCase):
       for tokens, logprobs in rollouts:
         model_tests.TestNemotronHRolloutSampler._check(self, model, prompt, tokens, logprobs)
 
+  def test_moves_need_no_memory_of_their_own(self):
+    import gc
+    from tinygrad.helpers import GlobalCounters
+    model = tiny_model()
+    sampler = NemotronHRolloutSampler(model, batch=4, capacity=16, prefix_capacity=8, prompts=4, rows=2, ring=2,
+                                      window=2, capture=len(model.blk) - 1, compact=(2,))
+    sampler.warm()
+    self.assertIn(("move", "lane"), sampler.graphs)
+    self.assertIn(("move", "slot"), sampler.graphs)
+    gc.collect()
+    before = GlobalCounters.mem_used
+    for _ in range(3):  # the copies' one-lane temporaries live in the step graphs' arenas, captured at warm()
+      sampler._move("lane", 0, 1)
+      sampler._move("slot", 0, 1)
+    gc.collect()
+    self.assertEqual(GlobalCounters.mem_used, before)
+
   def test_compact_rows_are_checked(self):
     model = tiny_model()
     with self.assertRaises(ValueError):
