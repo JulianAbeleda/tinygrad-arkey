@@ -26,20 +26,20 @@
       "split_k": 7
     },
     {
-      "canonical_identity": "c5031229c5d9b6d028fe2d7f381934a733c3200688a33a02b9cf22f2ff704537",
+      "canonical_identity": "d3a223b158498b1d373ca57dbad0b3cd71de7ff6f43ab0cb05fede5ac6ff65bd",
       "k": 3136,
       "m": 128,
       "n": 1024,
       "role": "attn_kv",
-      "split_k": 7
+      "split_k": 5
     },
     {
-      "canonical_identity": "f4a0ad64b3c0c7b5eb16a847e1a17e9782be4d7a529808bb55d487b785e0b580",
+      "canonical_identity": "bb9e0bfe66b9574566710081fd21b02cdc71ce0c719b3e2792dcd9d4ac374e85",
       "k": 3136,
       "m": 256,
       "n": 1024,
       "role": "attn_kv",
-      "split_k": 7
+      "split_k": 5
     },
     {
       "canonical_identity": "f364646d609276e1eecc6445c3660a94d6c6a0741d3b8079c2f921ab54b55204",
@@ -82,20 +82,20 @@
       "split_k": 10
     },
     {
-      "canonical_identity": "98265970badae90e724a8c9395fd11753d35c7901dd4d8e6720cefc2473f14c5",
+      "canonical_identity": "648aa7a2fe6daefabd5b4e767a271ab63ce205db3c3437f69cc5c77f1d955843",
       "k": 5120,
       "m": 128,
       "n": 3200,
       "role": "attn_o",
-      "split_k": 5
+      "split_k": 3
     },
     {
-      "canonical_identity": "914172a4947fdc954c1a50ec5e0ce5272922305f3facea379763a0539fd540dc",
+      "canonical_identity": "98089515d624cda677031fdec25c35ed354fbc4d8eb25fe0c426f5996137fc22",
       "k": 5120,
       "m": 256,
       "n": 3200,
       "role": "attn_o",
-      "split_k": 4
+      "split_k": 3
     },
     {
       "canonical_identity": "dc1c07ef4391c2f46474484d1a4e5bb3052e1282c976e6f0a0a1397499b5dc72",
@@ -194,20 +194,20 @@
       "split_k": 4
     },
     {
-      "canonical_identity": "02b9ae74b0e5a5bbe6a24734f31aca426f5bc38617c97d6e54333edc342e2d94",
+      "canonical_identity": "4bdc2d61d078ab80503728c36634d29b849a420d44452d001a774e17998988af",
       "k": 12544,
       "m": 128,
       "n": 3200,
       "role": "ffn_down",
-      "split_k": 8
+      "split_k": 6
     },
     {
-      "canonical_identity": "c8cd7f9e627a9cbd5bb5c79fd8c8798d2659725164778148f370d7469d723eec",
+      "canonical_identity": "a69e70044260fc0e259e277899dc17f4173bd2f3f24676533489456b01b2187d",
       "k": 12544,
       "m": 256,
       "n": 3200,
       "role": "ffn_down",
-      "split_k": 4
+      "split_k": 3
     },
     {
       "canonical_identity": "a0202ce5d0b56b2ed5130a1616d043989f100e46e5efb05290f6f3a632a83522",
@@ -250,15 +250,15 @@
       "split_k": 1
     },
     {
-      "canonical_identity": "f638c071ec2df8757efde016abf00730ad571c6056ab430e4b1b2e8fcb637cad",
+      "canonical_identity": "c51418c6042a36432a7a366a7a0c6d91cca41c59ec5edea2e9d5b285f5d33d80",
       "k": 3136,
       "m": 128,
       "n": 12544,
       "role": "ffn_up",
-      "split_k": 2
+      "split_k": 3
     },
     {
-      "canonical_identity": "6455387a5bd81a4bfe40450db77f8e1e5d72be789d84db544e0311b33feffa57",
+      "canonical_identity": "ebdd929068365a1cd65b048fa6a27602ab81b8104a766324b0e6bae26f611ad3",
       "k": 3136,
       "m": 256,
       "n": 12544,
@@ -314,7 +314,7 @@
       "split_k": 1
     },
     {
-      "canonical_identity": "ddb28a19e3595ee4ae4442683ab0f80376807d76c3a246a2ee6a2565e04e3bde",
+      "canonical_identity": "d478cd76e66c6cd6b8442999ff456871f301d66f24efeefb35223fda28f975d7",
       "k": 3136,
       "m": 256,
       "n": 131072,
@@ -362,7 +362,7 @@
       "split_k": 1
     },
     {
-      "canonical_identity": "b6a091832ab052f7772dae42ba5ed85fd6325a725388ddadfb0893f01e262fc3",
+      "canonical_identity": "a3692d31898de746b81e061cb688664a5a63f8f6e0404da17623ba01ee091428",
       "k": 3136,
       "m": 256,
       "n": 17536,
@@ -418,12 +418,12 @@
       "split_k": 6
     },
     {
-      "canonical_identity": "fa0cb467810ba919114c2cbb1395d616a045204517a231fc6189467f4a7352d8",
+      "canonical_identity": "95dfc4f4e25d3b65caa8baef301cd08aebb73fd4301bd240ccbd8e0653d2b4a9",
       "k": 7680,
       "m": 256,
       "n": 3200,
       "role": "ssm_out",
-      "split_k": 4
+      "split_k": 3
     },
     {
       "canonical_identity": "d4baf8bbba441d122a850ea19a4e96a7eb99f14832eaae641c6a5902c11ff494",
@@ -1283,193 +1283,7 @@
       }
     },
     {
-      "candidate_set_identity": "candidate_set:sha256:57030b6a7790f6faf039b66435e1667a99ef9b547733b64aad449e26889890c7",
-      "entries": [
-        {
-          "canonical_identity": "c5031229c5d9b6d028fe2d7f381934a733c3200688a33a02b9cf22f2ff704537",
-          "legacy_identity": "23a2db326c3b57a9d980a6d8e080877ba78031e5d5efe19cff1fb72d9b042e17",
-          "role": "attn_kv",
-          "shape": {
-            "k": 448,
-            "m": 128,
-            "n": 1024
-          }
-        },
-        {
-          "canonical_identity": "f4a0ad64b3c0c7b5eb16a847e1a17e9782be4d7a529808bb55d487b785e0b580",
-          "legacy_identity": "920ab7f33afc4fd7e86aae67ddf56c0b77edcd491c77098e59a1fb1974bcf903",
-          "role": "attn_kv",
-          "shape": {
-            "k": 448,
-            "m": 256,
-            "n": 1024
-          }
-        },
-        {
-          "canonical_identity": "914172a4947fdc954c1a50ec5e0ce5272922305f3facea379763a0539fd540dc",
-          "legacy_identity": "2dc50f2b4467107532b69aca12a0ec7dc53a6272203cf67c069d2bc54a260775",
-          "role": "attn_o",
-          "shape": {
-            "k": 1280,
-            "m": 256,
-            "n": 3200
-          }
-        },
-        {
-          "canonical_identity": "c8cd7f9e627a9cbd5bb5c79fd8c8798d2659725164778148f370d7469d723eec",
-          "legacy_identity": "8c8b372b9ae06ccb5007fdf503b9e5ba0aba5b3b54250bcf7311ddeb16816493",
-          "role": "ffn_down",
-          "shape": {
-            "k": 3136,
-            "m": 256,
-            "n": 3200
-          }
-        },
-        {
-          "canonical_identity": "fa0cb467810ba919114c2cbb1395d616a045204517a231fc6189467f4a7352d8",
-          "legacy_identity": "7524f9ed12a09e0c6ada0a7de01be17c6bcf4146028332ee2be07229deea54ff",
-          "role": "ssm_out",
-          "shape": {
-            "k": 1920,
-            "m": 256,
-            "n": 3200
-          }
-        }
-      ],
-      "profile": "nemotron_h_4b_bf16_sm120",
-      "route_id": "prefill_wmma_lds_dbuf_generated",
-      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
-      "target": {
-        "arch": "sm_120",
-        "backend": "NV",
-        "wave_size": 32
-      },
-      "template": {
-        "dtypes": {
-          "a": "bf16",
-          "accumulator": "fp32",
-          "b": "bf16",
-          "c": "fp32"
-        },
-        "layout": {
-          "a": "row_major",
-          "b": "transposed_row_major",
-          "c": "row_major"
-        },
-        "schedule": {
-          "cooperative_load": {
-            "a": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            },
-            "b": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            }
-          },
-          "dependency_policy": {
-            "barriers": [
-              "before_fragment_load",
-              "after_wmma_before_slot_reuse"
-            ],
-            "waitcnt": {
-              "lgkm": null,
-              "vm": null
-            }
-          },
-          "epilogue": {
-            "lane_mapping": "wmma_accumulator_scalar_b16",
-            "vector_width": 1
-          },
-          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
-          "lds": {
-            "banks": 32,
-            "load_vector_width": 8,
-            "padding": 0,
-            "store_vector_width": 8,
-            "strides": {
-              "a": 64,
-              "b": 64
-            },
-            "swizzle": "xor_b128",
-            "windows": {
-              "a": [
-                0,
-                4096
-              ],
-              "b": [
-                4096,
-                8192
-              ]
-            }
-          },
-          "numerical_mode": "ieee_fp16_acc_fp32",
-          "pipeline": {
-            "async_copy": true,
-            "buffer_count": 4,
-            "epoch_graph": [
-              {
-                "barrier": "before_fragment_load",
-                "consume": [
-                  "a",
-                  "b"
-                ],
-                "epoch": "body",
-                "produce": [
-                  "a",
-                  "b"
-                ],
-                "slot": 0,
-                "wait": [
-                  "global",
-                  "lds"
-                ]
-              }
-            ],
-            "fragment_load": "matrix",
-            "stage_count": 1
-          },
-          "residency": {
-            "preload": [
-              "a",
-              "b"
-            ],
-            "resident": [
-              "accumulator"
-            ],
-            "reuse": {
-              "a": 4,
-              "b": 2
-            }
-          },
-          "threads": 128,
-          "tile": {
-            "k": 32,
-            "m": 64,
-            "n": 64
-          },
-          "waves": {
-            "m": 2,
-            "n": 2
-          },
-          "wmma": {
-            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_8x16x16_f16"
-          }
-        },
-        "schema_version": "boltbeam.full_kernel_candidate.v1",
-        "static_constraints": {
-          "allow_spill": false,
-          "max_lds_bytes": 101376,
-          "max_vgpr_per_thread": 256
-        }
-      }
-    },
-    {
-      "candidate_set_identity": "candidate_set:sha256:5b362fbd306f70464a6b2dec892f943e655c1c5ef87d90f2ac57becfafc2f0c3",
+      "candidate_set_identity": "candidate_set:sha256:3dd5bb7f975b95941a54eaf73984e7b5206d521e911a76331e98094a9aa122e8",
       "entries": [
         {
           "canonical_identity": "5f27f90c5d4c6f8bc605e4b76b5fd0beb390ddeab5b8c63b08727ee4b060f4a8",
@@ -1482,13 +1296,13 @@
           }
         },
         {
-          "canonical_identity": "02b9ae74b0e5a5bbe6a24734f31aca426f5bc38617c97d6e54333edc342e2d94",
-          "legacy_identity": "0533e3d9a3d8cf0cb7ca269f5068bcf0f57d43470e364a056565168499621796",
-          "role": "ffn_down",
+          "canonical_identity": "d3a223b158498b1d373ca57dbad0b3cd71de7ff6f43ab0cb05fede5ac6ff65bd",
+          "legacy_identity": "d6b4305b6aa5b87b430da5a50bcafc812e931f8be6a8818a41a7f98e0c8bb1e8",
+          "role": "attn_kv",
           "shape": {
-            "k": 1568,
+            "k": 640,
             "m": 128,
-            "n": 3200
+            "n": 1024
           }
         }
       ],
@@ -1609,152 +1423,6 @@
           "waves": {
             "m": 2,
             "n": 4
-          },
-          "wmma": {
-            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_8x16x16_f16"
-          }
-        },
-        "schema_version": "boltbeam.full_kernel_candidate.v1",
-        "static_constraints": {
-          "allow_spill": false,
-          "max_lds_bytes": 101376,
-          "max_vgpr_per_thread": 256
-        }
-      }
-    },
-    {
-      "candidate_set_identity": "candidate_set:sha256:8bbf0a24c92ef6525e027d63f02c6dc2f179245a349ca15802ab2b46159f71fc",
-      "entries": [
-        {
-          "canonical_identity": "98265970badae90e724a8c9395fd11753d35c7901dd4d8e6720cefc2473f14c5",
-          "legacy_identity": "127e7ad4a8bf3cc40064c1a86f218328031656f1ae00e63b602be84bc17eb820",
-          "role": "attn_o",
-          "shape": {
-            "k": 1024,
-            "m": 128,
-            "n": 3200
-          }
-        }
-      ],
-      "profile": "nemotron_h_4b_bf16_sm120",
-      "route_id": "prefill_wmma_lds_dbuf_generated",
-      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
-      "target": {
-        "arch": "sm_120",
-        "backend": "NV",
-        "wave_size": 32
-      },
-      "template": {
-        "dtypes": {
-          "a": "bf16",
-          "accumulator": "fp32",
-          "b": "bf16",
-          "c": "fp32"
-        },
-        "layout": {
-          "a": "row_major",
-          "b": "transposed_row_major",
-          "c": "row_major"
-        },
-        "schedule": {
-          "cooperative_load": {
-            "a": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            },
-            "b": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            }
-          },
-          "dependency_policy": {
-            "barriers": [
-              "before_fragment_load",
-              "after_wmma_before_slot_reuse"
-            ],
-            "waitcnt": {
-              "lgkm": null,
-              "vm": null
-            }
-          },
-          "epilogue": {
-            "lane_mapping": "wmma_accumulator_scalar_b16",
-            "vector_width": 1
-          },
-          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
-          "lds": {
-            "banks": 32,
-            "load_vector_width": 8,
-            "padding": 0,
-            "store_vector_width": 8,
-            "strides": {
-              "a": 64,
-              "b": 64
-            },
-            "swizzle": "xor_b128",
-            "windows": {
-              "a": [
-                0,
-                4096
-              ],
-              "b": [
-                4096,
-                8192
-              ]
-            }
-          },
-          "numerical_mode": "ieee_fp16_acc_fp32",
-          "pipeline": {
-            "async_copy": true,
-            "buffer_count": 3,
-            "epoch_graph": [
-              {
-                "barrier": "before_fragment_load",
-                "consume": [
-                  "a",
-                  "b"
-                ],
-                "epoch": "body",
-                "produce": [
-                  "a",
-                  "b"
-                ],
-                "slot": 0,
-                "wait": [
-                  "global",
-                  "lds"
-                ]
-              }
-            ],
-            "fragment_load": "matrix",
-            "stage_count": 1
-          },
-          "residency": {
-            "preload": [
-              "a",
-              "b"
-            ],
-            "resident": [
-              "accumulator"
-            ],
-            "reuse": {
-              "a": 4,
-              "b": 2
-            }
-          },
-          "threads": 256,
-          "tile": {
-            "k": 32,
-            "m": 64,
-            "n": 64
-          },
-          "waves": {
-            "m": 4,
-            "n": 2
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
@@ -2246,152 +1914,6 @@
       }
     },
     {
-      "candidate_set_identity": "candidate_set:sha256:430672deb068ea033dbad5040c5456828b9cb86af79e27702a03da705f881240",
-      "entries": [
-        {
-          "canonical_identity": "6455387a5bd81a4bfe40450db77f8e1e5d72be789d84db544e0311b33feffa57",
-          "legacy_identity": "b9585f900d5dbeed3721142bf3b6175c0700e27760d4406bd3a158aadff8364b",
-          "role": "ffn_up",
-          "shape": {
-            "k": 3136,
-            "m": 256,
-            "n": 12544
-          }
-        }
-      ],
-      "profile": "nemotron_h_4b_bf16_sm120",
-      "route_id": "prefill_wmma_lds_dbuf_generated",
-      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
-      "target": {
-        "arch": "sm_120",
-        "backend": "NV",
-        "wave_size": 32
-      },
-      "template": {
-        "dtypes": {
-          "a": "bf16",
-          "accumulator": "fp32",
-          "b": "bf16",
-          "c": "fp32"
-        },
-        "layout": {
-          "a": "row_major",
-          "b": "transposed_row_major",
-          "c": "row_major"
-        },
-        "schedule": {
-          "cooperative_load": {
-            "a": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            },
-            "b": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            }
-          },
-          "dependency_policy": {
-            "barriers": [
-              "before_fragment_load",
-              "after_wmma_before_slot_reuse"
-            ],
-            "waitcnt": {
-              "lgkm": null,
-              "vm": null
-            }
-          },
-          "epilogue": {
-            "lane_mapping": "wmma_accumulator_scalar_b16",
-            "vector_width": 1
-          },
-          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
-          "lds": {
-            "banks": 32,
-            "load_vector_width": 8,
-            "padding": 0,
-            "store_vector_width": 8,
-            "strides": {
-              "a": 128,
-              "b": 128
-            },
-            "swizzle": "xor_b128",
-            "windows": {
-              "a": [
-                0,
-                8192
-              ],
-              "b": [
-                8192,
-                16384
-              ]
-            }
-          },
-          "numerical_mode": "ieee_fp16_acc_fp32",
-          "pipeline": {
-            "async_copy": true,
-            "buffer_count": 4,
-            "epoch_graph": [
-              {
-                "barrier": "before_fragment_load",
-                "consume": [
-                  "a",
-                  "b"
-                ],
-                "epoch": "body",
-                "produce": [
-                  "a",
-                  "b"
-                ],
-                "slot": 0,
-                "wait": [
-                  "global",
-                  "lds"
-                ]
-              }
-            ],
-            "fragment_load": "matrix",
-            "stage_count": 1
-          },
-          "residency": {
-            "preload": [
-              "a",
-              "b"
-            ],
-            "resident": [
-              "accumulator"
-            ],
-            "reuse": {
-              "a": 4,
-              "b": 2
-            }
-          },
-          "threads": 128,
-          "tile": {
-            "k": 64,
-            "m": 64,
-            "n": 64
-          },
-          "waves": {
-            "m": 2,
-            "n": 2
-          },
-          "wmma": {
-            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_8x16x16_f16"
-          }
-        },
-        "schema_version": "boltbeam.full_kernel_candidate.v1",
-        "static_constraints": {
-          "allow_spill": false,
-          "max_lds_bytes": 101376,
-          "max_vgpr_per_thread": 256
-        }
-      }
-    },
-    {
       "candidate_set_identity": "candidate_set:sha256:e27bbd7821ffd0048b27138bff1ed4bba15d2d47b1109d85129b38d013778e44",
       "entries": [
         {
@@ -2538,6 +2060,152 @@
       }
     },
     {
+      "candidate_set_identity": "candidate_set:sha256:6294321ee3fa1af3aaec1e9e86e1dbe9ca2d47230ec3812a01c732b293319c74",
+      "entries": [
+        {
+          "canonical_identity": "bb9e0bfe66b9574566710081fd21b02cdc71ce0c719b3e2792dcd9d4ac374e85",
+          "legacy_identity": "578ba6f1e77eb22dfa06fb4c9488c952eeedb555db6f65cddb7fc08e25f271c3",
+          "role": "attn_kv",
+          "shape": {
+            "k": 640,
+            "m": 256,
+            "n": 1024
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 64,
+              "b": 64
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                4096
+              ],
+              "b": [
+                4096,
+                12288
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 4,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 128,
+          "tile": {
+            "k": 32,
+            "m": 64,
+            "n": 128
+          },
+          "waves": {
+            "m": 1,
+            "n": 4
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
       "candidate_set_identity": "candidate_set:sha256:4dd1cf8281161d05858353684feda8ff6cd57c97c6139664fdfb017991b43c14",
       "entries": [
         {
@@ -2644,6 +2312,152 @@
           "pipeline": {
             "async_copy": true,
             "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 128,
+          "tile": {
+            "k": 64,
+            "m": 64,
+            "n": 128
+          },
+          "waves": {
+            "m": 1,
+            "n": 4
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
+      "candidate_set_identity": "candidate_set:sha256:2cdc22393a06b24a7bd53681fdc5413a17efb4e7bdb12878ea3a2929f549e835",
+      "entries": [
+        {
+          "canonical_identity": "648aa7a2fe6daefabd5b4e767a271ab63ce205db3c3437f69cc5c77f1d955843",
+          "legacy_identity": "8fdeaaf3838a46e0c4627f62d9eeef97a95871a34e96b0d908aa7fe39e42d81b",
+          "role": "attn_o",
+          "shape": {
+            "k": 1728,
+            "m": 128,
+            "n": 3200
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 128,
+              "b": 128
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                8192
+              ],
+              "b": [
+                8192,
+                24576
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 3,
             "epoch_graph": [
               {
                 "barrier": "before_fragment_load",
@@ -3434,153 +3248,7 @@
       }
     },
     {
-      "candidate_set_identity": "candidate_set:sha256:bf3fc4e98ff5eaf4417e6e842609b25d554ff6ae2aa7ef135c8ae9446fd85498",
-      "entries": [
-        {
-          "canonical_identity": "f638c071ec2df8757efde016abf00730ad571c6056ab430e4b1b2e8fcb637cad",
-          "legacy_identity": "f1e976e891d57ba39dabe4107e524d75c50a8fffa9a2d18b11010159fc2b08a5",
-          "role": "ffn_up",
-          "shape": {
-            "k": 1568,
-            "m": 128,
-            "n": 12544
-          }
-        }
-      ],
-      "profile": "nemotron_h_4b_bf16_sm120",
-      "route_id": "prefill_wmma_lds_dbuf_generated",
-      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
-      "target": {
-        "arch": "sm_120",
-        "backend": "NV",
-        "wave_size": 32
-      },
-      "template": {
-        "dtypes": {
-          "a": "bf16",
-          "accumulator": "fp32",
-          "b": "bf16",
-          "c": "fp32"
-        },
-        "layout": {
-          "a": "row_major",
-          "b": "transposed_row_major",
-          "c": "row_major"
-        },
-        "schedule": {
-          "cooperative_load": {
-            "a": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            },
-            "b": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            }
-          },
-          "dependency_policy": {
-            "barriers": [
-              "before_fragment_load",
-              "after_wmma_before_slot_reuse"
-            ],
-            "waitcnt": {
-              "lgkm": null,
-              "vm": null
-            }
-          },
-          "epilogue": {
-            "lane_mapping": "wmma_accumulator_scalar_b16",
-            "vector_width": 1
-          },
-          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
-          "lds": {
-            "banks": 32,
-            "load_vector_width": 8,
-            "padding": 0,
-            "store_vector_width": 8,
-            "strides": {
-              "a": 64,
-              "b": 64
-            },
-            "swizzle": "xor_b128",
-            "windows": {
-              "a": [
-                0,
-                8192
-              ],
-              "b": [
-                8192,
-                12288
-              ]
-            }
-          },
-          "numerical_mode": "ieee_fp16_acc_fp32",
-          "pipeline": {
-            "async_copy": true,
-            "buffer_count": 4,
-            "epoch_graph": [
-              {
-                "barrier": "before_fragment_load",
-                "consume": [
-                  "a",
-                  "b"
-                ],
-                "epoch": "body",
-                "produce": [
-                  "a",
-                  "b"
-                ],
-                "slot": 0,
-                "wait": [
-                  "global",
-                  "lds"
-                ]
-              }
-            ],
-            "fragment_load": "matrix",
-            "stage_count": 1
-          },
-          "residency": {
-            "preload": [
-              "a",
-              "b"
-            ],
-            "resident": [
-              "accumulator"
-            ],
-            "reuse": {
-              "a": 4,
-              "b": 2
-            }
-          },
-          "threads": 128,
-          "tile": {
-            "k": 32,
-            "m": 128,
-            "n": 64
-          },
-          "waves": {
-            "m": 2,
-            "n": 2
-          },
-          "wmma": {
-            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_8x16x16_f16"
-          }
-        },
-        "schema_version": "boltbeam.full_kernel_candidate.v1",
-        "static_constraints": {
-          "allow_spill": false,
-          "max_lds_bytes": 101376,
-          "max_vgpr_per_thread": 256
-        }
-      }
-    },
-    {
-      "candidate_set_identity": "candidate_set:sha256:9a2f01a4b6bf7a311e093dbd2ba1de91b4343264a46634cc75cd196ee163ad11",
+      "candidate_set_identity": "candidate_set:sha256:3a2376c87ca77ea1188f9e15d45b98e8ece297612f3b4812b54511d35d17dacb",
       "entries": [
         {
           "canonical_identity": "38fa81cb24f1d260f1c0a8d000e35e58f8a9d93c2d667b396cfb976f466ee6df",
@@ -3589,16 +3257,6 @@
           "shape": {
             "k": 3136,
             "m": 128,
-            "n": 131072
-          }
-        },
-        {
-          "canonical_identity": "ddb28a19e3595ee4ae4442683ab0f80376807d76c3a246a2ee6a2565e04e3bde",
-          "legacy_identity": "95d607f5350a5a0e1b1179146d11d65d8c3375f57cb29a9893139f17c7a7ff75",
-          "role": "output",
-          "shape": {
-            "k": 3136,
-            "m": 256,
             "n": 131072
           }
         }
@@ -3736,8 +3394,164 @@
       }
     },
     {
-      "candidate_set_identity": "candidate_set:sha256:fc94d6f1d045870d4f9f307a5abf06982b65f00dcdc709def3bffa54a7419628",
+      "candidate_set_identity": "candidate_set:sha256:13bfafbc8f4eba76c0d31c365cd64185e1d9e25ff38b9d510c95caf9255b2d77",
       "entries": [
+        {
+          "canonical_identity": "ebdd929068365a1cd65b048fa6a27602ab81b8104a766324b0e6bae26f611ad3",
+          "legacy_identity": "33ae963ddf41aca9b07e20ea2ca9a606bfa2db481d879e0574af5b144aa794b0",
+          "role": "ffn_up",
+          "shape": {
+            "k": 3136,
+            "m": 256,
+            "n": 12544
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 128,
+              "b": 128
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                16384
+              ],
+              "b": [
+                16384,
+                24576
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 64,
+            "m": 128,
+            "n": 64
+          },
+          "waves": {
+            "m": 2,
+            "n": 4
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
+      "candidate_set_identity": "candidate_set:sha256:7a11ccbd167a7eab3804a2f6fcdee9c2aedec87b20bf0848c1571d50cef27d81",
+      "entries": [
+        {
+          "canonical_identity": "a69e70044260fc0e259e277899dc17f4173bd2f3f24676533489456b01b2187d",
+          "legacy_identity": "5633fe7317162c264388dd0297831dd4b9543df4cb78a3cc8eb82906f69b3fc1",
+          "role": "ffn_down",
+          "shape": {
+            "k": 4192,
+            "m": 256,
+            "n": 3200
+          }
+        },
         {
           "canonical_identity": "eb0f28848ed3c4bb9115c3ac5d7eeb81239de52b4635326deac84e8085bfa8fe",
           "legacy_identity": "3ea13168a5a8a4f2a1d3e8849105907862f993130a3e31e4f43a8820b539b44f",
@@ -3822,152 +3636,6 @@
           "pipeline": {
             "async_copy": true,
             "buffer_count": 3,
-            "epoch_graph": [
-              {
-                "barrier": "before_fragment_load",
-                "consume": [
-                  "a",
-                  "b"
-                ],
-                "epoch": "body",
-                "produce": [
-                  "a",
-                  "b"
-                ],
-                "slot": 0,
-                "wait": [
-                  "global",
-                  "lds"
-                ]
-              }
-            ],
-            "fragment_load": "matrix",
-            "stage_count": 1
-          },
-          "residency": {
-            "preload": [
-              "a",
-              "b"
-            ],
-            "resident": [
-              "accumulator"
-            ],
-            "reuse": {
-              "a": 4,
-              "b": 2
-            }
-          },
-          "threads": 256,
-          "tile": {
-            "k": 32,
-            "m": 128,
-            "n": 128
-          },
-          "waves": {
-            "m": 2,
-            "n": 4
-          },
-          "wmma": {
-            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
-            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
-            "instruction_family": "wmma_f32_8x16x16_f16"
-          }
-        },
-        "schema_version": "boltbeam.full_kernel_candidate.v1",
-        "static_constraints": {
-          "allow_spill": false,
-          "max_lds_bytes": 101376,
-          "max_vgpr_per_thread": 256
-        }
-      }
-    },
-    {
-      "candidate_set_identity": "candidate_set:sha256:e886eae03765eb5035317be8ce5337ca4e0f3489b0acbceea7b9d49f583439ae",
-      "entries": [
-        {
-          "canonical_identity": "b6a091832ab052f7772dae42ba5ed85fd6325a725388ddadfb0893f01e262fc3",
-          "legacy_identity": "8573f00f869549d39bc98477811455cbbcf520c16df52fffaf77b4e7d7ea833a",
-          "role": "ssm_in",
-          "shape": {
-            "k": 3136,
-            "m": 256,
-            "n": 17536
-          }
-        }
-      ],
-      "profile": "nemotron_h_4b_bf16_sm120",
-      "route_id": "prefill_wmma_lds_dbuf_generated",
-      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
-      "target": {
-        "arch": "sm_120",
-        "backend": "NV",
-        "wave_size": 32
-      },
-      "template": {
-        "dtypes": {
-          "a": "bf16",
-          "accumulator": "fp32",
-          "b": "bf16",
-          "c": "fp32"
-        },
-        "layout": {
-          "a": "row_major",
-          "b": "transposed_row_major",
-          "c": "row_major"
-        },
-        "schedule": {
-          "cooperative_load": {
-            "a": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            },
-            "b": {
-              "alignment": 16,
-              "lane_mapping": "cooperative_row_stride_64_b128",
-              "vector_width": 8
-            }
-          },
-          "dependency_policy": {
-            "barriers": [
-              "before_fragment_load",
-              "after_wmma_before_slot_reuse"
-            ],
-            "waitcnt": {
-              "lgkm": null,
-              "vm": null
-            }
-          },
-          "epilogue": {
-            "lane_mapping": "wmma_accumulator_scalar_b16",
-            "vector_width": 1
-          },
-          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
-          "lds": {
-            "banks": 32,
-            "load_vector_width": 8,
-            "padding": 0,
-            "store_vector_width": 8,
-            "strides": {
-              "a": 64,
-              "b": 64
-            },
-            "swizzle": "xor_b128",
-            "windows": {
-              "a": [
-                0,
-                8192
-              ],
-              "b": [
-                8192,
-                16384
-              ]
-            }
-          },
-          "numerical_mode": "ieee_fp16_acc_fp32",
-          "pipeline": {
-            "async_copy": true,
-            "buffer_count": 4,
             "epoch_graph": [
               {
                 "barrier": "before_fragment_load",
@@ -4201,6 +3869,152 @@
       }
     },
     {
+      "candidate_set_identity": "candidate_set:sha256:47126a14257e4637d7d4914a95c57b3fd94047e3f9a4a39a0de797328554bbae",
+      "entries": [
+        {
+          "canonical_identity": "95dfc4f4e25d3b65caa8baef301cd08aebb73fd4301bd240ccbd8e0653d2b4a9",
+          "legacy_identity": "9b950d36be78bd42e9bab2e4244cbf5710439dace725d52a5eed15832c765c82",
+          "role": "ssm_out",
+          "shape": {
+            "k": 2560,
+            "m": 256,
+            "n": 3200
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 128,
+              "b": 128
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                16384
+              ],
+              "b": [
+                16384,
+                32768
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 128,
+          "tile": {
+            "k": 64,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 1,
+            "n": 4
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
       "candidate_set_identity": "candidate_set:sha256:b8c748355d68569d9fb6506b9e8f3377166891d1c6ceb65c39a98814e00afb0c",
       "entries": [
         {
@@ -4347,8 +4161,28 @@
       }
     },
     {
-      "candidate_set_identity": "candidate_set:sha256:f0244d8b6cb8f5c9f6a29422a4b21fe68951b7330fb84194ba2488120ac891fe",
+      "candidate_set_identity": "candidate_set:sha256:d496f68efa97c77b8d1629f3fa3f7a23a9915e35aa5d35ac9e2ff43273a7f231",
       "entries": [
+        {
+          "canonical_identity": "4bdc2d61d078ab80503728c36634d29b849a420d44452d001a774e17998988af",
+          "legacy_identity": "0818680ac272e3521312d24f7774a4e9a06fd29a544bd443517b09773f4c8d31",
+          "role": "ffn_down",
+          "shape": {
+            "k": 2112,
+            "m": 128,
+            "n": 3200
+          }
+        },
+        {
+          "canonical_identity": "c51418c6042a36432a7a366a7a0c6d91cca41c59ec5edea2e9d5b285f5d33d80",
+          "legacy_identity": "c645a6b963549249a9a4628a48e0479743dbbeabffcf3602138b2489ed744cc2",
+          "role": "ffn_up",
+          "shape": {
+            "k": 1088,
+            "m": 128,
+            "n": 12544
+          }
+        },
         {
           "canonical_identity": "9cf41083db62f207c91f30a929fd9ced78b5c5a352d19eee9655f7ff82fceb4a",
           "legacy_identity": "a05ac61e47060a6499829347e85f4fd924b2de38fa72d385af09d7b0eb23e9a1",
@@ -4503,6 +4337,152 @@
       }
     },
     {
+      "candidate_set_identity": "candidate_set:sha256:94f37ba8e7bca42723b1b42e45dc4a7ed8d4db3c0916b2d8124ecc61ff47d728",
+      "entries": [
+        {
+          "canonical_identity": "98089515d624cda677031fdec25c35ed354fbc4d8eb25fe0c426f5996137fc22",
+          "legacy_identity": "5a32af373078eee470adb604dbed82f85254ec545cf227e24592fd4bcdc6b4f8",
+          "role": "attn_o",
+          "shape": {
+            "k": 1728,
+            "m": 256,
+            "n": 3200
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 128,
+              "b": 128
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                16384
+              ],
+              "b": [
+                16384,
+                32768
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 3,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 64,
+            "m": 128,
+            "n": 128
+          },
+          "waves": {
+            "m": 2,
+            "n": 4
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
       "candidate_set_identity": "candidate_set:sha256:d1698435f22bca4bd877bb23e1eecee0c090a25ee96990427ac6950ece685ca1",
       "entries": [
         {
@@ -4633,6 +4613,298 @@
           "waves": {
             "m": 2,
             "n": 8
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
+      "candidate_set_identity": "candidate_set:sha256:521eb96e6436601922b3829caf3ae1b84366034d64d6f63b040be2c369fb1335",
+      "entries": [
+        {
+          "canonical_identity": "d478cd76e66c6cd6b8442999ff456871f301d66f24efeefb35223fda28f975d7",
+          "legacy_identity": "ce2a59b284fc07147f703ab8ccf87be269241544c6ef65d889129816518b7a15",
+          "role": "output",
+          "shape": {
+            "k": 3136,
+            "m": 256,
+            "n": 131072
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 128,
+              "b": 128
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                32768
+              ],
+              "b": [
+                32768,
+                40960
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 2,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 128,
+          "tile": {
+            "k": 64,
+            "m": 256,
+            "n": 64
+          },
+          "waves": {
+            "m": 4,
+            "n": 1
+          },
+          "wmma": {
+            "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",
+            "fragment_layout": "cuda_mma_f32_8x16x16_f16_lds2_static",
+            "instruction_family": "wmma_f32_8x16x16_f16"
+          }
+        },
+        "schema_version": "boltbeam.full_kernel_candidate.v1",
+        "static_constraints": {
+          "allow_spill": false,
+          "max_lds_bytes": 101376,
+          "max_vgpr_per_thread": 256
+        }
+      }
+    },
+    {
+      "candidate_set_identity": "candidate_set:sha256:63156c4cf9b3d57db3552b7a33f186dbdaf0d1ea8422832a2d9ec19ffe335c1f",
+      "entries": [
+        {
+          "canonical_identity": "a3692d31898de746b81e061cb688664a5a63f8f6e0404da17623ba01ee091428",
+          "legacy_identity": "4fe272818b594d1559a30c3cbbae563405772caa63349f0d7aefde07a4d9dbb2",
+          "role": "ssm_in",
+          "shape": {
+            "k": 3136,
+            "m": 256,
+            "n": 17536
+          }
+        }
+      ],
+      "profile": "nemotron_h_4b_bf16_sm120",
+      "route_id": "prefill_wmma_lds_dbuf_generated",
+      "schema": "tinygrad.prefill_wmma_lds_compact.v1",
+      "target": {
+        "arch": "sm_120",
+        "backend": "NV",
+        "wave_size": 32
+      },
+      "template": {
+        "dtypes": {
+          "a": "bf16",
+          "accumulator": "fp32",
+          "b": "bf16",
+          "c": "fp32"
+        },
+        "layout": {
+          "a": "row_major",
+          "b": "transposed_row_major",
+          "c": "row_major"
+        },
+        "schedule": {
+          "cooperative_load": {
+            "a": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            },
+            "b": {
+              "alignment": 16,
+              "lane_mapping": "cooperative_row_stride_64_b128",
+              "vector_width": 8
+            }
+          },
+          "dependency_policy": {
+            "barriers": [
+              "before_fragment_load",
+              "after_wmma_before_slot_reuse"
+            ],
+            "waitcnt": {
+              "lgkm": null,
+              "vm": null
+            }
+          },
+          "epilogue": {
+            "lane_mapping": "wmma_accumulator_scalar_b16",
+            "vector_width": 1
+          },
+          "lane_ownership": "cuda_mma_f32_8x16x16_f16_lds2_static",
+          "lds": {
+            "banks": 32,
+            "load_vector_width": 8,
+            "padding": 0,
+            "store_vector_width": 8,
+            "strides": {
+              "a": 64,
+              "b": 64
+            },
+            "swizzle": "xor_b128",
+            "windows": {
+              "a": [
+                0,
+                16384
+              ],
+              "b": [
+                16384,
+                24576
+              ]
+            }
+          },
+          "numerical_mode": "ieee_fp16_acc_fp32",
+          "pipeline": {
+            "async_copy": true,
+            "buffer_count": 4,
+            "epoch_graph": [
+              {
+                "barrier": "before_fragment_load",
+                "consume": [
+                  "a",
+                  "b"
+                ],
+                "epoch": "body",
+                "produce": [
+                  "a",
+                  "b"
+                ],
+                "slot": 0,
+                "wait": [
+                  "global",
+                  "lds"
+                ]
+              }
+            ],
+            "fragment_load": "matrix",
+            "stage_count": 1
+          },
+          "residency": {
+            "preload": [
+              "a",
+              "b"
+            ],
+            "resident": [
+              "accumulator"
+            ],
+            "reuse": {
+              "a": 4,
+              "b": 2
+            }
+          },
+          "threads": 256,
+          "tile": {
+            "k": 32,
+            "m": 256,
+            "n": 128
+          },
+          "waves": {
+            "m": 4,
+            "n": 2
           },
           "wmma": {
             "accumulator_ownership": "wmma_accum_wm_x_wn_8_vgprs",

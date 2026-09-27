@@ -43,8 +43,11 @@ def test_routes_cover_only_exact_padded_nemotron_projections():
   routes = dense.dense_bf16_routes(**NV)
   assert routes
   for (role, m, n, k), route in routes.items():
-    assert NEMOTRON[role] == (n, k) and n % dense.WEIGHT_ROW_TILE == 0 and k % route.split_k == 0
-    assert route.admission.normalized_payload["workload"]["shape"] == {"m":m, "n":n, "k":k // route.split_k}
+    tk = route.admission.geometry.tile[2]
+    assert NEMOTRON[role] == (n, k) and n % dense.WEIGHT_ROW_TILE == 0 and route.k_pad == dense.ragged_k_pad(k, route.split_k, tk)
+    assert route.k_pad - k < route.split_k * tk   # ragged split-K pads less than one tile per slice
+    assert route.admission.normalized_payload["workload"]["shape"] == {"m":m, "n":n, "k":route.k_pad // route.split_k}
+  assert any(r.k_pad > r.k for r in routes.values())   # the promoted table exercises ragged split-K
   assert dense.dense_bf16_routes("NV", "sm_89", 32) is None and dense.dense_bf16_routes("AMD", "gfx1100", 32) is None
 
 

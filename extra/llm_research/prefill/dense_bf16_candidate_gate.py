@@ -64,7 +64,9 @@ def run_arm(route, reps: int, *, candidate: bool) -> tuple[np.ndarray, float, li
   a, w = Tensor(a_np).cast(dtypes.bfloat16).realize(), Tensor(w_np).cast(dtypes.bfloat16).realize()
   _PROGRAMS.clear()
   if candidate:
-    gemm = lambda: dense._chunk(a, w, route)
+    # the route's activation is zero-padded to k_pad (ragged split-K), exactly as route_dense_bf16 materializes it
+    a_route = a if route.k_pad == k else a.pad(((0, 0), (0, route.k_pad - k))).contiguous().realize()
+    gemm = lambda: dense._chunk(a_route, w, route)
     out = gemm().realize()
     times = _gpu_times(gemm, reps)
   else:
