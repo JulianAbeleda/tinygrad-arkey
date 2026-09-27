@@ -4,7 +4,7 @@ Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16
 (`~/DayCare/research/rloo-llama-countdown.md`), and a pass/fail answer on its R5 gate. Parity numbers: `README.md`.
 
 ## PAUSED (2026-09-26 ~22:05, Julian)
-All agents stopping cleanly; status notes in ~/scratchpad/{ksearch,w8,corefix}/PAUSE-STATUS.md. Unpushed, pending GPU verification: kernel agent ragged split-K (65dfcfb94, 703dece91) + 256-row grid; sampler agent prefill plan A4/A1/C1 (not started); core agent sibling fusion v2 GPU gate (running at pause). BoltBeam local-only: 2db8922 (ncu importer fix), 4424edc (calibrated cost model). Decisions pending Julian: (1) hi/lo -> plain bf16 decode, (2) Mamba prefill SSD bf16, (3) bf16 Mamba state, (4) push BoltBeam, (5) next RL experiment.
+All agents stopping cleanly; status notes in ~/scratchpad/{ksearch,w8,corefix}/PAUSE-STATUS.md. Kernel agent ragged split-K + 256-row routes landed after the pause (9c227ac02); sampler agent prefill plan A4/A1/C1 (not started); core agent sibling fusion v2 GPU gate (running at pause). BoltBeam local-only: 2db8922 (ncu importer fix), 4424edc (calibrated cost model). Decisions pending Julian: (1) hi/lo -> plain bf16 decode, (2) Mamba prefill SSD bf16, (3) bf16 Mamba state, (4) push BoltBeam, (5) next RL experiment.
 
 ## Definition of done (Julian, 2026-09-25 evening; ordered by dependency)
 1. **Finish phase 1**: RLOO R5-R7, then the LR sweep and the v2 run (does RL help at a real step size?).
@@ -50,6 +50,8 @@ Sibling fusion v1 LANDED 3747f3588 (SIBLING_FUSE=1, default off): same failure s
 Coalescing heuristic LANDED 257491111: step B=32/64/128 11.14->10.62, 17.02->16.05, 28.83->27.29 ms; capture/replay bit-exact; Qwen3-8B decode unchanged (4.29/4.30 ms).
 
 Principled-grid routes LANDED 2f029d81d (1852 measured configs, 14 decode shapes at 64/128 rows): step B=32 11.13->10.88, B=64 16.98->15.63, B=128 unchanged (256 rows not in grid). Combined HEAD re-time pending (the A/B baselines of this and the heuristic differ). Next: calibrate BoltBeam cost model (Spearman 0.33) on the measured points, 256-row grid for B=128, ragged split-K.
+
+Ragged split-K + 256-row routes LANDED 9c227ac02 (cp.async zero-fill K tail 53d248bb0, routes 57616436d, split-K tail gate db6c0d9de; async gate 21/21, candidate gate 24/24, real-4B capture/window bit-exact, prefill parity 8/8): 11 routes 2-23% faster at 128/256 rows. Combined re-time (rollout step+flush, bucket 256, one gpu-run time job) 86b60043b -> 9c227ac02: B=32 10.37 -> 10.36, B=64 14.67 -> 14.08, B=128 (cap 2048) 27.72 -> 26.05 ms; vs vLLM 13.4 / 22.3 at B=64/128 = 95% / 86%. The three 64-row winners (ragged, 4-16% faster in isolation) cost B=32 +0.19 ms in the step (A/B/A/B) and were not promoted -- isolated route time is not step time at 64 rows.
 
 Goal 4 probe (pf_probe.log): large prefill pieces NO LONGER FAIL on exp (1024..8192 all fit; shared pool halves arena memory) but don't speed up (1.15-1.22 s) -> the gap is per-token kernels: 10k 1235 vs vLLM 377 ms = Mamba SSD +384, GEMMs +412, attention +59, lifecycle +5; launches 8540 vs 1012. Distinct 10.5k prompts: B=32/64 fit, B=128 OOMs (34 slots x 10.5k K/V). Plan: A4 prefill shared-arena pool, A1 Mamba SSD restructure (fp32, vLLM-like 5 fused kernels, 421 -> 120-180 ms), C1 pooled prefix K/V by actual tokens; B (plain-bf16 GEMMs, bf16 SSD) and C3 (bf16 state) await Julian. Kernel agent: BoltBeam cost model calibrated (4424edc local; held-out Spearman 0.10 -> 0.58, best-of-top-5 regret 1.15 -> 1.03).
 

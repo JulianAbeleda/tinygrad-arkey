@@ -30,6 +30,18 @@ Continuously batched `NemotronHRolloutSampler` (the RLOO sampler), step + flush 
 | 64 (4096) | 18.9 | 19.8 | 21.6 |
 | 128 (2048) | 33.0 | 35.5 | 35.3 |
 
+Current (9c227ac02: coalescing heuristic, principled-grid + ragged split-K decode routes, shared arena pool; one
+gpu-run time job, 4 reps each within 0.03 ms except B=128 bucket 256 at 25.97-26.17; B=32 buckets 1024/whole ring measured on
+86b60043b, whose 64-row routes are identical):
+
+| B (capacity) | bucket 256 | bucket 1024 | whole ring |
+|---|---|---|---|
+| 32 (4096) | 10.36 | 10.84 | 11.85 |
+| 64 (4096) | 14.08 | 15.19 | 16.99 |
+| 128 (2048) | 26.05 | 28.25 | 28.17 |
+
+vs vLLM step 13.4 / 22.3 ms at B=64/128: 95% / 86% at bucket 256.
+
 The (bucket, wrap) step graphs share one pool of intermediate arenas (7cc433d27, `shared_arenas`): all 13 warm at
 B=64 capacity 4096 in a 1.24 GB pool (mem_used 20.1 -> 21.3 GB), 11 at B=128 capacity 2048 in 1.71 GB. B=128 at
 capacity 4096 fits since 3067908d6 + 96009907e: prompt slots keep only attention's prefix keys/values and one
