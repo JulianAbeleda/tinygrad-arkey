@@ -48,6 +48,8 @@ Coalescing heuristic LANDED 257491111: step B=32/64/128 11.14->10.62, 17.02->16.
 
 Principled-grid routes LANDED 2f029d81d (1852 measured configs, 14 decode shapes at 64/128 rows): step B=32 11.13->10.88, B=64 16.98->15.63, B=128 unchanged (256 rows not in grid). Combined HEAD re-time pending (the A/B baselines of this and the heuristic differ). Next: calibrate BoltBeam cost model (Spearman 0.33) on the measured points, 256-row grid for B=128, ragged split-K.
 
+Goal 4 probe (pf_probe.log): large prefill pieces NO LONGER FAIL on exp (1024..8192 all fit; shared pool halves arena memory) but don't speed up (1.15-1.22 s) -> the gap is per-token kernels: 10k 1235 vs vLLM 377 ms = Mamba SSD +384, GEMMs +412, attention +59, lifecycle +5; launches 8540 vs 1012. Distinct 10.5k prompts: B=32/64 fit, B=128 OOMs (34 slots x 10.5k K/V). Plan: A4 prefill shared-arena pool, A1 Mamba SSD restructure (fp32, vLLM-like 5 fused kernels, 421 -> 120-180 ms), C1 pooled prefix K/V by actual tokens; B (plain-bf16 GEMMs, bf16 SSD) and C3 (bf16 state) await Julian. Kernel agent: BoltBeam cost model calibrated (4424edc local; held-out Spearman 0.10 -> 0.58, best-of-top-5 regret 1.15 -> 1.03).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
