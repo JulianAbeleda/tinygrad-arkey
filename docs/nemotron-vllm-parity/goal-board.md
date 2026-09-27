@@ -44,6 +44,8 @@ Compile-cache key bug FIXED 829da80a7 (to_program keyed by AST only -> now by th
 
 Sibling fusion v1 LANDED 3747f3588 (SIBLING_FUSE=1, default off): same failure set, bit-identical on the 4B, kernels/generate 10692->10184, step -0.3..-1.1%; residual+norm+hi/lo 5->3 kernels. v2 approved: row-per-workgroup lowering (vLLM fused_add_rms_norm style) -> 1 kernel. New-heuristic caf839729 held: isolated norm kernels 3-14x faster but step regressed (B=128 28.83->30.00 ms) -> per-kernel timeline in progress.
 
+Coalescing heuristic LANDED 257491111: step B=32/64/128 11.14->10.62, 17.02->16.05, 28.83->27.29 ms; capture/replay bit-exact; Qwen3-8B decode unchanged (4.29/4.30 ms).
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
