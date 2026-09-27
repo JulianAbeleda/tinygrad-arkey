@@ -46,6 +46,8 @@ Sibling fusion v1 LANDED 3747f3588 (SIBLING_FUSE=1, default off): same failure s
 
 Coalescing heuristic LANDED 257491111: step B=32/64/128 11.14->10.62, 17.02->16.05, 28.83->27.29 ms; capture/replay bit-exact; Qwen3-8B decode unchanged (4.29/4.30 ms).
 
+Principled-grid routes LANDED 2f029d81d (1852 measured configs, 14 decode shapes at 64/128 rows): step B=32 11.13->10.88, B=64 16.98->15.63, B=128 unchanged (256 rows not in grid). Combined HEAD re-time pending (the A/B baselines of this and the heuristic differ). Next: calibrate BoltBeam cost model (Spearman 0.33) on the measured points, 256-row grid for B=128, ragged split-K.
+
 ## Rules
 - Main loop manages; agents build. One owner per file; new workstreams go in new files.
 - GPU: `~/scratchpad/bin/gpu-run time <cmd>` (exclusive, the only source of reported numbers) or `gpu-run check <cmd>`
