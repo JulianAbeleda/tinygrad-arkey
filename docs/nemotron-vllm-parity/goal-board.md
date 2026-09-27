@@ -3,6 +3,9 @@
 Goal: one tinygrad stack (`exp`) that samples AND trains Nemotron 3 Nano 4B BF16 for DayCare's RLOO on Countdown
 (`~/DayCare/research/rloo-llama-countdown.md`), and a pass/fail answer on its R5 gate. Parity numbers: `README.md`.
 
+## PAUSED (2026-09-26 ~22:05, Julian)
+All agents stopping cleanly; status notes in ~/scratchpad/{ksearch,w8,corefix}/PAUSE-STATUS.md. Unpushed, pending GPU verification: kernel agent ragged split-K (65dfcfb94, 703dece91) + 256-row grid; sampler agent prefill plan A4/A1/C1 (not started); core agent sibling fusion v2 GPU gate (running at pause). BoltBeam local-only: 2db8922 (ncu importer fix), 4424edc (calibrated cost model). Decisions pending Julian: (1) hi/lo -> plain bf16 decode, (2) Mamba prefill SSD bf16, (3) bf16 Mamba state, (4) push BoltBeam, (5) next RL experiment.
+
 ## Definition of done (Julian, 2026-09-25 evening; ordered by dependency)
 1. **Finish phase 1**: RLOO R5-R7, then the LR sweep and the v2 run (does RL help at a real step size?).
 2. **Kernel audit (measure first)**: ncu of vLLM/cuBLAS vs BoltBeam-emitted kernels on every Nemotron shape (decode
