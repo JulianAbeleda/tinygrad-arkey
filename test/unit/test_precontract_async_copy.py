@@ -248,3 +248,16 @@ def test_k_tail_not_aligned_to_the_vector_fails_closed():
   with pr.warmstart_candidate_state({key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: _matrix_context((64, 64, 32), (2, 2), 3, swizzle=True)}):
     with pytest.raises(Exception, match="dense aligned"):
       to_program(call.src[0], CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+
+
+def test_k_padded_tail_under_split_k_slices_uses_zero_fill():
+  m, n, k, kp, s = 64, 64 * 31, 1504, 1536, 3      # the tail sits in the last slice: gate on slice*ks + k
+  a = Tensor.empty(m, kp, dtype=dtypes.bfloat16, device="CPU")
+  w = Tensor.empty(n, k, dtype=dtypes.bfloat16, device="CPU").pad(((0, 0), (0, kp - k)))
+  ks = kp // s
+  a3, w3 = a.reshape(m, s, ks).permute(1, 0, 2), w.reshape(n, s, ks).permute(1, 0, 2)
+  (call,) = a3.dot(w3.transpose(1, 2), dtype=dtypes.float).schedule_linear().src
+  key = pr.warmstart_key({s, m, n}, ks)
+  with pr.warmstart_candidate_state({key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: _matrix_context((64, 64, 32), (2, 2), 3, swizzle=True)}):
+    program = to_program(call.src[0], CUDARenderer(Target.parse("NV:CUDA:sm_120")))
+  assert "16, %2;" in next(u.arg for u in program.src if u.op is Ops.SOURCE)

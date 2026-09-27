@@ -930,12 +930,13 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
 
 def _k_tail_gate(operand, src:UOp) -> tuple[UOp, UOp]|None:
-  """``(INDEX, gate)`` for a K-zero-padded dense source ``WHERE(k < K, INDEX(PARAM, WHERE(k < K, idx, Invalid)), 0)``
-  (a lazily padded reduction tail), or None.  The gate must compare exactly this operand's K range with a constant."""
+  """``(INDEX, gate)`` for a K-zero-padded dense source ``WHERE(e < K, INDEX(PARAM, WHERE(e < K, idx, Invalid)), 0)``
+  (a lazily padded reduction tail; ``e`` is the padded tensor's K coordinate, e.g. ``slice*ks + k`` under split-K), or
+  None.  The gate must compare an expression of this operand's K range with a constant."""
   if src.op is not Ops.WHERE or len(src.src) != 3 or src.src[2].op is not Ops.CONST or src.src[2].arg != 0: return None
   gate, inner = src.src[0], src.src[1]
   if inner.op is not Ops.INDEX or len(inner.src) != 2 or inner.src[1].dtype != dtypes.weakint or inner.src[1].get_valid() is not gate: return None
-  if gate.op is not Ops.CMPLT or gate.src[0] is not operand.k_axis or gate.src[1].op is not Ops.CONST: return None
+  if gate.op is not Ops.CMPLT or gate.src[1].op is not Ops.CONST or operand.k_axis not in gate.src[0].backward_slice_with_self: return None
   return inner, gate
 
 def _dense_vector_address(operand, coords:dict, dtype, width:int, *, allow_k_tail:bool=False) -> tuple[UOp, UOp, UOp|None]|None:
@@ -957,13 +958,18 @@ def _dense_vector_address(operand, coords:dict, dtype, width:int, *, allow_k_tai
   if step.op is not Ops.CONST or step.arg != 1: return None
   if start.divides(width) is None: return None
   if gate is not None:
-    k_start = coords[operand.k_axis].simplify()
-    if gate.src[1].arg % width or k_start.divides(width) is None: return None
-    bound = gate.src[1].arg
+    # e = the padded K coordinate: unit step in k, vector-aligned at the vector's first element, bound vector-aligned,
+    # so a vector is wholly inside or wholly past the tail.  idx - e must not depend on k (the address is rest + e).
+    e, bound = gate.src[0], gate.src[1].arg
+    e_start = e.substitute(coords).simplify()
+    if bound % width or e_start.divides(width) is None: return None
+    if (e.substitute({**coords, operand.k_axis:coords[operand.k_axis]+1}) - e_start).simplify().arg != 1: return None
+    rest = (start - e_start).simplify()
+    if operand.k_axis in rest.backward_slice_with_self or rest.divides(width) is None: return None
     gate = gate.substitute(coords).simplify()
     if gate.op is Ops.CONST and gate.arg is True: gate = None     # this vector is provably inside K
     else:   # the address issued: an in-tail vector points at the last in-range vector (and reads 0 bytes of it)
-      start = idx.substitute({**coords, operand.k_axis:k_start.minimum(bound - width)}).simplify()
+      start = rest + e_start.minimum(bound - width)
   if start.vmin < 0 or start.vmax + width > src.src[0].ptrdtype.size: return None
   return src.src[0], start, gate
 
