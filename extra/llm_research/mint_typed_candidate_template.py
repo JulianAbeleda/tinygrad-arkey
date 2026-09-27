@@ -107,14 +107,17 @@ def mint_dense_bf16(selection: list[dict] | None = None) -> dict:
     template = {"schema_version": base["schema_version"], "dtypes": {"a": "bf16", "b": "bf16", "accumulator": "fp32", "c": "fp32"},
                 "layout": dict(base["layout"]), "schedule": derived["schedule"], "static_constraints": derived["static_constraints"]}
     ordered = sorted(rows, key=lambda r: (r["role"], r["m"], r["n"], r["k"]))
+    from tinygrad.llm.dense_candidate_gemm import ragged_k_pad
     compact = _compact(_DENSE_BF16_PROFILE, nv["target"], template,
-                       [(r["role"], (r["m"], r["n"], r["k"] // r["split_k"])) for r in ordered])
+                       [(r["role"], (r["m"], r["n"], ragged_k_pad(r["k"], r["split_k"], tk) // r["split_k"])) for r in ordered])
     sets.append(compact)
     for r, entry in zip(ordered, compact["entries"]):
       routes.append({"role": r["role"], "m": r["m"], "n": r["n"], "k": r["k"], "split_k": r["split_k"],
                      "canonical_identity": entry["canonical_identity"]})
   # The runtime keys warmstart schedules by (output dims, reduce size); two routes may never share a key.
-  keys = [(frozenset({r["m"], r["n"]} | ({r["split_k"]} if r["split_k"] > 1 else set())), r["k"] // r["split_k"]) for r in selection]
+  from tinygrad.llm.dense_candidate_gemm import ragged_k_pad
+  keys = [(frozenset({r["m"], r["n"]} | ({r["split_k"]} if r["split_k"] > 1 else set())),
+           ragged_k_pad(r["k"], r["split_k"], r["geometry"][2]) // r["split_k"]) for r in selection]
   if len(set(keys)) != len(keys): raise ValueError("dense bf16 selection has colliding warmstart keys")
   return {"schema": "tinygrad.dense_bf16_candidate_routes.v1", "profile": _DENSE_BF16_PROFILE, "target": dict(nv["target"]),
           "sets": sets, "routes": sorted(routes, key=lambda r: (r["role"], r["m"]))}

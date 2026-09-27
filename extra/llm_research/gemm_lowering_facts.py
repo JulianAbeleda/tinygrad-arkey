@@ -61,12 +61,12 @@ def lowering_facts(backend:str="NV", arch:str="sm_120", dtype_in:str="bfloat16",
           "lds_padding_bytes": row.lds_padding,
           "async_copy": getattr(renderer, "async_copy_ops", None) is not None, "matrix_fragments": matrix,
           "swizzle_row_bytes": swizzle_rows, "weight_row_granule": WEIGHT_ROW_TILE,
-          "ragged_split_k": False, "stream_k": False,
+          "ragged_split_k": getattr(getattr(renderer, "async_copy_ops", None), "copy16_zfill", None) is not None, "stream_k": False,
           "provenance": {"renderer": f"{renderer.__module__}.{renderer.__name__}", "tensor_core": f"{tc.dims} {din}->{dout}",
                          "capability_row": row.capability_id,
                          "matrix_fragments": "kernel_lds.derive_matrix_fragment_layout", "swizzle": "kernel_lds.xor_swizzle_conflict_free",
                          "weight_row_granule": "tinygrad.llm.dense_candidate_gemm.WEIGHT_ROW_TILE",
-                         "ragged_split_k": "precontract split-K slices are whole K tiles (dense_bf16_geometry_search.feasible)",
+                         "ragged_split_k": "K zero-padded to whole tiles per slice (dense_candidate_gemm.ragged_k_pad), the tail read by masked zero-fill copies (kernel_lds._k_tail_gate); async rings only",
                          "stream_k": "no dense precontract stream-K lowering"}}
 
 

@@ -110,20 +110,25 @@ def _context(geom, pipe):
 
 
 class _Operands:
-  """One activation and a rotation of weight copies for an exact (m, n, k), with per-split strided layouts cached."""
+  """One activation and a rotation of weight copies for an exact (m, n, k).  ``split(s, tk)`` returns the operands as
+  the route runs them: the activation materialized at the (ragged) padded K, the weights padded lazily in K and viewed
+  as s slices (no weight copy -- the ring reads the tail as zeros)."""
   def __init__(self, m, n, k):
     from tinygrad import Tensor, dtypes
     self.m, self.n, self.k = m, n, k
     copies = max(1, -(-ROTATION_BYTES // (n * k * 2)))
     self.a = Tensor.randn(m, k, dtype=dtypes.bfloat16).cast(dtypes.bfloat16).realize()
     self.ws = [Tensor.randn(n, k, dtype=dtypes.bfloat16).mul(0.02).cast(dtypes.bfloat16).realize() for _ in range(copies)]
-    self.split_views: dict[int, tuple] = {}
-  def split(self, s):
-    if s not in self.split_views:
-      ks = self.k // s
-      self.split_views[s] = (self.a.reshape(self.m, s, ks).permute(1, 0, 2).contiguous().realize(),
-                             [w.reshape(self.n, s, ks).permute(1, 0, 2).contiguous().realize() for w in self.ws])
-    return self.split_views[s]
+    self.split_views: dict[tuple, tuple] = {}
+  def split(self, s, tk):
+    from tinygrad.llm.dense_candidate_gemm import ragged_k_pad
+    kp = ragged_k_pad(self.k, s, tk)
+    if (s, kp) not in self.split_views:
+      ks = kp // s
+      a = self.a.pad(((0, 0), (0, kp - self.k))).contiguous().realize() if kp != self.k else self.a
+      ws = [w.pad(((0, 0), (0, kp - self.k))) if kp != self.k else w for w in self.ws]
+      self.split_views[(s, kp)] = (a.reshape(self.m, s, ks).permute(1, 0, 2), [w.reshape(self.n, s, ks).permute(1, 0, 2) for w in ws], a, ws, kp)
+    return self.split_views[(s, kp)]
 
 
 def measure(role, ops: _Operands, geom, split, pipe, reps: int) -> dict:
@@ -132,16 +137,17 @@ def measure(role, ops: _Operands, geom, split, pipe, reps: int) -> dict:
   from tinygrad.codegen.opt import Opt, OptOps
   import tinygrad.codegen.opt.postrange as pr
   m, n, k = ops.m, ops.n, ops.k
-  ks = k // split
+  a3, w3s, a_pad, ws_pad, k_pad = ops.split(split, geom[2])   # ragged split-K: K padded to whole tiles per slice
+  ks = k_pad // split
   key = pr.warmstart_key({m, n} | ({split} if split > 1 else set()), ks)
   pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}
   pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: _context(geom, pipe)}
   if split > 1:
-    a3, w3s = ops.split(split)
     fn = lambda i: a3.dot(w3s[i % len(w3s)].transpose(1, 2), dtype=dtypes.float).contiguous().sum(0)
   else:
-    fn = lambda i: ops.a.dot(ops.ws[i % len(ops.ws)].T, dtype=dtypes.float)
+    fn = lambda i: a_pad.dot(ws_pad[i % len(ws_pad)].T, dtype=dtypes.float)
   row = {"role": role, "m": m, "n": n, "k": k, "geometry": list(geom), "split_k": split}
+  if k_pad != k: row["k_pad"] = k_pad
   if pipe != SYNC2: row["pipeline"] = list(pipe)
   try:
     out = fn(0).realize()

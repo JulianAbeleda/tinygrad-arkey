@@ -183,3 +183,15 @@ def test_route_scratch_lifts_the_row_cap(monkeypatch):
   assert dense.route_bound(lin, Tensor.ones(200, 4), max_rows=128) is None and seen == []
   with dense.route_scratch(): assert dense.route_bound(lin, Tensor.ones(200, 4), max_rows=128) is not None
   assert seen == [(200, 4)]
+
+
+def test_ragged_split_k_pads_k_to_whole_tiles_per_slice():
+  from tinygrad.llm.dense_candidate_gemm import ragged_k_pad
+  assert ragged_k_pad(12544, 6, 64) == 6 * 33 * 64          # cuBLAS's split-6 partition of 196 K64 tiles: 5 x 33 + 31
+  assert ragged_k_pad(12544, 7, 64) == 12544                 # an even split stays unpadded
+  assert ragged_k_pad(3136, 5, 32) == 5 * 20 * 32
+  from extra.llm_research.mint_typed_candidate_template import mint_dense_bf16
+  rows = [{"role": "ffn_down", "m": 64, "n": 3200, "k": 12544, "geometry": [64, 128, 64, 2, 2], "split_k": 6,
+           "pipeline": [3, True, True, True]}]
+  route = dense.load_routes(mint_dense_bf16(rows), **NV)[("ffn_down", 64, 3200, 12544)]
+  assert route.k_pad == 12672 and route.admission.normalized_payload["workload"]["shape"]["k"] == 2112

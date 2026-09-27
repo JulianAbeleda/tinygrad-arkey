@@ -20,14 +20,14 @@ def test_lowering_facts_read_the_renderer_and_descriptor():
   assert facts["runtime_lds_bytes"] == CUDARenderer.max_runtime_local_bytes
   assert facts["async_copy"] is True and CUDARenderer.async_copy_ops is not None
   assert facts["matrix_fragments"] is True and 128 in facts["swizzle_row_bytes"]
-  assert facts["ragged_split_k"] is False and facts["stream_k"] is False
+  assert facts["ragged_split_k"] is True and facts["stream_k"] is False    # masked zero-fill copies (copy16_zfill)
 
 
 def test_lowering_facts_follow_the_renderer(monkeypatch):
   monkeypatch.setattr(CUDARenderer, "async_copy_ops", None)
   monkeypatch.setattr(CUDARenderer, "max_runtime_local_bytes", 65536)
   facts = lowering_facts("NV", "sm_120")
-  assert facts["async_copy"] is False and facts["runtime_lds_bytes"] == 65536
+  assert facts["async_copy"] is False and facts["ragged_split_k"] is False and facts["runtime_lds_bytes"] == 65536
 
 
 def test_nv_capability_rows_take_the_static_lds_cap_from_the_renderer():

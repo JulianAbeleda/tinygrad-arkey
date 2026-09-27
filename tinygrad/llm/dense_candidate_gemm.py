@@ -33,6 +33,13 @@ _CANDIDATE_OPTS = (Opt(OptOps.TC, 0, (-1, 2, 1)),)
 _DTYPES = {"a":"bf16", "b":"bf16", "accumulator":"fp32", "c":"fp32"}
 
 
+def ragged_k_pad(k: int, split: int, tile_k: int) -> int:
+  """K padded so ``split`` slices hold whole ``tile_k`` tiles: cuBLAS's ragged split-K partition (slices of
+  ceil(tiles / split) tiles, the last one short), with the short slice's tail read as zeros (the ring's masked
+  zero-fill copies; no weight copy)."""
+  return split * -(-(-(-k // tile_k)) // split) * tile_k
+
+
 @dataclass(frozen=True)
 class DenseRoute:
   role: str
@@ -41,6 +48,11 @@ class DenseRoute:
   k: int
   split_k: int
   admission: CandidateAdmission
+  k_pad: int | None = None   # ragged split-K: K zero-padded to whole tiles per slice (load_routes derives it)
+
+  def __post_init__(self):
+    if self.k_pad is None: object.__setattr__(self, "k_pad", self.k)
+    if self.k_pad < self.k or self.k_pad % self.split_k: raise ValueError("route K padding must cover K in whole slices")
 
 
 def device_target(device: str) -> dict[str, Any]:
@@ -64,10 +76,11 @@ def load_routes(raw: dict, backend: str, arch: str, wave_size: int) -> dict[tupl
     admission = admissions.get(row["canonical_identity"])
     if admission is None: raise ValueError(f"route {role} {m}x{n}x{k} names an unknown candidate")
     workload = admission.normalized_payload["workload"]
-    if (workload["role"], *(workload["shape"][x] for x in "mnk")) != (role, m, n, k // split) or k % split:
+    k_pad = ragged_k_pad(k, split, admission.geometry.tile[2])
+    if (workload["role"], *(workload["shape"][x] for x in "mnk")) != (role, m, n, k_pad // split):
       raise ValueError(f"route {role} {m}x{n}x{k}/{split} does not match its candidate workload")
     if (key := (role, m, n, k)) in routes: raise ValueError(f"duplicate dense bf16 route {key}")
-    routes[key] = DenseRoute(role, m, n, k, split, admission)
+    routes[key] = DenseRoute(role, m, n, k, split, admission, k_pad)
   return routes
 
 
@@ -113,6 +126,8 @@ def pad_weight(weight: Tensor, device: str | None = None) -> Tensor:
 
 
 def _chunk(a: Tensor, weight: Tensor, route: DenseRoute) -> Tensor:
+  """``a`` (m, k_pad): the activation already zero-padded to the route's K; the weight's K tail is padded lazily."""
+  if route.k_pad != weight.shape[1]: weight = weight.pad(((0, 0), (0, route.k_pad - weight.shape[1])))
   m, (n, k), s = route.m, weight.shape, route.split_k
   if s == 1:
     _install(route.admission, {m, n}, k)
@@ -139,7 +154,7 @@ def route_dense_bf16(x: Tensor, weight: Tensor, role: str, n_out: int, *, min_ro
   outs = []
   for start, take, route in plan:
     a = flat[start:start + take]
-    if route.m != take: a = a.pad(((0, route.m - take), (0, 0)))
+    if route.m != take or route.k_pad != k: a = a.pad(((0, route.m - take), (0, route.k_pad - k)))
     # The padded product is its own buffer: slicing a lazy product would shrink the GEMM to the unpadded
     # (unpromoted) shape and silently fall back to the generic schedule.
     outs.append(_chunk(a.contiguous(), weight, route)[:take, :n_out])
@@ -177,10 +192,11 @@ def _hilo_scratch(flat: Tensor, weight: Tensor, role: str, n_out: int) -> Tensor
   n_pad = weight.shape[0]
   route = routes.get((role, 2 * rows, n_pad, k)) if routes is not None else None
   if route is None: return None
-  m, split = 2 * rows, route.split_k
+  m, split, k_pad = 2 * rows, route.split_k, route.k_pad
   hi = flat.cast(dtypes.bfloat16)
-  stacked = _scratch(flat.device, "a", (m, k), dtypes.bfloat16)
-  stacked.assign(hi.cat((flat - hi.float()).cast(dtypes.bfloat16))).realize()
+  stacked = _scratch(flat.device, "a", (m, k_pad), dtypes.bfloat16)
+  stacked.assign(hi.cat((flat - hi.float()).cast(dtypes.bfloat16)).pad(((0, 0), (0, k_pad - k)))).realize()
+  if k_pad != k: weight, k = weight.pad(((0, 0), (0, k_pad - k))), k_pad
   product = _scratch(flat.device, "p", (split, m, n_pad), dtypes.float)
   if split == 1:
     _install(route.admission, {m, n_pad}, k)
@@ -269,7 +285,7 @@ class CandidateLinear:
     return self.fallback(x) if self.fallback is not None else x.linear(self.weight.transpose())
 
 
-__all__ = ["DENSE_BF16_ARTIFACT", "NEMOTRON_H_ROLES", "CandidateBinding", "CandidateLinear", "DenseRoute", "bind_projection", "route_bound", "bind_candidate_linears", "dense_bf16_routes",
+__all__ = ["ragged_k_pad", "DENSE_BF16_ARTIFACT", "NEMOTRON_H_ROLES", "CandidateBinding", "CandidateLinear", "DenseRoute", "bind_projection", "route_bound", "bind_candidate_linears", "dense_bf16_routes",
            "device_target", "load_routes", "pad_weight", "plan_rows", "route_dense_bf16", "route_dense_bf16_hilo", "route_scratch"]
 
 
