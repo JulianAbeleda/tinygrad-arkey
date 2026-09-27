@@ -95,6 +95,25 @@ class TestNemotronHPrefill(unittest.TestCase):
     with self.assertRaises(ValueError):
       prefill(shared, start=len(shared))  # nothing past the start
 
+  def test_graphs_share_one_arena_pool(self):
+    from tinygrad.dtype import dtypes
+    from tinygrad.uop.ops import Ops
+    model = tiny_model()
+    prefill = NemotronHPrefill(model, capacity=40, piece=8, ssd_chunk=4)
+    rng = np.random.default_rng(8)
+    prompts = [[int(v) for v in rng.integers(1, 64, n)] for n in (5, 29, 13, 29, 40, 5)]  # pieces 8 and 4, several times
+    prefill.warm((5,))
+    for prompt in prompts:
+      hidden = prefill(prompt).numpy()
+      expected = model.prefix(prompt, through=len(model.blk) - 1)[0].numpy()[:, -1:]
+      np.testing.assert_allclose(hidden, expected, rtol=1e-4, atol=1e-4)
+    pool = {id(arena) for arena in prefill.arenas.values()}
+    captured = [jit.captured for jit in prefill._graphs() if getattr(jit, "captured", None) is not None]
+    self.assertTrue(captured and pool)
+    for linear in (c.linear for c in captured):
+      arenas = {id(u) for u in linear.toposort() if u.op is Ops.BUFFER and u.dtype == dtypes.int8}
+      self.assertLessEqual(arenas, pool)  # no graph plans an arena of its own or keeps one the pool outgrew
+
   def test_reset_zeroes_every_buffer_as_one_graph(self):
     prefill = NemotronHPrefill(tiny_model(), capacity=16, piece=8)
     for length in (5, 11, 7):  # the reset graph captures, then replays

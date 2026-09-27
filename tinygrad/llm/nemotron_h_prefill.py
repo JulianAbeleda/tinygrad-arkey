@@ -42,6 +42,8 @@ from tinygrad.nn.state import get_state_dict
 from tinygrad.llm.dense_candidate_gemm import CandidateBinding, route_scratch
 from tinygrad.llm import nemotron_h_prefill_attention as fused_attention
 from tinygrad.llm.nemotron_h_ssd import PRECISIONS, ssd_cached
+from tinygrad.schedule.memory import shared_arenas
+from tinygrad.uop.ops import Ops
 
 
 def _fresh(value: Tensor) -> Tensor:
@@ -101,6 +103,9 @@ class NemotronHPrefill:
     self.bindings = {}  # (template block, projection) -> its own route binding, restored after each graph
     self.flash_blocks: dict[int, bool] = {}
     self._reset = TinyJit(self._zero)
+    # every graph plans its intermediates into one pool (they run one after another): a piece's arena is the largest
+    # block kind's, not the sum over kinds (10k at 8192-row pieces: 9.96 -> 5.09 GB)
+    self.arenas: dict = {}
     self.saved: list[dict | None] | None = None  # a snapshot of every Mamba block's state (`save`)
     self._save = TinyJit(functools.partial(self._copy, True))
     self._restore = TinyJit(functools.partial(self._copy, False))
@@ -266,7 +271,37 @@ class NemotronHPrefill:
     """Zero every cache buffer, in one graph (eager, its ~50 assigns cost ~0.1-0.2 s of host time per prompt)."""
     self._reset()
 
+  def warm(self, lengths: tuple[int, ...] | None = None):
+    """Capture the graphs prompts of `lengths` (default: the capacity) use, twice each so each graph captures, and
+    leave every captured graph on the final pool; the buffers' contents are left undefined."""
+    for length in lengths or (self.capacity,):
+      for _ in range(2):
+        self([self.pad_token] * length)
+
+  def _graphs(self):
+    return (*self.block_graphs.values(), *self.graphs.values())
+
+  def _drop_outgrown(self):
+    """Drop graphs that hold an arena the pool has since replaced with a larger one: they capture again on it."""
+    pool = {id(arena) for arena in self.arenas.values()}
+    def outgrown(jit) -> bool:
+      captured = getattr(jit, "captured", None)
+      return captured is not None and any(u.op is Ops.BUFFER and u.dtype == dtypes.int8 and id(u) not in pool
+                                          for u in captured.linear.toposort())
+    for table in (self.block_graphs, self.graphs):
+      for key in [key for key, jit in table.items() if outgrown(jit)]:
+        del table[key]
+
   def __call__(self, prompt: list[int], start: int = 0) -> Tensor:
+    """Prefill `prompt` (from `start`: see `_run`); returns the last position's hidden state, shape (1, 1, dim)."""
+    sizes = {key: arena.arg for key, arena in self.arenas.items()}
+    with shared_arenas(self.arenas):
+      hidden = self._run(prompt, start)
+    if {key: arena.arg for key, arena in self.arenas.items()} != sizes:
+      self._drop_outgrown()
+    return hidden
+
+  def _run(self, prompt: list[int], start: int = 0) -> Tensor:
     """Run the prompt from an empty state; returns the last position's hidden state, shape (1, 1, dim).
 
     Afterwards `buffers` holds the prompt's state: attention key/value rows
