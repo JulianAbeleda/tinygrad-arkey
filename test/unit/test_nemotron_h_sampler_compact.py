@@ -126,6 +126,19 @@ class TestNemotronHSamplerCompact(unittest.TestCase):
     gc.collect()
     self.assertEqual(GlobalCounters.mem_used, before)
 
+  def test_compacted_graphs_share_the_arena_pool(self):
+    model = tiny_model()
+    def pool(compact):
+      sampler = NemotronHRolloutSampler(model, batch=4, capacity=32, prefix_capacity=8, prompts=4, rows=2, ring=2,
+                                        window=2, capture=len(model.blk) - 1, compact=compact, min_bucket=4)
+      sampler.warm()
+      return len(sampler.arenas), sum(int(a.arg) for a in sampler.arenas.values()), len(sampler.graphs)
+    full, compacted = pool(()), pool((1, 2))
+    self.assertGreater(compacted[2], full[2])
+    # three times the step graphs, the same arenas (ranked per graph, not keyed by each graph's lane colouring)
+    self.assertEqual(compacted[0], full[0])
+    self.assertLessEqual(compacted[1], full[1] * 1.1)
+
   def test_compact_rows_are_checked(self):
     model = tiny_model()
     with self.assertRaises(ValueError):

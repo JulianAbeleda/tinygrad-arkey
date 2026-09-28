@@ -140,11 +140,20 @@ def memory_plan_rewrite(linear:UOp, held_bufs:set[UOp]|None=None) -> UOp:
   arena_sizes = {k:round_up(peak, block_size) for k,(peak,_) in peaks.items()}
   arenas:dict[LaneKey, UOp] = {}
   pool = _shared_arenas.get()
-  for k, sz in ({} if NO_MEMORY_PLANNER else arena_sizes).items():
-    if pool is None: arenas[k] = UOp.new_buffer(k[0], sz, dtypes.int8)
-    else:
-      if (have:=pool.get(k)) is None or have.arg < sz: pool[k] = UOp.new_buffer(k[0], sz, dtypes.int8)
-      arenas[k] = pool[k]
+  if pool is None:
+    for k, sz in ({} if NO_MEMORY_PLANNER else arena_sizes).items(): arenas[k] = UOp.new_buffer(k[0], sz, dtypes.int8)
+  else:
+    # Graphs sharing a pool never run at the same time, so a graph's lanes may take any pool arenas as long as its own
+    # lanes stay on distinct ones (that is all the lanes are for). Ranked by size per (device, copy): a graph's
+    # largest lane takes the pool's rank-0 arena, the next rank 1, and so on. Keying by the lane colors themselves
+    # made graphs whose colorings differ (e.g. the same decode step at another batch) add arenas, not share them.
+    ranked:defaultdict[tuple, list[tuple[int, LaneKey]]] = defaultdict(list)
+    for k, sz in ({} if NO_MEMORY_PLANNER else arena_sizes).items(): ranked[(k[0], k[1])].append((sz, k))
+    for (device, copy), sized in ranked.items():
+      for rank, (sz, k) in enumerate(sorted(sized, key=lambda x: (-x[0], x[1][2:]))):
+        slot = (device, copy, rank, 0)
+        if (have:=pool.get(slot)) is None or have.arg < sz: pool[slot] = UOp.new_buffer(device, sz, dtypes.int8)
+        arenas[k] = pool[slot]
   # Collectors receive the placement evidence (arena, offset, aligned size,
   # lifetime) so observers can attribute planner-added WAR/WAW edges to exact
   # physical ranges. The call is a no-op when no collector is installed.
