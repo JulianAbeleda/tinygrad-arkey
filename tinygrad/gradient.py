@@ -54,6 +54,10 @@ pm_gradient = PatternMatcher([
   # Logical ownership/shape annotations are transparent to differentiation.
   # They carry no value transformation and remain present on LLM outputs.
   (UPat((Ops.MEMORY_SEMANTIC, Ops.SCOPED_VALUE)), lambda ctx: (ctx,)),
+  # Semantic attention boundary: src[0] is the ordinary SDPA graph over the same Q/K/V/(mask),
+  # value-equal to the marker. Backprop through it; the optional primitive and the raw operand
+  # sources get nothing here (they already receive their gradient via src[0]).
+  (UPat(Ops.ATTENTION, name="ret"), lambda ctx, ret: (ctx,) + (None,)*(len(ret.src)-1)),
   (UPat(Ops.CAST, name="ret"), lambda ctx, ret: (ctx.cast(ret.src[0].dtype),)),
   (UPat(Ops.RECIPROCAL, name="ret"), lambda ctx, ret: (-ctx * ret * ret,)),
   (UPat(Ops.SIN, name="ret"), lambda ctx, ret: ((math.pi/2 - ret.src[0]).sin() * ctx,)),
