@@ -40,16 +40,24 @@ packages = [
   'tinygrad.runtime.graph',
   'tinygrad.runtime.support',
   'tinygrad.runtime.support.am',
+  'tinygrad.runtime.support.am.ip',
   'tinygrad.runtime.support.mlx',
   'tinygrad.runtime.support.nv',
   'tinygrad.schedule',
+  'tinygrad.schedule.wmma',
   'tinygrad.uop',
   'tinygrad.viz',
+  # tinygrad/llm (boltbeam_authority, kernel_program, model NV bindings, ...) imports these research
+  # modules; ship them so a pip install of the fork imports without a checkout.
+  'extra',
+  'extra.llm_research',
+  'extra.llm_research.decode',
+  'extra.llm_research.prefill',
 ]
 
 [tool.setuptools.package-data]
 tinygrad = ["py.typed"]
-"tinygrad.llm" = ["chat.html"]
+"tinygrad.llm" = ["chat.html", "generated/*.json", "generated/**/*.json"]
 "tinygrad.viz" = ["index.html", "assets/**/*", "js/*"]
 
 
