@@ -4,7 +4,7 @@ against tinygrad's GGUF dequantizer, and its cold-L2 time. One row per distinct 
 
 usage: block_quant_microgate.py --model M.gguf --quant Q5_K [--out result.json] [--peak-gbs 1693.9]"""
 from __future__ import annotations
-import argparse, json, pathlib, sys, time
+import argparse, json, pathlib, sys
 import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 
@@ -42,22 +42,19 @@ def main() -> int:
       w = ggml_data_to_tensor(Tensor(raw), rows * k, typ).numpy().reshape(rows, k).astype(np.float64)
       want = w @ x_np.astype(np.float64)
       rel = float(np.abs(got - want).max() / max(np.abs(want).max(), 1e-30))
-      from tinygrad.engine.jit import TinyJit
-      kernel = emit_block_quant_gemv_kernel(spec)
-      step = TinyJit(lambda hv, xv: Tensor.empty(rows, dtype=dtypes.float32).uop_program(hv, xv, fxn=kernel)[0].realize())
-      bump = TinyJit(lambda fl: (fl + 1).realize())
+      from tinygrad.engine.realize import time_call
+      call = Tensor.empty(rows, dtype=dtypes.float32).uop_program(halfs, x, fxn=emit_block_quant_gemv_kernel(spec))[0].schedule_linear().src[0]
       times = []
-      for i in range(a.iters + 3):
-        bump(flush); Device[dev].synchronize()
-        t0 = time.perf_counter(); step(halfs, x); Device[dev].synchronize()
-        if i >= 3: times.append(time.perf_counter() - t0)  # the first calls capture the JIT
+      for _ in range(a.iters):
+        (flush + 1).realize(); Device[dev].synchronize()  # a 256 MB write between samples: the weights start cold
+        times.append(time_call(call))
       us = float(np.median(times) * 1e6)
       row = {"tensor": name, "rows": rows, "k": k, "bytes": nbytes, "lanes_per_block": spec.lanes_per_block, "warps_per_cta": spec.warps_per_cta,
-             "max_rel_err": rel, "wall_us_median": us, "gbs_wall": nbytes / us / 1e3}
-      if a.peak_gbs: row["pct_peak_wall"] = 100 * row["gbs_wall"] / a.peak_gbs
+             "max_rel_err": rel, "kernel_us_median": us, "gbs": nbytes / us / 1e3}
+      if a.peak_gbs: row["pct_peak"] = 100 * row["gbs"] / a.peak_gbs
       rows_out.append(row); print(json.dumps(row))
   res = {"schema": "tinygrad.block_quant_microgate.v1", "model": a.model, "quant": a.quant, "device": dev, "sm_count": sm,
-         "timing": "host wall clock around one JIT replay after a 256 MB write (cold L2), median; includes the launch",
+         "timing": "time_call (device timestamps, the kernel alone) after a 256 MB write (cold L2), median",
          "rows": rows_out, "pass": all(r["max_rel_err"] < 1e-3 for r in rows_out)}
   if a.out: pathlib.Path(a.out).write_text(json.dumps(res, indent=2) + "\n")
   print(json.dumps({"pass": res["pass"], "shapes": len(rows_out)})); return 0 if res["pass"] else 1
