@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 GGML_Q4_K = 12
 GGML_Q6_K = 14
+GGML_Q8_0 = 8
 
 QK_BLOCK_ELEMS = 256
 Q4_K_BLOCK_ELEMS = QK_BLOCK_ELEMS
@@ -14,6 +15,10 @@ Q6_K_BLOCK_ELEMS = QK_BLOCK_ELEMS
 Q6_K_BLOCK_BYTES = 210
 Q6K_HALFWORDS_PER_BLOCK = Q6_K_BLOCK_BYTES // 2
 Q8_1_BLOCK_ELEMS = 32
+# Q8_0: one fp16 scale d, then 32 int8 values. 34 bytes per 32 values, so a block is 17 uint16 halfwords.
+Q8_0_BLOCK_ELEMS = 32
+Q8_0_BLOCK_BYTES = 34
+Q8_0_HALFWORDS_PER_BLOCK = Q8_0_BLOCK_BYTES // 2
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,10 @@ class QuantFormat:
 
 Q4_K = QuantFormat("Q4_K", Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES, ("words",))
 Q6_K = QuantFormat("Q6_K", Q6_K_BLOCK_ELEMS, Q6_K_BLOCK_BYTES, ("halfs",))
+Q8_0 = QuantFormat("Q8_0", Q8_0_BLOCK_ELEMS, Q8_0_BLOCK_BYTES, ("halfs",))
+# Q5_0: d fp16, qh 4 bytes (5th bits), 16 qs bytes (two nibbles). Q4_0: d fp16, 16 qs bytes.
+Q5_0 = QuantFormat("Q5_0", 32, 22, ("halfs",))
+Q4_0 = QuantFormat("Q4_0", 32, 18, ("halfs",))
 
 # Single authority for name -> format at the string/JSON boundary.
-QUANT_FORMATS: dict[str, QuantFormat] = {"Q4_K": Q4_K, "Q6_K": Q6_K}
+QUANT_FORMATS: dict[str, QuantFormat] = {"Q4_K": Q4_K, "Q6_K": Q6_K, "Q8_0": Q8_0, "Q5_0": Q5_0, "Q4_0": Q4_0}

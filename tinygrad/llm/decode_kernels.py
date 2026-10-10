@@ -13,8 +13,8 @@ from typing import Any
 from tinygrad import dtypes
 from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace, DType
-from tinygrad.helpers import cdiv
-from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, QuantFormat
+from tinygrad.helpers import cdiv, ceildiv
+from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q4_0, Q5_0, Q8_0, QuantFormat
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 
@@ -1011,4 +1011,211 @@ def decode_kv_rope_store_kernel(Hkv:int, Hd:int, MAXC:int, VPART:int=1):
     kst = cache[0, 0, kvh, sp, elem].store(kout)
     vst = cache.after(kst)[1, 0, kvh, sp, elem].store(vout)
     return vst.end(kvh, elem).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+  return kernel
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Block-quant decode GEMV family (GGML "_0" formats: Q8_0, Q5_0, Q4_0). Generic by construction: the kernel is
+# emitted from (rows, k), a BlockQuantLayout (block size, bytes, scale and code layout, dequantize) and launch facts
+# read from the device (wave size, SM count, max threads per CTA). No model dimension is written here.
+# Each warp owns one row. A block is split into `units`: one uint16 load of codes plus the elements it yields. A lane
+# owns units_per_block/lanes_per_block consecutive units of a block, so one warp step reads wave/lanes_per_block
+# consecutive blocks. Weights are the GGUF bytes viewed as uint16 (every GGML block size is even, not always 4-aligned).
+# ---------------------------------------------------------------------------------------------------------------
+BLOCK_QUANT_LANE_REDUCES = ("warp_shfl", "serial")
+
+
+def _bq_u16(halfs:UOp, idx:UOp) -> UOp: return halfs[idx]
+def _bq_nib(hw:UOp, byte:int, high:bool) -> UOp: return hw.rshift(byte * 8 + (4 if high else 0)).bitwise_and(0xf).cast(dtypes.float32)
+def _bq_bit(word:UOp, bit:UOp) -> UOp:
+  return word.cast(dtypes.uint32).rshift(bit.cast(dtypes.uint32)).bitwise_and(1).cast(dtypes.float32)
+
+
+@dataclass(frozen=True)
+class BlockQuantLayout:
+  """One GGML block format as data for the GEMV family.
+
+  - block_elems / block_bytes: the block geometry (block_bytes must be even: the uint16 view).
+  - units: code loads per block; `terms(halfs, base, u)` returns [(element index in block, integer code as fp32)]
+    for unit u (u may be a UOp; every shift inside a unit is static).
+  - `scale(halfs, base)`: the block's fp16 scale d as fp32. The block dot is d * sum(code * x)."""
+  quant: QuantFormat
+  ggml_type: int
+  units: int
+  terms: Any
+  scale: Any = None
+
+  @property
+  def block_elems(self) -> int: return self.quant.block_elems
+  @property
+  def block_halfwords(self) -> int: return self.quant.block_bytes // 2
+
+
+def _q8_0_terms(h:UOp, base:UOp, u:UOp):
+  hw = h[base + 1 + u]   # 32 int8 after d: unit u holds elements 2u, 2u+1
+  return [(u * 2, _i8(hw.bitwise_and(0xff))), (u * 2 + 1, _i8(hw.rshift(8)))]
+
+def _q4_0_terms(h:UOp, base:UOp, u:UOp):
+  hw = h[base + 1 + u]   # 16 qs bytes after d: byte b holds element b (low nibble) and b+16 (high nibble)
+  return [(u * 2 + t + 16 * hi, _bq_nib(hw, t, bool(hi)) - 8.0) for hi in (0, 1) for t in (0, 1)]
+
+def _q5_0_terms(h:UOp, base:UOp, u:UOp):
+  qh_lo, qh_hi, hw = h[base + 1], h[base + 2], h[base + 3 + u]   # d, qh (uint32 as two halves), 16 qs bytes
+  out = []
+  for hi, qh in ((0, qh_lo), (1, qh_hi)):
+    for t in (0, 1):
+      e_low = u * 2 + t   # element index within its 16-element half; the qh bit for element e is bit e of qh
+      out.append((e_low + 16 * hi, _bq_nib(hw, t, bool(hi)) + _bq_bit(qh, e_low) * 16.0 - 16.0))
+  return out
+
+def _f16_scale(h:UOp, base:UOp) -> UOp: return _f16_half(h[base])
+
+BLOCK_QUANT_LAYOUTS: dict[str, BlockQuantLayout] = {
+  "Q8_0": BlockQuantLayout(Q8_0, 8, 16, _q8_0_terms, _f16_scale),
+  "Q5_0": BlockQuantLayout(Q5_0, 6, 8, _q5_0_terms, _f16_scale),
+  "Q4_0": BlockQuantLayout(Q4_0, 2, 8, _q4_0_terms, _f16_scale),
+}
+
+
+@dataclass(frozen=True)
+class BlockQuantGEMVRouteSpec:
+  rows: int
+  k: int
+  quant: QuantFormat = Q8_0
+  wave_size: int = WARP
+  lanes_per_block: int = 16
+  warps_per_cta: int = 1
+  # "warp_shfl": one warp per row, XOR-ladder lane reduce (the GPU route).
+  # "serial": the same lane partition with the lane axis as a REDUCE loop, so the same per-lane math runs on a
+  # backend without warp shuffles (CPU tests). Both spellings share _block_quant_lane_partial.
+  lane_reduce: str = "warp_shfl"
+
+  @property
+  def layout(self) -> BlockQuantLayout: return BLOCK_QUANT_LAYOUTS[self.quant.name]
+  @property
+  def k_blocks(self) -> int: return self.k // self.quant.block_elems
+  @property
+  def blocks_per_step(self) -> int: return self.wave_size // self.lanes_per_block
+  @property
+  def steps(self) -> int: return ceildiv(self.k_blocks, self.blocks_per_step)
+  @property
+  def units_per_lane(self) -> int: return self.layout.units // self.lanes_per_block
+  @property
+  def ctas(self) -> int: return ceildiv(self.rows, self.warps_per_cta)
+  @property
+  def ragged_k(self) -> bool: return self.k_blocks % self.blocks_per_step != 0
+  @property
+  def ragged_rows(self) -> bool: return self.rows % self.warps_per_cta != 0
+
+  @property
+  def kernel_name(self) -> str:
+    suffix = "_serial" if self.lane_reduce == "serial" else ""
+    return f"{self.quant.name.lower()}_gemv_{self.rows}_{self.k}_l{self.lanes_per_block}_w{self.warps_per_cta}{suffix}"
+
+  def validate(self) -> None:
+    """The real constraints of the lowering, nothing else."""
+    name = getattr(self.quant, "name", None)
+    if name not in BLOCK_QUANT_LAYOUTS: raise ValueError(f"block-quant GEMV has no layout for {self.quant!r}")
+    be = self.quant.block_elems
+    if not isinstance(self.rows, int) or self.rows < 1: raise ValueError(f"{name} GEMV requires rows >= 1, got {self.rows!r}")
+    if not isinstance(self.k, int) or self.k < be or self.k % be != 0:
+      raise ValueError(f"{name} GEMV requires k to be a positive multiple of {be}, got k={self.k!r}")
+    if self.lane_reduce not in BLOCK_QUANT_LANE_REDUCES: raise ValueError(f"unknown lane_reduce {self.lane_reduce!r}")
+    # The XOR ladder halves a power-of-two lane width; the staged ladder supports widths up to WARP.
+    if self.wave_size < 1 or self.wave_size > WARP or self.wave_size & (self.wave_size - 1):
+      raise ValueError(f"{name} GEMV requires a power-of-two wave_size <= {WARP}, got {self.wave_size}")
+    units = self.layout.units
+    if self.lanes_per_block < 1 or units % self.lanes_per_block != 0 or self.wave_size % self.lanes_per_block != 0:
+      raise ValueError(f"{name} GEMV lanes_per_block must divide {units} code units and wave_size={self.wave_size}, "
+                       f"got {self.lanes_per_block}")
+    if self.warps_per_cta < 1: raise ValueError(f"{name} GEMV requires warps_per_cta >= 1, got {self.warps_per_cta}")
+
+  def to_json(self) -> dict[str, Any]:
+    return {"quant": self.quant.name, "rows": self.rows, "k": self.k, "wave_size": self.wave_size,
+            "lanes_per_block": self.lanes_per_block, "warps_per_cta": self.warps_per_cta, "lane_reduce": self.lane_reduce}
+
+
+# Lane map choice: one code unit (one uint16 load) per lane per block, so a block's units are spread over that many
+# lanes. Measured for Q8_0 on NV sm_120 (cold L2, 12 shapes from 0.3 to 165 MB): 16 lanes/block (one unit each) with
+# 2 warps/CTA was the best or within noise of the best on every shape (1.49-1.66 TB/s at >= 33 MB); 4 and 8 lanes/block
+# were within 3% on the large shapes; 1 lane/block was ~3x slower. These are load-width and CTA-size choices.
+BLOCK_QUANT_UNITS_PER_LANE = 1
+BLOCK_QUANT_MAX_WARPS_PER_CTA = 2
+
+
+def block_quant_gemv_geometry(quant:QuantFormat, rows:int, k:int, *, wave_size:int|None, sm_count:int|None,
+                              max_threads:int|None, lane_reduce:str="warp_shfl") -> BlockQuantGEMVRouteSpec:
+  """Choose the launch geometry from the format, the shape and device facts only.
+
+  - lanes_per_block: units / BLOCK_QUANT_UNITS_PER_LANE, bounded by wave_size.
+  - warps_per_cta: the most warps (one row each) that still give every SM at least two CTAs, capped by
+    BLOCK_QUANT_MAX_WARPS_PER_CTA and the device's max threads per CTA when reported. Unknown SM count: one warp.
+  An unknown wave_size yields wave_size=0, which validate refuses: the warp route is then not expressible."""
+  wave = wave_size if wave_size is not None else 0
+  units = BLOCK_QUANT_LAYOUTS[quant.name].units if quant.name in BLOCK_QUANT_LAYOUTS else 1
+  lanes = max(1, units // BLOCK_QUANT_UNITS_PER_LANE)
+  while wave and lanes > wave: lanes //= 2
+  warps = 1
+  if sm_count and wave:
+    cap = BLOCK_QUANT_MAX_WARPS_PER_CTA if not max_threads else min(BLOCK_QUANT_MAX_WARPS_PER_CTA, max_threads // wave)
+    while warps * 2 <= cap and ceildiv(rows, warps * 2) >= 2 * sm_count: warps *= 2
+  return BlockQuantGEMVRouteSpec(rows=rows, k=k, quant=quant, wave_size=wave, lanes_per_block=lanes, warps_per_cta=warps,
+                                 lane_reduce=lane_reduce)
+
+
+def _block_quant_lane_partial(halfs:UOp, x:UOp, row:UOp, blk:UOp, sub:UOp, spec:BlockQuantGEMVRouteSpec) -> UOp:
+  """One lane's share of one block: d * sum(code * x) over the lane's units."""
+  lay = spec.layout
+  base = (row * spec.k_blocks + blk) * lay.block_halfwords
+  acc = UOp.const(dtypes.float32, 0.0)
+  for j in range(spec.units_per_lane):
+    for e, code in lay.terms(halfs, base, sub * spec.units_per_lane + j):
+      acc = acc + code * x[blk * lay.block_elems + e].cast(dtypes.float32)
+  return lay.scale(halfs, base) * acc
+
+
+def _block_quant_clamped_block(spec:BlockQuantGEMVRouteSpec, step:UOp, bsel:UOp) -> tuple[UOp, UOp|None]:
+  blk = step * spec.blocks_per_step + bsel
+  if not spec.ragged_k: return blk, None
+  valid = blk < spec.k_blocks
+  return valid.where(blk, UOp.const(blk.dtype, 0)), valid
+
+
+def emit_block_quant_gemv_kernel(spec:BlockQuantGEMVRouteSpec):
+  """out[row] = sum_k dequant(W)[row, k] * x[k]. Inputs: (out fp32[rows], halfs uint16 GGUF bytes, x[k])."""
+  spec.validate()
+  name, lpb, wave = spec.kernel_name, spec.lanes_per_block, spec.wave_size
+
+  if spec.lane_reduce == "serial":
+    def serial(out:UOp, halfs:UOp, x:UOp) -> UOp:
+      row = UOp.range(spec.rows, 0)
+      lane = UOp.range(wave, 1, axis_type=AxisType.REDUCE)
+      step = UOp.range(spec.steps, 2, axis_type=AxisType.REDUCE)
+      blk, valid = _block_quant_clamped_block(spec, step, lane // lpb)
+      part = _block_quant_lane_partial(halfs, x, row, blk, lane % lpb, spec)
+      if valid is not None: part = valid.where(part, UOp.const(dtypes.float32, 0.0))
+      acc = out[row].set(0.0)
+      acc = out[row].set(acc.after(lane, step)[row] + part, end=step)
+      return acc.end(row, lane).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    return serial
+
+  def kernel(out:UOp, halfs:UOp, x:UOp) -> UOp:
+    cta = UOp.special(spec.ctas, "gidx0")
+    tid = UOp.special(spec.warps_per_cta * wave, "lidx0")
+    lane, warp = tid % wave, tid // wave
+    row = cta * spec.warps_per_cta + warp
+    valid_row = None
+    if spec.ragged_rows:
+      valid_row = row < spec.rows
+      row = valid_row.where(row, UOp.const(row.dtype, spec.rows - 1))
+    step = UOp.range(spec.steps, 0, axis_type=AxisType.REDUCE)
+    blk, valid = _block_quant_clamped_block(spec, step, lane // lpb)
+    part = _block_quant_lane_partial(halfs, x, row, blk, lane % lpb, spec)
+    if valid is not None: part = valid.where(part, UOp.const(dtypes.float32, 0.0))
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(step)[0] + part).end(step))
+    total = _warp_reduce_sum_staged(acc[0], lane, wave, 90)
+    store = out[row].store(total) if valid_row is None else out[row].store(total, valid_row)
+    return store.sink(arg=KernelInfo(name=name, opts_to_apply=()))
   return kernel

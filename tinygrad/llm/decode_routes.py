@@ -5,7 +5,7 @@ from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (DecodeRMSNormSpec, Q4KGEMVEpilogue, Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
-  decode_rmsnorm_warps_per_row, emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
+  decode_rmsnorm_warps_per_row, emit_q6k_gemv_kernel, block_quant_gemv_geometry, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q4k_g3_lanemap_gemv_w1w3_kernel, q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
@@ -15,9 +15,10 @@ from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOut
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.kernel_program import execute_research_program_outputs
 from tinygrad.llm.model_route_plan import (DecodeRouteShapes, decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
-                                           decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted, lease_forced)
+                                           decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted, decode_q8_0_gemv_formats,
+                                           lease_forced)
 from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
-from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
+from tinygrad.llm.qk_layout import Q4_K, Q6_K, Q8_0, QUANT_FORMATS, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
 from tinygrad.uop.ops import Ops
 from tinygrad.llm.boltbeam_authority import lower_authorized_candidate, tickets_for_candidate
@@ -642,6 +643,51 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   return Q6K_DECODE_CANDIDATE.execute(linear, x, binding, epilogue_inputs=epilogue_inputs or {})
 
 @dataclass(frozen=True)
+class _BlockQuantDecodeCandidate:
+  """Generic block-quant decode GEMV (route decode_q8_0_gemv, decode-q8-0-gemv-route-policy.json; the record names
+  the formats it promotes). Binds any single-token block-quant linear whose (out_features, in_features) the kernel's own
+  validate accepts; the geometry comes from the format, the shape and the device facts the installer copied onto the
+  linear. Anything else returns None and the caller's graph runs."""
+  candidate_id: str = "quant_linear_decode.block_quant_generated"
+  route_id: str = "decode_q8_0_gemv"
+  quant: QuantFormat = Q8_0
+  batch: int = 1
+  tokens: int = 1
+
+  def spec_for(self, linear:Any):
+    capability = getattr(getattr(linear, "route_admission", None), "capability", None)
+    return block_quant_gemv_geometry(linear.block_quant_storage.format, linear.out_features, linear.in_features,
+                                     wave_size=getattr(capability, "wave_size", None), sm_count=getattr(linear, "device_sm_count", None),
+                                     max_threads=getattr(linear, "device_max_threads", None))
+
+  def bind(self, linear:Any, x:Tensor, arch_ok:bool):
+    B, T, K = _decode_shape(x)
+    if not hasattr(linear, "block_quant_storage") or not getattr(linear, "decode_enabled", False): return None
+    if getattr(linear, "bias", None) is not None or not arch_ok: return None
+    if B != self.batch or T != self.tokens or not isinstance(T, int) or K != getattr(linear, "in_features", None): return None
+    spec = self.spec_for(linear)
+    try: spec.validate()
+    except ValueError: return None
+    return spec
+
+  def execute(self, linear:Any, x:Tensor, spec) -> Tensor:
+    x_vec = x[:, 0, :].reshape(spec.k).contiguous()
+    candidate = {"family": "block_quant_gemv_route.v1", **spec.to_json(), "spec_binding": "block_quant_spec"}
+    emitter, ticket = lower_authorized_candidate(candidate, (("decode_q8_0_gemv", "block_quant_gemv"),),
+                                                 lowering_bindings={"block_quant_spec": spec})
+    program = KernelProgram(self.route_id, f"{self.candidate_id}.gemv", KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
+                            emitter, output_spec=OutputSpec((spec.rows,), dtypes.float32), boltbeam_ticket=ticket)
+    return execute_promoted_program(None, linear.block_quant_storage.halfs.to(x.device), x_vec, program=program).reshape(1, 1, spec.rows)
+
+BLOCK_QUANT_DECODE_CANDIDATE = _BlockQuantDecodeCandidate()
+
+def block_quant_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool) -> Tensor:
+  """Block-quant decode GEMV (1 token). Prefill, bias, or a shape the kernel refuses -> the caller's ordinary graph."""
+  spec = BLOCK_QUANT_DECODE_CANDIDATE.bind(linear, x, arch_ok)
+  if spec is None: return fallback(x)
+  return BLOCK_QUANT_DECODE_CANDIDATE.execute(linear, x, spec)
+
+@dataclass(frozen=True)
 class _FlashDecodeBinding:
   candidate_id: str
   route_id: str
@@ -936,6 +982,17 @@ def _probe_norm_fusion(s:DecodeRouteShapes) -> None:
     DecodeRMSNormSpec(rows=rows, dim=dim, eps=s.eps, warps_per_row=decode_rmsnorm_warps_per_row(dim),
                       weight_dtype=dtypes.float16, out_dtype=dtypes.float16).validate()
 
+def _probe_block_quant_gemv(s:DecodeRouteShapes) -> None:
+  # The model-level projections the shapes name (FFN in/out, attention q/k/v/o, vocab head). Per-weight shapes a
+  # model has beyond these (e.g. recurrent-block projections) are validated again per linear at install and at
+  # bind, where a refusal leaves that one linear on the ordinary graph. Wave size: the warp route is installed
+  # only where QKPrimitiveCapability.satisfied, i.e. a 32-wide shuffle, so the probe builds that spec.
+  from tinygrad.codegen.late.warp_reduce import WARP
+  q_dim = s.n_heads * s.head_dim
+  for rows, k in ((s.hidden_dim, s.dim), (s.dim, s.hidden_dim), (q_dim, s.dim), (s.kv_dim, s.dim), (s.dim, q_dim), (s.vocab, s.dim)):
+    for fmt in decode_q8_0_gemv_formats():
+      block_quant_gemv_geometry(QUANT_FORMATS[fmt], rows, k, wave_size=WARP, sm_count=None, max_threads=None).validate()
+
 def _reduce_output_probe(epilogue:str) -> Callable[[DecodeRouteShapes], None]:
   def probe(s:DecodeRouteShapes) -> None:
     from tinygrad.codegen.late.reduce_output import emit_reduce_output
@@ -963,4 +1020,5 @@ DECODE_ROUTE_SHAPE_PROBES:dict[str, Callable[[DecodeRouteShapes], None]] = {
   "decode_norm_fusion": _probe_norm_fusion,
   "decode_reduce_output_rmsnorm": _reduce_output_probe("identity"),
   "decode_qk_norm_rope": _reduce_output_probe("rope"),
+  "decode_q8_0_gemv": _probe_block_quant_gemv,
 }

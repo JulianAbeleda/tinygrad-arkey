@@ -687,6 +687,30 @@ def decode_native_argmax_threads(target:Target, getenv_fn=getenv) -> int:
   """Resolve the promoted CTA width, with an explicit load-time rollback."""
   return 1024 if decode_native_argmax_promoted(target) and not getenv_fn("TINYGRAD_NATIVE_ARGMAX_DISABLE", 0) else 0
 
+def load_decode_q8_0_gemv_promotion(path:str) -> frozenset[Target]:
+  """Closed-default policy for the generic Q8_0 decode GEMV (decode-q8-0-gemv-route-policy.json). The record names
+  the target only; the kernel's validate (DECODE_ROUTE_SHAPE_PROBES["decode_q8_0_gemv"]) names the shape."""
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1": raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  return frozenset((t.get("backend"), t.get("architecture")) for t in (data.get("promoted_targets") or ()))
+
+_DECODE_Q8_0_GEMV_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q8-0-gemv-route-policy.json"
+_DECODE_Q8_0_GEMV_TARGETS = load_decode_q8_0_gemv_promotion(_DECODE_Q8_0_GEMV_RECORD)
+
+def load_decode_q8_0_gemv_formats(path:str) -> frozenset[str]:
+  """The block formats the record promotes for the block-quant GEMV route (default: Q8_0 only)."""
+  data = json.loads(pathlib.Path(path).expanduser().read_text())
+  return frozenset(data.get("formats") or ("Q8_0",))
+
+_DECODE_Q8_0_GEMV_FORMATS = load_decode_q8_0_gemv_formats(_DECODE_Q8_0_GEMV_RECORD)
+
+def decode_q8_0_gemv_formats() -> frozenset[str]: return _DECODE_Q8_0_GEMV_FORMATS
+
+def decode_q8_0_gemv_promoted(target:Target, getenv_fn=getenv) -> bool:
+  """Resolve the Q8_0 GEMV route with an explicit load-time rollback (TINYGRAD_Q8_0_GEMV_DISABLE=1)."""
+  return target in _DECODE_Q8_0_GEMV_TARGETS and not getenv_fn("TINYGRAD_Q8_0_GEMV_DISABLE", 0)
+
 @dataclass(frozen=True)
 class DecodeRouteShapes:
   """The shapes the loader knows about THIS model at promotion time. A route probe reads these to build the

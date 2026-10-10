@@ -17,8 +17,8 @@ So this is a consistency gate, not a unification. It fails when a guard is chang
 other. It deliberately does not try to make the two representations into one -- that is LR-062's boundary
 question, and doing it here would mean editing the manifest that everything else trusts.
 
-Coverage is partial and the gaps are named below rather than papered over: of the four decode candidates,
-only Q4_K states its numeric guard in a form a machine can compare. See UNCHECKED_GUARDS.
+Coverage is partial and the gaps are named below rather than papered over: of the five decode candidates,
+only Q4_K and Q8_0 state its numeric guard in a form a machine can compare. See UNCHECKED_GUARDS.
 """
 from __future__ import annotations
 
@@ -53,6 +53,8 @@ UNCHECKED_GUARDS = {
   "Q6K_DECODE_CANDIDATE": {"batch", "tokens", "k_multiple", "row_tile"},
   # decode is 1 batch x 1 token by definition; the manifest does not restate it
   "Q4K_DECODE_CANDIDATE": {"batch", "tokens"},
+  # decode is 1 batch x 1 token by definition; the K rule is the spec validate, compared below
+  "BLOCK_QUANT_DECODE_CANDIDATE": {"batch", "tokens"},
   # the 48-wide live split and KV_BOTH staging are implementation geometry, absent from the manifest
   "FLASH_DECODE_CANDIDATE": {"split_size", "staging", "query_group_size", "stage_width"},
   "FLASH_DECODE_G5_CANDIDATE": {"split_size", "staging", "query_group_size", "stage_width"},
@@ -143,6 +145,19 @@ def test_q4k_k_and_n_multiples_match_the_manifest_condition():
     f"candidate requires N % {cand.n_multiple} == 0, manifest requires N % {multiples.get('N')} == 0"
 
 
+def test_q8_0_k_multiple_matches_the_manifest_condition():
+  """The Q8_0 candidate carries no K field: its K rule is the spec validate. Compare that against the manifest's
+  parsable condition, so a change to either side fails here."""
+  from tinygrad.llm.decode_kernels import BlockQuantGEMVRouteSpec as Q8_0GEMVRouteSpec
+  cand = _candidates()["BLOCK_QUANT_DECODE_CANDIDATE"]
+  multiples: dict[str, int] = {}
+  for c in (g["condition"] for g in _guards(cand.route_id) if "condition" in g): multiples.update(parse_multiples(c))
+  m = multiples.get("K")
+  assert m, "manifest route decode_q8_0_gemv no longer states a parsable K condition"
+  Q8_0GEMVRouteSpec(rows=1, k=m).validate()
+  with pytest.raises(ValueError): Q8_0GEMVRouteSpec(rows=1, k=m + m // 2).validate()
+
+
 def test_unchecked_guard_list_is_exhaustive():
   """Every candidate field is either compared against the manifest by a test above, or declared unchecked. A new
   guard field with no manifest counterpart fails here, which is the point: it should be a decision, not a
@@ -164,11 +179,11 @@ def test_the_gate_is_not_vacuous():
   """Guards against the failure mode where a refactor renames the candidates and every loop above iterates over
   nothing while still reporting green."""
   cands = _candidates()
-  assert len(cands) == 4, f"expected 4 decode candidates, found {sorted(cands)}"
-  assert sum(1 for c in cands.values() if getattr(c, "quant", None)) == 2
+  assert len(cands) == 5, f"expected 5 decode candidates, found {sorted(cands)}"
+  assert sum(1 for c in cands.values() if getattr(c, "quant", None)) == 3
 
 
-@pytest.mark.parametrize("route_id", ["decode_q4k_g3_generated", "decode_q6k_coop_generated",
+@pytest.mark.parametrize("route_id", ["decode_q4k_g3_generated", "decode_q6k_coop_generated", "decode_q8_0_gemv",
                                       "decode_flash_live_split_g4_kvboth", "decode_flash_live_split_g5_kvboth"])
 def test_every_admitted_route_is_a_decode_workload(route_id):
   """A prefill route reached through the decode admission path would be a real routing bug and is cheap to

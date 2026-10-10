@@ -266,6 +266,15 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
       if getattr(spec,field) != value: raise ValueError(f"Q6 spec {field} drift")
     from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel
     return emit_q6k_gemv_kernel(spec) if family == "q6_gemv_route.v1" else emit_q6k_vocab_scalar_reduce_kernel(spec)
+  if family == "block_quant_gemv_route.v1":
+    required={"quant","rows","k","wave_size","lanes_per_block","warps_per_cta","lane_reduce","spec_binding"}
+    if set(parameters) != required: raise ValueError("block_quant_gemv_route.v1 parameters are invalid")
+    name=parameters["spec_binding"]
+    if not bindings or name not in bindings: raise ValueError("block-quant spec binding is missing")
+    spec=bindings[name]
+    if {k:v for k,v in parameters.items() if k != "spec_binding"} != spec.to_json(): raise ValueError("block-quant spec drift")
+    from tinygrad.llm.decode_kernels import emit_block_quant_gemv_kernel
+    return emit_block_quant_gemv_kernel(spec)
   if family == "qk_norm_rope_cache_sink.v1":
     required={"spec_repr","producer_dtype","weight_dtype","cache_dtype","max_context","spec_binding"}
     if set(parameters) != required: raise ValueError("qk_norm_rope_cache_sink.v1 parameters are invalid")

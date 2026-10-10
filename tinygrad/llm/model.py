@@ -35,7 +35,7 @@ from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
 from tinygrad.llm.prefill_route_observer import prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
-  _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
+  _install_q4k_primitives, _install_q6k_primitives, _install_block_quant_primitives, _qk_storage_summary,
   qk_primitive_capability_from_device_facts, kv_cache_fp16_eligible, _module_at,
 )
 from tinygrad.llm.model_facts import (
@@ -59,7 +59,7 @@ from tinygrad.llm.model_route_plan import (DecodeRouteShapeGate, DecodeRouteShap
   decode_rmsnorm_native_lowering_promoted, decode_rmsnorm_native_lowering_site_promoted,
   decode_reduce_output_rmsnorm_promoted, decode_qk_norm_rope_promoted,
   decode_producer_kv_cache_sink_promoted, decode_q4k_kv_pair_promoted,
-  decode_native_argmax_threads,
+  decode_native_argmax_threads, decode_q8_0_gemv_formats, decode_q8_0_gemv_promoted,
   decode_shared_q8_attention_promoted,
   decode_q6_direct_shared_q8_attention_promoted, decode_q4_direct_shared_q8_attention_promoted,
   decode_shared_q8_q4kv_pair_promoted, decode_shared_q8_q4q6_kv_pair_promoted,
@@ -644,6 +644,7 @@ def _decode_route_promotions(config, target:tuple[str|None, str|None], getenv_fn
   gate.admit("decode_q4k_q4q4_qkv_full", decode_q4k_q4q4_qkv_full_promoted(target))
   gate.admit("decode_shared_q8_q4kv_pair", q4_direct and decode_shared_q8_q4kv_pair_promoted(target))
   gate.admit("decode_shared_q8_q4q4_qkv_full", q4_direct and decode_shared_q8_q4q4_qkv_full_promoted(target))
+  gate.admit("decode_q8_0_gemv", decode_q8_0_gemv_promoted(target))
   return gate
 
 def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> Tensor|None:
@@ -2839,7 +2840,12 @@ class Transformer:
               f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s} "
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
-      if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
+      # Generic block-quant decode GEMV (decode-q8-0-gemv-route-policy.json, formats named by the record): one primitive
+      # per nn.Linear of a promoted format the decode reads, each admitted by the kernel's own validate. Kept out of
+      # `primitive_linears` (whose weights the identity binding treats as packed): it keeps the ordinary weight graph.
+      q8_0_linears = (_install_block_quant_primitives(model, q4k_meta, _device_facts, decode_q8_0_gemv_formats(), debug=DEBUG >= 1)
+                      if _gate.admitted("decode_q8_0_gemv") and "raw_tensor" in q4k_meta else [])
+      if primitive_linears or q8_0_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears + q8_0_linears)
       primitive_ids = {id(linear) for linear in primitive_linears}
       generic_facts = []
       for fact in model_facts.tensors:

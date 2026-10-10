@@ -7,7 +7,7 @@ from tinygrad.helpers import prod
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
-from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
+from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call, block_quant_primitive_linear_call
 from tinygrad.llm.model_route_plan import (ModelRoutePlan, build_model_route_plan,
   decode_epilogue_fusion_promoted, decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted,
   decode_q4k_w1w3_fusion_promoted)
@@ -233,6 +233,79 @@ class Q6KPrimitiveLinear(_QKPrimitiveLinear):
     return self._call_with_program_facts(lambda: q6k_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted,
                                                                            epilogue_inputs=epilogue_inputs))
 
+class BlockQuantPrimitiveStorage(_QKPrimitiveStorage):
+  __slots__ = ("format",)
+  def __init__(self, packed:Tensor, fmt:QuantFormat, source_bytes:int):
+    super().__init__(packed, source_bytes, 0, "shared", source_bytes, 0)
+    self.format = fmt
+  @property
+  def halfs(self) -> Tensor: return self.packed
+
+class BlockQuantPrimitiveLinear(_QKPrimitiveLinear):
+  """A block-quant (Q8_0/Q5_0/Q4_0) linear whose single-token decode runs the generic block-quant GEMV
+  (decode_routes.block_quant_primitive_linear_call). `weight` stays the ordinary dequantize graph, so prefill and any
+  refused shape run exactly as before. `device_sm_count`/`device_max_threads` are launch facts read at install."""
+  _storage_attr, _prefill_attr = "block_quant_storage", "_prefill_block_quant_halfs"
+  def __init__(self, weight:Tensor, halfs:Tensor, fmt:QuantFormat, out_features:int, in_features:int, name:str,
+               source_bytes:int, route_role:str="", route_admission:QKPrimitiveRouteAdmission|None=None,
+               device_sm_count:int|None=None, device_max_threads:int|None=None):
+    self._init_common(weight, None, halfs, out_features, in_features, 1, (), name,
+      BlockQuantPrimitiveStorage(halfs, fmt, source_bytes), route_role, route_admission)
+    self._ggml_type = fmt
+    self.device_sm_count, self.device_max_threads = device_sm_count, device_max_threads
+
+  def __call__(self, x:Tensor, **_epilogue_inputs) -> Tensor:
+    return self._call_with_program_facts(lambda: block_quant_primitive_linear_call(self, x, self._fallback, self.route_admission.admitted))
+
+def device_sm_count(device:str) -> int|None:
+  """SM count as the opened device reports it, or None when the backend does not report one. On NV this is
+  GPCs x TPCs/GPC x SMs/TPC from the driver's GPU info (the full floorplan; a cut-down part enables fewer)."""
+  try:
+    from tinygrad import Device
+    dev = Device[device]
+    parts = [getattr(dev, name, None) for name in ("num_gpcs", "num_tpc_per_gpc", "num_sm_per_tpc")]
+  except Exception: return None
+  return prod(parts) if all(isinstance(p, int) and p > 0 for p in parts) else None
+
+def _install_block_quant_primitives(model, meta:dict, device_facts:object|None, formats:frozenset[str], *,
+                                    debug:bool=False) -> list[BlockQuantPrimitiveLinear]:
+  """Replace every 2-D nn.Linear weight whose GGML format is in `formats` (the promotion record's formats) with a
+  BlockQuantPrimitiveLinear over a zero-copy uint16 view of the GGUF bytes. A tied lm_head (no output.weight) is the
+  token_embd bytes. Per-weight admission is the kernel's own validate; a refused shape keeps the ordinary module."""
+  from tinygrad import nn
+  from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS, block_quant_gemv_geometry
+  by_type = {lay.ggml_type: lay.quant for name, lay in BLOCK_QUANT_LAYOUTS.items() if name in formats}
+  capability = qk_primitive_capability_from_device_facts(device_facts)
+  admission = QKPrimitiveRouteAdmission(capability, True)
+  max_threads = getattr(getattr(device_facts, "capabilities", None), "max_workgroup_threads", None)
+  infos = {name: (dims, typ, off) for name, dims, typ, off in meta["tensor_infos"]}
+  sources = [(name, name) for name in infos]
+  if "output.weight" not in infos and "token_embd.weight" in infos: sources.append(("output.weight", "token_embd.weight"))
+  installed, skipped, sm_count = [], collections.Counter(), None
+  for name, source in sources:
+    dims, typ, off = infos[source]
+    if (fmt := by_type.get(typ)) is None: continue
+    if len(dims) != 2 or not name.endswith(".weight"): skipped["not_2d_weight"] += 1; continue
+    module_path = name[:-len(".weight")]
+    try: module = _module_at(model, module_path)
+    except (AttributeError, IndexError, ValueError): skipped["missing_module"] += 1; continue
+    if type(module) is not nn.Linear: skipped["not_linear"] += 1; continue
+    if getattr(module, "bias", None) is not None: skipped["bias"] += 1; continue
+    rows, cols = int(dims[1]), int(dims[0])
+    if sm_count is None: sm_count = device_sm_count(str(module.weight.device))
+    try: block_quant_gemv_geometry(fmt, rows, cols, wave_size=capability.wave_size, sm_count=sm_count, max_threads=max_threads).validate()
+    except ValueError: skipped["shape_refused"] += 1; continue
+    nbytes = rows * cols // fmt.block_elems * fmt.block_bytes
+    halfs = _shared_packed_view(meta, meta["data_start"] + off, nbytes, dtypes.uint16)
+    linear = BlockQuantPrimitiveLinear(module.weight, halfs, fmt, rows, cols, name, nbytes, route_role=module_path.rsplit(".", 1)[-1],
+                                       route_admission=admission, device_sm_count=sm_count, device_max_threads=max_threads)
+    _set_module_at(model, module_path, linear)
+    installed.append(linear)
+  if debug:
+    print(f"BLOCK_QUANT_PRIMITIVE_DEBUG formats={sorted(formats)} installed={len(installed)} "
+          f"{' '.join(f'{k}={v}' for k, v in sorted(skipped.items()))} admitted={admission.admitted} sm_count={sm_count} max_threads={max_threads}")
+  return installed
+
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.
   if requested_mode not in ("sidecar", "q4_ondemand", "shared"):
@@ -272,8 +345,8 @@ def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> 
   by_mode: collections.Counter[str] = collections.Counter()
   source_bytes = persistent_bytes = shared_bytes = nonpersistent_bytes = 0
   for linear in linears:
-    storage = linear.q4k_storage if isinstance(linear, Q4KPrimitiveLinear) else linear.q6k_storage
-    kind = "Q4K" if isinstance(linear, Q4KPrimitiveLinear) else "Q6K"
+    storage = getattr(linear, linear._storage_attr)
+    kind = {"q4k_storage": "Q4K", "q6k_storage": "Q6K"}.get(linear._storage_attr) or storage.format.name
     by_kind[kind] += storage.persistent_bytes
     by_mode[storage.mode] += 1
     source_bytes += storage.source_bytes
