@@ -1231,9 +1231,51 @@ FLASH_DECODE_G4 = FlashDecodeRouteConfig("attention_decode.flash_live_split", "d
 FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5", "decode_flash_live_split_g5_kvboth",
                                           40, 32, 2, 4)
 
+# Measured tunings of the live-split route, by the attention shape they were qualified on. Any other shape runs
+# the default geometry (FLASH_DECODE_G4's split, query group and stage width) when the kernel's own validate accepts
+# it: flash_decode_route_for. A tuning is a measured preference, never an admission rule.
+FLASH_DECODE_TUNED: tuple[FlashDecodeRouteConfig, ...] = (FLASH_DECODE_G4, FLASH_DECODE_G5)
+
+
+def flash_decode_route_for(Hq:int, Hkv:int, Hd:int) -> FlashDecodeRouteConfig|None:
+  """The live-split flash decode route for this attention shape, or None when the kernel refuses it.
+
+  The shape comes from the model (query heads, KV heads, head dim). A measured tuning is used when one exists for
+  the shape, else the default geometry. Admission is the kernel's own spec validate (describe_flash_decode_attention:
+  Hq % Hkv, Hd against the lane and pair widths, the query group, the warps), never a model constant."""
+  route = next((row for row in FLASH_DECODE_TUNED if (row.query_heads, row.kv_heads, row.head_dim) == (Hq, Hkv, Hd)), None)
+  if route is None:
+    route = FlashDecodeRouteConfig("attention_decode.flash_live_split_generic", "decode_flash_live_split_generic_kvboth",
+                                   Hq, FLASH_DECODE_G4.split_size, FLASH_DECODE_G4.query_group_size, FLASH_DECODE_G4.stage_width,
+                                   kv_heads=Hkv, head_dim=Hd, staging=FLASH_DECODE_G4.staging)
+  try:
+    describe_flash_decode_attention(Hq, Hd, Hkv, route.split_size, route.split_size, staging=route.staging,
+                                    query_group_size=route.query_group_size, stage_width=route.stage_width).validate()
+  except (ValueError, ZeroDivisionError): return None
+  return route
+
+
+def flash_decode_route_refusal(Hq:int, Hkv:int, Hd:int) -> str|None:
+  """Why the live-split kernel refuses this attention shape (its own validate's words), or None."""
+  if flash_decode_route_for(Hq, Hkv, Hd) is not None: return None
+  try:
+    describe_flash_decode_attention(Hq, Hd, Hkv, FLASH_DECODE_G4.split_size, FLASH_DECODE_G4.split_size,
+                                    staging=FLASH_DECODE_G4.staging).validate()
+  except (ValueError, ZeroDivisionError) as exc: return str(exc)
+  return "the live-split kernel refuses this shape"
+
+
+def llama_vec_wide_shape_refusal(Hq:int, Hkv:int, Hd:int) -> str|None:
+  """Why the llama-vec wide substrate refuses this attention shape (its own construction check), or None."""
+  from tinygrad.uop.ops import UOp
+  try: flash_vec_llama_score_pv_kernel(Hd, Hq, Hkv, 512, 4, UOp.variable("Tc", 1, 512))
+  except (ValueError, ZeroDivisionError) as exc: return str(exc)
+  return None
+
+
 def _adaptive_split_lease_admitted(route:FlashDecodeRouteConfig|None, S:int, query_group_size:int|None,
                                    staging:str, MAXC:int) -> bool:
-  return route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and MAXC <= 1024 and \
+  return route == FLASH_DECODE_G4 and MAXC <= 1024 and \
     (64, route.query_group_size, route.staging) == (S, query_group_size, staging)
 
 
@@ -1252,7 +1294,7 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   # succeeded), so re-deriving them from `device` here would be both redundant and -- inside a Tensor Function
   # dispatch, which is exactly where this runs -- unable to open a device at all (see
   # decode_routes._flash_decode_capability_and_target_for_device's docstring).
-  route = next((row for row in (FLASH_DECODE_G4, FLASH_DECODE_G5) if row.shape_ok(1, Hq, Hkv, Hd)), None)
+  route = flash_decode_route_for(Hq, Hkv, Hd)
   # stage_width/reduce_structure/dot_pair_width are searchable geometry overrides (P3); the promoted-route
   # identity is the split/query-group/staging triple, not the staging coalesce width.
   admitted = route is not None and (route.split_size, route.query_group_size, route.staging) == \
@@ -1261,7 +1303,7 @@ def flash_decode_live_split_block_tile(q:Tensor, cache_kv:Tensor, Tc:UOp, Hd:int
   # split for the G4 d512 route in addition to the promoted one. Unset env leaves `admitted` exactly
   # as before, so the promoted route stays byte-identical to today.
   coarse_split = flash_decode_coarse_split_override()
-  if not admitted and route is not None and route.query_heads == FLASH_DECODE_G4.query_heads and coarse_split:
+  if not admitted and route == FLASH_DECODE_G4 and coarse_split:
     admitted = (coarse_split, route.query_group_size, route.staging) == (S, query_group_size, staging)
   # Closed-default graph-local lease used by the qualified adaptive policy.
   # Arbitrary split geometry remains inadmissible.

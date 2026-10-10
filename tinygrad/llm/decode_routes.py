@@ -7,7 +7,7 @@ from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (DecodeRMSNormSpec, Q4KGEMVEpilogue, Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
   decode_rmsnorm_warps_per_row, emit_q6k_gemv_kernel, block_quant_gemv_geometry, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q4k_g3_lanemap_gemv_w1w3_kernel, q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
-from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
+from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, flash_decode_route_for, llama_vec_wide_shape_refusal, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
   flash_decode_target_promoted, flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel)
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
@@ -777,7 +777,8 @@ class _FlashDecodeCandidate:
     backend_label = target[0] or "AMD"
     return _FlashDecodeBinding(self.candidate_id, self.route_id, backend_label, B, Hq, Hkv, Hd,
                                self.split_size, self.query_group_size, self.staging, self.stage_width,
-                               admission.combine_fusion_admitted, decode_flash_llama_vec_wide_promoted(target))
+                               admission.combine_fusion_admitted,
+                               decode_flash_llama_vec_wide_promoted(target) and llama_vec_wide_shape_refusal(Hq, Hkv, Hd) is None)
 
 # Public compatibility aliases. Their sole route authority is owned beside the
 # flash executor, so selection cannot drift from execution configuration.
@@ -864,8 +865,8 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
   # whole buffer (all MAXC slots valid) -- a CONCRETE Tc, not vsp+T. Keeps the graph's read extent constant across wrap.
   _tc = MAXC if ring_full else (vsp + T)
-  candidate = FLASH_DECODE_G5_CANDIDATE if Hq == FLASH_DECODE_G5_CANDIDATE.query_heads else FLASH_DECODE_CANDIDATE
-  binding = candidate.bind(B, Hq, Hkv, Hd, str(q.device))
+  route = flash_decode_route_for(Hq, Hkv, Hd)
+  binding = _FlashDecodeCandidate(route).bind(B, Hq, Hkv, Hd, str(q.device)) if route is not None else None
   # KV-quant (assigned_kv int8 + kv_scale) and rope-at-read (assigned_kv holds UN-roped K, rotated in-kernel from
   # `freqs`) are BOTH only supported on the live-split route -- every other route here reads fp16 pre-roped KV and would
   # silently misread. Fail loud rather than emit a phantom result. The live-split path below threads kv_scale + freqs.
@@ -877,8 +878,8 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # Promoted generated live-split flash-decode. Structural shape class: B==1, Hd==128, Hkv==8, Hq%Hkv==0.
   # KV_BOTH is the default because K_ONLY assumes the old g5 V layout and was verified to produce bad logits on 8B.
   if binding is None:
-    # No backups: the generated live-split route is the only attention kernel path. Unsupported shapes fail loud
-    # (rather than silently emitting a deleted handwritten flash kernel); model.py gates flash vs SDPA upstream.
+    # model.py takes the plain attention path for a shape this route refuses (its load-time bind verdict,
+    # config.flash_decode); reaching here without a binding is a caller that skipped that gate.
     raise RuntimeError(f"flash_decode_attention_route: shape B={B} Hd={Hd} Hkv={Hkv} Hq={Hq} is not served by "
                        "the generated live-split route, and all handwritten fallback flash routes were deleted.")
   # M2d combine-fp16 lease override (nv-epilogue-absorption-route-scope-20260810.md): the policy
@@ -892,7 +893,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # binding.split_size, so production behavior is byte-identical to today; the admission guard in
   # flash_decode_live_split_block_tile accepts the env value only when it is set.
   split_size = geom.get("split_count", binding.split_size)
-  if (coarse_split := flash_decode_coarse_split_override()) and binding.Hq == FLASH_DECODE_G4.query_heads:
+  if (coarse_split := flash_decode_coarse_split_override()) and binding.route_id == FLASH_DECODE_G4.route_id:
     # A graph-local typed geometry lease takes precedence.  The env override
     # remains the admission authority for non-promoted split counts.
     if "split_count" not in geom: split_size = coarse_split

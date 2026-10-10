@@ -1401,7 +1401,10 @@ class TransformerBlock(FFNBlock):
       from extra.llm_research.prefill.nv_llama_fattn_mma_pp512_binding import project
       attn = project(q.contiguous(), k.cast(dtypes.float16).contiguous(), v.cast(dtypes.float16).contiguous(),
                      mask.cast(dtypes.float16).contiguous()).cast(q.dtype)
-    elif _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
+    elif _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)) and \
+         (self.config.flash_decode or _ring_freqs is not None):
+      # the fallback: a shape the live-split kernel refuses (config.flash_decode False at load) takes the plain
+      # attention path below; ring decode has no plain path and keeps the flash route
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       _flash_geom = getattr(self, "_flash_decode_tile_geometry_lease", None)
       _o_q8_fine = bool((_flash_geom or {}).get("o_q8_fine_owned",False))
@@ -2456,8 +2459,13 @@ class Transformer:
     # S6: the runtime prefill-v2 flag is True for every executed strategy (REFUSE raises at admission), so it
     # is folded to True here; the admission-time capability keeps the v2_on name on AdmissionInputs.
     _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, True)
-    _flash_decode = any(candidate.bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
-                        for candidate in (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE))
+    # The flash route for this model's attention shape, admitted by the kernel's own validate
+    # (flash_decode_route_for); a refused shape keeps config.flash_decode False and decodes on plain attention.
+    from tinygrad.llm.decode_routes import _FlashDecodeCandidate
+    from tinygrad.llm.flash_decode_attention import flash_decode_route_for
+    _flash_route = flash_decode_route_for(n_heads, n_kv_heads, head_dim)
+    _flash_decode = _flash_route is not None and \
+      _FlashDecodeCandidate(_flash_route).bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
     # Warm the fused-attention spec-target cache at load time (decode's resolve-once pattern,
     # decode_routes.py:151): custom_kernel_attention runs inside a Tensor Function dispatch where
     # Device[...] is disallowed, so the runtime lookup must be a cache hit. Devices without a renderer
@@ -2533,9 +2541,12 @@ class Transformer:
     # absent from this predicate: the Flash graph shape, not the weight format,
     # owns the contract.  MoE stays closed until it receives its own lifecycle
     # qualification.
+    # The attention shape is the substrate's to accept: its own construction check, no model constant.
+    from tinygrad.llm.flash_decode_attention import llama_vec_wide_shape_refusal
     model._decode_flash_load_schedule_promoted = bool(
       decode_flash_llama_vec_wide_promoted((_norm_cap.backend, _norm_cap.architecture)) and
-      not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and
+      not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and config.flash_decode and
+      llama_vec_wide_shape_refusal(config.n_heads, config.n_kv_heads, config.head_dim) is None and
       shape_measured("decode_flash_llama_vec_wide", {"num_blocks": config.num_blocks, "n_heads": config.n_heads,
                      "n_kv_heads": config.n_kv_heads, "head_dim": config.head_dim}, field="measured_topologies") and
       config.max_context >= 513)
