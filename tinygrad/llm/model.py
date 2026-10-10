@@ -749,6 +749,13 @@ def _generation_input_slice(tokens:Tensor, start_pos:int|UOp, token_extent:UOp, 
   """Retain the lazy symbolic slice used by decode and chunked prefill JITs."""
   return tokens[:, start_pos:start_pos + token_extent]
 
+def _recurrent_prompt_token(tokens:Tensor, start_pos:int) -> Tensor:
+  """One prompt token in the decode feedback token's own JIT input spelling: a realized (1,1) buffer (the
+  previous output is `argmax(...).realize()`), not a start_pos-sliced view of the prompt tensor. Recurrent
+  models feed their prompt through the T==1 decode JIT one token at a time, so the two must match."""
+  # argmax(-1, keepdim=True).realize() is a realized (1,) buffer viewed as (1,1): build the token the same way.
+  return tokens[:, start_pos:start_pos + 1].reshape(1).contiguous().realize().reshape(1, 1)
+
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
   freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
@@ -3035,6 +3042,7 @@ class Transformer:
     if delivery_batch > 1 and (temperature != 0.0 or diagnostic_full_logits or expected_output_tokens is None or expected_output_tokens < 1):
       raise ValueError("delivery_batch > 1 requires greedy generation and a positive expected_output_tokens")
     if self.has_recurrent_block: chunk_size = 1
+    # (and no prefill-v2 chunk below: GatedDeltaNetBlock._attention supports T==1 only, so the prompt also runs one token at a time)
     _ring = self.config.ring and self.config.rope_dim == self.config.head_dim
     if _ring and len(tokens) > self.max_context:
       # StreamingLLM evicts DURING generation, not prefill: a prompt larger than the physical window N can't be held.
@@ -3107,7 +3115,7 @@ class Transformer:
         prompt = Tensor([tokens[:prompt_len]], dtype=dtypes.int32, device=self.token_embd.weight.device)
         out = self.logits(prompt, 0)[:, -1, :].argmax(-1, keepdim=True).realize()
         ntv = prompt_len
-      elif self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
+      elif self.config.prefill_v2 and not self.has_recurrent_block and prefill_v2_target_admitted(self.config.prefill_device_facts) and (prompt_len - start_pos) >= ubatch:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
@@ -3118,7 +3126,7 @@ class Transformer:
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
         out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False, greedy=direct_greedy).realize()
-      elif self.config.prefill_v2 and prefill_v2_target_admitted(self.config.prefill_device_facts) and start_pos < prompt_len and prompt_len >= ubatch:
+      elif self.config.prefill_v2 and not self.has_recurrent_block and prefill_v2_target_admitted(self.config.prefill_device_facts) and start_pos < prompt_len and prompt_len >= ubatch:
         # Phase-3 fix: a sub-UBATCH PROMPT remainder would otherwise fall to many slow 32-token symbolic calls
         # (the fallback trap). Instead process the LAST PREFILL_UBATCH tokens as ONE prefill-v2 chunk by shifting
         # the window back so it ENDS exactly at prompt_len -> all-real tokens (no padding), last position is
@@ -3171,6 +3179,12 @@ class Transformer:
         else:
           decode_input = _generation_input_slice(t, sp, nt, ntv) if start_pos < prompt_len or out is None else \
                          (out[0] if diagnostic_full_logits and isinstance(out, tuple) else out)
+          if self.has_recurrent_block and start_pos < prompt_len:
+            # Recurrent models prefill one token at a time (chunk_size=1), so a prompt token and a generated token
+            # reach the SAME T==1 decode JIT. The JIT's input contract is structural: a start_pos-sliced view of t
+            # and the realized (1,1) feedback token are different spellings and TinyJit refuses the second. Hand the
+            # prompt token over as the feedback token is: a realized (1,1) buffer of its own.
+            decode_input = _recurrent_prompt_token(t, start_pos)
           feedback_slot = (decode_feedback_phase & 1) if direct_greedy and start_pos >= prompt_len and \
             bool(getattr(self, "_decode_feedback_pingpong_promoted", False)) else None
           out = (self.decode_with_logits(decode_input, sp, temp, use_flash=_uf, feedback_slot=feedback_slot,flash_split_count=_flash_split)
