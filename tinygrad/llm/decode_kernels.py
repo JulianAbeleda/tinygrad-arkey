@@ -942,7 +942,7 @@ def _emit_q6k_coop(spec:Q6KGEMVRouteSpec):
 
 def _emit_q6k_partial(spec:Q6KGEMVRouteSpec):
   rows, parts, k_blocks, name, opts = spec.rows, spec.parts, spec.k_blocks, spec.kernel_name, spec.opts
-  blocks_per_part = cdiv(k_blocks, parts)
+  blocks_per_part = ceildiv(k_blocks, parts)  # a ceiling: the last part may be short, never a block left out
   def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
     row, part = UOp.range(rows, 0), UOp.range(parts, 1)
     blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
