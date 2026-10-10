@@ -185,19 +185,19 @@ _NV_FB_INFO_INDEX_L2CACHE_SIZE = 0x1b
 
 
 def _nv_facts_of(device: Any) -> dict[str, Any]:
-  """Facts an NVIDIA device opened through the resource manager reports: compute capability, SM count, L2 bytes.
-  Each is read from the GPU; one the driver refuses is left out, so a caller names it missing."""
+  """Facts an NVIDIA device opened through the resource manager reports: compute capability (from the device's own
+  architecture string, the runtime's one decoding of its SM version), SM count and L2 bytes. Each is read from the
+  GPU; one the driver refuses is left out, so a caller names it missing."""
+  import re
+  from tinygrad.runtime.ops_nv import nv_gpu
   out: dict[str, Any] = {}
-  version = getattr(device, "sm_version", None)
-  if isinstance(version, int): out["compute_capability"] = [(version >> 8) & 0xff, version & 0xff if (version & 0xff) <= 0xf else (version & 0xff) >> 4]
+  if (match := re.fullmatch(r"sm_(\d+)(\d)", str(getattr(device, "arch", "")))): out["compute_capability"] = [int(match[1]), int(match[2])]
   try:
-    from tinygrad.runtime.autogen import nv_gpu
     masks = [device.iface.rm_control(device.subdevice, nv_gpu.NV2080_CTRL_CMD_GR_GET_TPC_MASK,
                                      nv_gpu.NV2080_CTRL_GR_GET_TPC_MASK_PARAMS(gpcId=i)).tpcMask for i in range(device.num_gpcs)]
     out["sm_count"] = sum(bin(m).count("1") for m in masks) * int(device.num_sm_per_tpc)
   except Exception: pass
   try:
-    from tinygrad.runtime.autogen import nv_gpu
     params = nv_gpu.NV2080_CTRL_FB_GET_INFO_V2_PARAMS(fbInfoListSize=1)
     params.fbInfoList[0].index = _NV_FB_INFO_INDEX_L2CACHE_SIZE
     params = device.iface.rm_control(device.subdevice, nv_gpu.NV2080_CTRL_CMD_FB_GET_INFO_V2, params)
