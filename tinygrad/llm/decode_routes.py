@@ -535,7 +535,8 @@ class _Q6KDecodeCandidate:
     authorities=(("decode_q6k_coop_generated","q6_gemv"),)
     if fusion_admitted: authorities += (("decode_epilogue_fusion","q6_gemv_epilogue"),)
     if epilogue == "ffn_down_resadd": authorities += (("decode_ffn_down_resadd","q6_ffn_down_resadd"),)
-    candidate={"family":"q6_gemv_route.v1","rows":binding.N,"k":binding.K,"row_tile":binding.row_tile,
+    # the spec's own row_tile: a partial spec (parts > 1, or rows the target's tile does not divide) keeps its default
+    candidate={"family":"q6_gemv_route.v1","rows":binding.N,"k":binding.K,"row_tile":spec.row_tile,
       "reduction":reduction,"epilogue":epilogue,"spec_binding":"q6_spec"}
     emitter,ticket=lower_authorized_candidate(candidate,authorities,lowering_bindings={"q6_spec":spec})
     gemv_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.gemv",
@@ -560,7 +561,7 @@ class _Q6KDecodeCandidate:
       return (partial.sum(axis=1) + epi_inputs["normed_h"][:, 0, :].reshape(binding.N)).reshape(1, 1, binding.N)
     if q6k_vocab_scalar_reduce_eligible(spec):
       emitter,ticket=lower_authorized_candidate({"family":"q6_vocab_reduce_route.v1","rows":binding.N,"k":binding.K,
-        "row_tile":binding.row_tile,"reduction":reduction,"epilogue":epilogue,"spec_binding":"q6_spec"},
+        "row_tile":spec.row_tile,"reduction":reduction,"epilogue":epilogue,"spec_binding":"q6_spec"},
         (("decode_q6k_coop_generated","q6_vocab_reduce"),),lowering_bindings={"q6_spec":spec})
       reduce_program = KernelProgram(binding.route_id, f"{binding.candidate_id}.vocab_reduce",
         KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,

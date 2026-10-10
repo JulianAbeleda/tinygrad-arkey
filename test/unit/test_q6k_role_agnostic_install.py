@@ -16,3 +16,13 @@ def test_q6k_entries_are_role_agnostic():
 
 def test_q6k_entries_refuse_partial_blocks():
   assert _entry("blk.3.attn_output.weight", 5120, 6100) is None
+
+
+def test_a_partial_q6k_spec_lowers_through_the_route_family():
+  """A partial binding (parts > 1) on a target whose coop tile is 2 builds a spec with its own row_tile; the
+  route candidate must name that spec's tile, or the lowering refuses it as drift."""
+  from tinygrad.llm.decode_kernels import q6k_spec_for_role
+  from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
+  spec = q6k_spec_for_role(1024, 2560, parts=4, row_tile=2, use_coop=False, reduction="external_sum")
+  cand = {"rows": 1024, "k": 2560, "row_tile": spec.row_tile, "reduction": "external_sum", "epilogue": "", "spec_binding": "q6_spec"}
+  assert callable(build_registered_llm_emitter("q6_gemv_route.v1", cand, {"q6_spec": spec}))
