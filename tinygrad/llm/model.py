@@ -439,9 +439,13 @@ def _memory_adaptive_measurement_authority(*, device_facts, inventory:dict, work
 def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512, *, lm_head_resident_fp16:bool=False) -> dict:
   """Derive runtime route identity only from the explicitly opened GGUF's tensor metadata."""
   facts = model_facts_from_gguf_metadata(kv, meta)
+  # The loader builds block_count - nextn_predict_layers blocks: a next-n (MTP) block's tensors have no runtime linear.
+  arch = kv.get("general.architecture")
+  built = (kv[f"{arch}.block_count"] - kv.get(f"{arch}.nextn_predict_layers", 0)) if arch and f"{arch}.block_count" in kv else None
   rows = []
   for tensor in facts.tensors:
     if tensor.role is None: continue
+    if built is not None and tensor.name.startswith("blk.") and tensor.name.split(".")[1].isdigit() and int(tensor.name.split(".")[1]) >= built: continue
     # Generation consumes only the final token's output projection.  The
     # pp512 dense candidate set therefore cannot own LM-head merely because
     # its source tensor is quantized; keep it on the explicit fixed lazy route.
