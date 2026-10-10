@@ -688,19 +688,66 @@ def decode_native_argmax_threads(target:Target, getenv_fn=getenv) -> int:
   return 1024 if decode_native_argmax_promoted(target) and not getenv_fn("TINYGRAD_NATIVE_ARGMAX_DISABLE", 0) else 0
 
 @dataclass(frozen=True)
+class DecodeRouteShapes:
+  """The shapes the loader knows about THIS model at promotion time. A route probe reads these to build the
+  exact kernel spec / epilogue the route would lower for the model, then calls that spec's own validate."""
+  dim:int; hidden_dim:int; n_heads:int; n_kv_heads:int; head_dim:int; vocab:int; eps:float
+  target:Target = (None, None)
+  @property
+  def kv_dim(self) -> int: return self.n_kv_heads * self.head_dim
+
+@dataclass(frozen=True)
+class SkippedPromotion:
+  route:str; reason:str
+  @property
+  def line(self) -> str: return f"{self.route}: {self.reason}; plain kernels used"
+
+class DecodeRouteShapeGate:
+  """ONE rule for every promoted decode route: the promotion record names the target; the kernel's own validate
+  names the shape. `admit` keeps a record-promoted route only when its probe (DECODE_ROUTE_SHAPE_PROBES in
+  decode_routes.py) builds the spec for this model's shapes and validate does not raise. A refused route is not
+  promoted for this model and is recorded, one line per route, on the route plan. No shape constant lives in the
+  loader; a route without a probe is admitted on its record alone (its call site must fail closed on its own)."""
+  def __init__(self, shapes:DecodeRouteShapes, probes:Mapping[str, Any]):
+    self.shapes, self.probes = shapes, probes
+    self.decisions:dict[str, bool] = {}
+    self.skipped:list[SkippedPromotion] = []
+  def admit(self, route:str, promoted:bool) -> bool:
+    ok = bool(promoted)
+    if ok and (probe := self.probes.get(route)) is not None:
+      try: probe(self.shapes)
+      except ValueError as e:
+        self.skipped.append(SkippedPromotion(route, str(e))); ok = False
+    self.decisions[route] = ok
+    return ok
+  def admitted(self, route:str) -> bool: return self.decisions.get(route, False)
+  def report_lines(self) -> list[str]: return [s.line for s in self.skipped]
+
+def lease_forced(route:str, validate:Any) -> None:
+  """A harness lease forces a route past the shape gate. When the kernel's validate still refuses, a research arm
+  must know: re-raise the validate message with the lease named, never fall back silently."""
+  try: validate()
+  except ValueError as e: raise ValueError(f"{route}: {e} (lease forced)") from e
+
+@dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str
   kernel_mode:str = "partial"
 
 class ModelRoutePlan:
-  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=(), promoted_targets:frozenset[Target]|None=None):
+  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=(), promoted_targets:frozenset[Target]|None=None,
+               shape_gate:DecodeRouteShapeGate|None=None):
     self._entries = {entry.name: entry for entry in entries}
     self.promoted_targets = promoted_targets
+    self.shape_gate = shape_gate
   def primitive(self, name:str) -> PrimitiveRouteEntry|None: return self._entries.get(name)
   def target_promoted(self, target:Target) -> bool:
     """Policy authority for TG3's second question. See the module-level note above `load_qk_target_promotion`
     for why `None` here means "undecided by target", not "denied"."""
     return self.promoted_targets is None or target in self.promoted_targets
+  def report_lines(self) -> list[str]:
+    """One line per record-promoted route the shape gate refused for this model (empty when all apply)."""
+    return self.shape_gate.report_lines() if self.shape_gate is not None else []
   def __len__(self) -> int: return len(self._entries)
   def __iter__(self): return iter(self._entries.values())
 
@@ -737,14 +784,15 @@ def _record_entry(record:Any) -> PrimitiveRouteEntry|None:
   return primitive_route_entry_for_tensor(str(name), int(typ), int(rows), int(cols), module_path=get("module_path"),
                                           quant_label=get("quant_label"), role=get("role"))
 
-def build_model_route_plan(meta:dict|None=None, model_facts:Any=None, promoted_targets:frozenset[Target]|None=None) -> ModelRoutePlan:
+def build_model_route_plan(meta:dict|None=None, model_facts:Any=None, promoted_targets:frozenset[Target]|None=None,
+                           shape_gate:DecodeRouteShapeGate|None=None) -> ModelRoutePlan:
   records = getattr(model_facts, "tensors", ()) if model_facts is not None else ()
   entries = [entry for record in records if (entry := _record_entry(record)) is not None]
   if not entries and meta is not None:
     for name, dims, typ, _off in meta.get("tensor_infos", ()):
       if str(name).endswith(".weight") and len(dims) == 2 and (entry := primitive_route_entry_for_tensor(str(name), int(typ), int(dims[1]), int(dims[0]))) is not None:
         entries.append(entry)
-  return ModelRoutePlan(entries, promoted_targets)
+  return ModelRoutePlan(entries, promoted_targets, shape_gate)
 
 try: from tinygrad.llm.model_facts import ModelFacts as ModelFacts
 except Exception: ModelFacts = None

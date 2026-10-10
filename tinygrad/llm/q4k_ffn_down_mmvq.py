@@ -24,6 +24,10 @@ from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 ROWS, K, QK = 4096, 12288, 256
 WARP, WARPS_PER_ROW = 32, 4
+
+def validate_shape(rows:int, k:int) -> None:
+  """The kernel is fixed to one geometry; this is the shape authority the loader's route gate asks."""
+  if (rows, k) != (ROWS, K): raise ValueError(f"Q4_K FFN-down four-warp fp16 route requires (rows,k)=({ROWS},{K}), got ({rows},{k})")
 Q4_BLOCKS, BLOCKS_PER_WARP = K//QK, (K//QK)//WARPS_PER_ROW
 SUB_BLOCKS = BLOCKS_PER_WARP // WARPS_PER_ROW
 Q8_PAYLOAD_WORDS, Q8_GROUPS = K//4, K//32

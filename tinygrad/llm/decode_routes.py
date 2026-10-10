@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Callable, Any
 
 from tinygrad import Device, Tensor, UOp, dtypes, getenv
-from tinygrad.llm.decode_kernels import (Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
-  emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
-  q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
+from tinygrad.llm.decode_kernels import (DecodeRMSNormSpec, Q4KGEMVEpilogue, Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
+  decode_rmsnorm_warps_per_row, emit_q6k_gemv_kernel, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
+  q4k_g3_lanemap_gemv_w1w3_kernel, q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
 from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
   flash_decode_target_promoted, flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel)
@@ -14,8 +14,8 @@ from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOut
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.kernel_program import execute_research_program_outputs
-from tinygrad.llm.model_route_plan import (decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
-                                           decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted)
+from tinygrad.llm.model_route_plan import (DecodeRouteShapes, decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
+                                           decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted, lease_forced)
 from tinygrad.llm.packed_argmax import packed_argmax_from_tile_keys
 from tinygrad.llm.qk_layout import Q4_K, Q6_K, QuantFormat
 from tinygrad.llm.route_selection import parse_route_mode
@@ -145,28 +145,28 @@ class _Q4KDecodeCandidate:
     m2b_resadd = (route_role == "ffn_down" and "normed_h" in epi_inputs and "gate_out" not in epi_inputs
                   and (bool(getattr(linear, "_ffn_down_resadd_lease", False))
                        or bool(getattr(linear, "_decode_ffn_down_resadd_promoted", False))))
+    add_after = None  # the ordinary h+ffn_out add, issued after a plain GEMV when the epilogue refuses this shape
     if m2b_resadd:
-      from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
       epi_spec = Q4KGEMVEpilogue("ffn_down_resadd")
-      _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
-      prog_inputs.append(_xv)
-      prog_inputs.append(epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
+      if not _ffn_down_resadd_admitted(linear, lambda: epi_spec.validate(binding.N, binding.K)):
+        epi_spec, add_after = None, epi_inputs["normed_h"]
+      else:
+        _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
+        prog_inputs.append(_xv)
+        prog_inputs.append(epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
     elif (q4k_epi_admitted or q4k_resadd_admitted) and route_role:
 
       if route_role == "attn_qo" and "residual" in epi_inputs and q4k_resadd_admitted:
-        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("residual_add")
         _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
         prog_inputs.append(_xv)
         prog_inputs.append(epi_inputs["residual"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
       elif route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")) and q4k_epi_admitted:
-        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("ffn_down_fused")
         prog_inputs.append(epi_inputs["gate_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
         prog_inputs.append(epi_inputs["up_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
         prog_inputs.append(epi_inputs["normed_h"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
       elif route_role == "attn_kv" and not epi_inputs and q4k_epi_admitted:
-        from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue
         epi_spec = Q4KGEMVEpilogue("fp16_cast")
         _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
         prog_inputs.append(_xv)
@@ -245,7 +245,20 @@ class _Q4KDecodeCandidate:
       typed_input_views=typed_input_views,
       residual_input_views=residual_input_views,
       boltbeam_ticket=ticket)
-    return execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
+    out = execute_promoted_program(None, *prog_inputs, program=program).reshape(1, 1, binding.N)
+    return out if add_after is None else out + add_after
+
+def _ffn_down_resadd_admitted(linear:Any, validate:Callable[[], None]) -> bool:
+  """Shape check of the M2b epilogue at the call site. The loader's gate (model_route_plan.DecodeRouteShapeGate)
+  already keeps the promoted flag off a model whose shape the epilogue refuses, so a promoted call passes here;
+  a harness lease forces the route past that gate and must hear the refusal (lease_forced). False means the
+  promoted flag alone reached an unaccepted shape: the caller runs the plain GEMV and the ordinary add."""
+  if getattr(linear, "_ffn_down_resadd_lease", False):
+    lease_forced("decode_ffn_down_resadd", validate)
+    return True
+  try: validate()
+  except ValueError: return False
+  return True
 
 # This is a statically promoted result of offline machine search, not an online
 # autotuner. See README.md#why-this-is-machine-search-even-though-the-runtime-is-static.
@@ -498,6 +511,10 @@ class _Q6KDecodeCandidate:
                        opts=linear.opts, target=target, reduction=reduction, epilogue=epilogue)
     if accumulators != 1: spec_kwargs["accumulators"] = accumulators
     spec = q6k_spec_for_role(binding.N, binding.K, **spec_kwargs)
+    if epilogue and not _ffn_down_resadd_admitted(linear, spec.validate):
+      # Same contract as the Q4K branch: the plain coop GEMV lowers and the ordinary add follows below.
+      epilogue = ""
+      spec = q6k_spec_for_role(binding.N, binding.K, **{**spec_kwargs, "epilogue": epilogue})
     # M2 epilogue-absorption boundary (nv-epilogue-absorption-route-scope-20260810.md): the shared-block
     # ffn_down Q6K GEMV consumes the fused w1+w3 fp16 store directly when the producer declared its
     # fp16 layout under the harness-installed lease. Same fail-closed validator as Q4K: no declaration,
@@ -535,7 +552,8 @@ class _Q6KDecodeCandidate:
                                       program=gemv_program).reshape(1, 1, binding.N)
     partial = execute_promoted_program(None, linear.q6k_storage.halfs.to(x.device), x_vec, program=gemv_program)
     if reduction == "in_kernel":
-      return partial.reshape(1, 1, binding.N)
+      out = partial.reshape(1, 1, binding.N)
+      return out + epi_inputs["normed_h"] if m2b_resadd else out
     if m2b_resadd:
       # external_sum fallback: reproduce the ordinary h+ffn_out fp32 add over the reduced partials.
       return (partial.sum(axis=1) + epi_inputs["normed_h"][:, 0, :].reshape(binding.N)).reshape(1, 1, binding.N)
@@ -862,3 +880,87 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     reduce_structure=geom.get("reduce_structure", "staged"), dot_pair_width=geom.get("dot_pair_width", 2),
     combine_lane_width=geom.get("combine_lane_width"),
     combine_fp16=output_fp16, split_count_leased="split_count" in geom)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Shape probes for the loader's promotion gate (model_route_plan.DecodeRouteShapeGate). One probe per promoted
+# decode route that lowers a shape-bearing kernel. Each builds the exact spec / epilogue / kernel the route would
+# lower for THIS model's shapes and calls that object's own validate; a ValueError means "not for this model".
+# No shape constant is written here: the kernels' validate methods stay the single source of truth.
+# ---------------------------------------------------------------------------------------------------------------
+def _probe_ffn_down_resadd(s:DecodeRouteShapes) -> None:
+  Q4KGEMVEpilogue("ffn_down_resadd").validate(s.dim, s.hidden_dim)
+  q6k_spec_for_role(s.dim, s.hidden_dim, role="ffn_down", row_tile=q6k_coop_row_tile_for_target(*s.target), use_coop=True,
+                    reduction="in_kernel", epilogue="ffn_down_resadd").validate()
+
+def _probe_w1w3(store_fp16:bool) -> Callable[[DecodeRouteShapes], None]:
+  def probe(s:DecodeRouteShapes) -> None:
+    load_style = "scalar" if getenv("TINYGRAD_Q4K_W1W3_SCALAR_LOAD", 0) else "vector"
+    q4k_g3_lanemap_gemv_w1w3_kernel(s.hidden_dim, s.dim, load_style=load_style, store_fp16=store_fp16)
+  return probe
+
+def _probe_q4k_epilogue_resadd(s:DecodeRouteShapes) -> None:
+  Q4KGEMVEpilogue("residual_add").validate(s.dim, s.n_heads * s.head_dim)
+
+def _probe_gate_up_four_warp(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q4k_gate_up_four_warp_mmvq import validate_shape
+  validate_shape(s.hidden_dim, s.dim)
+
+def _probe_q4k_ffn_down_geometry(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q4k_ffn_down_mmvq import validate_shape
+  validate_shape(s.dim, s.hidden_dim)
+
+def _probe_q6k_ffn_down_geometry(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q6k_ffn_down_mmvq import validate_shape
+  validate_shape(s.dim, s.hidden_dim)
+
+def _probe_q6k_v_four_warp(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q6k_v_mmvq import validate_shape
+  validate_shape(s.kv_dim, s.dim)
+
+def _probe_shared_q8_attention(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.shared_q8_attention import validate_shape
+  validate_shape(s.dim, s.n_heads * s.head_dim, s.kv_dim)
+
+def _probe_q4k_kv_pair(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector
+  emit_q4k_kv_pair_vector(s.kv_dim, s.dim)
+
+def _probe_q4k_qkv_full(s:DecodeRouteShapes) -> None:
+  from tinygrad.llm.q4k_kv_pair import emit_q4k_qkv_full
+  emit_q4k_qkv_full(s.n_heads * s.head_dim, s.kv_dim, s.dim)
+
+def _probe_norm_fusion(s:DecodeRouteShapes) -> None:
+  # The same spec _decode_rmsnorm builds at the block norms (one row of dim) and the head norms (heads x head_dim).
+  for rows, dim in ((1, s.dim), (s.n_heads, s.head_dim), (s.n_kv_heads, s.head_dim)):
+    DecodeRMSNormSpec(rows=rows, dim=dim, eps=s.eps, warps_per_row=decode_rmsnorm_warps_per_row(dim),
+                      weight_dtype=dtypes.float16, out_dtype=dtypes.float16).validate()
+
+def _reduce_output_probe(epilogue:str) -> Callable[[DecodeRouteShapes], None]:
+  def probe(s:DecodeRouteShapes) -> None:
+    from tinygrad.codegen.late.reduce_output import emit_reduce_output
+    from tinygrad.uop.ops import ReduceOutputSpec
+    # The q/k sites lower one row per head over head_dim (the rope epilogue only there); the block norm sites one row of dim.
+    sites = ((s.n_heads, s.head_dim), (s.n_kv_heads, s.head_dim)) + (((1, s.dim),) if epilogue == "identity" else ())
+    for rows, dim in sites:
+      spec = ReduceOutputSpec(rows=rows, dim=dim, eps=s.eps, out_dtype=dtypes.float32, affine=True, recipe="sumsq_rsqrt_affine",
+                              reduce_op=Ops.ADD, warps=rows, lanes=32, per_lane=dim // 32, epilogue=epilogue)
+      emit_reduce_output(spec, dtypes.float32, dtypes.float16)
+  return probe
+
+DECODE_ROUTE_SHAPE_PROBES:dict[str, Callable[[DecodeRouteShapes], None]] = {
+  "decode_ffn_down_resadd": _probe_ffn_down_resadd,
+  "decode_q4k_w1w3_fusion": _probe_w1w3(False),
+  "decode_q4k_w1w3_fp16_store": _probe_w1w3(True),
+  "decode_q4k_gate_up_four_warp_vector": _probe_gate_up_four_warp,
+  "decode_q4k_ffn_down_fp16_geometry": _probe_q4k_ffn_down_geometry,
+  "decode_q6k_ffn_down_fp16_geometry": _probe_q6k_ffn_down_geometry,
+  "decode_q6k_v_four_warp_fp16_geometry": _probe_q6k_v_four_warp,
+  "decode_q4k_epilogue_resadd": _probe_q4k_epilogue_resadd,
+  "decode_shared_q8_attention": _probe_shared_q8_attention,
+  "decode_q4k_kv_pair": _probe_q4k_kv_pair,
+  "decode_q4k_q4q4_qkv_full": _probe_q4k_qkv_full,
+  "decode_norm_fusion": _probe_norm_fusion,
+  "decode_reduce_output_rmsnorm": _reduce_output_probe("identity"),
+  "decode_qk_norm_rope": _reduce_output_probe("rope"),
+}

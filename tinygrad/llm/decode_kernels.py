@@ -689,6 +689,12 @@ class DecodeRMSNormSpec:
       raise ValueError(f"DecodeRMSNormSpec requires out_dtype float16/float32, got {self.out_dtype}")
 
 
+def decode_rmsnorm_warps_per_row(dim:int) -> int:
+  """256 elements per warp is the measured occupancy sweet spot for the single-row 4096 shape
+  (512 threads, 8 elems/lane); smaller norms stay at one warp per row. One definition: the
+  call site (_decode_rmsnorm) and the loader's shape probe build the same spec."""
+  return max(1, min(16, dim // 256))
+
 def emit_decode_rmsnorm_kernel(spec:DecodeRMSNormSpec):
   spec.validate()
   rows, dim, lane, warps = spec.rows, spec.dim, spec.lane_width, spec.warps_per_row

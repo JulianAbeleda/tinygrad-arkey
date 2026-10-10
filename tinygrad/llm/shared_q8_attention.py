@@ -24,6 +24,11 @@ from tinygrad.llm.boltbeam_authority import lower_authorized_candidate, tickets_
 _K, _Q_ROWS, _KV_ROWS = 4096, 4096, 1024
 _Q8_PACKS, _Q8_GROUPS = _K//4, _K//32
 
+def validate_shape(dim:int, q_rows:int, kv_rows:int) -> None:
+  """The provider and consumers are fixed to one attention geometry; the loader's route gate asks here."""
+  if (dim, q_rows, kv_rows) != (_K, _Q_ROWS, _KV_ROWS):
+    raise ValueError(f"shared-Q8 attention requires (dim,q_rows,kv_rows)=({_K},{_Q_ROWS},{_KV_ROWS}), got ({dim},{q_rows},{kv_rows})")
+
 @dataclass(frozen=True)
 class SharedQ8AttentionAdmission:
   """A deliberately non-promoted qualification lease for one exact block.

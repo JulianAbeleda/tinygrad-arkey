@@ -2,7 +2,7 @@ from __future__ import annotations
 import contextlib, contextvars, functools, hashlib, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
-from tinygrad.helpers import prod, getenv
+from tinygrad.helpers import DEBUG, prod, getenv
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.llm.admission import (
@@ -14,13 +14,13 @@ from tinygrad.llm.admission import (
 from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
-from tinygrad.llm.decode_routes import (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
+from tinygrad.llm.decode_routes import (DECODE_ROUTE_SHAPE_PROBES, FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, _kv_store_parts_view,
                                         _q4k_single_projection_load_style,
                                         decode_kv_store_route, flash_decode_attention_route,
                                         q4k_gate_up_primitive_linear_call, q4k_gate_up_rms_affine_qualification_call,
                                         q6k_vocab_top1_call,
                                         should_use_flash_decode as _route_should_use_flash_decode)
-from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, emit_decode_rmsnorm_kernel
+from tinygrad.llm.decode_kernels import DecodeRMSNormSpec, decode_rmsnorm_warps_per_row, emit_decode_rmsnorm_kernel
 from tinygrad.llm.kernel_program import KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program
 from tinygrad.llm.shared_q8_attention import (SharedQ8AttentionAdmission, q4k_q8_fine_o_call, q4k_q8_o_call,
                                                shared_q8_attention_call)
@@ -28,7 +28,7 @@ from tinygrad.llm.packed_argmax import (make_native_argmax_host_mirror, native_a
                                         native_argmax_finite_fp32_host_mirror, packed_argmax_finite_fp32,
                                         read_native_argmax_host_mirror)
 from tinygrad.llm.producer_kv_cache_sink import ProducerKVCacheSinkAdmission, producer_kv_cache_sink_call
-from tinygrad.llm.q4k_kv_pair import q4k_kv_pair_call, q4k_qkv_call
+from tinygrad.llm.q4k_kv_pair import emit_q4k_kv_pair_vector, q4k_kv_pair_call, q4k_qkv_call
 from tinygrad.llm.prefill_routes import direct_packed_prefill_policy, is_direct_packed_prefill_linear, route_prefill_linear, validate_prefill_route_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_attachments import attach_selected_prefill_inventory
@@ -52,7 +52,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            prefill_activation, prefill_output, prefill_scratch, runtime_activation,
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
-from tinygrad.llm.model_route_plan import (build_model_route_plan, decode_norm_fusion_promoted,
+from tinygrad.llm.model_route_plan import (DecodeRouteShapeGate, DecodeRouteShapes, build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_q4k_gate_up_four_warp_vector_promoted,
   decode_ffn_down_resadd_promoted, decode_kv_store_fusion_promoted,
@@ -608,6 +608,44 @@ def _prefill_semantic(enabled:bool, mark, value:Tensor) -> Tensor:
   if runtime_mark is None: raise ValueError("execution semantic requires a prefill role marker")
   return (mark if enabled else runtime_mark)(value)
 
+def _linear_shape_accepted(linear, validate) -> bool:
+  """Per-linear install check against the route module's own shape authority (its validate / emitter), so the
+  loader installs an exact-geometry admission only where the kernel accepts (out_features, in_features)."""
+  try: validate(getattr(linear, "out_features", None), getattr(linear, "in_features", None))
+  except (ValueError, TypeError): return False
+  return True
+
+def _decode_route_promotions(config, target:tuple[str|None, str|None], getenv_fn=getenv) -> DecodeRouteShapeGate:
+  """Resolve the shape-bearing promoted decode routes for THIS model once (model_route_plan.DecodeRouteShapeGate).
+  A record names the target; the kernel's own validate (DECODE_ROUTE_SHAPE_PROBES, decode_routes.py) names the
+  shape. A route whose kernel refuses the model's (rows, k) is not promoted for this model and is recorded on the
+  gate (gate.report_lines(), carried by the route plan); the plain tinygrad kernels run there. The loader reads
+  gate.admitted(route) and never writes a shape constant of its own. Dependent routes are ANDed with their
+  prerequisite exactly as before; the environment rollbacks stay where they were."""
+  shapes = DecodeRouteShapes(dim=config.dim, hidden_dim=config.hidden_dim, n_heads=config.n_heads, n_kv_heads=config.n_kv_heads,
+                             head_dim=config.head_dim, vocab=config.vocab_size, eps=float(config.norm_eps), target=target)
+  gate = DecodeRouteShapeGate(shapes, DECODE_ROUTE_SHAPE_PROBES)
+  gate.admit("decode_norm_fusion", decode_norm_fusion_promoted(target))
+  gate.admit("decode_q4k_epilogue_resadd", decode_q4k_epilogue_resadd_promoted(target))
+  shared_q8 = gate.admit("decode_shared_q8_attention", decode_shared_q8_attention_promoted(target))
+  q4_direct = gate.admit("decode_q4_direct_shared_q8_attention", shared_q8 and decode_q4_direct_shared_q8_attention_promoted(target)
+                         and not getenv_fn("TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT", 0))
+  w1w3 = gate.admit("decode_q4k_w1w3_fusion", decode_q4k_w1w3_fusion_promoted(target))
+  w1w3_fp16 = gate.admit("decode_q4k_w1w3_fp16_store", w1w3 and decode_q4k_w1w3_fp16_store_promoted(target))
+  gate.admit("decode_q4k_gate_up_four_warp_vector", w1w3_fp16 and decode_q4k_gate_up_four_warp_vector_promoted(target)
+             and not getenv_fn("TINYGRAD_Q4K_GATE_UP_FOUR_WARP_DISABLE", 0))
+  resadd = gate.admit("decode_ffn_down_resadd", decode_ffn_down_resadd_promoted(target))
+  gate.admit("decode_q4k_ffn_down_fp16_geometry", resadd and decode_q4k_ffn_down_fp16_geometry_promoted(target))
+  gate.admit("decode_q6k_ffn_down_fp16_geometry", resadd and decode_q6k_ffn_down_fp16_geometry_promoted(target))
+  gate.admit("decode_q6k_v_four_warp_fp16_geometry", decode_q6k_v_four_warp_fp16_geometry_promoted(target))
+  reduce_output = gate.admit("decode_reduce_output_rmsnorm", decode_reduce_output_rmsnorm_promoted(target))
+  gate.admit("decode_qk_norm_rope", reduce_output and decode_qk_norm_rope_promoted(target))
+  gate.admit("decode_q4k_kv_pair", decode_q4k_kv_pair_promoted(target))
+  gate.admit("decode_q4k_q4q4_qkv_full", decode_q4k_q4q4_qkv_full_promoted(target))
+  gate.admit("decode_shared_q8_q4kv_pair", q4_direct and decode_shared_q8_q4kv_pair_promoted(target))
+  gate.admit("decode_shared_q8_q4q4_qkv_full", q4_direct and decode_shared_q8_q4q4_qkv_full_promoted(target))
+  return gate
+
 def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> Tensor|None:
   """L1 M3 fused decode RMSNorm (l1-decode-plumbing-fusion-design-20260802.md section 6 norm
   family): one kernel per norm replaces the generic mean/var reduce + epilogue pair. Returns
@@ -634,9 +672,7 @@ def _decode_rmsnorm(norm, x:Tensor, promoted:bool, out_dtype=dtypes.float32) -> 
   # reason this route is closed-default non-landing (see the norm-fusion record).
   x_in = x.reshape(numel)
   x_rank = 1
-  # 256 elements per warp is the measured occupancy sweet spot for the single-row 4096 shape
-  # (512 threads, 8 elems/lane); smaller norms stay at one warp per row.
-  warps = max(1, min(16, dim // 256))
+  warps = decode_rmsnorm_warps_per_row(dim)
   spec = DecodeRMSNormSpec(rows=rows, dim=dim, eps=norm.eps, warps_per_row=warps,
                            x_dtype=x.dtype, weight_dtype=dtypes.float16, out_dtype=out_dtype, x_rank=x_rank)
   emitter,ticket=lower_authorized_candidate({"family":"decode_rmsnorm.v1","rows":rows,"dim":dim,
@@ -2495,7 +2531,12 @@ class Transformer:
     model._flash_decode_active_horizon_lease = bool(
       model._decode_flash_load_schedule_promoted and
       not getenv("TINYGRAD_FLASH_ACTIVE_HORIZON_DISABLE", 0))
-    _norm_promoted = decode_norm_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # Every shape-bearing promoted route below is read from ONE gate (_decode_route_promotions): the record names the
+    # target, the kernel's own validate names the shape, and a route the kernel refuses for this model stays off
+    # (plain kernels) with the reason recorded on the route plan. No shape constant lives here.
+    _gate = _decode_route_promotions(config, (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_route_shape_gate = _gate
+    _norm_promoted = _gate.admitted("decode_norm_fusion")
     model._decode_norm_fusion_promoted = _norm_promoted
     for _b in model.blk: _b._decode_norm_fusion_promoted = _norm_promoted
     # L1 M4: q4k GEMV epilogue fusion gate. CLOSED default (decode-q4k-epilogue-fusion-route-policy.json,
@@ -2508,7 +2549,7 @@ class Transformer:
     # L1 M4 o-proj residual_add variant gate. CLOSED default (decode-q4k-epilogue-resadd-route-policy.json,
     # m4-resadd-landing-scope-20260806.md); separate from the combined M4 record so this one measured
     # copy-free variant can promote alone. Same resolve-once pattern as the M4 combined gate.
-    _q4k_resadd_promoted = decode_q4k_epilogue_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    _q4k_resadd_promoted = _gate.admitted("decode_q4k_epilogue_resadd")
     model._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
     for _b in model.blk: _b._decode_q4k_epilogue_resadd_promoted = _q4k_resadd_promoted
     # L1 GEMV substrate: decode shared-Q8 attention group. CLOSED default
@@ -2516,7 +2557,7 @@ class Transformer:
     # section-6 full gate passes, nv-gemv-substrate-landing-scope-20260808.md). Same
     # resolve-once pattern as the M4 gate; the loader installs the booked max18
     # cooperative lease (blocks 1-12, 14-18, and 25) only when the record promotes NV sm_120.
-    _shared_q8_promoted = decode_shared_q8_attention_promoted((_norm_cap.backend, _norm_cap.architecture))
+    _shared_q8_promoted = _gate.admitted("decode_shared_q8_attention")
     model._decode_shared_q8_attention_promoted = _shared_q8_promoted
     for _b in model.blk: _b._decode_shared_q8_attention_promoted = _shared_q8_promoted
     # Q6 V direct-output consumer sub-variant gate. CLOSED default
@@ -2532,29 +2573,26 @@ class Transformer:
     # partials and their left-to-right fp32 association, but merges them inside
     # the producer CTA. This removes 43 completion nodes in the max17 group.
     # TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT=1 restores the prior partial ABI.
-    _q4_direct_promoted = _shared_q8_promoted and decode_q4_direct_shared_q8_attention_promoted(
-      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_SHARED_Q8_Q4_PARTIAL_OUTPUT", 0)
+    _q4_direct_promoted = _gate.admitted("decode_q4_direct_shared_q8_attention")
     model._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
     for _b in model.blk: _b._decode_q4_direct_shared_q8_attention_promoted = _q4_direct_promoted
     # Shared-Q8 Q4/Q4 K/V dual-output producer. This is separately gated from
     # the direct-output consumer and is inert unless both prerequisite shared
     # Q8 and cooperative direct-output records are active.
-    _shared_q8_q4kv_pair_promoted = _q4_direct_promoted and decode_shared_q8_q4kv_pair_promoted(
-      (_norm_cap.backend,_norm_cap.architecture))
+    _shared_q8_q4kv_pair_promoted = _gate.admitted("decode_shared_q8_q4kv_pair")
     model._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
     for _b in model.blk: _b._decode_shared_q8_q4kv_pair_promoted = _shared_q8_q4kv_pair_promoted
     _shared_q8_q4q6_pair_promoted = _q4_direct_promoted and _q6_direct_promoted and \
       decode_shared_q8_q4q6_kv_pair_promoted((_norm_cap.backend,_norm_cap.architecture))
     model._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
     for _b in model.blk: _b._decode_shared_q8_q4q6_kv_pair_promoted = _shared_q8_q4q6_pair_promoted
-    _shared_q8_q4q4_full_promoted = _q4_direct_promoted and decode_shared_q8_q4q4_qkv_full_promoted(
-      (_norm_cap.backend,_norm_cap.architecture))
+    _shared_q8_q4q4_full_promoted = _gate.admitted("decode_shared_q8_q4q4_qkv_full")
     model._decode_shared_q8_q4q4_qkv_full_promoted = _shared_q8_q4q4_full_promoted
     # Fused w1+w3 (gate/up) decode GEMV gate. CLOSED default (decode-q4k-w1w3-fusion-route-policy.json,
     # NV sm_120 promoted, q4k-w1w3-fused-qv-implementation-record-20260803.md). Same resolve-once
     # pattern as the M4 gate; the fused call additionally requires BOTH ffn_gate and ffn_up to be
     # admitted Q4K primitives, so the model flag alone never changes the legacy chain.
-    _w1w3_promoted = decode_q4k_w1w3_fusion_promoted((_norm_cap.backend, _norm_cap.architecture))
+    _w1w3_promoted = _gate.admitted("decode_q4k_w1w3_fusion")
     model._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fusion_promoted = _w1w3_promoted
     # M2a fp16-store spelling gate (decode-q4k-w1w3-fp16-store-route-policy.json, NV sm_120 promoted,
@@ -2563,11 +2601,10 @@ class Transformer:
     # cast; it only applies when the fused kernel itself is admitted, so the flag is ANDed with the
     # w1w3 admission. The harness lease `_q4k_w1w3_fp16_store_lease` still forces the spelling where
     # the loader record is closed (research arms), so the AB contract is unchanged.
-    _w1w3_fp16_promoted = _w1w3_promoted and decode_q4k_w1w3_fp16_store_promoted((_norm_cap.backend, _norm_cap.architecture))
+    _w1w3_fp16_promoted = _gate.admitted("decode_q4k_w1w3_fp16_store")
     model._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
     for _b in model.blk: _b._decode_q4k_w1w3_fp16_store_promoted = _w1w3_fp16_promoted
-    _gateup_fourwarp_promoted = _w1w3_fp16_promoted and decode_q4k_gate_up_four_warp_vector_promoted(
-      (_norm_cap.backend, _norm_cap.architecture)) and not getenv("TINYGRAD_Q4K_GATE_UP_FOUR_WARP_DISABLE", 0)
+    _gateup_fourwarp_promoted = _gate.admitted("decode_q4k_gate_up_four_warp_vector")
     model._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
     for _b in model.blk: _b._decode_q4k_gate_up_four_warp_vector_promoted = _gateup_fourwarp_promoted
     # M2b+M2c ffn-down residual-add absorption gate (decode-ffn-down-resadd-route-policy.json,
@@ -2576,8 +2613,9 @@ class Transformer:
     # output gets its CALL rebound to the caller output slot so the identity copies fold. The flag
     # is carried on the model and every block; the ffn_down linear copies are installed after the
     # Q4K/Q6K primitive replacement below (the primitives are the objects that carry route_role).
-    # The harness lease _ffn_down_resadd_lease still forces the route where the record is closed.
-    _ffn_resadd_promoted = decode_ffn_down_resadd_promoted((_norm_cap.backend, _norm_cap.architecture))
+    # The harness lease _ffn_down_resadd_lease still forces the route where the record is closed (and where the
+    # shape gate refused it: decode_routes then raises the kernel's refusal with "lease forced").
+    _ffn_resadd_promoted = _gate.admitted("decode_ffn_down_resadd")
     model._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
     for _b in model.blk: _b._decode_ffn_down_resadd_promoted = _ffn_resadd_promoted
     # Q4_K FFN-down four-warp fp16 geometry route (decode-q4k-ffn-down-fp16-geometry-route-policy.json,
@@ -2585,14 +2623,12 @@ class Transformer:
     # with the 4-warp/row fp16-FMA direct consumer; the control topology it swaps against requires the
     # M2b ffn-down residual-add promotion, so the flag is ANDed with _ffn_resadd_promoted. The Q4-only
     # admission is installed on the replaced Q4K primitives after they are built below.
-    model._decode_q4k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
-      decode_q4k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q4k_ffn_down_fp16_geometry_promoted = _gate.admitted("decode_q4k_ffn_down_fp16_geometry")
     # Q6_K FFN-down four-warp fp16 geometry route (decode-q6k-ffn-down-fp16-geometry-route-policy.json,
     # NV sm_120 promoted, device 25.7 us vs 31.0 us control). Same closed-default shape as the Q4
     # analog: it replaces the row_tile-2 coop Q6 consumer with the 4-warp/row fp16 direct consumer,
     # requires the M2b ffn-down residual-add promotion, and is ANDed with it at resolve time.
-    model._decode_q6k_ffn_down_fp16_geometry_promoted = _ffn_resadd_promoted and \
-      decode_q6k_ffn_down_fp16_geometry_promoted((_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6k_ffn_down_fp16_geometry_promoted = _gate.admitted("decode_q6k_ffn_down_fp16_geometry")
     model._decode_q6k_ffn_down_packed_lanemap_promoted = model._decode_q6k_ffn_down_fp16_geometry_promoted and \
       decode_q6k_ffn_down_packed_lanemap_promoted((_norm_cap.backend, _norm_cap.architecture))
     model._decode_q6k_ffn_down_unroll_promoted = model._decode_q6k_ffn_down_packed_lanemap_promoted and \
@@ -2601,8 +2637,7 @@ class Transformer:
     # NV sm_120 promoted, in-loop 5.12 us vs 17.94 us control, -147.35 us/token wall bracket). It replaces
     # the parts route on the 10 Q6_K attention-V blocks with a 128-thread four-warp fp16 direct consumer;
     # the V output binds to the kv-store route as a flat fp32 view (vparts=1), so no parts reduce is left.
-    model._decode_q6k_v_four_warp_promoted = decode_q6k_v_four_warp_fp16_geometry_promoted(
-      (_norm_cap.backend, _norm_cap.architecture))
+    model._decode_q6k_v_four_warp_promoted = _gate.admitted("decode_q6k_v_four_warp_fp16_geometry")
     # Decode kv-store chain fusion gate (decode-kv-store-chain-fusion-scope-20260803.md). CLOSED default
     # (decode-kv-store-fusion-route-policy.json, empty promoted_targets until a same-session A/B record
     # lands). Same resolve-once pattern as the w1w3 gate; blocks carry their own copy so the traced
@@ -2629,7 +2664,7 @@ class Transformer:
     # Cooperative ordinary-CALL reduce/output route.  Promotion lives on the
     # model/block call sites, never nn.RMSNorm: the call sites gate the marker
     # on ``not _prefill`` before late concrete-view admission runs.
-    _reduce_output_promoted = decode_reduce_output_rmsnorm_promoted((_norm_cap.backend, _norm_cap.architecture))
+    _reduce_output_promoted = _gate.admitted("decode_reduce_output_rmsnorm")
     model._decode_reduce_output_rmsnorm_promoted = _reduce_output_promoted
     # The FFN-norm site stays CLOSED by default even when the fp32 q/k route is
     # promoted.  The residual-bind lowers one cooperative 1_4096 body per FFN
@@ -2645,8 +2680,7 @@ class Transformer:
     # Full-head Q/K norm+RoPE epilogue. This is a semantic REDUCE_OUTPUT
     # lowering, not an opaque KernelProgram boundary; target policy remains
     # separate and is additionally gated by the established q/k marker route.
-    _qk_norm_rope_promoted = _reduce_output_promoted and decode_qk_norm_rope_promoted(
-      (_norm_cap.backend, _norm_cap.architecture))
+    _qk_norm_rope_promoted = _gate.admitted("decode_qk_norm_rope")
     model._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
     for _b in model.blk: _b._decode_qk_norm_rope_promoted = _qk_norm_rope_promoted
     # Producer-owned K/V cache sink. The terminal 8x128 K RMSNorm+RoPE body
@@ -2663,10 +2697,8 @@ class Transformer:
     # Ordinary Q4/Q4 K/V dual-output producer. Admission is installed only
     # after primitive replacement and after the shared-Q8 leases are known;
     # this resolve-once flag carries only the target/rollback policy.
-    model._decode_q4k_kv_pair_promoted = decode_q4k_kv_pair_promoted(
-      (_norm_cap.backend, _norm_cap.architecture))
-    model._decode_q4k_q4q4_qkv_full_promoted = decode_q4k_q4q4_qkv_full_promoted(
-      (_norm_cap.backend,_norm_cap.architecture))
+    model._decode_q4k_kv_pair_promoted = _gate.admitted("decode_q4k_kv_pair")
+    model._decode_q4k_q4q4_qkv_full_promoted = _gate.admitted("decode_q4k_q4q4_qkv_full")
     # One-CTA finite-fp32 decode argmax. The native reducer replaces the three
     # scheduler reduction kernels at the sampled-score tail and keeps a held
     # one-element clone for replay-safe feedback. NV sm_120 is promoted after
@@ -2727,7 +2759,9 @@ class Transformer:
         _out_norm._decode_reduce_output_weight = None
     if q4k_meta is not None:
       model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
-      route_plan = build_model_route_plan(q4k_meta, model_facts)
+      route_plan = build_model_route_plan(q4k_meta, model_facts, shape_gate=_gate)
+      if DEBUG >= 1:
+        for _line in route_plan.report_lines(): print(f"decode route plan: {_line}")
       # The production candidate views the selected GGUF backing directly;
       # it never creates an unchecked model-sized sidecar.
       qk_cfg = QKConfig(False, None, "shared", "shared", False, False)
@@ -2747,34 +2781,33 @@ class Transformer:
           if _ffn is not None and isinstance(_ffn, (Q4KPrimitiveLinear, Q6KPrimitiveLinear)) and getattr(_ffn, "route_role", "") == "ffn_down":
             _ffn._decode_ffn_down_resadd_promoted = True
       if model._decode_q4k_gate_up_four_warp_vector_promoted:
-        from tinygrad.llm.q4k_gate_up_four_warp_mmvq import Q4KGateUpFourWarpAdmission
+        from tinygrad.llm.q4k_gate_up_four_warp_mmvq import Q4KGateUpFourWarpAdmission, validate_shape as _four_warp_shape
         for _idx, _b in enumerate(model.blk):
           _fg, _fu = getattr(_b, "ffn_gate", None), getattr(_b, "ffn_up", None)
           if isinstance(_fg, Q4KPrimitiveLinear) and isinstance(_fu, Q4KPrimitiveLinear) and \
-             (getattr(_fg, "out_features", None), getattr(_fg, "in_features", None)) == (12288, 4096) and \
-             (getattr(_fu, "out_features", None), getattr(_fu, "in_features", None)) == (12288, 4096):
+             _linear_shape_accepted(_fg, _four_warp_shape) and _linear_shape_accepted(_fu, _four_warp_shape):
             _fg._q4k_gate_up_four_warp_admission = Q4KGateUpFourWarpAdmission(_idx, vector_loads=True)
       # Q4_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q4_K
       # 4096x12288 ffn_down role only (Q6 down keeps its own route). The vector-load spelling is
       # bit-exact and passed production d512/d128 reverse brackets; TINYGRAD_Q4K_SCALAR_LOAD=1
       # restores the scalar spelling along with the ordinary Q4 single-projection routes.
       if model._decode_q4k_ffn_down_fp16_geometry_promoted:
-        from tinygrad.llm.q4k_ffn_down_mmvq import Q4KFFNDownMMVQAdmission
+        from tinygrad.llm.q4k_ffn_down_mmvq import Q4KFFNDownMMVQAdmission, validate_shape as _q4_down_shape
         for _idx, _b in enumerate(model.blk):
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, Q4KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
-             and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
+             and _linear_shape_accepted(_ffn, _q4_down_shape):
             _ffn._q4k_ffn_down_mmvq_admission = Q4KFFNDownMMVQAdmission(_idx, fp16_fma=True,
               vector_loads=_q4k_single_projection_load_style(_ffn) == "vector")
       # Q6_K FFN-down four-warp fp16 geometry route: install the admission on the exact Q6_K
       # 4096x12288 ffn_down role only (Q4 down keeps its own route). Normal loads carry no
       # admission, so this stays closed on every other target.
       if model._decode_q6k_ffn_down_fp16_geometry_promoted:
-        from tinygrad.llm.q6k_ffn_down_mmvq import Q6KFFNDownMMVQAdmission
+        from tinygrad.llm.q6k_ffn_down_mmvq import Q6KFFNDownMMVQAdmission, validate_shape as _q6_down_shape
         for _idx, _b in enumerate(model.blk):
           _ffn = getattr(_b, "ffn_down", None)
           if _ffn is not None and isinstance(_ffn, Q6KPrimitiveLinear) and getattr(_ffn, "route_role", "") == "ffn_down" \
-             and getattr(_ffn, "out_features", None) == 4096 and getattr(_ffn, "in_features", None) == 12288:
+             and _linear_shape_accepted(_ffn, _q6_down_shape):
             _ffn._q6k_ffn_down_mmvq_admission = Q6KFFNDownMMVQAdmission(_idx, fp16_fma=True,
               packed_lanemap=model._decode_q6k_ffn_down_packed_lanemap_promoted,
               unroll_blocks=4 if model._decode_q6k_ffn_down_unroll_promoted else None)
@@ -2782,11 +2815,11 @@ class Transformer:
       # 1024x4096 attn_kv role only (Q4 V keeps its own shared-Q8 route). Normal loads carry no
       # admission, so this stays closed on every other target.
       if model._decode_q6k_v_four_warp_promoted:
-        from tinygrad.llm.q6k_v_mmvq import Q6KVFourWarpAdmission
+        from tinygrad.llm.q6k_v_mmvq import Q6KVFourWarpAdmission, validate_shape as _q6_v_shape
         for _idx, _b in enumerate(model.blk):
           _v = getattr(_b, "attn_v", None)
           if _v is not None and isinstance(_v, Q6KPrimitiveLinear) and getattr(_v, "route_role", "") == "attn_kv" \
-             and getattr(_v, "out_features", None) == 1024 and getattr(_v, "in_features", None) == 4096:
+             and _linear_shape_accepted(_v, _q6_v_shape):
             _v._q6k_v_four_warp_admission = Q6KVFourWarpAdmission(_idx)
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
@@ -2841,7 +2874,7 @@ class Transformer:
               _b.attn_v.q4k_storage.words,dim=0).contiguous().realize()
           _b._decode_reduce_output_attn_rmsnorm_promoted = True
           try:
-            _b._shared_q8_attention_norm_weight = Tensor.empty(4096, dtype=dtypes.float16,
+            _b._shared_q8_attention_norm_weight = Tensor.empty(_norm.weight.shape[-1], dtype=dtypes.float16,
               device=_norm.weight.device).assign(_norm.weight.cast(dtypes.float16).contiguous()).realize()
           except Exception:
             # A failed norm copy declines the fused provider for that block (legacy graph).
@@ -2855,8 +2888,7 @@ class Transformer:
           if getattr(_b, "_shared_q8_attention_admission", None) is not None: continue
           _k, _v = getattr(_b, "attn_k", None), getattr(_b, "attn_v", None)
           if isinstance(_k, Q4KPrimitiveLinear) and isinstance(_v, Q4KPrimitiveLinear) and \
-             all(getattr(x, "route_role", "") == "attn_kv" and getattr(x, "out_features", None) == 1024 and
-                 getattr(x, "in_features", None) == 4096 for x in (_k, _v)):
+             all(getattr(x, "route_role", "") == "attn_kv" and _linear_shape_accepted(x, emit_q4k_kv_pair_vector) for x in (_k, _v)):
             _b.attn_q._q4k_qkv_words=_k.q4k_storage.words.cat(_v.q4k_storage.words,dim=0).contiguous().realize()
             if model._decode_q4k_q4q4_qkv_full_promoted: _b._q4k_qkv_admission=Q4KQKVAdmission(_idx)
             elif model._decode_q4k_kv_pair_promoted: _b._q4k_kv_pair_admission = Q4KKVPairAdmission(_idx)

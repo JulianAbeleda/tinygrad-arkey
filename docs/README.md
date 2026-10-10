@@ -103,6 +103,13 @@ recover the doc by name if a specific number is needed again.
   snapshot is the local read-only route-state input, while `bench/qk-search-spaces/default_route_manifest.json`
   is an inspection export only.
 - `extra/audit/pure_machine_search_default_path_census.py` is the local generated-default census.
+- A promotion record names the TARGET only. The SHAPE is decided once at load by `tinygrad/llm/model_route_plan.py`
+  `DecodeRouteShapeGate`: for each record-promoted decode route the loader builds the kernel spec / epilogue the route
+  would lower for this model (`DECODE_ROUTE_SHAPE_PROBES`, `tinygrad/llm/decode_routes.py`) and calls that spec's own
+  `validate`; a refused route is not promoted for the model, the route plan records one line per refusal
+  (`ModelRoutePlan.report_lines()`, printed under `DEBUG>=1`), and the plain tinygrad kernels run. The kernels'
+  validate methods are the single shape authority; no shape constant lives in the loader. A harness lease that forces
+  a refused route raises the kernel's message plus "lease forced" (`lease_forced`).
 
 ## Boundary Rule
 
