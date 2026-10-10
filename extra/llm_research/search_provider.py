@@ -441,8 +441,8 @@ class DeviceAdapter:
     meta = entry.model.metadata
     row = next(r for r in meta["tensor_infos"] if r[0] == name)
     _name, dims, typ, off = row
-    block = 144 if int(typ) == 12 else 210
-    count = int(np.prod(dims)) // 256 * block
+    from tinygrad.llm.qk_layout import GGML_TYPE_FORMATS, packed_nbytes
+    count = packed_nbytes(GGML_TYPE_FORMATS[int(typ)], int(np.prod(dims)))
     return np.fromfile(path, dtype=np.uint8, count=count, offset=meta["data_start"] + off)
 
   def _prepared(self, payload: Mapping[str, Any]):
@@ -539,8 +539,7 @@ class DeviceAdapter:
         raise ProtocolError("identity_mismatch", "exact GGUF binding failed", details={"reason": str(exc)}) from exc
     if shape["m"] != 1: raise ProtocolError("unsupported_plan", "decode emitters are one-token GEMVs (m == 1)")
     rows, k = shape["n"], shape["k"]
-    if k % 256: raise ProtocolError("identity_mismatch", "packed K must be divisible by 256")
-    try: output, words, x, raw, block = space.build(candidate, dev, raw)
+    try: output, words, x, raw, quant = space.build(candidate, dev, raw)
     except (ValueError, AssertionError) as exc:
       raise ProtocolError("unsupported_plan", f"the emitter refused this geometry: {exc}") from exc
     linear = output.schedule_linear()
@@ -550,7 +549,7 @@ class DeviceAdapter:
     except Exception as exc:
       raise ProtocolError("provider_failure", f"the emitter did not compile: {type(exc).__name__}: {exc}",
                           details={"stage": "compile"}) from exc
-    prepared = PreparedWorkload(output, words, call.replace(src=(program, *call.src[1:])), program, (1, rows, k, block), rows, k,
+    prepared = PreparedWorkload(output, words, call.replace(src=(program, *call.src[1:])), program, (1, rows, k, quant), rows, k,
                                 x, raw, raw.nbytes)
     self._prepared_cache[cache_key] = prepared; return prepared
 
@@ -593,12 +592,11 @@ class DeviceAdapter:
     """The emitter's output against the canonical packed reference on the same fixture bytes."""
     import numpy as np
     from tinygrad import Tensor
-    from extra.llm_research.layout import q4_k_reference, q6_k_reference
     from extra.llm_research import decode_emitter_space as space
-    _, rows, k, block = prepared.geometry
+    _, rows, k, quant = prepared.geometry
     got = prepared.call.src[1].buffer.ensure_allocated().numpy().reshape(-1)[:rows]
     raw = prepared.weight  # the packed bytes the emitter read: the recorded tensor's, or the fixture's
-    weights = (q4_k_reference if block == 144 else q6_k_reference)(Tensor(raw), rows * k).numpy().reshape(rows, k)
+    weights = space.reference(quant, raw, rows * k).reshape(rows, k)
     oracle = weights.astype(np.float32) @ space.fixture_activation(k).astype(np.float32)
     evidence = {"representative_role_shape": {"m": 1, "n": rows, "k": k}, "oracle": "canonical packed reference + numpy matmul",
                 "tolerance": {"atol": 1e-3, "rtol": 1e-3}, "candidate_call_buffer_read": True, "packed_block_fixtures": fixtures}

@@ -117,6 +117,14 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, q6k_spec_for_role
     return emit_q6k_gemv_kernel(q6k_spec_for_role(parameters["rows"], parameters["k"], row_tile=parameters["row_tile"],
                                                   reduction="in_kernel", accumulators=parameters["accumulators"]))
+  if family == "block_quant_gemv.v1":
+    required = {"rows", "k", "quant", "wave_size", "lanes_per_block", "warps_per_cta"}
+    if set(parameters) != required or not all(isinstance(parameters[x], int) and not isinstance(parameters[x], bool) for x in required - {"quant"}):
+      raise ValueError("block_quant_gemv.v1 parameters are invalid")
+    from tinygrad.llm.decode_kernels import BlockQuantGEMVRouteSpec, emit_block_quant_gemv_kernel
+    from tinygrad.llm.qk_layout import QUANT_FORMATS
+    if parameters["quant"] not in QUANT_FORMATS: raise ValueError(f"block_quant_gemv.v1 has no format {parameters['quant']!r}")
+    return emit_block_quant_gemv_kernel(BlockQuantGEMVRouteSpec(**{**parameters, "quant": QUANT_FORMATS[parameters["quant"]]}))
   if family == "q4_w1w3.v1":
     required = {"rows", "k", "load_style", "store_fp16"}
     if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad") or not isinstance(parameters["store_fp16"], bool):

@@ -38,13 +38,14 @@ def bind_exact_gguf_workload(workload:Mapping[str, Any], gguf_path:str|pathlib.P
   name = identity["tensor_name"]
   if name not in loaded.state: raise ValueError("recorded GGUF tensor is absent")
   row = next((row for row in loaded.metadata["tensor_infos"] if row[0] == name), None)
-  if row is None or int(row[2]) not in (12, 14): raise ValueError("recorded tensor is not Q4_K/Q6_K")
-  if shape["k"] % 256: raise ValueError("exact packed K must be divisible by 256")
+  from tinygrad.llm.qk_layout import GGML_TYPE_FORMATS, packed_nbytes
+  fmt = GGML_TYPE_FORMATS.get(int(row[2])) if row is not None else None
+  if fmt is None: raise ValueError(f"recorded tensor is not a packed format the decode emitters read: {sorted(f.name for f in GGML_TYPE_FORMATS.values())}")
+  if shape["k"] % fmt.block_elems: raise ValueError(f"exact packed K must be divisible by the {fmt.name} block ({fmt.block_elems})")
   if tuple(loaded.state[name].shape) != (shape["n"], shape["k"]): raise ValueError("recorded GGUF tensor shape mismatch")
   from tinygrad import Tensor, dtypes
   activation = Tensor.arange(shape["m"]*shape["k"], dtype=dtypes.float16).reshape(shape["m"], shape["k"])
-  block_bytes = 144 if int(row[2]) == 12 else 210
-  return ExactGGUFBinding(name, loaded.state[name], activation, loaded.model_hash, shape["n"]*shape["k"]//256*block_bytes)
+  return ExactGGUFBinding(name, loaded.state[name], activation, loaded.model_hash, packed_nbytes(fmt, shape["n"]*shape["k"]))
 
 def semantic_identity_to_workload(identity:Mapping[str, Any], *, model_hash:str, target:Mapping[str, Any], tolerance:Mapping[str, float]) -> dict[str, Any]:
   if not isinstance(identity, Mapping) or identity.get("metadata_status", "semantic") != "semantic":

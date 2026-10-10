@@ -55,3 +55,12 @@ Q4_0 = QuantFormat("Q4_0", 32, 18, ("halfs",))
 
 # Single authority for name -> format at the string/JSON boundary.
 QUANT_FORMATS: dict[str, QuantFormat] = {"Q4_K": Q4_K, "Q6_K": Q6_K, "Q8_0": Q8_0, "Q5_0": Q5_0, "Q4_0": Q4_0}
+# GGML's type id for each format (ggml.h enum ggml_type), so a file's tensor table reads as a QuantFormat.
+GGML_TYPE_FORMATS: dict[int, QuantFormat] = {2: Q4_0, 6: Q5_0, 8: Q8_0, 12: Q4_K, 14: Q6_K}
+GGML_TYPE_IDS: dict[str, int] = {fmt.name: typ for typ, fmt in GGML_TYPE_FORMATS.items()}
+
+
+def packed_nbytes(fmt:QuantFormat, elements:int) -> int:
+  """Bytes of `elements` values in `fmt`; refuses a count that is not whole blocks."""
+  if elements % fmt.block_elems: raise ValueError(f"{elements} {fmt.name} values are not whole {fmt.block_elems}-element blocks")
+  return elements // fmt.block_elems * fmt.block_bytes

@@ -1141,6 +1141,7 @@ class BlockQuantGEMVRouteSpec:
 # were within 3% on the large shapes; 1 lane/block was ~3x slower. These are load-width and CTA-size choices.
 BLOCK_QUANT_UNITS_PER_LANE = 1
 BLOCK_QUANT_MAX_WARPS_PER_CTA = 2
+BLOCK_QUANT_MIN_CTAS_PER_SM = 2  # warps grow only while every SM still gets this many CTAs
 
 
 def block_quant_gemv_geometry(quant:QuantFormat, rows:int, k:int, *, wave_size:int|None, sm_count:int|None,
@@ -1158,7 +1159,7 @@ def block_quant_gemv_geometry(quant:QuantFormat, rows:int, k:int, *, wave_size:i
   warps = 1
   if sm_count and wave:
     cap = BLOCK_QUANT_MAX_WARPS_PER_CTA if not max_threads else min(BLOCK_QUANT_MAX_WARPS_PER_CTA, max_threads // wave)
-    while warps * 2 <= cap and ceildiv(rows, warps * 2) >= 2 * sm_count: warps *= 2
+    while warps * 2 <= cap and ceildiv(rows, warps * 2) >= BLOCK_QUANT_MIN_CTAS_PER_SM * sm_count: warps *= 2
   return BlockQuantGEMVRouteSpec(rows=rows, k=k, quant=quant, wave_size=wave, lanes_per_block=lanes, warps_per_cta=warps,
                                  lane_reduce=lane_reduce)
 

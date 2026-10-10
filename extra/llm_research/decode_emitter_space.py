@@ -27,15 +27,21 @@ def _row(threads:int, tile_n:int, b_width:int, a_space:str = "global", stages:in
 @dataclass(frozen=True)
 class EmitterFamily:
   family: str  # the registry family (semantic_kernel_lowering.build_registered_llm_emitter)
-  quant: str
+  quants: tuple[str, ...]  # the weight formats the one emitter reads (a layout table, not one emitter per format)
   storage: str  # the dtype the GGUF bytes are viewed as: uint32 words or uint16 halfs
   rows: tuple[dict[str, Any], ...]  # coupled schedule rows, one per emitter parameter combination
   one_subgroup: bool  # the emitter reduces inside one subgroup, so its threads may not exceed the subgroup width
   parameters: Callable[[Mapping[str, Any], int, int], dict[str, Any]]  # schedule, rows, k -> registry parameters
 
   def to_json(self) -> dict[str, Any]:
-    return {"family": self.family, "quant": self.quant, "storage": self.storage, "coupled_rows": [dict(r) for r in self.rows],
-            "threads_within_subgroup": self.one_subgroup}
+    out = {"family": self.family, "quant": self.quants[0], "quants": list(self.quants), "storage": self.storage,
+           "coupled_rows": [dict(r) for r in self.rows], "threads_within_subgroup": self.one_subgroup}
+    if self.family == BLOCK_QUANT_FAMILY:  # the layout facts a caller needs to propose its own rows: code bytes per block
+      from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS
+      out["code_unit_bytes"] = 2
+      out["code_units_per_block"] = {q: BLOCK_QUANT_LAYOUTS[q].units for q in self.quants}
+      out["installed_rule"] = block_quant_installed_rule()
+    return out
 
 
 def _q4_parameters(schedule:Mapping[str, Any], rows:int, k:int) -> dict[str, Any]:
@@ -60,13 +66,35 @@ def _q6_parameters(schedule:Mapping[str, Any], rows:int, k:int) -> dict[str, Any
   return {"rows": rows, "k": k, "row_tile": tile, "accumulators": schedule["pipeline"]["stage_count"]}
 
 
+BLOCK_QUANT_FAMILY = "block_quant_gemv.v1"
+
+
+def _block_quant_row(lane_bytes:int, warps_per_cta:int, wave:int, block_elems:int) -> dict[str, Any]:
+  """The block-quant emitter's parameters as schedule fields: one row per warp (tile.n = warps per CTA), a CTA of
+  warps x wave threads, tile.k one block (k must be whole blocks), and b's vector width the code bytes a lane loads per
+  block (units_per_lane x 2). lanes_per_block = code bytes / lane_bytes, read back by _bq_parameters."""
+  return {"schedule.launch.threads": warps_per_cta * wave, "schedule.tile.n": warps_per_cta, "schedule.tile.k": block_elems,
+          "schedule.memory.b.vector_width": lane_bytes, "schedule.memory.a.space": "global", "schedule.pipeline.stage_count": 1}
+
+
+def _bq_parameters(schedule:Mapping[str, Any], rows:int, k:int, quant:str, wave:int) -> dict[str, Any]:
+  from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS
+  units = BLOCK_QUANT_LAYOUTS[quant].units
+  lane_bytes, threads, tile = schedule["memory"]["b"]["vector_width"], schedule["launch"]["threads"], schedule["tile"]["n"]
+  if lane_bytes % 2 or (units * 2) % lane_bytes: raise ValueError(f"a {quant} lane loads whole 16-bit code units of the {units * 2} code bytes")
+  if threads != tile * wave: raise ValueError(f"the block-quant emitter runs one {wave}-lane warp per row")
+  return {"rows": rows, "k": k, "quant": quant, "wave_size": wave, "lanes_per_block": units * 2 // lane_bytes, "warps_per_cta": tile}
+
+
 FAMILIES: tuple[EmitterFamily, ...] = (
-  EmitterFamily("q4_g3_gemv.v1", "Q4_K", "uint32",
+  EmitterFamily("q4_g3_gemv.v1", ("Q4_K",), "uint32",
                 (_row(32, 1, 4), _row(32, 1, 16), _row(128, 16, 16, "shared")), False,
                 _q4_parameters),
-  EmitterFamily("q6_coop_gemv.v1", "Q6_K", "uint16",
+  EmitterFamily("q6_coop_gemv.v1", ("Q6_K",), "uint16",
                 tuple(_row(t * _POS_LANES, t, 2, stages=a) for t in (1, 2, 4) for a in (1, 2, 4)), True,
                 _q6_parameters),
+  # rows here are the route's own choice (block_quant_gemv_geometry); a caller proposes its own from the chip's facts
+  EmitterFamily(BLOCK_QUANT_FAMILY, ("Q8_0", "Q5_0", "Q4_0"), "uint16", (), False, _bq_parameters),
 )
 BY_FAMILY = {f.family: f for f in FAMILIES}
 
@@ -81,7 +109,7 @@ def emitters_apply(device:str) -> tuple[bool, str]:
                  f"shuffle {capability.supports_warp_shfl_xor}): the decode runs scheduler kernels")
 
 
-def installed_row(family:EmitterFamily, backend:str | None, architecture:str | None) -> dict[str, Any]:
+def installed_row(family:EmitterFamily, backend:str | None, architecture:str | None) -> dict[str, Any] | None:
   """The row the model's decode installs for this family on this device, by the fork's own routing rules."""
   if family.family == "q4_g3_gemv.v1":
     from types import SimpleNamespace
@@ -89,9 +117,28 @@ def installed_row(family:EmitterFamily, backend:str | None, architecture:str | N
     linear = SimpleNamespace(route_admission=SimpleNamespace(capability=SimpleNamespace(backend=backend, architecture=architecture)))
     style = _q4k_single_projection_load_style(linear)
     return _row(32, 1, 16 if style == "vector" else 4)
+  if family.family == BLOCK_QUANT_FAMILY:
+    return None  # shape- and device-dependent: the family's installed_rule (and installed_block_quant_row) say it
   from tinygrad.llm.decode_kernels import q6k_coop_row_tile_for_target
   tile = q6k_coop_row_tile_for_target(backend, architecture)
   return _row(tile * _POS_LANES, tile, 2)
+
+
+def block_quant_installed_rule() -> dict[str, int]:
+  """block_quant_gemv_geometry's measured constants, as data: a caller applies them to a role's shape and its chip."""
+  from tinygrad.llm.decode_kernels import BLOCK_QUANT_MAX_WARPS_PER_CTA, BLOCK_QUANT_MIN_CTAS_PER_SM, BLOCK_QUANT_UNITS_PER_LANE
+  return {"units_per_lane": BLOCK_QUANT_UNITS_PER_LANE, "max_warps_per_cta": BLOCK_QUANT_MAX_WARPS_PER_CTA,
+          "min_ctas_per_sm": BLOCK_QUANT_MIN_CTAS_PER_SM}
+
+
+def installed_block_quant_row(quant:str, rows:int, k:int, facts:Mapping[str, Any]) -> dict[str, Any]:
+  """The row the decode route installs for one block-quant role: block_quant_gemv_geometry on the device's facts."""
+  from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS, block_quant_gemv_geometry
+  from tinygrad.llm.qk_layout import QUANT_FORMATS
+  spec = block_quant_gemv_geometry(QUANT_FORMATS[quant], rows, k, wave_size=facts.get("wave_size"), sm_count=facts.get("sm_count"),
+                                   max_threads=facts.get("max_threads"))
+  return _block_quant_row(BLOCK_QUANT_LAYOUTS[quant].units * 2 // spec.lanes_per_block, spec.warps_per_cta, spec.wave_size,
+                          QUANT_FORMATS[quant].block_elems)
 
 
 def build(candidate:Mapping[str, Any], device:str, raw=None):
@@ -103,30 +150,46 @@ def build(candidate:Mapping[str, Any], device:str, raw=None):
   schedule, workload = candidate["schedule"], candidate["workload"]
   family = BY_FAMILY.get(schedule["compute"]["family"])
   if family is None: raise ValueError(f"no decode emitter family {schedule['compute']['family']!r}")
-  quant = str(workload["operands"]["b"]["quantization"]).upper()
-  if quant.replace("_", "") != family.quant.replace("_", ""): raise ValueError(f"{family.family} reads {family.quant}, not {quant}")
+  from tinygrad.llm.qk_layout import QUANT_FORMATS, packed_nbytes
+  quant = next((q for q in family.quants if q.replace("_", "") == str(workload["operands"]["b"]["quantization"]).upper().replace("_", "")), None)
+  if quant is None: raise ValueError(f"{family.family} reads {list(family.quants)}, not {workload['operands']['b']['quantization']}")
   rows, k = int(workload["shape"]["n"]), int(workload["shape"]["k"])
-  emitter = build_registered_llm_emitter(family.family, family.parameters(schedule, rows, k))
-  block = 144 if family.quant == "Q4_K" else 210
-  raw = fixture_bytes(family.quant, rows, k) if raw is None else raw
-  if raw.nbytes != rows * k // 256 * block: raise ValueError(f"{raw.nbytes} weight bytes are not {rows}x{k} {family.quant}")
+  if family.family == BLOCK_QUANT_FAMILY:
+    params = family.parameters(schedule, rows, k, quant, int(workload["target"]["subgroup_size"]))
+  else: params = family.parameters(schedule, rows, k)
+  emitter = build_registered_llm_emitter(family.family, params)
+  raw = fixture_bytes(quant, rows, k) if raw is None else raw
+  if raw.nbytes != packed_nbytes(QUANT_FORMATS[quant], rows * k): raise ValueError(f"{raw.nbytes} weight bytes are not {rows}x{k} {quant}")
   storage = dtypes.uint32 if family.storage == "uint32" else dtypes.uint16
   words = Tensor(raw.view(np.uint32 if family.storage == "uint32" else np.uint16), dtype=storage, device=device).realize()
   x = Tensor(fixture_activation(k), dtype=dtypes.float16, device=device).realize()
   out = Tensor.empty(rows, dtype=dtypes.float32, device=device).uop_program(words, x, fxn=emitter)[0]
-  return out, words, x, raw, block
+  return out, words, x, raw, quant
 
 
 def fixture_bytes(quant:str, rows:int, k:int):
   """Deterministic, finite GGUF blocks (the provider's fixture rule: small nonzero bytes, fixed fp16 scales)."""
   import numpy as np
-  block = 144 if quant == "Q4_K" else 210
-  raw = (1 + np.arange(rows * k // 256 * block, dtype=np.uint32) % 13).astype(np.uint8).reshape(-1, block)
+  from tinygrad.llm.qk_layout import QUANT_FORMATS, packed_nbytes
+  block = QUANT_FORMATS[quant].block_bytes
+  raw = (1 + np.arange(packed_nbytes(QUANT_FORMATS[quant], rows * k), dtype=np.uint32) % 13).astype(np.uint8).reshape(-1, block)
   d, dmin = np.array([0.01], dtype=np.float16).view(np.uint8), np.array([0.005], dtype=np.float16).view(np.uint8)
-  raw[:, 0:2] = d
+  if quant == "Q6_K": raw[:, 208:210] = d  # Q6_K keeps d last
+  else: raw[:, 0:2] = d                     # every other GGML block opens with d
   if quant == "Q4_K": raw[:, 2:4] = dmin
-  else: raw[:, 208:210] = d
   return raw.reshape(-1)
+
+
+def reference(quant:str, raw, elements:int):
+  """The dequantized weights (float32 numpy) of `raw` packed bytes: the layout module's canonical Q4_K/Q6_K references,
+  tinygrad's GGUF dequantizer for every other format."""
+  from tinygrad import Tensor
+  from tinygrad.llm.qk_layout import GGML_TYPE_IDS
+  if quant in ("Q4_K", "Q6_K"):
+    from extra.llm_research.layout import q4_k_reference, q6_k_reference
+    return (q4_k_reference if quant == "Q4_K" else q6_k_reference)(Tensor(raw), elements).numpy().reshape(-1)
+  from tinygrad.llm.gguf import ggml_data_to_tensor
+  return ggml_data_to_tensor(Tensor(raw), elements, GGML_TYPE_IDS[quant]).numpy().reshape(-1)
 
 
 def fixture_activation(k:int):
@@ -134,5 +197,5 @@ def fixture_activation(k:int):
   return np.array([1.0 + (i % 7) / 16 for i in range(k)], dtype=np.float16)
 
 
-__all__ = ["BY_FAMILY", "EMITTER_PLAN_KIND", "FAMILIES", "EmitterFamily", "build", "emitters_apply", "fixture_activation",
+__all__ = ["BLOCK_QUANT_FAMILY", "BY_FAMILY", "EMITTER_PLAN_KIND", "installed_block_quant_row", "reference", "FAMILIES", "EmitterFamily", "build", "emitters_apply", "fixture_activation",
            "fixture_bytes", "installed_row"]
