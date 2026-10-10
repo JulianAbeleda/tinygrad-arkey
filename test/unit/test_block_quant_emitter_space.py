@@ -21,7 +21,7 @@ def _schedule(row):
 class TestBlockQuantFamily(unittest.TestCase):
   def test_family_describes_layout_facts_and_rule(self):
     fam = space.BY_FAMILY[space.BLOCK_QUANT_FAMILY].to_json()
-    self.assertEqual(fam["quants"], ["Q8_0", "Q5_0", "Q4_0"])
+    self.assertEqual(fam["quants"], ["Q8_0", "Q5_0", "Q4_0", "Q5_K"])
     self.assertEqual(fam["code_units_per_block"], {q: BLOCK_QUANT_LAYOUTS[q].units for q in fam["quants"]})
     self.assertEqual(set(fam["installed_rule"]), {"units_per_lane", "max_warps_per_cta", "min_ctas_per_sm"})
     self.assertIsNone(space.installed_row(space.BY_FAMILY[space.BLOCK_QUANT_FAMILY], "X", "y"))
@@ -55,7 +55,7 @@ class TestBlockQuantFamily(unittest.TestCase):
     np.testing.assert_allclose(space.reference("Q8_0", raw, 32), d * raw[2:34].view(np.int8).astype(np.float32), rtol=1e-6)
 
   def test_ggml_type_table(self):
-    self.assertEqual({t: f.name for t, f in GGML_TYPE_FORMATS.items()}, {2: "Q4_0", 6: "Q5_0", 8: "Q8_0", 12: "Q4_K", 14: "Q6_K"})
+    self.assertEqual({t: f.name for t, f in GGML_TYPE_FORMATS.items()}, {2: "Q4_0", 6: "Q5_0", 8: "Q8_0", 12: "Q4_K", 13: "Q5_K", 14: "Q6_K"})
     self.assertEqual(GGML_TYPE_IDS["Q8_0"], 8)
     with self.assertRaises(ValueError): packed_nbytes(QUANT_FORMATS["Q8_0"], 33)
 

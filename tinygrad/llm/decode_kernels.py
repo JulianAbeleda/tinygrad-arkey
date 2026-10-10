@@ -14,7 +14,7 @@ from tinygrad import dtypes
 from tinygrad.codegen.late.warp_reduce import WARP, _staged_shfl, _warp_reduce_sum_staged
 from tinygrad.dtype import AddrSpace, DType
 from tinygrad.helpers import cdiv, ceildiv
-from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q4_0, Q5_0, Q8_0, QuantFormat
+from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q4_0, Q5_0, Q5_K, Q8_0, QuantFormat
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 
@@ -1069,11 +1069,48 @@ def _q5_0_terms(h:UOp, base:UOp, u:UOp):
   return out
 
 def _f16_scale(h:UOp, base:UOp) -> UOp: return _f16_half(h[base])
+def _unit_scale(h:UOp, base:UOp) -> UOp: return UOp.const(dtypes.float32, 1.0)
+
+
+def _bq_byte(h:UOp, base:UOp, b:UOp) -> UOp:
+  """Byte b of the block (b may be a UOp) from its uint16 view, as uint32."""
+  hw = h[base + b // 2].cast(dtypes.uint32)
+  return hw.rshift(((b % 2) * 8).cast(dtypes.uint32)).bitwise_and(0xff)
+
+
+def _k4_scale_min(h:UOp, base:UOp, j:UOp) -> tuple[UOp, UOp]:
+  """GGML get_scale_min_k4 for group j (0..7, a UOp): the 6-bit scale and min from the 12 bytes at byte 4."""
+  lo = j < 4                     # scales q[0..11] at byte 4: q[j], q[j+4] always; q[j-4] only for j >= 4 (clamped)
+  q_j, q_j4, q_jm4 = _bq_byte(h, base, 4 + j), _bq_byte(h, base, 8 + j), _bq_byte(h, base, 4 + lo.where(j, j - 4))
+  sc = lo.where(q_j.bitwise_and(63), q_j4.bitwise_and(0xf).bitwise_or(q_jm4.rshift(6).lshift(4)))
+  mn = lo.where(q_j4.bitwise_and(63), q_j4.rshift(4).bitwise_or(q_j.rshift(6).lshift(4)))
+  return sc.cast(dtypes.float32), mn.cast(dtypes.float32)
+
+
+def _q5_k_terms(h:UOp, base:UOp, u:UOp):
+  """Unit u (0..63) is qs bytes 2u, 2u+1 at byte 48: pair i = u // 16 of 32-byte rows; byte l (0..31) of the row holds
+  element 64i + l (low nibble, group 2i) and 64i + 32 + l (high nibble, group 2i+1); the fifth bit of element l of group j
+  is bit j of qh byte l (byte 16 + l). Each term is the dequantized weight d*sc*q - dmin*m (the layout's scale is 1)."""
+  if isinstance(u, int): u = UOp.const(dtypes.int, u)
+  i, l0 = u // 16, (u % 16) * 2
+  qs, qh = h[base + 24 + u].cast(dtypes.uint32), h[base + 8 + u % 16].cast(dtypes.uint32)
+  d, dmin = _f16_half(h[base]), _f16_half(h[base + 1])
+  out = []
+  for hi in (0, 1):
+    j = i * 2 + hi
+    sc, mn = _k4_scale_min(h, base, j)
+    a, b = d * sc, dmin * mn
+    for t in (0, 1):
+      nib = qs.rshift(t * 8 + (4 if hi else 0)).bitwise_and(0xf).cast(dtypes.float32)
+      bit = qh.rshift((j + t * 8).cast(dtypes.uint32)).bitwise_and(1).cast(dtypes.float32)
+      out.append((i * 64 + hi * 32 + l0 + t, a * (nib + bit * 16.0) - b))
+  return out
 
 BLOCK_QUANT_LAYOUTS: dict[str, BlockQuantLayout] = {
   "Q8_0": BlockQuantLayout(Q8_0, 8, 16, _q8_0_terms, _f16_scale),
   "Q5_0": BlockQuantLayout(Q5_0, 6, 8, _q5_0_terms, _f16_scale),
   "Q4_0": BlockQuantLayout(Q4_0, 2, 8, _q4_0_terms, _f16_scale),
+  "Q5_K": BlockQuantLayout(Q5_K, 13, 64, _q5_k_terms, _unit_scale),
 }
 
 

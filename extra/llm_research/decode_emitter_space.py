@@ -94,7 +94,7 @@ FAMILIES: tuple[EmitterFamily, ...] = (
                 tuple(_row(t * _POS_LANES, t, 2, stages=a) for t in (1, 2, 4) for a in (1, 2, 4)), True,
                 _q6_parameters),
   # rows here are the route's own choice (block_quant_gemv_geometry); a caller proposes its own from the chip's facts
-  EmitterFamily(BLOCK_QUANT_FAMILY, ("Q8_0", "Q5_0", "Q4_0"), "uint16", (), False, _bq_parameters),
+  EmitterFamily(BLOCK_QUANT_FAMILY, ("Q8_0", "Q5_0", "Q4_0", "Q5_K"), "uint16", (), False, _bq_parameters),
 )
 BY_FAMILY = {f.family: f for f in FAMILIES}
 

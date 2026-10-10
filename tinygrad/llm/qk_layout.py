@@ -52,11 +52,13 @@ Q8_0 = QuantFormat("Q8_0", Q8_0_BLOCK_ELEMS, Q8_0_BLOCK_BYTES, ("halfs",))
 # Q5_0: d fp16, qh 4 bytes (5th bits), 16 qs bytes (two nibbles). Q4_0: d fp16, 16 qs bytes.
 Q5_0 = QuantFormat("Q5_0", 32, 22, ("halfs",))
 Q4_0 = QuantFormat("Q4_0", 32, 18, ("halfs",))
+# Q5_K: d, dmin fp16, 12 bytes of packed 6-bit scales/mins for 8 groups of 32, 32 qh bytes (fifth bits), 128 qs bytes.
+Q5_K = QuantFormat("Q5_K", 256, 176, ("halfs",))
 
 # Single authority for name -> format at the string/JSON boundary.
-QUANT_FORMATS: dict[str, QuantFormat] = {"Q4_K": Q4_K, "Q6_K": Q6_K, "Q8_0": Q8_0, "Q5_0": Q5_0, "Q4_0": Q4_0}
+QUANT_FORMATS: dict[str, QuantFormat] = {"Q4_K": Q4_K, "Q6_K": Q6_K, "Q8_0": Q8_0, "Q5_0": Q5_0, "Q4_0": Q4_0, "Q5_K": Q5_K}
 # GGML's type id for each format (ggml.h enum ggml_type), so a file's tensor table reads as a QuantFormat.
-GGML_TYPE_FORMATS: dict[int, QuantFormat] = {2: Q4_0, 6: Q5_0, 8: Q8_0, 12: Q4_K, 14: Q6_K}
+GGML_TYPE_FORMATS: dict[int, QuantFormat] = {2: Q4_0, 6: Q5_0, 8: Q8_0, 12: Q4_K, 13: Q5_K, 14: Q6_K}
 GGML_TYPE_IDS: dict[str, int] = {fmt.name: typ for typ, fmt in GGML_TYPE_FORMATS.items()}
 
 
