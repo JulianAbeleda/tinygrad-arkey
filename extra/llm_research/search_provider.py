@@ -356,15 +356,27 @@ def _buffer_role(nbytes: int, prepared: "PreparedWorkload") -> str:
   return roles[0] if len(roles) == 1 else "out"
 
 
-def _kernel_record(prepared: "PreparedWorkload", ast: Any, source: str, local: tuple) -> dict[str, Any]:
+def _identity_labels(call: Any, program: Any, inputs: Mapping[str, Any]) -> list[str]:
+  """Each program parameter's operand name, by the buffer it binds: an input tensor's name, else the output."""
+  ids = {id(t.uop.buffer): name for name, t in inputs.items()}
+  labels = [ids.get(id(call.src[1 + index].buffer), "out") for index in program.arg.globals]
+  if labels.count("out") != 1: raise ProtocolError("provider_failure", "a node program must write exactly one output")
+  return labels
+
+
+def _kernel_record(prepared: "PreparedWorkload", ast: Any, source: str, local: tuple, call: Any = None,
+                   labels: list[str] | None = None) -> dict[str, Any]:
   """What a caller needs to compile and launch this exact kernel itself: the source text, the function, the launch,
-  and each argument buffer in the kernel's parameter order with its dtype, size and operand."""
-  info, call = ast.arg, prepared.call
+  and each argument buffer in the kernel's parameter order with its dtype, size and operand. A fusion's buffers are
+  labelled by operand ("out", "weight:<node>", "value:<name>"), never guessed from their sizes."""
+  info, call = ast.arg, call if call is not None else prepared.call
+  if labels is None and prepared.fusion is not None: labels = prepared.fusion["labels"]
   if info.vars: raise ProtocolError("unsupported_plan", "a kernel with symbolic variables cannot be described for replay")
   buffers = []
-  for index in info.globals:
+  for position, index in enumerate(info.globals):
     buf = call.src[1 + index].buffer
-    buffers.append({"index": index, "dtype": buf.dtype.name, "nbytes": buf.nbytes, "role": _buffer_role(buf.nbytes, prepared)})
+    role = labels[index] if labels is not None and len(labels) == len(info.globals) else _buffer_role(buf.nbytes, prepared)
+    buffers.append({"index": index, "dtype": buf.dtype.name, "nbytes": buf.nbytes, "role": role})
   from tinygrad.helpers import to_function_name
   return {"source": source, "function": to_function_name(info.name), "global_size": [int(x) for x in info.global_size],
           "local_size": [int(x) for x in local], "buffers": buffers}
@@ -375,6 +387,7 @@ class PreparedWorkload:
   output: Any; raw: Any; call: Any; ast: Any; geometry: tuple; rows: int; k: int
   activation: Any = None; weight: Any = None
   packed_source_bytes: int|None = None
+  fusion: Any = None  # a fusion candidate: its family, operand tensors and buffer labels (decode_fusion_space)
   def __iter__(self): return iter((self.output, self.raw, self.call, self.ast, self.geometry, self.rows, self.k))
 
 @dataclass(frozen=True)
@@ -431,13 +444,14 @@ class DeviceAdapter:
       self._exact_models[key] = entry
     return bind_exact_gguf_workload(workload, path, model=entry.model)
 
-  def _exact_raw(self, exact: Mapping[str, Any]):
-    """The recorded tensor's packed bytes, read from the verified GGUF at the offset its header gives."""
+  def _exact_raw(self, exact: Mapping[str, Any], name: str | None = None):
+    """The recorded tensor's packed bytes (or the named tensor's), read from the verified GGUF at the offset its header
+    gives."""
     import numpy as np
     from pathlib import Path
     path = Path(exact["path"]).resolve()
     entry = self._exact_models[(str(path), str(exact["workload"].get("model_hash")))]
-    name = exact["workload"]["semantic_identity"]["tensor_name"]
+    name = name or exact["workload"]["semantic_identity"]["tensor_name"]
     meta = entry.model.metadata
     row = next(r for r in meta["tensor_infos"] if r[0] == name)
     _name, dims, typ, off = row
@@ -465,6 +479,10 @@ class DeviceAdapter:
     from tinygrad.llm.qk_layout import GGML_Q4_K, GGML_Q6_K
     candidate = _candidate(payload); _, opts = _plan(candidate); workload = candidate["workload"]
     dev = self._device(payload)
+    if ((payload.get("exact_gguf") or {}).get("workload") or {}).get("fusion") is not None and \
+        candidate["schedule"]["plan_kind"] != EMITTER_PLAN_KIND:
+      raise ProtocolError("unsupported_plan", "a fusion workload runs only through its fused emitter; tinygrad's scheduler "
+                          "has no one-kernel plan for several decode-graph nodes")
     if candidate["schedule"]["plan_kind"] == EMITTER_PLAN_KIND: return self._build_emitter(payload, candidate, cache_key, dev)
     fmt = str(workload["operands"]["b"].get("quantization", workload["operands"]["b"].get("dtype", ""))).upper().replace("_", "_")
     fmt = "Q4_K" if fmt in ("Q4_K", "Q4K") else "Q6_K" if fmt in ("Q6_K", "Q6K") else None
@@ -529,9 +547,11 @@ class DeviceAdapter:
     """One decode emitter at the role's exact shape: the fork's registered lowering, on the recorded tensor's packed
     bytes (exact_gguf) or deterministic fixture bytes."""
     from extra.llm_research import decode_emitter_space as space
+    from extra.llm_research import decode_fusion_space as fusions
     from tinygrad.codegen import to_program
     from tinygrad.device import Device
     workload = candidate["workload"]; shape = workload["shape"]
+    if fusions.family_of(candidate) is not None: return self._build_fusion(payload, candidate, cache_key, dev)
     raw = None
     if (exact := payload.get("exact_gguf")) is not None:
       try: self._exact_binding(exact); raw = self._exact_raw(exact)
@@ -552,6 +572,87 @@ class DeviceAdapter:
     prepared = PreparedWorkload(output, words, call.replace(src=(program, *call.src[1:])), program, (1, rows, k, quant), rows, k,
                                 x, raw, raw.nbytes)
     self._prepared_cache[cache_key] = prepared; return prepared
+
+  def _fusion_raws(self, payload: Mapping[str, Any], family: Any) -> dict[str, Any]:
+    """Every weight operand's packed bytes, by node, from the tensors the exact workload's fusion names."""
+    exact = payload.get("exact_gguf")
+    fusion = ((exact or {}).get("workload") or {}).get("fusion") if isinstance(exact, Mapping) else None
+    if not isinstance(fusion, Mapping) or not isinstance(fusion.get("tensors"), Mapping):
+      raise ProtocolError("admission_rejected", "a fusion candidate needs the exact workload's fusion tensors")
+    tensors = dict(fusion["tensors"])
+    if set(tensors) != set(family.weights()):
+      raise ProtocolError("identity_mismatch", "the fusion's tensors do not name the family's weight operands",
+                          details={"tensors": sorted(tensors), "weights": list(family.weights())})
+    anchor = exact["workload"]["semantic_identity"]["tensor_name"]
+    if tensors[family.weights()[0]] != anchor:
+      raise ProtocolError("identity_mismatch", "the fusion's first weight is not the recorded tensor")
+    try: self._exact_binding(exact)
+    except (OSError, ValueError, KeyError) as exc:
+      raise ProtocolError("identity_mismatch", "exact GGUF binding failed", details={"reason": str(exc)}) from exc
+    shape, block = exact["workload"]["shape"], {"Q4_K": 12, "Q6_K": 14}[family.quant]
+    entry = self._exact_models[(str(__import__("pathlib").Path(exact["path"]).resolve()), str(exact["workload"].get("model_hash")))]
+    raws = {}
+    for node, name in tensors.items():
+      row = next((r for r in entry.model.metadata["tensor_infos"] if r[0] == name), None)
+      if row is None or int(row[2]) != block or tuple(entry.model.state[name].shape) != (shape["n"], shape["k"]):
+        raise ProtocolError("identity_mismatch", f"{name} is not a {family.quant} tensor of {shape['n']}x{shape['k']}")
+      raws[node] = self._exact_raw(exact, name)
+    return raws
+
+  def _build_fusion(self, payload: Mapping[str, Any], candidate: Mapping[str, Any], cache_key: str, dev: str):
+    """One fused emitter at the anchor's exact shape on the fusion's recorded tensors, with every buffer labelled by
+    the operand it holds, and each covered node's program alone (decode_fusion_space.unfused) for the caller to time."""
+    from extra.llm_research import decode_fusion_space as fusions
+    family = fusions.family_of(candidate)
+    shape = candidate["workload"]["shape"]
+    if shape["m"] != 1: raise ProtocolError("unsupported_plan", "decode fusions are one-token programs (m == 1)")
+    rows, k = shape["n"], shape["k"]
+    raws = self._fusion_raws(payload, family)
+    try: output, inputs = fusions.build(family, candidate["schedule"], rows, k, raws, dev)
+    except (ValueError, AssertionError) as exc:
+      raise ProtocolError("unsupported_plan", f"the fused emitter refused this geometry: {exc}") from exc
+    call, program = self._one_program(output, dev, "the fused emitter")
+    labels = ["out", *inputs]
+    facts = self._facts(payload)
+    alone = []
+    for node, out, node_inputs in fusions.unfused(family, rows, k, raws, dev, facts.get("backend"), facts.get("architecture")):
+      node_call, node_program = self._one_program(out, dev, f"the {node} kernel alone")
+      alone.append({"node": node, "call": node_call, "program": node_program, "labels": _identity_labels(node_call, node_program, node_inputs)})
+    weight_bytes = sum(int(r.nbytes) for r in raws.values())
+    prepared = PreparedWorkload(output, None, call, program, (1, rows, k, fusions.BLOCK_BYTES[family.quant]), rows, k,
+                                inputs.get(next(o for o in family.operands if o.startswith("value:")), None), None, weight_bytes,
+                                {"family": family, "raws": raws, "inputs": inputs, "labels": labels, "unfused": alone})
+    self._prepared_cache[cache_key] = prepared; return prepared
+
+  def _one_program(self, output: Any, dev: str, what: str):
+    from tinygrad.codegen import to_program
+    from tinygrad.device import Device
+    linear = output.schedule_linear()
+    if len(linear.src) != 1: raise ProtocolError("provider_failure", f"{what} must schedule exactly one program")
+    call = linear.src[0]
+    try: program = to_program(call.src[0], Device[dev].renderer)
+    except Exception as exc:
+      raise ProtocolError("provider_failure", f"{what} did not compile: {type(exc).__name__}: {exc}", details={"stage": "compile"}) from exc
+    return call.replace(src=(program, *call.src[1:])), program
+
+  def _check_fusion(self, prepared: "PreparedWorkload", fixtures: list[dict[str, Any]]) -> Mapping[str, Any]:
+    """The fused output against the covered nodes evaluated one after another (decode_fusion_space.reference)."""
+    import numpy as np
+    from extra.llm_research import decode_fusion_space as fusions
+    fusion = prepared.fusion
+    got = prepared.call.src[1].buffer.ensure_allocated().numpy().reshape(-1)[:prepared.rows].astype(np.float32)
+    vals = {name.split(":", 1)[1]: t for name, t in fusion["inputs"].items() if name.startswith("value:")}
+    oracle = fusions.reference(fusion["family"], prepared.rows, prepared.k, fusion["raws"], vals)
+    evidence = {"representative_role_shape": {"m": 1, "n": prepared.rows, "k": prepared.k},
+                "oracle": "the covered nodes one after another: canonical packed reference + numpy",
+                "covers": [n.name for n in fusion["family"].covers], "tolerance": {"atol": 1e-3, "rtol": 1e-3},
+                "candidate_call_buffer_read": True, "packed_block_fixtures": fixtures}
+    if not np.isfinite(got).all() or not np.any(got != 0):
+      return {"correct": False, "reason": "candidate_output_nonfinite_or_trivial", "evidence": evidence}
+    if not np.allclose(got, oracle, rtol=1e-3, atol=1e-3):
+      return {"correct": False, "reason": "candidate_output_disagrees_with_the_unfused_reference",
+              "evidence": evidence | {"max_abs_error": float(np.max(np.abs(got - oracle)))}}
+    return {"correct": True, **evidence}
 
   def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     """Which of the named devices this worker can run, and the plan kinds it serves on each. A device that does not
@@ -608,14 +709,24 @@ class DeviceAdapter:
     return {"correct": True, **evidence}
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The device, its plan kinds, the decode emitters and the decode fusions. With payload "shapes" ([{"n", "k"}]),
+    every fusion row's verdict from the emitter's own validate at each shape (decode_fusion_space.shape_verdicts)."""
     from extra.llm_research import decode_emitter_space as space
+    from extra.llm_research import decode_fusion_space as fusions
     dev = self._device(payload); facts = self._facts(payload)
     kinds, decode = self._plan_kinds(dev)
     emitters = [{**f.to_json(), "installed_row": space.installed_row(f, facts["backend"], facts["architecture"])}
                 for f in space.FAMILIES] if EMITTER_PLAN_KIND in kinds else []
+    fused = [f.to_json() for f in fusions.FAMILIES] if EMITTER_PLAN_KIND in kinds else []
+    shapes = payload.get("shapes")
+    if shapes is not None and (not isinstance(shapes, list) or not all(isinstance(x, Mapping) and isinstance(x.get("n"), int)
+                                                                        and isinstance(x.get("k"), int) for x in shapes)):
+      raise ProtocolError("invalid_envelope", "payload.shapes must be a list of {n, k} integer objects")
     return {"provider_revision": _revision(), "target": facts, "supported_plan_kinds": kinds,
-            "decode_binding": decode, "decode_emitters": emitters,
-            "single_subgroup_families": sorted(f["family"] for f in emitters if f.get("threads_within_subgroup")),
+            "decode_binding": decode, "decode_emitters": emitters, "decode_fusions": fused,
+            "fusion_shape_verdicts": fusions.shape_verdicts(shapes) if shapes and fused else [],
+            "single_subgroup_families": sorted([f["family"] for f in emitters if f.get("threads_within_subgroup")] +
+                                               [f["family"] for f in fused if f.get("threads_within_subgroup")]),
             "compiler_transforms": [op.name for op in __import__("tinygrad.codegen.opt", fromlist=["OptOps"]).OptOps],
             "limitations": ["graph entry timing is non-authoritative", "no model execution or route promotion"]}
 
@@ -677,6 +788,11 @@ class DeviceAdapter:
             "bound_compiler_opts": None if opts is None else [{"op": x.op.name, "axis": x.axis, "arg": x.arg} for x in opts],
             "candidate_plan_hash": _sha256(json.dumps(candidate["schedule"], sort_keys=True)), "representative_tile": {"rows": rows, "k": k},
             "kernel": _kernel_record(prepared, ast, source, local)}
+    if prepared.fusion is not None:
+      result["fusion"] = {"covers": [n.name for n in prepared.fusion["family"].covers],
+                          "unfused": [{"node": node["node"], "kernel": _kernel_record(prepared, node["program"], node["program"].src[3].arg,
+                                       tuple(node["program"].arg.local_size or (1, 1, 1)), node["call"], node["labels"])}
+                                      for node in prepared.fusion["unfused"]]}
     self._compile_cache[cache_key] = result
     return result
 
@@ -697,6 +813,7 @@ class DeviceAdapter:
       results.append({"format": fmt, "elements": 512, "oracle": "extra.llm_research.layout canonical reference"})
     prepared = self._prepared(payload); output, raw, call, _, geometry, rows, k = prepared
     time_call(call)
+    if prepared.fusion is not None: return self._check_fusion(prepared, results)
     if _candidate(payload)["schedule"]["plan_kind"] == EMITTER_PLAN_KIND: return self._check_emitter(prepared, results)
     # `call` owns the compiled candidate invocation; read its allocated output
     # buffer directly rather than asking the lazy Tensor to schedule again.
