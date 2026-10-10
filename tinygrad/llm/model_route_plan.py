@@ -705,7 +705,10 @@ def load_decode_q8_0_gemv_formats(path:str) -> frozenset[str]:
 
 _DECODE_Q8_0_GEMV_FORMATS = load_decode_q8_0_gemv_formats(_DECODE_Q8_0_GEMV_RECORD)
 
-def decode_q8_0_gemv_formats() -> frozenset[str]: return _DECODE_Q8_0_GEMV_FORMATS
+def decode_q8_0_gemv_formats(getenv_fn=getenv) -> frozenset[str]:
+  """The promoted formats less any named in TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE (comma list): a per-format rollback."""
+  off = {f.strip() for f in str(getenv_fn("TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE", "")).split(",") if f.strip()}
+  return _DECODE_Q8_0_GEMV_FORMATS - off
 
 def decode_q8_0_gemv_promoted(target:Target, getenv_fn=getenv) -> bool:
   """Resolve the Q8_0 GEMV route with an explicit load-time rollback (TINYGRAD_Q8_0_GEMV_DISABLE=1)."""
