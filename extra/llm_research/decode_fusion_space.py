@@ -184,7 +184,7 @@ def unfused(family:FusionFamily, rows:int, k:int, raws:Mapping[str, Any], device
     if node.op == "gemv":
       weight = next(r.split(":", 1)[1] for r in node.reads if r.startswith("weight:"))
       value = next(r for r in node.reads if r.startswith("value:"))
-      one = next(f for f in single.FAMILIES if f.quant == family.quant)
+      one = next(f for f in single.FAMILIES if family.quant in f.quants)
       row = single.installed_row(one, backend, architecture)
       emitter = build_registered_llm_emitter(one.family, one.parameters(_schedule(row), rows, k))
       inputs = {f"weight:{weight}": _words(raws[weight], one.storage, device), value: vals[value.split(":", 1)[1]]}
