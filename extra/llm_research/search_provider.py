@@ -16,7 +16,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol, TextIO
 
 PROTOCOL = "tinygrad.search_provider.v1"
-ACTIONS = ("describe", "admit", "compile", "check", "measure")
+ACTIONS = ("describe", "admit", "compile", "check", "measure", "capability")
+# The v2 plan kinds a device adapter serves: tinygrad's own scheduler (heuristic or an explicit Opt sequence) and the
+# fork's decode emitters (extra/llm_research/decode_emitter_space.py), offered where the model's decode binds them.
+EMITTER_PLAN_KIND = "tinygrad_decode_emitter.v1"
+PLAN_KINDS = ("tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1", EMITTER_PLAN_KIND)
 ERROR_CODES = ("invalid_json", "invalid_envelope", "protocol_mismatch", "unsupported_action", "backend_unavailable",
                "hardware_absent", "dirty_tree", "revision_mismatch", "timeout", "identity_mismatch", "unsupported_plan",
                "admission_rejected", "resource_limit", "invalid_evidence", "provider_failure")
@@ -104,6 +108,7 @@ class ProviderAdapter(Protocol):
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
   def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
   def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
+  def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -123,6 +128,7 @@ class UnsupportedAdapter:
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._unsupported("compile")
   def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._unsupported("check")
   def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._unsupported("measure")
+  def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._unsupported("capability")
 
 
 def _sha256(value: bytes | str) -> str:
@@ -141,29 +147,79 @@ def _revision() -> dict[str, Any]:
   except Exception: return {"revision": "unavailable", "dirty": True}
 
 
-def _metal_device():
-  """Import Metal only at the adapter boundary so protocol-only use stays portable."""
+def _device_name(name: str | None = None) -> str:
+  """The tinygrad device to serve: the one named (a target backend such as NV, METAL, CUDA, AMD), else tinygrad's default."""
+  from tinygrad.device import Device
+  return Device.canonicalize(name) if name else Device.DEFAULT
+
+
+def _open_device(name: str | None = None):
+  """Open the GPU only at the adapter boundary so protocol-only use stays portable."""
   try:
     from tinygrad.device import Device
-    return Device["METAL"]
+    return Device[_device_name(name)]
   except Exception as exc:
-    raise ProtocolError("hardware_absent", "Metal device is unavailable", details={"exception_type": type(exc).__name__}) from exc
+    raise ProtocolError("hardware_absent", f"{name or 'the default'} device is unavailable",
+                        details={"device": name, "exception_type": type(exc).__name__}) from exc
 
 
-def _metal_facts(device: Any) -> dict[str, Any]:
+def _apple_facts(device: Any) -> dict[str, Any]:
+  """Facts only a device with an Apple system device reports."""
   from tinygrad.runtime.ops_metal import from_ns_str
   from tinygrad.runtime.graph.metal import metal_replay_facts
   sysdevice = device.sysdevice
-  family = getattr(device, "arch", "unknown")
   try: registry_id = int(sysdevice.registryID())
   except Exception: registry_id = None
-  return {"backend": "METAL", "tinygrad_device": "METAL", "name": from_ns_str(sysdevice.name()), "registry_id": registry_id,
-          "architecture": family, "subgroup_width": 32, "subgroup_width_source": "Metal simdgroup renderer contract",
+  return {"name": from_ns_str(sysdevice.name()), "registry_id": registry_id,
+          "subgroup_width_source": "simdgroup renderer contract",
           "max_threads_per_threadgroup": int(sysdevice.maxThreadsPerThreadgroup().width),
           "max_threadgroup_memory_bytes": int(sysdevice.maxThreadgroupMemoryLength()),
           "recommended_max_working_set_bytes": int(sysdevice.recommendedMaxWorkingSetSize()),
           "current_allocated_bytes": int(sysdevice.currentAllocatedSize()), "current_allocated_bytes_status": "volatile_runtime_fact",
-          "replay": metal_replay_facts(device), "os_version": platform.platform()}
+          "replay": metal_replay_facts(device)}
+
+
+# NV2080_CTRL_FB_INFO_INDEX_L2CACHE_SIZE (open-gpu-kernel-modules ctrl2080fb.h); tinygrad's autogen carries the call, not the index
+_NV_FB_INFO_INDEX_L2CACHE_SIZE = 0x1b
+
+
+def _nv_facts_of(device: Any) -> dict[str, Any]:
+  """Facts an NVIDIA device opened through the resource manager reports: compute capability, SM count, L2 bytes.
+  Each is read from the GPU; one the driver refuses is left out, so a caller names it missing."""
+  out: dict[str, Any] = {}
+  version = getattr(device, "sm_version", None)
+  if isinstance(version, int): out["compute_capability"] = [(version >> 8) & 0xff, version & 0xff if (version & 0xff) <= 0xf else (version & 0xff) >> 4]
+  try:
+    from tinygrad.runtime.autogen import nv_gpu
+    masks = [device.iface.rm_control(device.subdevice, nv_gpu.NV2080_CTRL_CMD_GR_GET_TPC_MASK,
+                                     nv_gpu.NV2080_CTRL_GR_GET_TPC_MASK_PARAMS(gpcId=i)).tpcMask for i in range(device.num_gpcs)]
+    out["sm_count"] = sum(bin(m).count("1") for m in masks) * int(device.num_sm_per_tpc)
+  except Exception: pass
+  try:
+    from tinygrad.runtime.autogen import nv_gpu
+    params = nv_gpu.NV2080_CTRL_FB_GET_INFO_V2_PARAMS(fbInfoListSize=1)
+    params.fbInfoList[0].index = _NV_FB_INFO_INDEX_L2CACHE_SIZE
+    params = device.iface.rm_control(device.subdevice, nv_gpu.NV2080_CTRL_CMD_FB_GET_INFO_V2, params)
+    if int(params.fbInfoList[0].data) > 0: out["l2_bytes"] = int(params.fbInfoList[0].data)
+  except Exception: pass
+  return out
+
+
+def _device_facts(device: Any, name: str | None = None) -> dict[str, Any]:
+  """One device's facts, read from it: the fork's device scan for what every backend reports, then what this kind
+  of device alone can say (an Apple system device, an NVIDIA resource-manager device), chosen by what the opened
+  device carries, never by a backend name."""
+  from tinygrad.llm.device_facts import _tinygrad_target_probe
+  dev = _device_name(name)
+  probe = _tinygrad_target_probe(dev)
+  facts = {"backend": probe["backend"], "tinygrad_device": dev, "name": dev, "architecture": probe.get("architecture") or "unknown",
+           "subgroup_width": probe.get("wave_size") or 32,
+           "subgroup_width_source": "renderer wave_size" if probe.get("wave_size") else "renderer contract (32 lanes)",
+           "max_threads_per_threadgroup": probe.get("max_workgroup_threads"),
+           "max_threadgroup_memory_bytes": probe.get("lds_bytes"), "os_version": platform.platform()}
+  if hasattr(device, "sysdevice"): facts.update(_apple_facts(device))
+  if hasattr(device, "sm_version"): facts.update(_nv_facts_of(device))
+  return {k: v for k, v in facts.items() if v is not None}
 
 
 def _candidate(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -192,7 +248,7 @@ def _live_target_identity(facts: Mapping[str, Any], supplied: Any) -> dict[str, 
   # BoltBeam owns resolved-target hashing.  The provider only verifies the
   # facts it can observe; inventing a second hash would split authority.
   if identity["backend"] != facts["backend"] or identity["arch"] != facts["architecture"]:
-    raise ProtocolError("identity_mismatch", "target_identity does not match live Metal facts")
+    raise ProtocolError("identity_mismatch", "target_identity does not match the live device facts")
   return identity
 
 
@@ -209,11 +265,15 @@ def _plan(candidate: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
   if not isinstance(workload, Mapping) or not isinstance(schedule, Mapping):
     raise ProtocolError("admission_rejected", "candidate requires workload and schedule objects")
   target = workload.get("target")
-  if not isinstance(target, Mapping) or target.get("backend") != "METAL":
-    raise ProtocolError("identity_mismatch", "candidate target must be exact METAL identity")
-  if schedule.get("plan_kind") not in ("tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1"):
-    raise ProtocolError("unsupported_plan", "Metal adapter supports explicit Opt sequences or ordinary heuristic")
+  if not isinstance(target, Mapping) or not isinstance(target.get("backend"), str) or not target["backend"]:
+    raise ProtocolError("identity_mismatch", "candidate target must name the device backend it was built for")
+  if schedule.get("plan_kind") not in PLAN_KINDS:
+    raise ProtocolError("unsupported_plan", "the device adapter supports explicit Opt sequences, the ordinary heuristic, "
+                        "and the fork's decode emitters", details={"supported": list(PLAN_KINDS)})
   transforms = schedule.get("transforms")
+  if schedule.get("plan_kind") == EMITTER_PLAN_KIND:
+    if transforms not in (None, []): raise ProtocolError("unsupported_plan", "an emitter plan carries its geometry in the schedule, not transforms")
+    return dict(schedule), None
   if schedule.get("plan_kind") == "tinygrad_heuristic.v1":
     if transforms not in (None, []): raise ProtocolError("unsupported_plan", "heuristic plan cannot carry explicit transforms")
     return dict(schedule), None
@@ -287,6 +347,28 @@ def _geometry_warmstart(payload: Mapping[str, Any], candidate: Mapping[str, Any]
   return {key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}, {key: context}, transform
 
 
+def _buffer_role(nbytes: int, prepared: "PreparedWorkload") -> str:
+  """Which operand a program buffer holds, by its size: the packed weight, the activation, or the output."""
+  m, rows, k, block = prepared.geometry
+  weight = prepared.packed_source_bytes if prepared.packed_source_bytes is not None else rows * k // 256 * block
+  roles = [role for role, size in (("weight", weight), ("x", m * k * 2)) if size == nbytes]
+  return roles[0] if len(roles) == 1 else "out"
+
+
+def _kernel_record(prepared: "PreparedWorkload", ast: Any, source: str, local: tuple) -> dict[str, Any]:
+  """What a caller needs to compile and launch this exact kernel itself: the source text, the function, the launch,
+  and each argument buffer in the kernel's parameter order with its dtype, size and operand."""
+  info, call = ast.arg, prepared.call
+  if info.vars: raise ProtocolError("unsupported_plan", "a kernel with symbolic variables cannot be described for replay")
+  buffers = []
+  for index in info.globals:
+    buf = call.src[1 + index].buffer
+    buffers.append({"index": index, "dtype": buf.dtype.name, "nbytes": buf.nbytes, "role": _buffer_role(buf.nbytes, prepared)})
+  from tinygrad.helpers import to_function_name
+  return {"source": source, "function": to_function_name(info.name), "global_size": [int(x) for x in info.global_size],
+          "local_size": [int(x) for x in local], "buffers": buffers}
+
+
 @dataclass(frozen=True)
 class PreparedWorkload:
   output: Any; raw: Any; call: Any; ast: Any; geometry: tuple; rows: int; k: int
@@ -300,11 +382,25 @@ class _ExactModelCacheEntry:
   model: Any
 
 @dataclass(frozen=True)
-class MetalAdapter:
-  """Metal facts/compiler adapter; policy and ranking deliberately remain outside tinygrad."""
+class DeviceAdapter:
+  """Facts/compiler adapter for any tinygrad GPU; policy and ranking deliberately remain outside tinygrad.
+
+  The device is the one the candidate's target names (its backend: METAL, NV, CUDA, AMD), else the one the
+  payload names, else the one this worker was started for, else tinygrad's default. Nothing here names a backend."""
+  device: str | None = None
   _exact_models: dict[tuple[str, str], _ExactModelCacheEntry] = field(default_factory=dict, init=False, repr=False, compare=False)
   _prepared_cache: dict[str, PreparedWorkload] = field(default_factory=dict, init=False, repr=False, compare=False)
   _compile_cache: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False, repr=False, compare=False)
+
+  def _device(self, payload: Mapping[str, Any]) -> str:
+    candidate = payload.get("candidate")
+    target = (candidate.get("workload") or {}).get("target") if isinstance(candidate, Mapping) and isinstance(candidate.get("workload"), Mapping) else None
+    named = target.get("backend") if isinstance(target, Mapping) else None
+    return _device_name(named or payload.get("device") or self.device)
+
+  def _facts(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+    dev = self._device(payload)
+    return _device_facts(_open_device(dev), dev)
 
   def _prepared_key(self, payload: Mapping[str, Any]) -> str:
     exact = payload.get("exact_gguf")
@@ -313,7 +409,8 @@ class MetalAdapter:
       from pathlib import Path
       path = Path(exact["path"]).resolve(); stat = path.stat()
       exact_key = (str(path), exact["workload"].get("model_hash"), stat.st_size, stat.st_mtime_ns)
-    return _sha256(json.dumps({"candidate": _candidate(payload), "exact": exact_key, "fixture": payload.get("fixture_shape")}, sort_keys=True))
+    return _sha256(json.dumps({"candidate": _candidate(payload), "exact": exact_key, "fixture": payload.get("fixture_shape"),
+                               "device": self._device(payload)}, sort_keys=True))
 
   def _exact_binding(self, exact: Mapping[str, Any]):
     """Reuse a verified loaded GGUF while invalidating on path content metadata changes."""
@@ -351,9 +448,11 @@ class MetalAdapter:
     from tinygrad.llm.gguf import ggml_data_to_tensor
     from tinygrad.llm.qk_layout import GGML_Q4_K, GGML_Q6_K
     candidate = _candidate(payload); _, opts = _plan(candidate); workload = candidate["workload"]
+    dev = self._device(payload)
+    if candidate["schedule"]["plan_kind"] == EMITTER_PLAN_KIND: return self._build_emitter(payload, candidate, cache_key, dev)
     fmt = str(workload["operands"]["b"].get("quantization", workload["operands"]["b"].get("dtype", ""))).upper().replace("_", "_")
     fmt = "Q4_K" if fmt in ("Q4_K", "Q4K") else "Q6_K" if fmt in ("Q6_K", "Q6K") else None
-    if fmt is None: raise ProtocolError("unsupported_plan", "Metal M6 packed program requires Q4_K or Q6_K weight")
+    if fmt is None: raise ProtocolError("unsupported_plan", "the packed program requires a Q4_K or Q6_K weight")
     shape = workload["shape"]; fixture = payload.get("fixture_shape", {})
     exact = payload.get("exact_gguf")
     if not isinstance(fixture, Mapping): raise ProtocolError("admission_rejected", "fixture_shape must be an object")
@@ -366,7 +465,7 @@ class MetalAdapter:
       rows, k, m = shape["n"], shape["k"], shape["m"]
       if binding.weight.shape != (rows, k) or binding.activation.shape != (m, k):
         raise ProtocolError("identity_mismatch", "exact binding does not match candidate shape")
-      weights, activation, raw = binding.weight.to("METAL"), binding.activation.to("METAL"), None
+      weights, activation, raw = binding.weight.to(dev), binding.activation.to(dev), None
     else:
       rows, k, m = int(fixture.get("n", min(shape["n"], 256))), int(fixture.get("k", min(shape["k"], 256))), int(fixture.get("m", 1))
     if exact is None: k -= k % 256
@@ -390,7 +489,7 @@ class MetalAdapter:
         linear = output.schedule_linear()
         if len(linear.src) != 1: raise ProtocolError("provider_failure", "exact bound output must schedule exactly one program")
         call = linear.src[0]; sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
-        program = to_program(sink, Device["METAL"].renderer)
+        program = to_program(sink, Device[dev].renderer)
         prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights, binding.packed_source_bytes)
         self._prepared_cache[cache_key] = prepared; return prepared
       import numpy as np
@@ -405,7 +504,7 @@ class MetalAdapter:
         raw_bytes[base:base+2] = d_bytes
         if fmt == "Q4_K": raw_bytes[base+2:base+4] = dmin_bytes
         else: raw_bytes[base+208:base+210] = d_bytes
-      raw = Tensor(raw_bytes, dtype=dtypes.uint8, device="METAL").realize()
+      raw = Tensor(raw_bytes, dtype=dtypes.uint8, device=dev).realize()
       if warm_transform is not None:
         # The generic ggml_data_to_tensor dequant (below) fully unpacks Q4_K/Q6_K into float32
         # via elementwise ops on a uint8 PARAM -- it never leaves a PARAM whose OWN dtype is
@@ -419,31 +518,102 @@ class MetalAdapter:
         from tinygrad.llm.packed_wmma_prefill import packed_half_carrier
         storage_np = np.uint32 if warm_transform.storage_dtype == dtypes.uint32 else np.uint16
         packed_words = raw_bytes.reshape(-1).view(storage_np)
-        raw_packed = Tensor(packed_words, dtype=warm_transform.storage_dtype, device="METAL").realize()
+        raw_packed = Tensor(packed_words, dtype=warm_transform.storage_dtype, device=dev).realize()
         weights = packed_half_carrier(raw_packed, warm_transform, rows, k)
       else:
         weights = ggml_data_to_tensor(raw, rows*k, typ).reshape(rows, k)
-      activation = Tensor([1.0 + (i % 7)/16 for i in range(m*k)], dtype=dtypes.float16, device="METAL").reshape(m, k).realize()
+      activation = Tensor([1.0 + (i % 7)/16 for i in range(m*k)], dtype=dtypes.float16, device=dev).reshape(m, k).realize()
       output = activation @ weights.T
       linear = output.schedule_linear()
       if len(linear.src) != 1: raise ProtocolError("provider_failure", "prepared fused output must schedule exactly one program")
       call = linear.src[0]
       sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
-      program = to_program(sink, Device["METAL"].renderer)
+      program = to_program(sink, Device[dev].renderer)
       prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights)
       self._prepared_cache[cache_key] = prepared; return prepared
 
+  def _build_emitter(self, payload: Mapping[str, Any], candidate: Mapping[str, Any], cache_key: str, dev: str):
+    """One decode emitter at the role's exact shape: the fork's registered lowering, deterministic GGUF bytes."""
+    from extra.llm_research import decode_emitter_space as space
+    from tinygrad.codegen import to_program
+    from tinygrad.device import Device
+    workload = candidate["workload"]; shape = workload["shape"]
+    if payload.get("exact_gguf") is not None: raise ProtocolError("unsupported_plan", "emitter plans run on the fixture bytes, not exact_gguf")
+    if shape["m"] != 1: raise ProtocolError("unsupported_plan", "decode emitters are one-token GEMVs (m == 1)")
+    rows, k = shape["n"], shape["k"]
+    if k % 256: raise ProtocolError("identity_mismatch", "packed K must be divisible by 256")
+    try: output, words, x, raw, block = space.build(candidate, dev)
+    except (ValueError, AssertionError) as exc:
+      raise ProtocolError("unsupported_plan", f"the emitter refused this geometry: {exc}") from exc
+    linear = output.schedule_linear()
+    if len(linear.src) != 1: raise ProtocolError("provider_failure", "an emitter output must schedule exactly one program")
+    call = linear.src[0]
+    try: program = to_program(call.src[0], Device[dev].renderer)
+    except Exception as exc:
+      raise ProtocolError("provider_failure", f"the emitter did not compile: {type(exc).__name__}: {exc}",
+                          details={"stage": "compile"}) from exc
+    prepared = PreparedWorkload(output, words, call.replace(src=(program, *call.src[1:])), program, (1, rows, k, block), rows, k,
+                                x, None, raw.nbytes)
+    self._prepared_cache[cache_key] = prepared; return prepared
+
+  def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Which of the named devices this worker can run, and the plan kinds it serves on each. A device that does not
+    open is reported with the reason, never skipped."""
+    names = payload.get("devices")
+    if names is None: names = [self.device or _device_name()]
+    if not isinstance(names, list) or not all(isinstance(x, str) and x for x in names):
+      raise ProtocolError("invalid_envelope", "payload.devices must be a list of device names")
+    rows = []
+    for name in names:
+      try:
+        facts = self._facts({"device": name})
+        rows.append({"device": _device_name(name), "opened": True, "backend": facts["backend"],
+                     "architecture": facts["architecture"], "name": facts.get("name"),
+                     "supported_plan_kinds": self._plan_kinds(_device_name(name))[0]})
+      except ProtocolError as exc:
+        rows.append({"device": name, "opened": False, "reason": str(exc)})
+    return {"provider_revision": _revision(), "devices": rows}
+
+  def _plan_kinds(self, dev: str) -> tuple[list[str], dict[str, Any]]:
+    from extra.llm_research import decode_emitter_space as space
+    applies, why = space.emitters_apply(dev)
+    kinds = ["tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1"] + ([EMITTER_PLAN_KIND] if applies else [])
+    return kinds, {"binds_through": EMITTER_PLAN_KIND if applies else "tinygrad_opt_sequence.v1", "reason": why}
+
+  def _check_emitter(self, prepared: "PreparedWorkload", fixtures: list[dict[str, Any]]) -> Mapping[str, Any]:
+    """The emitter's output against the canonical packed reference on the same fixture bytes."""
+    import numpy as np
+    from tinygrad import Tensor
+    from extra.llm_research.layout import q4_k_reference, q6_k_reference
+    from extra.llm_research import decode_emitter_space as space
+    _, rows, k, block = prepared.geometry
+    got = prepared.call.src[1].buffer.ensure_allocated().numpy().reshape(-1)[:rows]
+    raw = space.fixture_bytes("Q4_K" if block == 144 else "Q6_K", rows, k)
+    weights = (q4_k_reference if block == 144 else q6_k_reference)(Tensor(raw), rows * k).numpy().reshape(rows, k)
+    oracle = weights.astype(np.float32) @ space.fixture_activation(k).astype(np.float32)
+    evidence = {"representative_role_shape": {"m": 1, "n": rows, "k": k}, "oracle": "canonical packed reference + numpy matmul",
+                "tolerance": {"atol": 1e-3, "rtol": 1e-3}, "candidate_call_buffer_read": True, "packed_block_fixtures": fixtures}
+    if not np.isfinite(got).all() or not np.any(got != 0):
+      return {"correct": False, "reason": "candidate_output_nonfinite_or_trivial", "evidence": evidence}
+    if not np.allclose(got, oracle, rtol=1e-3, atol=1e-3):
+      return {"correct": False, "reason": "candidate_output_disagrees_with_canonical_oracle",
+              "evidence": evidence | {"max_abs_error": float(np.max(np.abs(got - oracle)))}}
+    return {"correct": True, **evidence}
+
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    del payload
-    device = _metal_device()
-    return {"provider_revision": _revision(), "target": _metal_facts(device),
-            "supported_plan_kinds": ["tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1"],
+    from extra.llm_research import decode_emitter_space as space
+    dev = self._device(payload); facts = self._facts(payload)
+    kinds, decode = self._plan_kinds(dev)
+    emitters = [{**f.to_json(), "installed_row": space.installed_row(f, facts["backend"], facts["architecture"])}
+                for f in space.FAMILIES] if EMITTER_PLAN_KIND in kinds else []
+    return {"provider_revision": _revision(), "target": facts, "supported_plan_kinds": kinds,
+            "decode_binding": decode, "decode_emitters": emitters,
             "compiler_transforms": [op.name for op in __import__("tinygrad.codegen.opt", fromlist=["OptOps"]).OptOps],
             "limitations": ["graph entry timing is non-authoritative", "no model execution or route promotion"]}
 
   def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _pinned_identity(payload)
-    candidate = _candidate(payload); schedule, opts = _plan(candidate); facts = _metal_facts(_metal_device())
+    candidate = _candidate(payload); schedule, opts = _plan(candidate); facts = self._facts(payload)
     workload, target = candidate["workload"], candidate["workload"]["target"]
     if payload.get("candidate_hash") != _canonical_candidate_hash(candidate):
       raise ProtocolError("identity_mismatch", "candidate_hash does not match canonical candidate bytes")
@@ -475,11 +645,12 @@ class MetalAdapter:
       raise ProtocolError("admission_rejected", "workload must describe matmul operands a/b/c")
     identity = _live_target_identity(facts, payload.get("target_identity"))
     if dict(target) != identity:
-      raise ProtocolError("identity_mismatch", "candidate target does not match live Metal device", details={"live": facts["architecture"]})
+      raise ProtocolError("identity_mismatch", "candidate target does not match the live device", details={"live": facts["architecture"]})
     launch = schedule.get("launch", {})
     threads = launch.get("threads") if isinstance(launch, Mapping) else None
-    if not isinstance(threads, int) or threads <= 0 or threads > facts["max_threads_per_threadgroup"]:
-      raise ProtocolError("resource_limit", "launch threads exceed live Metal limit", details={"limit": facts["max_threads_per_threadgroup"]})
+    limit = facts.get("max_threads_per_threadgroup")
+    if not isinstance(threads, int) or threads <= 0 or (limit is not None and threads > limit):
+      raise ProtocolError("resource_limit", "launch threads exceed the live device limit", details={"limit": limit})
     return {"admitted": True, "target": facts, "target_identity": identity, "plan_hash": _sha256(json.dumps(schedule, sort_keys=True)),
             "compiler_opts": None if opts is None else [{"op": x.op.name, "axis": x.axis, "arg": x.arg} for x in opts]}
 
@@ -488,15 +659,16 @@ class MetalAdapter:
     cache_key = self._prepared_key(payload)
     if cache_key in self._compile_cache: return dict(self._compile_cache[cache_key])
     from tinygrad.engine.realize import get_runtime
-    _, _, _, ast, _, rows, k = self._prepared(payload)
+    prepared = self._prepared(payload); _, _, call, ast, _, rows, k = prepared
     source, binary = ast.src[3].arg, ast.src[4].arg
-    runtime = get_runtime("METAL", ast)
+    runtime = get_runtime(self._device(payload), ast)
     local = tuple(ast.arg.local_size or (1, 1, 1))
     result = {**admitted, "source_sha256": _sha256(source), "mtlb_sha256": _sha256(binary),
             "launch": {"global_size": list(ast.arg.global_size), "local_size": list(local)},
-            "pipeline": {"max_total_threads_per_threadgroup": runtime.max_total_threads},
+            "pipeline": {"max_total_threads_per_threadgroup": getattr(runtime, "max_total_threads", None)},
             "bound_compiler_opts": None if opts is None else [{"op": x.op.name, "axis": x.axis, "arg": x.arg} for x in opts],
-            "candidate_plan_hash": _sha256(json.dumps(candidate["schedule"], sort_keys=True)), "representative_tile": {"rows": rows, "k": k}}
+            "candidate_plan_hash": _sha256(json.dumps(candidate["schedule"], sort_keys=True)), "representative_tile": {"rows": rows, "k": k},
+            "kernel": _kernel_record(prepared, ast, source, local)}
     self._compile_cache[cache_key] = result
     return result
 
@@ -517,6 +689,7 @@ class MetalAdapter:
       results.append({"format": fmt, "elements": 512, "oracle": "extra.llm_research.layout canonical reference"})
     prepared = self._prepared(payload); output, raw, call, _, geometry, rows, k = prepared
     time_call(call)
+    if _candidate(payload)["schedule"]["plan_kind"] == EMITTER_PLAN_KIND: return self._check_emitter(prepared, results)
     # `call` owns the compiled candidate invocation; read its allocated output
     # buffer directly rather than asking the lazy Tensor to schedule again.
     metal = call.src[1].buffer.ensure_allocated().numpy().reshape(geometry[0], rows)
@@ -557,15 +730,17 @@ class MetalAdapter:
       raise ProtocolError("admission_rejected", "samples must be 1..20 and warmups 0..10")
     from tinygrad.engine.realize import time_call
     prepared = self._prepared(payload); _, raw, call, _, geometry, rows, k = prepared
-    before = _metal_facts(_metal_device())["current_allocated_bytes"]
+    before = self._facts(payload).get("current_allocated_bytes")
     for _ in range(warmups): time_call(call)
-    raw_ns = [int(time_call(call) * 1e9) for _ in range(samples)]
-    device = _metal_device(); after = _metal_facts(device)["current_allocated_bytes"]
+    # the device's own cache invalidation before each timed sample: a decode reads its weights from DRAM, so a
+    # kernel time from a warm cache is not the time the model sees
+    raw_ns = [int(time_call(call, clear_l2=True) * 1e9) for _ in range(samples)]
+    after = self._facts(payload).get("current_allocated_bytes")
     m, _, _, block_bytes = geometry
-    source_bytes = raw.nbytes() if raw is not None else prepared.packed_source_bytes
+    source_bytes = prepared.packed_source_bytes if prepared.packed_source_bytes is not None else raw.nbytes()
     operations, bytes_ = 2*m*rows*k, source_bytes + m*k*2 + m*rows*4
     mean = sum(raw_ns) / len(raw_ns)
-    return {**compiled, "timing_mode": "eager_metal_command_buffer_gpu_time_wait_true", "synchronized": True,
+    return {**compiled, "timing_mode": "tinygrad time_call: device timestamps, wait=True, device cache invalidated before each sample", "synchronized": True,
             "warmups": warmups, "samples_ns": raw_ns, "summary_ns": {"min": min(raw_ns), "mean": mean, "max": max(raw_ns),
             "range": max(raw_ns)-min(raw_ns)}, "working_set_after_bytes": after,
             "working_set_before_bytes": before, "work_bytes": {"status": "estimated", "provenance": "modeled logical packed input + fp16 activation/output; physical cache traffic unobserved", "operations": operations, "bytes": bytes_}}
@@ -573,11 +748,12 @@ class MetalAdapter:
   def _practical_streaming(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     """Bounded ordinary Tensor streaming measurement; not a roofline or policy verdict."""
     _pinned_identity(payload)
-    facts = _metal_facts(_metal_device()); _live_target_identity(facts, payload.get("target_identity"))
+    facts = self._facts(payload); _live_target_identity(facts, payload.get("target_identity"))
     requested = payload.get("source_bytes", 256 << 20)
     if not isinstance(requested, int) or isinstance(requested, bool) or requested <= 0 or requested > (512 << 20):
       raise ProtocolError("resource_limit", "source_bytes must be positive and at most 512 MiB")
-    budget = facts["recommended_max_working_set_bytes"]
+    budget = facts.get("recommended_max_working_set_bytes")
+    if budget is None: raise ProtocolError("resource_limit", "the device reports no working-set budget")
     # src + dst must fit conservatively, with an explicit practical-stream assumption.
     if 2*requested > budget: raise ProtocolError("resource_limit", "resident stream buffers exceed live working-set budget",
                                                   details={"requested_resident_bytes": 2*requested, "budget": budget})
@@ -588,24 +764,24 @@ class MetalAdapter:
     from tinygrad.engine.realize import time_call
     if requested % dtypes.float.itemsize: raise ProtocolError("admission_rejected", "source_bytes must be divisible by float32 itemsize")
     elements = requested // dtypes.float.itemsize
-    src = Tensor.zeros(elements, dtype=dtypes.float, device="METAL").realize()
+    src = Tensor.zeros(elements, dtype=dtypes.float, device=dev).realize()
     dst = src + 1.0
     linear = dst.schedule_linear()
     if len(linear.src) != 1: raise ProtocolError("provider_failure", "streaming Tensor must schedule one program")
     call = linear.src[0]
-    before = _metal_facts(_metal_device())["current_allocated_bytes"]
+    before = self._facts(payload).get("current_allocated_bytes")
     for _ in range(warmups): time_call(call)
     raw_ns = [int(time_call(call)*1e9) for _ in range(samples)]
     if any(value <= 0 or not math.isfinite(value) for value in raw_ns):
       raise ProtocolError("provider_failure", "streaming timing produced a non-positive or non-finite sample")
-    after = _metal_facts(_metal_device())["current_allocated_bytes"]
+    after = self._facts(payload).get("current_allocated_bytes")
     import statistics
     traffic = 2*requested
     gbs = [traffic/ns for ns in raw_ns]  # bytes/ns == GB/s
     median_ns = statistics.median(raw_ns)
     return {"measurement_kind": "practical_streaming", "label": "practical stream measurement; not roofline or promotion evidence",
-            "target": facts, "provider_revision": _revision(), "storage_mode": "Metal shared/unified memory", "direction": "device read + device write",
-            "timing_mode": "eager_metal_command_buffer_gpu_time_wait_true", "source_payload_bytes": requested, "traffic_bytes_per_sample": traffic, "raw_samples_ns": raw_ns,
+            "target": facts, "provider_revision": _revision(), "storage_mode": "device memory", "direction": "device read + device write",
+            "timing_mode": "tinygrad time_call: device timestamps, wait=True", "source_payload_bytes": requested, "traffic_bytes_per_sample": traffic, "raw_samples_ns": raw_ns,
             "summary_ns": {"min": min(raw_ns), "median": median_ns, "max": max(raw_ns), "dispersion_range": max(raw_ns)-min(raw_ns)},
             "per_sample_gb_s": gbs, "median_gb_s": statistics.median(gbs), "warmups": warmups, "synchronized": True,
             "allocation_before_bytes": before, "allocation_after_bytes": after, "requested_resident_working_set_bytes": 2*requested,
@@ -944,23 +1120,30 @@ class CudaAdapter:
 
 @dataclass(frozen=True)
 class DeviceRouter:
-  """The worker for one opened GPU: flash candidates go to the flash adapter, every other request to the
+  """Flash candidates go to the flash adapter, DS4 primitive plans (v3) to the primitive adapter when one is wired,
+  every other request (and capability) to the device adapter.
+  The worker for one opened GPU: flash candidates go to the flash adapter, every other request to the
   backend's own adapter. The candidate's schema chooses, never a backend name, so flash is served on any GPU.
   A describe may name only the schema, ``{"candidate": {"schema_version": ...}}``: that asks for the facts the
   family is admitted against, which is how a caller learns the GPU before it builds any candidate."""
   flash: ProviderAdapter
   native: ProviderAdapter
+  primitive: ProviderAdapter | None = None
 
   def _adapter(self, payload: Mapping[str, Any]) -> ProviderAdapter:
     candidate = payload.get("candidate")
     is_flash = isinstance(candidate, Mapping) and str(candidate.get("schema_version", "")).startswith(_FLASH_SCHEMA_PREFIX)
-    return self.flash if is_flash else self.native
+    if is_flash: return self.flash
+    if candidate is None and "target_facts" in payload and self.primitive is not None: return self.primitive  # caller-supplied DS4 facts
+    is_primitive = isinstance(candidate, Mapping) and candidate.get("schema_version") == "boltbeam.full_kernel_candidate.v3"
+    return self.primitive if is_primitive and self.primitive is not None else self.native
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).describe(payload)
   def admit(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).admit(payload)
   def compile(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).compile(payload)
   def check(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).check(payload)
   def measure(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self._adapter(payload).measure(payload)
+  def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]: return self.native.capability(payload)
 
 
 def _response(*, request_id: str | None, action: str | None, status: str,
@@ -1004,14 +1187,12 @@ def serve(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout, 
   return 0
 
 
-def _native_adapter(backend: str, live_generated: bool) -> ProviderAdapter:
-  """The adapter for the backend's own candidate kinds; flash candidates never reach it."""
-  if backend == "METAL": return MetalAdapter()
-  if backend == "CUDA" and live_generated:
+def _primitive_adapter(live_generated: bool) -> ProviderAdapter:
+  """The DS4 primitive-plan adapter (v3 candidates): facts-driven, live only when asked."""
+  if live_generated:
     generated = _primitive_plan_schema()
     return CudaAdapter(live_backend=True, compile_fn=generated.compile_ds4, check_fn=generated.check_ds4, measure_fn=generated.measure_ds4)
-  if backend == "CUDA": return CudaAdapter()
-  return UnsupportedAdapter(f"no adapter is registered for {backend} candidates other than flash")
+  return CudaAdapter()
 
 
 def main() -> int:
@@ -1021,15 +1202,15 @@ def main() -> int:
   parser.add_argument("--live-flash", action="store_true", help="compile, check and time flash candidates on the opened GPU")
   args = parser.parse_args()
   device = args.backend
+  native = DeviceAdapter(device)
   if device is None:
     from tinygrad.device import Device
     device = Device.DEFAULT
-  native = _native_adapter(device.split(":", 1)[0].upper(), args.live_generated)
   if args.live_flash:
     from extra.llm_research.flash_live import LiveFlash
     live = LiveFlash(device)
     flash = FlashAdapter(device, live_backend=True, compile_fn=live.compile, check_fn=live.check, measure_fn=live.measure)
   else: flash = FlashAdapter(device)
-  return serve(adapter=DeviceRouter(flash=flash, native=native))
+  return serve(adapter=DeviceRouter(flash=flash, native=native, primitive=_primitive_adapter(args.live_generated)))
 
 if __name__ == "__main__": raise SystemExit(main())

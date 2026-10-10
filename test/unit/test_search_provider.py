@@ -16,6 +16,7 @@ class MockAdapter:
   def check(self, payload): return {"phase": "check", "correct": True}
   def measure(self, payload): return {"phase": "measure", "samples_ns": [10, 11],
                                       "work_bytes": {"status": "estimated", "provenance": "mock model", "operations": 42, "bytes": 24}}
+  def capability(self, payload): return {"devices": [{"device": "MOCK", "opened": True}]}
 
 
 def test_each_canonical_action_uses_the_same_target_neutral_adapter_seam():
@@ -82,9 +83,8 @@ def _metal_payload(identity, **kwargs):
 
 def test_metal_adapter_admits_only_live_exact_target_and_compiler_owned_plan(monkeypatch):
   facts = {"backend": "METAL", "architecture": "Apple9", "name": "test", "max_threads_per_threadgroup": 64}
-  monkeypatch.setattr(provider, "_metal_device", lambda: object())
-  monkeypatch.setattr(provider, "_metal_facts", lambda _device: facts)
-  adapter = provider.MetalAdapter()
+  monkeypatch.setattr(provider.DeviceAdapter, "_facts", lambda _self, _payload: facts)
+  adapter = provider.DeviceAdapter()
   identity = {"target_id": "apple_test", "backend": "METAL", "arch": "Apple9", "subgroup_size": 32}
   identity["resolved_target_hash"] = "boltbeam-owned-hash"
   out = provider.process(request("admit", _metal_payload(identity)), adapter=adapter)
@@ -107,7 +107,7 @@ def test_metal_target_facts_expose_replay_strategy_and_counters_without_hardware
     "icb_offset_bits":32, "last_graph":{"graph_calls":323, "icb_calls":256, "direct_encoded_calls":67, "committed":True}})
   sysdevice = SimpleNamespace(name=lambda:object(), registryID=lambda:1, maxThreadsPerThreadgroup=lambda:SimpleNamespace(width=64),
     maxThreadgroupMemoryLength=lambda:32768, recommendedMaxWorkingSetSize=lambda:1 << 30, currentAllocatedSize=lambda:1 << 20)
-  facts = provider._metal_facts(SimpleNamespace(sysdevice=sysdevice, arch="Apple9"))
+  facts = provider._apple_facts(SimpleNamespace(sysdevice=sysdevice, arch="Apple9"))
   assert facts["replay"]["configured_strategy"] == "hybrid_icb_direct"
   assert facts["replay"]["last_graph"] == {"graph_calls":323, "icb_calls":256, "direct_encoded_calls":67, "committed":True}
 
@@ -117,7 +117,7 @@ def test_metal_adapter_hardware_compile_is_explicitly_opt_in():
   import os
   import pytest
   if os.getenv("RUN_METAL_PROVIDER_TESTS") != "1": pytest.skip("set RUN_METAL_PROVIDER_TESTS=1 on a Metal host")
-  adapter = provider.MetalAdapter()
+  adapter = provider.DeviceAdapter()
   facts = adapter.describe({})["target"]
   identity = {"target_id":"apple_m4_10c", "backend":"METAL", "arch":facts["architecture"], "subgroup_size":facts["subgroup_width"], "resolved_target_hash":"boltbeam-live"}
   out = provider.process(request("compile", _metal_payload(identity)), adapter=adapter)
@@ -152,7 +152,7 @@ def test_exact_model_cache_reuses_stat_identity_reloads_on_drift_and_rejects_has
   def bind(_workload, _path, *, model): return SimpleNamespace(model_hash=model.model_hash)
   monkeypatch.setattr(semantic, "load_exact_gguf_model", load)
   monkeypatch.setattr(semantic, "bind_exact_gguf_workload", bind)
-  adapter = provider.MetalAdapter()
+  adapter = provider.DeviceAdapter()
   exact = {"workload": {"model_hash": "good", "fixture_shape_substitution": "forbidden"}, "path": str(path)}
   assert adapter._exact_binding(exact).model_hash == "good"
   assert adapter._exact_binding(exact).model_hash == "good" and len(loads) == 1
@@ -166,26 +166,26 @@ def test_exact_model_cache_reuses_stat_identity_reloads_on_drift_and_rejects_has
 @pytest.mark.parametrize("field", ["model_sha256", "phase", "role", "profile"])
 def test_exact_semantic_admission_rejects_candidate_identity_mismatches(monkeypatch, field):
   facts = {"backend":"METAL","architecture":"Apple9","name":"test","max_threads_per_threadgroup":64}
-  monkeypatch.setattr(provider, "_metal_device", lambda: object()); monkeypatch.setattr(provider, "_metal_facts", lambda _d:facts)
+  monkeypatch.setattr(provider.DeviceAdapter, "_facts", lambda _self, _payload: facts)
   identity={"target_id":"x","backend":"METAL","arch":"Apple9","subgroup_size":32,"resolved_target_hash":"h"}
   candidate=_metal_candidate(identity); candidate["workload"].update({"model_sha256":"m","phase":"decode","profile":"mod","accumulator_dtype":"float32"}); candidate["correctness"]={"atol":1,"rtol":1}
   semantic={"model_hash":"m","target":identity,"fixture_shape_substitution":"forbidden","tolerance":{"atol":1,"rtol":1},"semantic_identity":{"phase":"decode","role":"decode_q4k_gemv","module_path":"mod","logical_m":1,"logical_n":256,"logical_k":256,"source_quant_storage":"Q4_K","source_layout":None,"accumulator_dtype":"float32"}}
   candidate["workload"][field]="bad"
   payload={"candidate":candidate,"candidate_hash":provider._canonical_candidate_hash(candidate),"target_identity":identity,"exact_gguf":{"workload":semantic,"path":"x"}}
-  assert provider.process(request("admit",payload),adapter=provider.MetalAdapter())["error"]["code"]=="identity_mismatch"
+  assert provider.process(request("admit",payload),adapter=provider.DeviceAdapter())["error"]["code"]=="identity_mismatch"
 
 def test_prepared_cache_key_is_stable_then_invalidates_exact_file_identity(tmp_path):
   path = tmp_path / "model.gguf"; path.write_bytes(b"one")
   identity={"target_id":"x","backend":"METAL","arch":"a","subgroup_size":32,"resolved_target_hash":"h"}
   payload=_metal_payload(identity); payload["exact_gguf"]={"workload":{"model_hash":"a"*64},"path":str(path)}
-  adapter=provider.MetalAdapter(); first=adapter._prepared_key(payload); assert first==adapter._prepared_key(payload)
+  adapter=provider.DeviceAdapter(); first=adapter._prepared_key(payload); assert first==adapter._prepared_key(payload)
   path.write_bytes(b"two-size")
   assert first != adapter._prepared_key(payload)
 
 def test_prepared_cache_builds_once_and_reuses_same_object(monkeypatch):
   identity={"target_id":"x","backend":"METAL","arch":"a","subgroup_size":32,"resolved_target_hash":"h"}
-  payload=_metal_payload(identity); adapter=provider.MetalAdapter(); builds=[]; fake=object()
-  monkeypatch.setattr(provider.MetalAdapter, "_build_prepared", lambda _self, _payload: (builds.append(1) or fake))
+  payload=_metal_payload(identity); adapter=provider.DeviceAdapter(); builds=[]; fake=object()
+  monkeypatch.setattr(provider.DeviceAdapter, "_build_prepared", lambda _self, _payload: (builds.append(1) or fake))
   assert adapter._prepared(payload) is fake and adapter._prepared(payload) is fake and len(builds)==1
 
 

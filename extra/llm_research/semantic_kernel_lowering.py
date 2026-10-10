@@ -110,6 +110,13 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
     return q4k_g3_lanemap_gemv_kernel(parameters["rows"], parameters["k"], lanes=parameters["lanes"],
       epilogue=Q4KGEMVEpilogue(parameters["epilogue"]), load_style=parameters["load_style"])
+  if family == "q6_coop_gemv.v1":
+    required = {"rows", "k", "row_tile", "accumulators"}
+    if set(parameters) != required or not all(isinstance(parameters[x], int) and not isinstance(parameters[x], bool) for x in required):
+      raise ValueError("q6_coop_gemv.v1 parameters are invalid")
+    from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, q6k_spec_for_role
+    return emit_q6k_gemv_kernel(q6k_spec_for_role(parameters["rows"], parameters["k"], row_tile=parameters["row_tile"],
+                                                  reduction="in_kernel", accumulators=parameters["accumulators"]))
   if family == "q4_w1w3.v1":
     required = {"rows", "k", "load_style", "store_fp16"}
     if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad") or not isinstance(parameters["store_fp16"], bool):
