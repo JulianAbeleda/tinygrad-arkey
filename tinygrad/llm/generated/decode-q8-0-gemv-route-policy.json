@@ -1,7 +1,7 @@
 {
   "schema": "boltbeam.route_policy.v1",
   "route": "decode_q8_0_gemv",
-  "description": "PENDING MEASUREMENT",
+  "description": "Generic block-quant decode GEMV (Q8_0 promoted; Q5_0/Q4_0 layouts exist, not promoted). Kernel emitted from (rows, k), the block layout and device facts; admitted per weight by BlockQuantGEMVRouteSpec.validate. Evidence: docs/task_workflow/output/nv-q8-0-gemv-route-result-20261010.md. RTX 5090 in-model (BoltBeam, ctx 128): Qwen3.8-27B-Q4_K_M 2.95 -> 18.96 tok/s (288 Q8_0 linears), Qwen3-0.6B-Q8_0 150.56 -> 362.26 tok/s (197), Qwen3-8B-Q4_K_M 241.46 -> 241.73 (0 installed, census identical, logits bitwise). Logits: argmax equal, max |dlogit| <= 6.6e-4 of step max. PROMOTED for NV sm_120.",
   "formats": [
     "Q8_0"
   ],
