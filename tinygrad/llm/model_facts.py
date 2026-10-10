@@ -121,7 +121,7 @@ def bind_module_program_tensor_facts(module:Any) -> None:
   fact = getattr(module, "_program_tensor_fact", None)
   if not isinstance(fact, TensorFact): return
   if (weight := getattr(module, "weight", None)) is not None: bind_program_tensor_fact(weight, fact, alias="weight")
-  for storage_name, tensor_name in (("q4k_storage", "words"), ("q6k_storage", "halfs")):
+  for storage_name, tensor_name in (("q4k_storage", "words"), ("q6k_storage", "halfs"), ("block_quant_storage", "halfs")):
     storage = getattr(module, storage_name, None)
     if storage is not None and (packed := getattr(storage, tensor_name, None)) is not None:
       bind_program_tensor_fact(packed, fact, alias="packed")
