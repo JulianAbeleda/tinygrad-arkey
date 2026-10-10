@@ -431,6 +431,20 @@ class DeviceAdapter:
       self._exact_models[key] = entry
     return bind_exact_gguf_workload(workload, path, model=entry.model)
 
+  def _exact_raw(self, exact: Mapping[str, Any]):
+    """The recorded tensor's packed bytes, read from the verified GGUF at the offset its header gives."""
+    import numpy as np
+    from pathlib import Path
+    path = Path(exact["path"]).resolve()
+    entry = self._exact_models[(str(path), str(exact["workload"].get("model_hash")))]
+    name = exact["workload"]["semantic_identity"]["tensor_name"]
+    meta = entry.model.metadata
+    row = next(r for r in meta["tensor_infos"] if r[0] == name)
+    _name, dims, typ, off = row
+    block = 144 if int(typ) == 12 else 210
+    count = int(np.prod(dims)) // 256 * block
+    return np.fromfile(path, dtype=np.uint8, count=count, offset=meta["data_start"] + off)
+
   def _prepared(self, payload: Mapping[str, Any]):
     """Campaign cache wrapper; the builder owns no identity policy."""
     cache_key = self._prepared_key(payload)
@@ -465,47 +479,24 @@ class DeviceAdapter:
       try: binding = self._exact_binding(exact)
       except (OSError, ValueError) as exc: raise ProtocolError("identity_mismatch", "exact GGUF binding failed", details={"reason":str(exc)}) from exc
       rows, k, m = shape["n"], shape["k"], shape["m"]
-      if binding.weight.shape != (rows, k) or binding.activation.shape != (m, k):
+      if tuple(binding.weight.shape) != (rows, k) or tuple(binding.activation.shape) != (m, k):
         raise ProtocolError("identity_mismatch", "exact binding does not match candidate shape")
-      weights, activation, raw = binding.weight.to(dev), binding.activation.to(dev), None
+      # the recorded tensor's own packed bytes, as the model's decode reads them; never a dequantized copy
+      exact_raw = self._exact_raw(exact)
     else:
       rows, k, m = int(fixture.get("n", min(shape["n"], 256))), int(fixture.get("k", min(shape["k"], 256))), int(fixture.get("m", 1))
     if exact is None: k -= k % 256
     elif k % 256: raise ProtocolError("identity_mismatch", "exact packed K must be divisible by 256")
     if not k: raise ProtocolError("admission_rejected", "representative packed tile requires k >= 256")
     block_bytes, typ = (144, GGML_Q4_K) if fmt == "Q4_K" else (210, GGML_Q6_K)
-    if exact is not None and payload.get("candidate_geometry") is not None:
-      # Not addressed by this wiring: the exact_gguf branch binds a fully dequantized
-      # `state_dict` tensor (tinygrad/llm/gguf.py:175 -> ggml_data_to_tensor), which never carries
-      # a PARAM of the packed storage dtype the warmstart discriminator matches on (see
-      # _geometry_warmstart's docstring). Fail closed rather than silently falling back to a
-      # decline with no diagnostic.
-      raise ProtocolError("unsupported_plan", "candidate_geometry is only wired for the fixture_shape path, not exact_gguf")
     from tinygrad.codegen.opt.postrange import warmstart_candidate_state
     # Installed and restored for exactly this one compile -- a leaked global would silently
     # contaminate every other candidate this worker process compiles afterward.
     warm_opts, warm_contexts, warm_transform = _geometry_warmstart(payload, candidate, workload, fmt, m, rows, k)
     with warmstart_candidate_state(warm_opts, warm_contexts):
-      if exact is not None:
-        output = activation @ weights.T
-        linear = output.schedule_linear()
-        if len(linear.src) != 1: raise ProtocolError("provider_failure", "exact bound output must schedule exactly one program")
-        call = linear.src[0]; sink = call.src[0].replace(arg=replace(call.src[0].arg, opts_to_apply=None if opts is None else tuple(opts)))
-        program = to_program(sink, Device[dev].renderer)
-        prepared = PreparedWorkload(output, raw, call.replace(src=(program, *call.src[1:])), program, (m, rows, k, block_bytes), rows, k, activation, weights, binding.packed_source_bytes)
-        self._prepared_cache[cache_key] = prepared; return prepared
-      import numpy as np
-      # Vectorized host fixture avoids a multi-million-element Python list for
-      # real decode roles (for example 12288x4096) while retaining deterministic
-      # nonzero GGUF payload bytes.
-      raw_bytes = (1 + np.arange(rows*k//256*block_bytes, dtype=np.uint32) % 13).astype(np.uint8)
-      d_bytes = np.array([0.01], dtype=np.float16).view(np.uint8).tolist()
-      dmin_bytes = np.array([0.005], dtype=np.float16).view(np.uint8).tolist()
-      for block in range(rows*k//256):
-        base = block*block_bytes
-        raw_bytes[base:base+2] = d_bytes
-        if fmt == "Q4_K": raw_bytes[base+2:base+4] = dmin_bytes
-        else: raw_bytes[base+208:base+210] = d_bytes
+      # the exact path uses the recorded tensor's packed bytes; the fixture path deterministic finite GGUF blocks
+      from extra.llm_research import decode_emitter_space as space
+      raw_bytes = exact_raw if exact is not None else space.fixture_bytes(fmt, rows, k)
       raw = Tensor(raw_bytes, dtype=dtypes.uint8, device=dev).realize()
       if warm_transform is not None:
         # The generic ggml_data_to_tensor dequant (below) fully unpacks Q4_K/Q6_K into float32
@@ -535,16 +526,21 @@ class DeviceAdapter:
       self._prepared_cache[cache_key] = prepared; return prepared
 
   def _build_emitter(self, payload: Mapping[str, Any], candidate: Mapping[str, Any], cache_key: str, dev: str):
-    """One decode emitter at the role's exact shape: the fork's registered lowering, deterministic GGUF bytes."""
+    """One decode emitter at the role's exact shape: the fork's registered lowering, on the recorded tensor's packed
+    bytes (exact_gguf) or deterministic fixture bytes."""
     from extra.llm_research import decode_emitter_space as space
     from tinygrad.codegen import to_program
     from tinygrad.device import Device
     workload = candidate["workload"]; shape = workload["shape"]
-    if payload.get("exact_gguf") is not None: raise ProtocolError("unsupported_plan", "emitter plans run on the fixture bytes, not exact_gguf")
+    raw = None
+    if (exact := payload.get("exact_gguf")) is not None:
+      try: self._exact_binding(exact); raw = self._exact_raw(exact)
+      except (OSError, ValueError, KeyError, StopIteration) as exc:
+        raise ProtocolError("identity_mismatch", "exact GGUF binding failed", details={"reason": str(exc)}) from exc
     if shape["m"] != 1: raise ProtocolError("unsupported_plan", "decode emitters are one-token GEMVs (m == 1)")
     rows, k = shape["n"], shape["k"]
     if k % 256: raise ProtocolError("identity_mismatch", "packed K must be divisible by 256")
-    try: output, words, x, raw, block = space.build(candidate, dev)
+    try: output, words, x, raw, block = space.build(candidate, dev, raw)
     except (ValueError, AssertionError) as exc:
       raise ProtocolError("unsupported_plan", f"the emitter refused this geometry: {exc}") from exc
     linear = output.schedule_linear()
@@ -555,7 +551,7 @@ class DeviceAdapter:
       raise ProtocolError("provider_failure", f"the emitter did not compile: {type(exc).__name__}: {exc}",
                           details={"stage": "compile"}) from exc
     prepared = PreparedWorkload(output, words, call.replace(src=(program, *call.src[1:])), program, (1, rows, k, block), rows, k,
-                                x, None, raw.nbytes)
+                                x, raw, raw.nbytes)
     self._prepared_cache[cache_key] = prepared; return prepared
 
   def capability(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -601,7 +597,7 @@ class DeviceAdapter:
     from extra.llm_research import decode_emitter_space as space
     _, rows, k, block = prepared.geometry
     got = prepared.call.src[1].buffer.ensure_allocated().numpy().reshape(-1)[:rows]
-    raw = space.fixture_bytes("Q4_K" if block == 144 else "Q6_K", rows, k)
+    raw = prepared.weight  # the packed bytes the emitter read: the recorded tensor's, or the fixture's
     weights = (q4_k_reference if block == 144 else q6_k_reference)(Tensor(raw), rows * k).numpy().reshape(rows, k)
     oracle = weights.astype(np.float32) @ space.fixture_activation(k).astype(np.float32)
     evidence = {"representative_role_shape": {"m": 1, "n": rows, "k": k}, "oracle": "canonical packed reference + numpy matmul",
@@ -621,6 +617,7 @@ class DeviceAdapter:
                 for f in space.FAMILIES] if EMITTER_PLAN_KIND in kinds else []
     return {"provider_revision": _revision(), "target": facts, "supported_plan_kinds": kinds,
             "decode_binding": decode, "decode_emitters": emitters,
+            "single_subgroup_families": sorted(f["family"] for f in emitters if f.get("threads_within_subgroup")),
             "compiler_transforms": [op.name for op in __import__("tinygrad.codegen.opt", fromlist=["OptOps"]).OptOps],
             "limitations": ["graph entry timing is non-authoritative", "no model execution or route promotion"]}
 

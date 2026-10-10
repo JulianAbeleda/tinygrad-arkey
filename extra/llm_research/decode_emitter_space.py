@@ -94,7 +94,7 @@ def installed_row(family:EmitterFamily, backend:str | None, architecture:str | N
   return _row(tile * _POS_LANES, tile, 2)
 
 
-def build(candidate:Mapping[str, Any], device:str):
+def build(candidate:Mapping[str, Any], device:str, raw=None):
   """The exact-shape program for one emitter candidate: (output, words, x, call inputs) on `device`, with
   deterministic GGUF bytes. The caller schedules output to get the one program."""
   import numpy as np
@@ -108,7 +108,8 @@ def build(candidate:Mapping[str, Any], device:str):
   rows, k = int(workload["shape"]["n"]), int(workload["shape"]["k"])
   emitter = build_registered_llm_emitter(family.family, family.parameters(schedule, rows, k))
   block = 144 if family.quant == "Q4_K" else 210
-  raw = fixture_bytes(family.quant, rows, k)
+  raw = fixture_bytes(family.quant, rows, k) if raw is None else raw
+  if raw.nbytes != rows * k // 256 * block: raise ValueError(f"{raw.nbytes} weight bytes are not {rows}x{k} {family.quant}")
   storage = dtypes.uint32 if family.storage == "uint32" else dtypes.uint16
   words = Tensor(raw.view(np.uint32 if family.storage == "uint32" else np.uint16), dtype=storage, device=device).realize()
   x = Tensor(fixture_activation(k), dtype=dtypes.float16, device=device).realize()
