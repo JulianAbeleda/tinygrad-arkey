@@ -43,7 +43,7 @@ def validate_four_warp(rows:int, k:int, warps_per_row:int=WARPS_PER_ROW) -> None
 
 def validate_shape(rows:int, k:int) -> None:
   """The shape authority the loader's route gate asks: the emitter's real limits. The shapes the route was measured
-  at live in its record (decode-q6k-v-four-warp-fp16-geometry-route-policy.json, measured_shapes)."""
+  at live in its record (decode-q6k-v-four-warp-fp16-geometry-route-policy.json, measured_models)."""
   validate_four_warp(rows, k)
 
 

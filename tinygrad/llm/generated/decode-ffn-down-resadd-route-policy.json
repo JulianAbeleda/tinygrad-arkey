@@ -5,5 +5,5 @@
   "promoted_targets": [
     {"backend": "NV", "architecture": "sm_120"}
   ],
-  "measured_shapes": [{"dim": 4096, "hidden_dim": 12288}]
+  "measured_models": [{"dim": 4096, "hidden_dim": 12288}]
 }

@@ -736,19 +736,19 @@ def route_policy_file(route:str) -> str:
   return route.replace("_", "-") + "-route-policy.json"
 
 @functools.lru_cache(maxsize=None)
-def route_measured_shapes(route:str, directory:pathlib.Path|None=None, field:str="measured_shapes") -> tuple[dict[str, Any], ...]|None:
+def route_measured_shapes(route:str, directory:pathlib.Path|None=None, field:str="measured_models") -> tuple[dict[str, Any], ...]|None:
   """The shapes a promotion record says the route was measured at, or None when the record names none (the kernel's
-  validate is then the only shape rule). "measured_shapes" holds model facts (dim, hidden_dim, heads, vocab, blocks),
+  validate is then the only shape rule). "measured_models" holds model facts (dim, hidden_dim, heads, vocab, blocks),
   read by the loader's gate; "measured_gemv_shapes" holds one GEMV's rows and k, read at a call site."""
   path = (directory or _GENERATED_DIR) / route_policy_file(route)
   if not path.is_file(): return None
   shapes = json.loads(path.read_text()).get(field)
   if shapes is None: return None
   if not isinstance(shapes, list) or not all(isinstance(s, dict) and s for s in shapes):
-    raise ValueError(f"{path}: measured_shapes must be a list of non-empty objects")
+    raise ValueError(f"{path}: {field} must be a list of non-empty objects")
   return tuple(dict(s) for s in shapes)
 
-def shape_measured(route:str, facts:Mapping[str, Any], directory:pathlib.Path|None=None, field:str="measured_shapes") -> bool:
+def shape_measured(route:str, facts:Mapping[str, Any], directory:pathlib.Path|None=None, field:str="measured_models") -> bool:
   """Was the route measured at these shape facts? True when its record names no measured shapes; otherwise one
   entry must name only facts given here, each equal. Widening a route is a new measurement, recorded as data."""
   shapes = route_measured_shapes(route, directory, field)

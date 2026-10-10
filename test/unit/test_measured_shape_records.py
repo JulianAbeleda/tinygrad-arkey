@@ -1,4 +1,4 @@
-"""Shape pins moved from code into promotion records (measured_shapes / measured_gemv_shapes / measured_topologies /
+"""Shape pins moved from code into promotion records (measured_models / measured_gemv_shapes / measured_topologies /
 measured_leases); the emitters validate only their real limits."""
 import json
 import pytest
@@ -21,7 +21,10 @@ def test_records_hold_the_measured_shapes():
   lease = mrp.measured_entry("decode_shared_q8_attention", {"num_blocks": 36, "dim": 4096}, field="measured_leases")
   assert lease["blocks"] == list(range(1, 13)) + list(range(14, 19)) + [25]
   assert mrp.measured_entry("decode_shared_q8_attention", {"num_blocks": 64, "dim": 5120}, field="measured_leases") is None
-  assert mrp.shape_measured("decode_norm_fusion", {"dim": 1})  # a record without measured shapes keeps validate as its only rule
+  assert mrp.shape_measured("decode_norm_fusion", {"dim": 1})
+  # a record whose evidence list is named measured_shapes (rows, k) is not a model gate: Q8_0 stays admitted
+  gate = mrp.DecodeRouteShapeGate(mrp.DecodeRouteShapes(5120, 17408, 24, 4, 256, 248320, 1e-6), {})
+  assert gate.admit("decode_q8_0_gemv", True)  # a record without measured shapes keeps validate as its only rule
 
 
 def test_the_gate_refuses_an_unmeasured_shape_after_validate_passes():
