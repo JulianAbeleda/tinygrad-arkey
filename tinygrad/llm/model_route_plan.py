@@ -830,7 +830,8 @@ def _default(name:str, quant:str, role:str, rows:int, cols:int) -> tuple[int, tu
     # Every Q6_K weight the decode reads as a GEMV: parts=1 binds the coop emitter wherever its validate admits the
     # shape (rows % row_tile), else the partial path. The one exception is a measured placement, kept: attn_v reads
     # with 4 parts (the 8B's ffn_down/lm_head/attn_v census and timing are unchanged by this rule).
-    if family == "attn_kv" and _module_path(name).rsplit(".", 1)[-1] == "attn_v": return 4, ("LOCAL:0:32",)
+    # (never more parts than k has blocks: the partial validate refuses an empty part)
+    if family == "attn_kv" and _module_path(name).rsplit(".", 1)[-1] == "attn_v": return min(4, cols // 256), ("LOCAL:0:32",)
     # rollback (TINYGRAD_Q6K_ROLE_AGNOSTIC_DISABLE=1): the role list before 2026-10-10, ffn_down and lm_head only
     if getenv("TINYGRAD_Q6K_ROLE_AGNOSTIC_DISABLE", 0) and not (family in ("ffn_down", "lm_head") or name == "output.weight"): return None
     return 1, ("LOCAL:0:64",)

@@ -7,7 +7,7 @@ from tinygrad import Device, Tensor, UOp, dtypes, getenv
 from tinygrad.llm.decode_kernels import (DecodeRMSNormSpec, Q4KGEMVEpilogue, Q6K_POS_EXTENT, decode_kv_rope_store_kernel,
   decode_rmsnorm_warps_per_row, emit_q6k_gemv_kernel, block_quant_gemv_geometry, emit_q6k_vocab_scalar_reduce_kernel, q4k_g3_lanemap_gemv_kernel,
   q4k_g3_lanemap_gemv_w1w3_kernel, q6k_coop_row_tile_for_target, q6k_spec_for_role, q6k_vocab_scalar_reduce_eligible)
-from tinygrad.llm.flash_decode_attention import (FLASH_DECODE_G4, FLASH_DECODE_G5, flash_decode_route_for, llama_vec_wide_shape_refusal, FlashDecodeCapability, FlashDecodeRouteConfig,
+from tinygrad.llm.flash_decode_attention import (COMBINE_REGISTER_WEIGHTS_MAX_SPLITS, FLASH_DECODE_G4, FLASH_DECODE_G5, flash_decode_route_for, llama_vec_wide_shape_refusal, FlashDecodeCapability, FlashDecodeRouteConfig,
   flash_decode_capability_from_renderer, flash_decode_coarse_split_override, flash_decode_live_split_block_tile,
   flash_decode_target_promoted, flash_fused_gmax_combine_kernel, flash_vec_llama_score_pv_kernel)
 from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOutput, KernelProgram,
@@ -845,13 +845,16 @@ def _flash_llama_vec_wide_installed_admitted(promoted:bool, geom:dict, max_conte
   # an unmeasured S=MAXC/128 launch merely because the arithmetic divides evenly.
   return promoted and not geom and max_context in (768, 1024)
 
-def _flash_combine_register_weights_admitted(wide_promoted:bool, geom:dict, getenv_fn=getenv) -> bool:
+def _flash_combine_register_weights_admitted(wide_promoted:bool, geom:dict, getenv_fn=getenv,
+                                              split_count:int|None=None) -> bool:
   """Install register-broadcast weights only with the qualified wide route.
 
   Explicit research geometry remains authoritative.  The environment switch
-  is a load-time rollback used by the installed reverse bracket.
+  is a load-time rollback used by the installed reverse bracket.  A split count
+  above one weight per warp lane falls back to shared-memory weights.
   """
   if getenv_fn("TINYGRAD_FLASH_COMBINE_REGISTER_DISABLE", 0): return False
+  if split_count is not None and split_count > COMBINE_REGISTER_WEIGHTS_MAX_SPLITS: return False
   return bool(geom.get("combine_register_weights", False)) or wide_promoted
 
 
@@ -916,7 +919,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
                                                 promoted=(wide_promoted or wide_policy) and not successor_prefetch_groups and not output_q8 and not output_q8_fine, token_bound=geom.get("token_bound"),
                                                 wide_q_f32=bool(geom.get("wide_q_f32", False)),
                                                 combine_register_weights=_flash_combine_register_weights_admitted(
-                                                  wide_promoted, geom),
+                                                  wide_promoted, geom, split_count=split_size),
                                                 query_group_size=int(geom.get("query_group_size", 1)),
                                                 successor_weights=successor_weights,
                                                 successor_prefetch_groups=successor_prefetch_groups,output_q8=output_q8,

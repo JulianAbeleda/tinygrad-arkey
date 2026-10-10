@@ -16,6 +16,22 @@ from tinygrad.dtype import AddrSpace, DType
 from tinygrad.helpers import cdiv, ceildiv
 from tinygrad.llm.qk_layout import Q4_K_BLOCK_ELEMS, Q4K_WORDS_PER_BLOCK, Q6_K, Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q4_0, Q5_0, Q5_K, Q8_0, QuantFormat
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
+from tinygrad.renderer import Renderer
+
+# Launch limits a kernel spec validates against when it has no device fact. Both are fail-closed portable ceilings:
+# a block is at most 1024 threads on every backend this fork launches on (CUDA, HIP, Metal), and static shared memory
+# is at most tinygrad's generic Renderer.shared_max. A spec may take a device's own (smaller or larger) fact instead.
+PORTABLE_MAX_THREADS_PER_BLOCK = 1024
+PORTABLE_STATIC_SHARED_BYTES = Renderer.shared_max
+
+
+def validate_launch_limits(name:str, threads:int, shared_bytes:int=0, *, max_threads:int|None=None,
+                           shared_max:int|None=None) -> None:
+  """Refuse a launch the device cannot run: too many threads per block, or more static shared memory than it has."""
+  tmax = PORTABLE_MAX_THREADS_PER_BLOCK if max_threads is None else max_threads
+  smax = PORTABLE_STATIC_SHARED_BYTES if shared_max is None else shared_max
+  if threads > tmax: raise ValueError(f"{name} needs {threads} threads per block, above the launch limit {tmax}")
+  if shared_bytes > smax: raise ValueError(f"{name} stages {shared_bytes} bytes of shared memory, above the limit {smax}")
 
 
 # Q4_K G3 selected lane-map lowering.
@@ -220,8 +236,13 @@ class Q4KGEMVEpilogue:
       raise ValueError(f"unsupported Q4K GEMV epilogue kind {self.kind!r}")
 
 
+def _validate_quad_x_stage(name:str, k:int, threads:int, shared_max:int|None) -> None:
+  """The quad spellings stage all of x (k fp16 halfs) in shared memory."""
+  validate_launch_limits(name, threads, k * 2, shared_max=shared_max)
+
+
 def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None,
-                               load_style:str="scalar"):
+                               load_style:str="scalar", shared_max:int|None=None):
   """Lower the search-selected G3 lane map. When epilogue is None, the emitted UOps are byte-identical
   to the legacy kernel. Fused variants get NEW kernel names (e.g. q4k_g3_lanemap_gemv_epi_resadd_...)
   so legacy hashes are untouched (pg3 guarantee).
@@ -253,6 +274,7 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMV
       raise ValueError(f"quad Q4 GEMV style requires rows % {rows_per_block} == 0, got rows={rows}")
     name = f"q4k_g3_lanemap_gemv_quad{epi.kernel_suffix}_{rows}_{k}"
     blocks, threads = rows // rows_per_block, rows_per_block * lanes_per_row
+    _validate_quad_x_stage(name, k, threads, shared_max)
 
     def kernel(out:UOp, words:UOp, x:UOp, *extra:UOp) -> UOp:
       block = UOp.special(blocks, "gidx0")
@@ -407,7 +429,8 @@ def _f16x4_lane(xidx:UOp, nib:int) -> UOp:
   return UOp(Ops.CUSTOMI, dtypes.float32, (xidx,), arg=f"float((*((half4*){{0}})).{'xyzw'[nib]})")
 
 
-def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", store_fp16:bool = False):
+def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", store_fp16:bool = False,
+                                    shared_max:int|None = None):
   """Fused gate/up (w1+w3) decode GEMV: ONE 12288-row kernel computes
   `out[r] = silu(dot(gate_row_r, x)) * dot(up_row_r, x)` from two weight buffers, replacing the
   gate GEMV + silu elementwise + up GEMV + mul elementwise chain (72 -> 36 kernels/token).
@@ -445,6 +468,7 @@ def q4k_g3_lanemap_gemv_w1w3_kernel(rows:int, k:int, load_style:str = "scalar", 
     if lm.blocks_per_group != 4:
       raise ValueError(f"quad w1w3 style requires blocks_per_group == 4 (k_blocks % 4 == 0), got {lm.blocks_per_group}")
     name = f"q4k_g3_lanemap_gemv_w1w3qv_{rows}_{k}"
+    _validate_quad_x_stage(name, k, rows_per_block * lanes_per_row, shared_max)
   elif load_style == "scalar":
     rows_per_block, lanes_per_row = 1, WARP
     name = f"q4k_g3_lanemap_gemv_w1w3fused16_{rows}_{k}" if store_fp16 else f"q4k_g3_lanemap_gemv_w1w3fused_{rows}_{k}"
@@ -588,28 +612,35 @@ def q6k_coop_row_tile_for_target(backend: str | None, architecture: str | None) 
 def _f16_half(half:UOp) -> UOp: return half.cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
 
 
-def _q6k_byte(halfs:UOp, base:UOp, byte_idx:UOp|int) -> UOp:
+def _gated(idx:UOp, gate:UOp|None) -> UOp:
+  """An index the load may only read where `gate` holds: a gated load, so a masked lane issues no read."""
+  return idx if gate is None else idx.valid(gate)
+
+
+def _q6k_byte(halfs:UOp, base:UOp, byte_idx:UOp|int, gate:UOp|None=None) -> UOp:
   idx = UOp.const(dtypes.int32, byte_idx) if isinstance(byte_idx, int) else byte_idx
-  return halfs[base + idx//2].rshift((idx%2)*8).bitwise_and(0xff)
+  return halfs[_gated(base + idx//2, gate)].rshift((idx%2)*8).bitwise_and(0xff)
 
 
 def _i8(byte:UOp) -> UOp: return byte.cast(dtypes.uint8).bitcast(dtypes.int8).cast(dtypes.float32)
 
 
-def _q6k_weight(halfs:UOp, base:UOp, grp:int, pos:UOp) -> UOp:
+def _q6k_weight(halfs:UOp, base:UOp, grp:int, pos:UOp, gate:UOp|None=None) -> UOp:
   half, pgrp = grp // 8, grp % 8
   ql_byte_idx, ql_shift = half*64 + (pgrp%4)*16 + pos, 4 if pgrp >= 4 else 0
   qh_byte_idx, qh_shift = 128 + half*32 + (pgrp%2)*16 + pos, (pgrp//2) * 2
-  ql = _q6k_byte(halfs, base, ql_byte_idx).rshift(ql_shift).bitwise_and(0xf)
-  qh = _q6k_byte(halfs, base, qh_byte_idx).rshift(qh_shift).bitwise_and(0x3).lshift(4)
+  ql = _q6k_byte(halfs, base, ql_byte_idx, gate).rshift(ql_shift).bitwise_and(0xf)
+  qh = _q6k_byte(halfs, base, qh_byte_idx, gate).rshift(qh_shift).bitwise_and(0x3).lshift(4)
   q = ql.bitwise_or(qh).cast(dtypes.float32) - UOp.const(dtypes.float32, 32.0)
-  return _f16_half(halfs[base + 104]) * q * _i8(_q6k_byte(halfs, base, 192 + grp))
+  return _f16_half(halfs[_gated(base + 104, gate)]) * q * _i8(_q6k_byte(halfs, base, 192 + grp, gate))
 
 
-def _q6k_block_dot(halfs:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
+def _q6k_block_dot(halfs:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp, gate:UOp|None=None) -> UOp:
+  """One Q6_K block's dot with x. With `gate`, every weight and x load is gated by it (a masked block reads nothing)."""
   contrib = UOp.const(dtypes.float32, 0.0)
   for grp in range(16):
-    contrib = contrib + _q6k_weight(halfs, base, grp, pos) * x[x_block*Q6_K_BLOCK_ELEMS + grp*16 + pos].cast(dtypes.float32)
+    xv = x[_gated(x_block*Q6_K_BLOCK_ELEMS + grp*16 + pos, gate)].cast(dtypes.float32)
+    contrib = contrib + _q6k_weight(halfs, base, grp, pos, gate) * xv
   return contrib
 
 
@@ -821,6 +852,8 @@ class Q6KGEMVRouteSpec:
     else:
       if self.pos_axis != "reduce": raise ValueError("partial route requires pos_axis=reduce")
       if self.parts < 1: raise ValueError(f"partial route requires parts>=1, got {self.parts}")
+      if self.parts > self.k_blocks:
+        raise ValueError(f"partial route requires parts({self.parts}) <= k_blocks({self.k_blocks}): a part with no block is wasted work")
 
   def to_json(self) -> dict[str, Any]:
     return {"quant": self.quant.name, "rows": self.rows, "k": self.k, "role": self.role, "route_family": self.route_family,
@@ -945,7 +978,10 @@ def _emit_q6k_partial(spec:Q6KGEMVRouteSpec):
     pos = UOp.range(Q6K_POS_EXTENT, 3, axis_type=AxisType.REDUCE)
     blk = part * blocks_per_part + blk_part
     base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
-    contrib = (blk < k_blocks).where(_q6k_block_dot(halfs, x, base, blk, pos), UOp.const(dtypes.float32, 0.0))
+    # the last part may run past k_blocks: gate the loads themselves (a masked block issues no read),
+    # then zero its value
+    in_k = blk < k_blocks
+    contrib = in_k.where(_q6k_block_dot(halfs, x, base, blk, pos, in_k), UOp.const(dtypes.float32, 0.0))
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
     return acc.end(row, part, blk_part).sink(arg=KernelInfo(name=name, opts_to_apply=opts))

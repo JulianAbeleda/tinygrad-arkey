@@ -14,6 +14,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.decode_kernels import PORTABLE_MAX_THREADS_PER_BLOCK
 from tinygrad.codegen.late.warp_reduce import _staged_shfl, _warp_reduce_sum_staged, warp_reduce_max
 from tinygrad.llm.kernel_program import (DeclaredTypedOutput, KernelProgram, KernelProgramProvenance, OutputSpec,
                                          TypedLayout, execute_promoted_program)
@@ -294,6 +295,11 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   return kernel
 
 
+# The register-weight combine keeps split s's weight in warp lane s (warp_lane = lane & 31), so it holds at most one
+# warp's worth of splits.
+COMBINE_REGISTER_WEIGHTS_MAX_SPLITS = 32
+
+
 def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None, output_fp16:bool=False,
                                     lane_width:int=32, register_weights:bool=False, successor_prefetch_groups:int=0,
                                     output_q8:bool=False, output_q8_fine:bool=False):
@@ -301,6 +307,9 @@ def flash_fused_gmax_combine_kernel(Hd:int, Hq:int, S:int, stride:int|None=None,
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%{LANES}==0, got {Hd}")
   NW, stride = _ceildiv(S, LANES), S if stride is None else stride
 
+  if register_weights and S > COMBINE_REGISTER_WEIGHTS_MAX_SPLITS:
+    # one split weight per warp lane, read back by lane index: a 33rd split would wrap onto lane 0
+    raise ValueError(f"register combine weights need S <= {COMBINE_REGISTER_WEIGHTS_MAX_SPLITS} (one per warp lane), got S={S}")
   if successor_prefetch_groups not in (0, 1, 2, 4):
     raise ValueError(f"successor prefetch groups must be one of 0/1/2/4, got {successor_prefetch_groups}")
   if output_q8 and output_q8_fine: raise ValueError("only one combine-owned Q8 representation may be selected")
@@ -741,7 +750,10 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
         tj = NKQ - v_pipeline_tail + ti
         ttok = split * COLS_PER_CHUNK + warp_in_head * COLS_PER_WARP + group * NKQ + tj
         tbase = (kvh * MAXC + ttok) * Hd if separate_kv else ((Hkv + kvh) * MAXC + ttok) * Hd
-        tlanes = packed_half8(vptr, tbase + glane * 8) + packed_half8(vptr, tbase + 64 + glane * 8)
+        # V at a slot >= Tc was never written (the cache is Tensor.empty): a stale NaN times a zero
+        # probability is NaN, so the V load itself is gated, not only its probability.
+        tvalid = ttok < Tc
+        tlanes = packed_half8(vptr, tbase + glane * 8, tvalid) + packed_half8(vptr, tbase + 64 + glane * 8, tvalid)
         vstores.extend(vtail[ti * R + di].store(tlanes[di]) for di in range(R))
       vtail_ready = UOp.group(*vstores)
 
@@ -816,7 +828,7 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
           vptr = cache_v if separate_kv else cache
           assert vptr is not None
           vbasei = (kvh * MAXC + tokvi) * Hd if separate_kv else ((Hkv + kvh) * MAXC + tokvi) * Hd
-          vgatei = validvi if guard_kv_loads else None
+          vgatei = validvi  # V is always gated: an unwritten slot may hold NaN (K is masked by its score)
           vlanesi = packed_half8(vptr, vbasei + glane * 8, vgatei) + packed_half8(vptr, vbasei + 64 + glane * 8, vgatei)
         ai = UOp.group(*[acc[di].store(acc.after(stage)[di] + probi * vlanesi[di].cast(_F32)) for di in range(R)])
         stage = den.after(ai, stage)[0].store(den.after(stage)[0] + probi)
@@ -834,13 +846,13 @@ def flash_vec_llama_score_pv_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, S:int, Tc
           vptr = cache_v if separate_kv else cache
           assert vptr is not None
           vbase = (kvh * MAXC + tokv) * Hd if separate_kv else ((Hkv + kvh) * MAXC + tokv) * Hd
-          vgate = validv if guard_kv_loads else None
+          vgate = validv  # V is always gated: an unwritten slot may hold NaN (K is masked by its score)
           vlanes = packed_half8(vptr, vbase + glane * 8, vgate) + packed_half8(vptr, vbase + 64 + glane * 8, vgate)
         a2 = UOp.group(*[acc[di].store(acc.after(jv)[di] + prob * vlanes[di].cast(_F32)) for di in range(R)])
       else:
         dv = UOp.range(R, 12)
         vdim = glane * R + dv
-        vval = cache[1, 0, kvh, tokv, vdim].cast(_F32)
+        vval = validv.where(cache[1, 0, kvh, tokv, vdim].cast(_F32), _fc(0.0))  # an unwritten slot may hold NaN
         a2 = acc[dv].store(acc.after(jv)[dv] + prob * vval).end(dv)
       # mu (the running-max store) is a loop-carried register too; order it inside the chunk so it is not
       # hoisted out as a dead tail and the next chunk reads the updated softmax frame.
@@ -970,6 +982,13 @@ class FlashDecodeTileSpec:
   reduce_structure: str = "staged"
   dot_pair_width: int = 2
   target: str|None = None
+  max_threads: int = PORTABLE_MAX_THREADS_PER_BLOCK
+
+  @property
+  def threads(self) -> int:
+    """Threads per block the tile launches: lane_width lanes per warp, one warp per grouped query head (or `warps`)."""
+    qg = self.query_group_size if self.query_group_size is not None else self.Hq // max(self.Hkv, 1)
+    return self.lane_width * (qg if self.warps is None else self.warps)
 
   def validate(self) -> None:
     if min(self.Hq, self.Hd, self.Hkv, self.MAXC) <= 0: raise ValueError("Hq, Hd, Hkv and MAXC must be positive")
@@ -993,6 +1012,9 @@ class FlashDecodeTileSpec:
                        f"got Hd={self.Hd}")
     if self.reduce_structure not in {"staged", "inline"}:
       raise ValueError(f"reduce_structure must be one of 'staged','inline', got {self.reduce_structure!r}")
+    if self.threads > self.max_threads:
+      raise ValueError(f"tile needs {self.threads} threads per block (lane_width {self.lane_width} x "
+                       f"{self.threads // self.lane_width} warps), above the launch limit {self.max_threads}")
     self.geometry.validate()
 
   @property
@@ -1086,6 +1108,11 @@ class FlashDecodeAttentionSpec:
     return (self.tile.kernel_name,) if self.combine is None else (self.tile.kernel_name, self.combine.kernel_name)
 
 
+def launch_thread_limit(device_max_threads:int|None) -> int:
+  """The block-thread limit a flash spec validates against: the device's own fact when known, never above the portable cap."""
+  return PORTABLE_MAX_THREADS_PER_BLOCK if not device_max_threads else min(PORTABLE_MAX_THREADS_PER_BLOCK, int(device_max_threads))
+
+
 def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *, staging:str="KV_BOTH",
                                     fused_combine:bool=True, quant:bool=False, rope:bool=False,
                                     combine_stride:int|None=None, query_group_size:int|None=None,
@@ -1093,11 +1120,11 @@ def describe_flash_decode_attention(Hq:int, Hd:int, Hkv:int, MAXC:int, S:int, *,
                                     score_group_width:int|None=None, warps:int|None=None,
                                     reduce_structure:str="staged", dot_pair_width:int=2,
                                     combine_lane_width:int|None=None,
-                                    combine_fp16:bool=False) -> FlashDecodeAttentionSpec:
+                                    combine_fp16:bool=False, max_threads:int|None=None) -> FlashDecodeAttentionSpec:
   tile = FlashDecodeTileSpec(Hq, Hd, Hkv, MAXC, S, staging, quant, rope, query_group_size=query_group_size,
                              stage_width=stage_width, token_block=token_block, lane_width=lane_width,
                              score_group_width=score_group_width, warps=warps, reduce_structure=reduce_structure,
-                             dot_pair_width=dot_pair_width)
+                             dot_pair_width=dot_pair_width, max_threads=launch_thread_limit(max_threads))
   return FlashDecodeAttentionSpec(
     tile,
     FlashCombineSpec(Hd, Hq, S, combine_stride, output_fp16=combine_fp16,
@@ -1237,7 +1264,7 @@ FLASH_DECODE_G5 = FlashDecodeRouteConfig("attention_decode.flash_live_split_g5",
 FLASH_DECODE_TUNED: tuple[FlashDecodeRouteConfig, ...] = (FLASH_DECODE_G4, FLASH_DECODE_G5)
 
 
-def flash_decode_route_for(Hq:int, Hkv:int, Hd:int) -> FlashDecodeRouteConfig|None:
+def flash_decode_route_for(Hq:int, Hkv:int, Hd:int, max_threads:int|None=None) -> FlashDecodeRouteConfig|None:
   """The live-split flash decode route for this attention shape, or None when the kernel refuses it.
 
   The shape comes from the model (query heads, KV heads, head dim). A measured tuning is used when one exists for
@@ -1250,17 +1277,18 @@ def flash_decode_route_for(Hq:int, Hkv:int, Hd:int) -> FlashDecodeRouteConfig|No
                                    kv_heads=Hkv, head_dim=Hd, staging=FLASH_DECODE_G4.staging)
   try:
     describe_flash_decode_attention(Hq, Hd, Hkv, route.split_size, route.split_size, staging=route.staging,
-                                    query_group_size=route.query_group_size, stage_width=route.stage_width).validate()
+                                    query_group_size=route.query_group_size, stage_width=route.stage_width,
+                                    max_threads=max_threads).validate()
   except (ValueError, ZeroDivisionError): return None
   return route
 
 
-def flash_decode_route_refusal(Hq:int, Hkv:int, Hd:int) -> str|None:
+def flash_decode_route_refusal(Hq:int, Hkv:int, Hd:int, max_threads:int|None=None) -> str|None:
   """Why the live-split kernel refuses this attention shape (its own validate's words), or None."""
-  if flash_decode_route_for(Hq, Hkv, Hd) is not None: return None
+  if flash_decode_route_for(Hq, Hkv, Hd, max_threads) is not None: return None
   try:
     describe_flash_decode_attention(Hq, Hd, Hkv, FLASH_DECODE_G4.split_size, FLASH_DECODE_G4.split_size,
-                                    staging=FLASH_DECODE_G4.staging).validate()
+                                    staging=FLASH_DECODE_G4.staging, max_threads=max_threads).validate()
   except (ValueError, ZeroDivisionError) as exc: return str(exc)
   return "the live-split kernel refuses this shape"
 

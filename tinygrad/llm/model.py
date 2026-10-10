@@ -2463,7 +2463,7 @@ class Transformer:
     # (flash_decode_route_for); a refused shape keeps config.flash_decode False and decodes on plain attention.
     from tinygrad.llm.decode_routes import _FlashDecodeCandidate
     from tinygrad.llm.flash_decode_attention import flash_decode_route_for
-    _flash_route = flash_decode_route_for(n_heads, n_kv_heads, head_dim)
+    _flash_route = flash_decode_route_for(n_heads, n_kv_heads, head_dim, _device_facts.capabilities.max_workgroup_threads)
     _flash_decode = _flash_route is not None and \
       _FlashDecodeCandidate(_flash_route).bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
     # Warm the fused-attention spec-target cache at load time (decode's resolve-once pattern,

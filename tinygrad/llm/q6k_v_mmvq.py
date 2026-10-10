@@ -17,7 +17,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.late.warp_reduce import _staged_shfl
 from tinygrad.dtype import AddrSpace
 from tinygrad.llm.decode_kernels import (
-  Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q6K_POS_EXTENT, _q6k_block_dot)
+  Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK, Q6K_POS_EXTENT, _q6k_block_dot, validate_launch_limits)
 from tinygrad.llm.kernel_program import (
   KernelProgram, KernelProgramProvenance, OutputSpec, execute_promoted_program)
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
@@ -31,11 +31,12 @@ SUBS = WARP // POS  # each warp holds WARP // POS sub-groups of POS lanes, one b
 
 def validate_four_warp(rows:int, k:int, warps_per_row:int=WARPS_PER_ROW) -> None:
   """The real limits of the four-warp Q6_K emitter: whole 256-element blocks, split evenly over the row's warps and
-  each warp's sub-groups, and a CTA of warps_per_row warps."""
+  each warp's sub-groups, and a CTA of warps_per_row warps within the block-thread limit."""
   if not isinstance(rows, int) or rows < 1: raise ValueError(f"Q6_K four-warp GEMV requires rows >= 1, got {rows!r}")
   if not isinstance(warps_per_row, int) or warps_per_row < 1: raise ValueError(f"warps_per_row must be >= 1, got {warps_per_row!r}")
   if not isinstance(k, int) or k < Q6_K_BLOCK_ELEMS or k % Q6_K_BLOCK_ELEMS:
     raise ValueError(f"Q6_K four-warp GEMV requires k a positive multiple of {Q6_K_BLOCK_ELEMS}, got {k!r}")
+  validate_launch_limits("Q6_K four-warp GEMV", warps_per_row * WARP)
   if (k // Q6_K_BLOCK_ELEMS) % (warps_per_row * SUBS):
     raise ValueError(f"Q6_K four-warp GEMV splits k's {k // Q6_K_BLOCK_ELEMS} blocks over {warps_per_row} warps x {SUBS} "
                      f"sub-groups: they must divide evenly")
