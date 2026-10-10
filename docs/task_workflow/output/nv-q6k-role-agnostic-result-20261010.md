@@ -40,3 +40,34 @@ Not bitwise: the coop kernel sums d*sc*q*x per lane then a warp ladder; the cont
 
 - Correctness: argmax equal on every step, max |dlogit| <= 1e-3 of the step max: PASS.
 - Wall vs the +7% decode bar: +193%.
+- The 8B ran both arms anyway (queued before the GPU budget was cut): 239.17 / 239.22 tok/s, 418 launches/token
+  in each, logits bitwise equal (16 steps). It confirms the CPU route-plan check.
+
+## Run + search on the 27B after (BoltBeam `kinds-27b-p2`, search on)
+
+Run: 17.1 ms per token (58.3 tok/s, a separate run from the A/B above); the limit is 10.8 ms (92.8 tok/s); 63% of the
+limit; 6.4 ms per token lost.
+
+Where the token goes (in-model, per token):
+
+| role | ms | floor ms | lost ms | calls |
+|---|---|---|---|---|
+| ffn_gate_up Q4_K 17408x5120 | 4.26 | 3.79 | 0.47 | 64 |
+| ffn_down Q4_K 5120x17408 | 2.66 | 1.90 | 0.76 | 64 |
+| lm_head Q6_K 248320x5120 | 0.65 | 0.62 | 0.04 | 1 |
+| attn_qo Q6_K 5120x6144 (attn_output) | 0.34 | 0.24 | 0.09 | 16 |
+| not attributed (Q8_0 GEMVs, attention, recurrent blocks, norms) | 10.45 | | | |
+
+The Q8_0 GEMVs (about 6 ms per token by kernel name) are in "not attributed": their programs carry no semantic
+identity in the capture yet (open; see the BoltBeam report).
+
+Search (BubbleBeam proposed / FutureSight rejected / BoltBeam reproduced; BoltBeam's fastest less the floor against
+the model's own per call):
+
+| role | proposed | rejected | reproduced | BoltBeam us | model us | verdict |
+|---|---|---|---|---|---|---|
+| ffn_gate_up Q4_K | 5 | 0 | 1 | 31.2 | 66.6 (fused w1w3) | not reproduced |
+| ffn_down Q4_K | 5 | 0 | 1 | 38.5 | 41.5 | not reproduced |
+| attn_qo Q6_K 5120x6144 | 11 | 3 | 2 | 20.1 | 21.1 | not reproduced |
+| lm_head Q6_K | 11 | 3 | 5 | 672.0 | 654.8 | reproduced; the model's own kernel is faster |
+| Q8_0 roles (6) | 27-32 | 0 | 0 | 3.7-41.1 | n/a | not reproduced |
