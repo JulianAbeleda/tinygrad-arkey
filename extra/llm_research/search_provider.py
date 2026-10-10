@@ -615,9 +615,13 @@ class DeviceAdapter:
     labels = ["out", *inputs]
     facts = self._facts(payload)
     alone = []
-    for node, out, node_inputs in fusions.unfused(family, rows, k, raws, dev, facts.get("backend"), facts.get("architecture")):
-      node_call, node_program = self._one_program(out, dev, f"the {node} kernel alone")
-      alone.append({"node": node, "call": node_call, "program": node_program, "labels": _identity_labels(node_call, node_program, node_inputs)})
+    try: nodes = fusions.unfused(family, rows, k, raws, dev, facts.get("backend"), facts.get("architecture"))
+    except (ValueError, AssertionError) as exc: nodes, alone = [], [{"node": None, "error": f"the unfused kernels did not build: {exc}"}]
+    for node, out, node_inputs in nodes:
+      try:
+        node_call, node_program = self._one_program(out, dev, f"the {node} kernel alone")
+        alone.append({"node": node, "call": node_call, "program": node_program, "labels": _identity_labels(node_call, node_program, node_inputs)})
+      except ProtocolError as exc: alone.append({"node": node, "error": str(exc)})
     weight_bytes = sum(int(r.nbytes) for r in raws.values())
     prepared = PreparedWorkload(output, None, call, program, (1, rows, k, fusions.BLOCK_BYTES[family.quant]), rows, k,
                                 inputs.get(next(o for o in family.operands if o.startswith("value:")), None), None, weight_bytes,
@@ -790,7 +794,8 @@ class DeviceAdapter:
             "kernel": _kernel_record(prepared, ast, source, local)}
     if prepared.fusion is not None:
       result["fusion"] = {"covers": [n.name for n in prepared.fusion["family"].covers],
-                          "unfused": [{"node": node["node"], "kernel": _kernel_record(prepared, node["program"], node["program"].src[3].arg,
+                          "unfused": [{"node": node["node"], "error": node["error"]} if "error" in node else
+                                      {"node": node["node"], "kernel": _kernel_record(prepared, node["program"], node["program"].src[3].arg,
                                        tuple(node["program"].arg.local_size or (1, 1, 1)), node["call"], node["labels"])}
                                       for node in prepared.fusion["unfused"]]}
     self._compile_cache[cache_key] = result

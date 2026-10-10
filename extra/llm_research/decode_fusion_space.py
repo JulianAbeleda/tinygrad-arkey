@@ -29,6 +29,7 @@ BLOCK_BYTES = {"Q4_K": 144, "Q6_K": 210}
 ELEMENTWISE: dict[str, Callable[..., Any]] = {
   "silu_mul": lambda a, b: a.silu() * b,
   "add": lambda a, b: a + b,
+  "cast_fp16": lambda a: a.cast(__import__("tinygrad").dtypes.float16),
 }
 
 
@@ -49,11 +50,12 @@ class FusionFamily:
   value_dtypes: Mapping[str, str]  # the dtype of each value operand the fused kernel reads ("half" or "float")
   rows: tuple[dict[str, Any], ...]
   one_subgroup: bool
-  parameters: Callable[[Mapping[str, Any], int, int], dict[str, Any]]  # schedule, rows, k -> registry parameters
+  emitter: Callable[[Mapping[str, Any], int, int], Any]  # schedule, rows, k -> the kernel function (its validate runs here)
+  out_dtype: str = "float"
 
   def to_json(self) -> dict[str, Any]:
     return {"family": self.family, "covers": [n.name for n in self.covers], "quant": self.quant, "storage": self.storage,
-            "operands": list(self.operands), "value_dtypes": dict(self.value_dtypes), "out_dtype": "float",
+            "operands": list(self.operands), "value_dtypes": dict(self.value_dtypes), "out_dtype": self.out_dtype,
             "nodes": [{"node": n.name, "op": n.op, "reads": list(n.reads)} for n in self.covers],
             "coupled_rows": [dict(r) for r in self.rows], "threads_within_subgroup": self.one_subgroup}
 
@@ -61,24 +63,81 @@ class FusionFamily:
     return tuple(o.split(":", 1)[1] for o in self.operands if o.startswith("weight:"))
 
 
-def _w1w3_parameters(schedule:Mapping[str, Any], rows:int, k:int) -> dict[str, Any]:
+def _registered(family:str, parameters:Callable[[Mapping[str, Any], int, int], dict[str, Any]]):
+  """An emitter from the campaign's registry (semantic_kernel_lowering.build_registered_llm_emitter)."""
+  def emit(schedule:Mapping[str, Any], rows:int, k:int):
+    from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
+    return build_registered_llm_emitter(family, parameters(schedule, rows, k))
+  return emit
+
+
+def _q4_style(schedule:Mapping[str, Any]) -> str:
+  """The Q4_K G3 load style a row spells: b's load width, a's memory, and the rows and threads of a block."""
   width, space = schedule["memory"]["b"]["vector_width"], schedule["memory"]["a"]["space"]
   style = {(4, "global"): "scalar", (16, "global"): "vector", (16, "shared"): "quad"}.get((width, space))
-  if style is None: raise ValueError(f"no fused gate/up load style reads b {width} wide with a in {space} memory")
+  if style is None: raise ValueError(f"no Q4_K G3 load style reads b {width} wide with a in {space} memory")
   tile, threads = schedule["tile"]["n"], schedule["launch"]["threads"]
-  if (style == "quad") != ((tile, threads) == (16, 128)) or (style != "quad" and (tile, threads) != (1, 32)):
+  if (tile, threads) != ((16, 128) if style == "quad" else (1, 32)):
     raise ValueError(f"the {style} style does not run {tile} rows a block on {threads} threads")
-  return {"rows": rows, "k": k, "load_style": style, "store_fp16": False}
+  return style
 
+
+def _w1w3(schedule:Mapping[str, Any], rows:int, k:int) -> dict[str, Any]:
+  return {"rows": rows, "k": k, "load_style": _q4_style(schedule), "store_fp16": False}
+
+
+def _q4_epilogue(kind:str):
+  def emit(schedule:Mapping[str, Any], rows:int, k:int):
+    from tinygrad.llm.decode_kernels import Q4KGEMVEpilogue, q4k_g3_lanemap_gemv_kernel
+    return q4k_g3_lanemap_gemv_kernel(rows, k, epilogue=Q4KGEMVEpilogue(kind), load_style=_q4_style(schedule))
+  return emit
+
+
+def _q6_resadd(schedule:Mapping[str, Any], rows:int, k:int):
+  from tinygrad.llm.decode_kernels import emit_q6k_gemv_kernel, q6k_spec_for_role
+  tile, threads = schedule["tile"]["n"], schedule["launch"]["threads"]
+  if threads != tile * single._POS_LANES: raise ValueError(f"the Q6_K coop emitter runs {single._POS_LANES} lanes per row")
+  return emit_q6k_gemv_kernel(q6k_spec_for_role(rows, k, row_tile=tile, reduction="in_kernel", epilogue="ffn_down_resadd",
+                                                accumulators=schedule["pipeline"]["stage_count"]))
+
+
+_Q4_ROWS = (single._row(32, 1, 4), single._row(32, 1, 16), single._row(128, 16, 16, "shared"))
+_Q6_ROWS = tuple(single._row(t * single._POS_LANES, t, 2, stages=a) for t in (1, 2, 4) for a in (1, 2, 4))
+_DOWN = Node("ffn_down", "gemv", ("weight:ffn_down", "value:silu_mul"))
+_FFN_RESIDUAL = Node("ffn_residual", "add", ("value:attn_residual", "value:ffn_down"))
 
 FAMILIES: tuple[FusionFamily, ...] = (
+  # gate and up read the same input; silu(gate) * up is written once
   FusionFamily("q4_w1w3.v1",
                (Node("ffn_gate", "gemv", ("weight:ffn_gate", "value:ffn_norm")),
                 Node("ffn_up", "gemv", ("weight:ffn_up", "value:ffn_norm")),
                 Node("silu_mul", "silu_mul", ("value:ffn_gate", "value:ffn_up"))),
                "Q4_K", "uint32", ("weight:ffn_gate", "weight:ffn_up", "value:ffn_norm"), {"ffn_norm": "half"},
-               (single._row(32, 1, 4), single._row(32, 1, 16), single._row(128, 16, 16, "shared")), False,
-               _w1w3_parameters),
+               _Q4_ROWS, False, _registered("q4_w1w3.v1", _w1w3)),
+  # the epilogues of Q4KGEMVEpilogue: the down projection plus the residual add
+  FusionFamily("q4_g3_ffn_down_resadd.v1", (_DOWN, _FFN_RESIDUAL), "Q4_K", "uint32",
+               ("weight:ffn_down", "value:silu_mul", "value:attn_residual"), {"silu_mul": "half", "attn_residual": "float"},
+               _Q4_ROWS, False, _q4_epilogue("ffn_down_resadd")),
+  # silu(gate) * up as the down projection's prelude, then the residual add
+  FusionFamily("q4_g3_ffn_down_fused.v1", (Node("silu_mul", "silu_mul", ("value:ffn_gate", "value:ffn_up")), _DOWN, _FFN_RESIDUAL),
+               "Q4_K", "uint32", ("weight:ffn_down", "value:ffn_gate", "value:ffn_up", "value:attn_residual"),
+               {"ffn_gate": "float", "ffn_up": "float", "attn_residual": "float"}, _Q4_ROWS[:1], False, _q4_epilogue("ffn_down_fused")),
+  # the output projection plus the residual add
+  FusionFamily("q4_g3_o_resadd.v1",
+               (Node("attention_o", "gemv", ("weight:attention_o", "value:attention")),
+                Node("attn_residual", "add", ("value:residual", "value:attention_o"))),
+               "Q4_K", "uint32", ("weight:attention_o", "value:attention", "value:residual"), {"attention": "half", "residual": "float"},
+               _Q4_ROWS, False, _q4_epilogue("residual_add")),
+  # the value projection stored as the fp16 cache writes it
+  FusionFamily("q4_g3_v_f16cast.v1",
+               (Node("attention_v", "gemv", ("weight:attention_v", "value:attn_norm")),
+                Node("v_cache_store", "cast_fp16", ("value:attention_v",))),
+               "Q4_K", "uint32", ("weight:attention_v", "value:attn_norm"), {"attn_norm": "half"},
+               _Q4_ROWS, False, _q4_epilogue("fp16_cast"), out_dtype="half"),
+  # the Q6_K coop down projection plus the residual add
+  FusionFamily("q6_coop_ffn_down_resadd.v1", (_DOWN, _FFN_RESIDUAL), "Q6_K", "uint16",
+               ("weight:ffn_down", "value:silu_mul", "value:attn_residual"), {"silu_mul": "half", "attn_residual": "float"},
+               _Q6_ROWS, True, _q6_resadd),
 )
 BY_FAMILY = {f.family: f for f in FAMILIES}
 
@@ -90,9 +149,8 @@ def family_of(candidate:Mapping[str, Any]) -> FusionFamily | None:
 def validate(family:FusionFamily, row:Mapping[str, Any], rows:int, k:int) -> str | None:
   """None when the emitter accepts this shape and row, else its own words. The emitter is constructed (its validate
   runs), not compiled."""
-  from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
   schedule = _schedule(row)
-  try: build_registered_llm_emitter(family.family, family.parameters(schedule, rows, k))
+  try: family.emitter(schedule, rows, k)
   except (ValueError, AssertionError) as exc: return str(exc) or type(exc).__name__
   return None
 
@@ -142,8 +200,7 @@ def values(names:tuple[str, ...], sizes:Mapping[str, int], dtypes_by_name:Mappin
 def build(family:FusionFamily, schedule:Mapping[str, Any], rows:int, k:int, raws:Mapping[str, Any], device:str):
   """The fused program at the anchor's exact shape: (output tensor, the operand tensors by name in parameter order)."""
   from tinygrad import Tensor, dtypes
-  from extra.llm_research.semantic_kernel_lowering import build_registered_llm_emitter
-  emitter = build_registered_llm_emitter(family.family, family.parameters(schedule, rows, k))
+  emitter = family.emitter(schedule, rows, k)
   inputs = {}
   vals = values(tuple(o.split(":", 1)[1] for o in family.operands if o.startswith("value:")),
                 _value_sizes(family, rows, k), family.value_dtypes, device)
@@ -154,17 +211,22 @@ def build(family:FusionFamily, schedule:Mapping[str, Any], rows:int, k:int, raws
       if raw.nbytes != rows * k // 256 * BLOCK_BYTES[family.quant]: raise ValueError(f"{raw.nbytes} weight bytes are not {rows}x{k} {family.quant}")
       inputs[operand] = _words(raw, family.storage, device)
     else: inputs[operand] = vals[name]
-  out = Tensor.empty(rows, dtype=dtypes.float32, device=device).uop_program(*inputs.values(), fxn=emitter)[0]
+  out_dtype = dtypes.float16 if family.out_dtype == "half" else dtypes.float32
+  out = Tensor.empty(rows, dtype=out_dtype, device=device).uop_program(*inputs.values(), fxn=emitter)[0]
   return out, inputs
 
 
 def _value_sizes(family:FusionFamily, rows:int, k:int) -> dict[str, int]:
-  """The length of every value a node of the family reads: a gemv's input is k long, everything else is a row."""
+  """The length of every value a node of the family reads: a gemv reads k values; the last node writes one per row; an
+  elementwise node reads values as long as its own output, which is as long as what its consumer reads."""
+  length = {family.covers[-1].name: rows}
   sizes: dict[str, int] = {}
-  for node in family.covers:
+  for node in reversed(family.covers):
     for read in node.reads:
       kind, name = read.split(":", 1)
-      if kind == "value": sizes[name] = k if node.op == "gemv" else rows
+      if kind == "value":
+        sizes[name] = k if node.op == "gemv" else length.get(node.name, rows)
+        length.setdefault(name, sizes[name])
   return sizes
 
 
@@ -212,6 +274,8 @@ def reference(family:FusionFamily, rows:int, k:int, raws:Mapping[str, Any], vals
     elif node.op == "silu_mul":
       a, b = (got[r.split(":", 1)[1]] for r in node.reads)
       got[node.name] = a / (1.0 + np.exp(-a)) * b
+    elif node.op == "cast_fp16":
+      got[node.name] = got[node.reads[0].split(":", 1)[1]].astype(np.float16).astype(np.float32)
     else:
       a, b = (got[r.split(":", 1)[1]] for r in node.reads)
       got[node.name] = a + b
