@@ -103,16 +103,23 @@ def _q8_fine_d(packed, group):
   """Scale-per-16 research packet: 1024 int8x4 words plus 256 d|sum half2 metadata words."""
   return packed[_Q8_PACKS+group].bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
 
-def _emit_q8_provider():
-  """One-program llama-CUDA Q8_1 provider: 1024 int8x4 packets + 128 d|s half2 metadata.
+def validate_q8_provider(k:int) -> None:
+  """The Q8_1 provider's real limit: whole 32-element groups (QK8_1)."""
+  if not isinstance(k, int) or k < 32 or k % 32: raise ValueError(f"the Q8_1 provider needs k a positive multiple of 32, got {k!r}")
+
+
+def _emit_q8_provider(k:int=_K):
+  """One-program llama-CUDA Q8_1 provider: k/4 int8x4 packets + k/32 d|s half2 metadata (1024 + 128 at k=4096).
 
   CUDA's live MMQ provider stores ``d`` and the raw fp32 input sum as fp16
   (`make_half2(d, sum)` in ggml-cuda/quantize.cu). This differs from the CPU
   model-file reference's `sum(qs)*d`; decode parity must match the live CUDA
   construction. Computing both here avoids the four-program Tensor graph.
   """
+  validate_q8_provider(k)
+  groups, packs = k // 32, k // 4
   def kernel(out, x):
-    group=UOp.range(_Q8_GROUPS,0)
+    group=UOp.range(groups,0)
     # The provider accepts the promised producer view directly. Baseline Q4/Q6
     # consumers round fp32 norm output to fp16 at their prelude; do that same
     # round in-kernel so no cast/contiguous adapter is needed at the function
@@ -138,14 +145,16 @@ def _emit_q8_provider():
     xsum=sums[0]
     dh=d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
     sh=xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
-    mstore=out[_Q8_PACKS+group].store(dh.bitwise_or(sh.lshift(16)))
-    return UOp.group(*qstores,mstore).end(group).sink(arg=KernelInfo(name="q8_1_llama_provider_4096",opts_to_apply=()))
+    mstore=out[packs+group].store(dh.bitwise_or(sh.lshift(16)))
+    return UOp.group(*qstores,mstore).end(group).sink(arg=KernelInfo(name=f"q8_1_llama_provider_{k}",opts_to_apply=()))
   return kernel
 
-def _emit_q8_provider_warp32():
+def _emit_q8_provider_warp32(k:int=_K):
   """Warp-owned Q8_1 provider: one 32-lane CTA per activation group."""
+  validate_q8_provider(k)
+  groups, packs = k // 32, k // 4
   def kernel(out, x):
-    group = UOp.special(_Q8_GROUPS, "gidx0")
+    group = UOp.special(groups, "gidx0")
     lane = UOp.special(32, "lidx0")
     rounded = x[group*32+lane].cast(dtypes.float16).cast(dtypes.float32)
     amax = warp_reduce_max(rounded.abs(), lane, 32, 100)
@@ -163,8 +172,8 @@ def _emit_q8_provider_warp32():
       stores.append(out[group*8+pack].store(word, lane.eq(0)))
     dh = d.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
     sh = xsum.cast(dtypes.float16).bitcast(dtypes.uint16).cast(dtypes.uint32)
-    stores.append(out[_Q8_PACKS+group].store(dh.bitwise_or(sh.lshift(16)), lane.eq(0)))
-    return UOp.group(*stores).sink(arg=KernelInfo(name="q8_1_llama_provider_warp32_4096", opts_to_apply=()))
+    stores.append(out[packs+group].store(dh.bitwise_or(sh.lshift(16)), lane.eq(0)))
+    return UOp.group(*stores).sink(arg=KernelInfo(name=f"q8_1_llama_provider_warp32_{k}", opts_to_apply=()))
   return kernel
 
 def _emit_rmsnorm_q8_provider(spec:ReduceOutputSpec, x_dtype, weight_dtype):

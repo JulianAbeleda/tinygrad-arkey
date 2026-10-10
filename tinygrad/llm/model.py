@@ -52,6 +52,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OU
                                            prefill_activation, prefill_output, prefill_scratch, runtime_activation,
                                            runtime_input, runtime_output,
                                            runtime_persistent, runtime_scratch)
+from tinygrad.llm.model_route_plan import measured_entry, shape_measured
 from tinygrad.llm.model_route_plan import (DecodeRouteShapeGate, DecodeRouteShapes, build_model_route_plan, decode_norm_fusion_promoted,
   decode_q4k_epilogue_fusion_promoted, decode_q4k_epilogue_resadd_promoted, decode_q4k_w1w3_fusion_promoted,
   decode_q4k_w1w3_fp16_store_promoted, decode_q4k_gate_up_four_warp_vector_promoted,
@@ -2527,15 +2528,17 @@ class Transformer:
     _norm_cap = qk_primitive_capability_from_device_facts(_device_facts)
     # Dense S8 Flash load-schedule promotion.  The substrate itself is generic
     # (capture-scoped launch bounds + graph cap), while admission remains at
-    # the exact topology qualified at token wall.  Quantization is deliberately
+    # the topologies qualified at token wall: the record's measured_topologies
+    # (decode-flash-llama-vec-wide-route-policy.json), data, not constants here.  Quantization is deliberately
     # absent from this predicate: the Flash graph shape, not the weight format,
     # owns the contract.  MoE stays closed until it receives its own lifecycle
     # qualification.
     model._decode_flash_load_schedule_promoted = bool(
       decode_flash_llama_vec_wide_promoted((_norm_cap.backend, _norm_cap.architecture)) and
       not getenv("TINYGRAD_FLASH_LOAD_SCHEDULE_DISABLE", 0) and config.num_experts == 0 and
-      config.num_blocks == 36 and config.n_heads == 32 and config.n_kv_heads == 8 and
-      config.head_dim == 128 and config.max_context >= 513)
+      shape_measured("decode_flash_llama_vec_wide", {"num_blocks": config.num_blocks, "n_heads": config.n_heads,
+                     "n_kv_heads": config.n_kv_heads, "head_dim": config.head_dim}, field="measured_topologies") and
+      config.max_context >= 513)
     # Active-horizon selection is inseparable from explicit capture placement:
     # without both S6/S8 ping-pong pairs prewarmed, the Tc=769 lazy capture
     # spike erases the steady-state saving. `generate` therefore activates
@@ -2868,8 +2871,10 @@ class Transformer:
       # shared_q8_attention_call revalidates the real Q4/Q4/{Q4,Q6} tuple and REDUCE_OUTPUT
       # norm marker, returning None to the ordinary primitives on any miss.
       if model._decode_shared_q8_attention_promoted:
-        _SHARED_Q8_LEASE = tuple(range(1, 13)) + tuple(range(14, 19)) + (25,)
-        for _idx in _SHARED_Q8_LEASE:
+        # the booked lease is data: the record's measured_leases entry whose topology is this model's (none: no lease)
+        _lease = measured_entry("decode_shared_q8_attention", {"num_blocks": len(model.blk), "dim": config.dim},
+                                field="measured_leases")
+        for _idx in (_lease or {}).get("blocks", ()):
           if _idx >= len(model.blk): break
           _b = model.blk[_idx]
           _norm = getattr(_b, "attn_norm", None)

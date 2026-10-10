@@ -162,8 +162,7 @@ def q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(rows:int,k:int,store_fp16:bool=Fa
   # This is deliberately not a general RMSNorm lowering.  Its only admitted
   # lease has the exact NVIDIA decode FFN shape; widening it would silently
   # turn a measured experiment into a route selector.
-  if (rows,k) != (12288,4096): raise ValueError(f"rms-affine gate/up requires (12288,4096), got ({rows},{k})")
-  lm=Q4KGateUpLaneMap(k=k,n=rows); lm.validate()
+  lm=Q4KGateUpLaneMap(k=k,n=rows); lm.validate()  # the lane map's own limits; the route's measured shape is its lease's
   # The fp16 store spelling mirrors the landed fused16 variant
   # (q4k_g3_lanemap_gemv_w1w3fused16_*): the fused z is cast to fp16 in-kernel so
   # the graph's fp32->fp16 ffn-activation cast folds away (the control graph's
@@ -219,8 +218,6 @@ class Q4KGEMVEpilogue:
     if self.kind == "": return
     if self.kind not in ("residual_add", "ffn_down_fused", "ffn_down_resadd", "fp16_cast"):
       raise ValueError(f"unsupported Q4K GEMV epilogue kind {self.kind!r}")
-    if self.kind in ("ffn_down_fused", "ffn_down_resadd") and rows != 4096:
-      raise ValueError(f"{self.kind} epilogue requires rows=4096, got rows={rows}")
 
 
 def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP, epilogue:Q4KGEMVEpilogue|None=None,
@@ -806,7 +803,6 @@ class Q6KGEMVRouteSpec:
                        "l1-decode-plumbing-fusion-design-20260802.md section 6 class 9); use external_sum")
     if self.epilogue == "ffn_down_resadd":
       if self.reduction != "in_kernel": raise ValueError("ffn_down_resadd epilogue requires in_kernel reduction")
-      if self.rows != 4096: raise ValueError(f"ffn_down_resadd epilogue requires rows=4096, got rows={self.rows}")
     if self.epilogue == "vocab_top1":
       if self.reduction != "in_kernel": raise ValueError("vocab_top1 epilogue requires in_kernel reduction")
       if self.route_family != "q6k_coop": raise ValueError("vocab_top1 epilogue requires the coop route family")

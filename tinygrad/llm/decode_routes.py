@@ -14,6 +14,7 @@ from tinygrad.llm.kernel_program import (ActivationViewRequest, DeclaredTypedOut
                                          KernelProgramProvenance, OutputSpec, ResidualViewRequest, TypedLayout,
                                          TypedViewRequest, execute_promoted_program, execute_research_program)
 from tinygrad.llm.kernel_program import execute_research_program_outputs
+from tinygrad.llm.model_route_plan import shape_measured
 from tinygrad.llm.model_route_plan import (DecodeRouteShapes, decode_epilogue_fusion_promoted, decode_flash_combine_fusion_promoted,
                                            decode_flash_llama_vec_wide_promoted, decode_q6k_vocab_four_warp_fp16_promoted, decode_q8_0_gemv_formats,
                                            lease_forced)
@@ -162,7 +163,8 @@ class _Q4KDecodeCandidate:
         _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
         prog_inputs.append(_xv)
         prog_inputs.append(epi_inputs["residual"][:, 0, :].reshape(binding.N).cast(dtypes.float32))
-      elif route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")) and q4k_epi_admitted:
+      elif (route_role == "ffn_down" and all(k in epi_inputs for k in ("gate_out", "up_out", "normed_h")) and q4k_epi_admitted and
+            shape_measured("decode_q4k_epilogue_fusion", {"rows": binding.N, "k": binding.K}, field="measured_gemv_shapes")):
         epi_spec = Q4KGEMVEpilogue("ffn_down_fused")
         prog_inputs.append(epi_inputs["gate_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
         prog_inputs.append(epi_inputs["up_out"][:, 0, :].reshape(binding.K).cast(dtypes.float32))
@@ -342,20 +344,21 @@ def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, no
   consumer sees the same fp16 ABI as the control graph."""
   g_bind=Q4K_DECODE_CANDIDATE.bind(gate,raw_x,getattr(getattr(gate,"route_admission",None),"admitted",False))
   u_bind=Q4K_DECODE_CANDIDATE.bind(up,raw_x,getattr(getattr(up,"route_admission",None),"admitted",False))
-  if g_bind is None or u_bind is None or (g_bind.T,g_bind.K,g_bind.N)!=(1,4096,12288) or (u_bind.T,u_bind.K,u_bind.N)!=(1,4096,12288): return fallback()
-  if norm_weight.shape != (4096,) or norm_weight.dtype != dtypes.float16: return fallback()
+  if g_bind is None or u_bind is None or g_bind.T != 1 or (u_bind.T,u_bind.K,u_bind.N) != (g_bind.T,g_bind.K,g_bind.N): return fallback()
+  if norm_weight.shape != (g_bind.K,) or norm_weight.dtype != dtypes.float16: return fallback()
+  K, N = g_bind.K, g_bind.N
   from tinygrad.llm.decode_kernels import q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel
   from tinygrad.llm.kernel_program import execute_research_program
   gw=gate.q4k_storage.words.to(raw_x.device).contiguous() if gate.q4k_storage.mode == "q4_ondemand" else gate.q4k_storage.words.to(raw_x.device)
   uw=up.q4k_storage.words.to(raw_x.device).contiguous() if up.q4k_storage.mode == "q4_ondemand" else up.q4k_storage.words.to(raw_x.device)
-  xv=raw_x[:,0,:].reshape(4096).contiguous()
+  xv=raw_x[:,0,:].reshape(K).contiguous()
   # Bitwise-exact control scale (r_16_256 contract): the ordinary ffn-norm reduce
   # computes rsqrt(mean(h^2)+eps) on the RAW fp32 h.  Rounding h to fp16 first (the
   # old spelling) or using a `.sum()` association changes 2/4096 scale bits and
   # fails the exact-logits gate.
   scale=(raw_x.float().square().mean(-1,keepdim=True)+eps).rsqrt().reshape(1)
   out_dtype=dtypes.float16 if store_fp16 else dtypes.float32
-  typed_output=(DeclaredTypedOutput(TypedLayout(out_dtype,(12288,),(1,1,12288)),
+  typed_output=(DeclaredTypedOutput(TypedLayout(out_dtype,(N,),(1,1,N)),
                                     combine_fusion_admitted=False, epilogue_absorption_admitted=True)
                 if store_fp16 else None)
   # M1 raw-x typed-input opt-in: the raw fp32 h slot (slot 3) binds zero-copy to the
@@ -365,12 +368,12 @@ def q4k_gate_up_rms_affine_qualification_call(gate:Any, up:Any, raw_x:Tensor, no
   # cancelling the M1 -36 program fold.  The request is issued only here; any mismatch
   # keeps the flat-buffer ABI (byte-identical control).
   # Input tuple is (gate_words, up_words, raw_x, norm_weight, scale): raw_x is slot 2.
-  activation_input_views=(ActivationViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(4096,),route_role="ffn_norm"),)
+  activation_input_views=(ActivationViewRequest(slot=2,dtype=dtypes.float32,flat_shape=(K,),route_role="ffn_norm"),)
   program=KernelProgram(g_bind.route_id,f"{g_bind.candidate_id}.rms_affine_qualification",KernelProgramProvenance.RESEARCH_ONLY,
-    q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(12288,4096,store_fp16=store_fp16),
-    output_spec=OutputSpec((12288,),out_dtype,typed_output=typed_output),
+    q4k_g3_lanemap_gemv_w1w3_rms_affine_kernel(N,K,store_fp16=store_fp16),
+    output_spec=OutputSpec((N,),out_dtype,typed_output=typed_output),
     activation_input_views=activation_input_views)
-  return execute_research_program(None,gw,uw,xv,norm_weight.to(raw_x.device),scale,program=program).reshape(1,1,12288)
+  return execute_research_program(None,gw,uw,xv,norm_weight.to(raw_x.device),scale,program=program).reshape(1,1,N)
 
 
 def _kv_store_parts_view(v:Tensor) -> tuple[Tensor, int]:
@@ -471,11 +474,10 @@ class _Q6KDecodeCandidate:
       getattr(capability, "backend", None) is not None and getattr(capability, "architecture", None) is not None \
       else self.target
     target_tuple = (getattr(capability,"backend",None),getattr(capability,"architecture",None))
-    # Exact-shape Boltbeam-promoted vocabulary route. Small projections retain
-    # their existing policies: widening only wins once the compulsory stream is
-    # the 510 MB 151936x4096 LM head. The policy resolver owns rollback.
+    # Boltbeam-promoted vocabulary route, at the GEMV shapes its record measured (measured_gemv_shapes): widening
+    # only won once the compulsory stream was a large LM head. The policy resolver owns target and rollback.
     if (decode_q6k_vocab_four_warp_fp16_promoted(target_tuple) and route_role == "lm_head" and
-        binding.N == 151936 and binding.K == 4096 and str(x.device).startswith("NV")):
+        shape_measured("decode_q6k_vocab_four_warp_fp16", {"rows": binding.N, "k": binding.K}, field="measured_gemv_shapes")):
       emitter,ticket=lower_authorized_candidate(
         {"family":"q6_vocab_four_warp.v1","rows":binding.N,"k":binding.K},
         (("decode_q6k_vocab_four_warp_fp16","q6_vocab_four_warp_fp16"),))

@@ -7,5 +7,6 @@
       "backend": "NV",
       "architecture": "sm_120"
     }
-  ]
+  ],
+  "measured_topologies": [{"num_blocks": 36, "n_heads": 32, "n_kv_heads": 8, "head_dim": 128}]
 }

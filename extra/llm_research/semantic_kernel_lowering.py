@@ -99,10 +99,10 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     source_dtype = dtypes.float16 if parameters["source_dtype"] == "fp16" else dtypes.float32
     return emit_q8_provider(source_dtype, k=parameters["k"])
   if family == "shared_q8_provider.v1":
-    if set(parameters) != {"k", "source_dtype"} or parameters != {"k":4096, "source_dtype":"fp16"}:
+    if set(parameters) != {"k", "source_dtype"} or parameters["source_dtype"] != "fp16" or not isinstance(parameters["k"], int):
       raise ValueError("shared_q8_provider.v1 parameters are invalid")
     from tinygrad.llm.shared_q8_attention import _emit_q8_provider
-    return _emit_q8_provider()
+    return _emit_q8_provider(parameters["k"])  # the shape rule is validate_q8_provider
   if family == "q4_g3_gemv.v1":
     required = {"rows", "k", "lanes", "load_style", "epilogue"}
     if set(parameters) != required or parameters["load_style"] not in ("scalar", "vector", "quad"):
@@ -155,14 +155,20 @@ def build_registered_llm_emitter(family: str, parameters: dict[str, Any], bindin
     return emit_q6k_four_warp_fp16_direct(rows_per_block=parameters["rows_per_block"], packed_lanemap=parameters["packed_lanemap"],
       unroll_blocks=parameters["unroll_blocks"], split_weight_stream=parameters["split_weight_stream"])
   if family == "q6_v.v1":
-    if parameters: raise ValueError("q6_v.v1 takes no parameters")
+    if parameters and (set(parameters) != {"rows", "k"} or not all(isinstance(v, int) and not isinstance(v, bool) for v in parameters.values())):
+      raise ValueError("q6_v.v1 takes rows and k, or nothing (its measured attention-V shape)")
     from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
-    return emit_q6k_v_four_warp_fp16_direct()
+    return emit_q6k_v_four_warp_fp16_direct(**parameters)
+  if family == "q6_four_warp_gemv.v1":
+    if set(parameters) != {"rows", "k", "warps_per_row"} or not all(isinstance(v, int) and not isinstance(v, bool) for v in parameters.values()):
+      raise ValueError("q6_four_warp_gemv.v1 parameters are invalid")
+    from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
+    return emit_q6k_v_four_warp_fp16_direct(rows=parameters["rows"], k=parameters["k"], warps_per_row=parameters["warps_per_row"])
   if family == "q6_vocab_four_warp.v1":
-    if set(parameters) != {"rows", "k"} or parameters["rows"] != 151936 or parameters["k"] != 4096:
-      raise ValueError("q6_vocab_four_warp.v1 requires the promoted 151936x4096 shape")
+    if set(parameters) != {"rows", "k"} or not all(isinstance(v, int) and not isinstance(v, bool) for v in parameters.values()):
+      raise ValueError("q6_vocab_four_warp.v1 parameters are invalid")  # the shape rule is the emitter's validate
     from tinygrad.llm.q6k_v_mmvq import emit_q6k_v_four_warp_fp16_direct
-    return emit_q6k_v_four_warp_fp16_direct(rows=parameters["rows"],
+    return emit_q6k_v_four_warp_fp16_direct(rows=parameters["rows"], k=parameters["k"],
       kernel_name=f"q6k_vocab_four_warp_fp16_direct_{parameters['rows']}_{parameters['k']}")
   if family == "shared_q8_consumer.v1":
     required = {"rows", "block_count", "direct_output", "residual_add", "quant"}

@@ -7,5 +7,6 @@
       "backend": "NV",
       "architecture": "sm_120"
     }
-  ]
+  ],
+  "measured_leases": [{"num_blocks": 36, "dim": 4096, "blocks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 25], "why": "block 0 embedding boundary and block 13 precision boundary stay ordinary"}]
 }

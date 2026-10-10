@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, pathlib
+import functools, json, pathlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -729,6 +729,40 @@ class SkippedPromotion:
   @property
   def line(self) -> str: return f"{self.route}: {self.reason}; plain kernels used"
 
+_GENERATED_DIR = pathlib.Path(__file__).with_name("generated")
+
+def route_policy_file(route:str) -> str:
+  """decode_ffn_down_resadd -> decode-ffn-down-resadd-route-policy.json"""
+  return route.replace("_", "-") + "-route-policy.json"
+
+@functools.lru_cache(maxsize=None)
+def route_measured_shapes(route:str, directory:pathlib.Path|None=None, field:str="measured_shapes") -> tuple[dict[str, Any], ...]|None:
+  """The shapes a promotion record says the route was measured at, or None when the record names none (the kernel's
+  validate is then the only shape rule). "measured_shapes" holds model facts (dim, hidden_dim, heads, vocab, blocks),
+  read by the loader's gate; "measured_gemv_shapes" holds one GEMV's rows and k, read at a call site."""
+  path = (directory or _GENERATED_DIR) / route_policy_file(route)
+  if not path.is_file(): return None
+  shapes = json.loads(path.read_text()).get(field)
+  if shapes is None: return None
+  if not isinstance(shapes, list) or not all(isinstance(s, dict) and s for s in shapes):
+    raise ValueError(f"{path}: measured_shapes must be a list of non-empty objects")
+  return tuple(dict(s) for s in shapes)
+
+def shape_measured(route:str, facts:Mapping[str, Any], directory:pathlib.Path|None=None, field:str="measured_shapes") -> bool:
+  """Was the route measured at these shape facts? True when its record names no measured shapes; otherwise one
+  entry must name only facts given here, each equal. Widening a route is a new measurement, recorded as data."""
+  shapes = route_measured_shapes(route, directory, field)
+  if shapes is None: return True
+  return any(all(k in facts and facts[k] == v for k, v in s.items()) for s in shapes)
+
+def measured_entry(route:str, facts:Mapping[str, Any], *, field:str, directory:pathlib.Path|None=None) -> dict[str, Any]|None:
+  """The first entry of a record's measured list whose keys that are facts all equal the given facts (other keys are
+  the entry's payload, e.g. a lease's block list), or None."""
+  for entry in route_measured_shapes(route, directory, field) or ():
+    keys = [k for k in entry if k in facts]
+    if keys and all(facts[k] == entry[k] for k in keys): return entry
+  return None
+
 class DecodeRouteShapeGate:
   """ONE rule for every promoted decode route: the promotion record names the target; the kernel's own validate
   names the shape. `admit` keeps a record-promoted route only when its probe (DECODE_ROUTE_SHAPE_PROBES in
@@ -745,6 +779,11 @@ class DecodeRouteShapeGate:
       try: probe(self.shapes)
       except ValueError as e:
         self.skipped.append(SkippedPromotion(route, str(e))); ok = False
+    if ok:
+      facts = {k: getattr(self.shapes, k) for k in ("dim", "hidden_dim", "n_heads", "n_kv_heads", "head_dim", "vocab")}
+      if not shape_measured(route, facts):
+        self.skipped.append(SkippedPromotion(route, f"its record measured {route_measured_shapes(route)}, not this model's {facts}"))
+        ok = False
     self.decisions[route] = ok
     return ok
   def admitted(self, route:str) -> bool: return self.decisions.get(route, False)

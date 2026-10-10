@@ -26,12 +26,25 @@ from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 ROWS, K = 1024, 4096
 WARP, WARPS_PER_ROW, POS = 32, 4, Q6K_POS_EXTENT
 
+SUBS = WARP // POS  # each warp holds WARP // POS sub-groups of POS lanes, one block row-slice each
+
+
+def validate_four_warp(rows:int, k:int, warps_per_row:int=WARPS_PER_ROW) -> None:
+  """The real limits of the four-warp Q6_K emitter: whole 256-element blocks, split evenly over the row's warps and
+  each warp's sub-groups, and a CTA of warps_per_row warps."""
+  if not isinstance(rows, int) or rows < 1: raise ValueError(f"Q6_K four-warp GEMV requires rows >= 1, got {rows!r}")
+  if not isinstance(warps_per_row, int) or warps_per_row < 1: raise ValueError(f"warps_per_row must be >= 1, got {warps_per_row!r}")
+  if not isinstance(k, int) or k < Q6_K_BLOCK_ELEMS or k % Q6_K_BLOCK_ELEMS:
+    raise ValueError(f"Q6_K four-warp GEMV requires k a positive multiple of {Q6_K_BLOCK_ELEMS}, got {k!r}")
+  if (k // Q6_K_BLOCK_ELEMS) % (warps_per_row * SUBS):
+    raise ValueError(f"Q6_K four-warp GEMV splits k's {k // Q6_K_BLOCK_ELEMS} blocks over {warps_per_row} warps x {SUBS} "
+                     f"sub-groups: they must divide evenly")
+
+
 def validate_shape(rows:int, k:int) -> None:
-  """The kernel is fixed to one geometry; this is the shape authority the loader's route gate asks."""
-  if (rows, k) != (ROWS, K): raise ValueError(f"Q6_K attention-V four-warp route requires (rows,k)=({ROWS},{K}), got ({rows},{k})")
-K_BLOCKS = K // Q6_K_BLOCK_ELEMS              # 16
-BLOCKS_PER_WARP = K_BLOCKS // WARPS_PER_ROW    # 4
-BLOCKS_PER_SUB = BLOCKS_PER_WARP // 2         # 2
+  """The shape authority the loader's route gate asks: the emitter's real limits. The shapes the route was measured
+  at live in its record (decode-q6k-v-four-warp-fp16-geometry-route-policy.json, measured_shapes)."""
+  validate_four_warp(rows, k)
 
 
 @dataclass(frozen=True)
@@ -42,13 +55,20 @@ class Q6KVFourWarpAdmission:
       raise ValueError("Q6_K attention-V four-warp block index must be a non-negative integer")
 
 
-def emit_q6k_v_four_warp_fp16_direct(*, rows:int=ROWS, kernel_name:str|None=None) -> callable:
-  """Q6_K attention-V four-warp fp16-direct consumer (128 threads/row, no Q8)."""
-  if not isinstance(rows, int) or rows <= 0: raise ValueError("rows must be a positive integer")
-  name = kernel_name or f"q6k_v_four_warp_fp16_direct_{rows}_{K}"
+def emit_q6k_v_four_warp_fp16_direct(*, rows:int=ROWS, k:int=K, warps_per_row:int=WARPS_PER_ROW,
+                                     kernel_name:str|None=None) -> callable:
+  """Q6_K multi-warp fp16-direct GEMV (warps_per_row x 32 threads a row, no Q8). The default is the attention-V
+  geometry it was measured at; any (rows, k, warps_per_row) that validate_four_warp accepts lowers."""
+  validate_four_warp(rows, k, warps_per_row)
+  WARPS = warps_per_row
+  K_BLOCKS = k // Q6_K_BLOCK_ELEMS
+  BLOCKS_PER_WARP = K_BLOCKS // WARPS
+  BLOCKS_PER_SUB = BLOCKS_PER_WARP // SUBS
+  wsuffix = "" if WARPS == WARPS_PER_ROW else f"_w{WARPS}"
+  name = kernel_name or f"q6k_v_four_warp_fp16_direct_{rows}_{k}{wsuffix}"
   def kernel(out:UOp, halfs:UOp, x:UOp) -> UOp:
     row = UOp.special(rows, "gidx0")
-    lid = UOp.special(WARP * WARPS_PER_ROW, "lidx0")
+    lid = UOp.special(WARP * WARPS, "lidx0")
     warp, lane = lid // WARP, lid % WARP
     sub, pos = lane // POS, lane % POS
 
@@ -63,11 +83,11 @@ def emit_q6k_v_four_warp_fp16_direct(*, rows:int=ROWS, kernel_name:str|None=None
 
     for slot, offset in enumerate((16, 8, 4, 2, 1), 90):
       total = total + _staged_shfl(total, offset, lane, slot)
-    smem = UOp.placeholder((WARPS_PER_ROW,), dtypes.float32, 40, addrspace=AddrSpace.LOCAL)
+    smem = UOp.placeholder((WARPS,), dtypes.float32, 40, addrspace=AddrSpace.LOCAL)
     published = smem[warp].store(total, lane.eq(0))
     ready = UOp.barrier(UOp.group(published))
     merged = UOp.const(dtypes.float32, 0.0)
-    for wi in range(WARPS_PER_ROW):
+    for wi in range(WARPS):
       merged = merged + smem.after(ready)[wi]
     return out[row].store(merged, lid.eq(0)).sink(
       arg=KernelInfo(name=name, opts_to_apply=()))
@@ -79,19 +99,22 @@ def q6k_v_four_warp_call(admission:object, linear:Any, x:Tensor, binding:Any) ->
   if not isinstance(admission, Q6KVFourWarpAdmission): return None
   capability = getattr(getattr(linear, "route_admission", None), "capability", None)
   if (getattr(capability, "backend", None), getattr(capability, "architecture", None)) != ("NV", "sm_120"): return None
-  if (getattr(linear, "route_role", None), getattr(binding, "N", None), getattr(binding, "K", None)) != ("attn_kv", ROWS, K): return None
+  rows, k = getattr(binding, "N", None), getattr(binding, "K", None)
+  if getattr(linear, "route_role", None) != "attn_kv": return None
+  try: validate_four_warp(rows, k)
+  except ValueError: return None
   if getattr(linear, "bias", None) is not None or not str(x.device).startswith("NV"): return None
   halfs = linear.q6k_storage.halfs.to(x.device)
-  xv = x[:, 0, :].reshape(K).cast(dtypes.float16).contiguous()
-  emitter,ticket=lower_authorized_candidate({"family":"q6_v.v1"},
+  xv = x[:, 0, :].reshape(k).cast(dtypes.float16).contiguous()
+  emitter,ticket=lower_authorized_candidate({"family":"q6_v.v1","rows":rows,"k":k},
     (("decode_q6k_v_four_warp_fp16_geometry","q6_v_four_warp_fp16"),))
   consumer = KernelProgram("decode_q6k_v_four_warp", f"blk{admission.block_index}.gemv",
     KernelProgramProvenance.MACHINE_SEARCH_GENERATED, emitter,
-    output_spec=OutputSpec((ROWS,), dtypes.float32),
+    output_spec=OutputSpec((rows,), dtypes.float32),
     boltbeam_ticket=ticket)
-  out = execute_promoted_program(Tensor.empty((ROWS,), dtype=dtypes.float32, device=x.device),
+  out = execute_promoted_program(Tensor.empty((rows,), dtype=dtypes.float32, device=x.device),
     halfs, xv, program=consumer)
-  return out.reshape(1, 1, ROWS)
+  return out.reshape(1, 1, rows)
 
 
 __all__ = ["Q6KVFourWarpAdmission", "ROWS", "K", "emit_q6k_v_four_warp_fp16_direct",

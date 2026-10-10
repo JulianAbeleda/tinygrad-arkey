@@ -36,6 +36,10 @@ class EmitterFamily:
   def to_json(self) -> dict[str, Any]:
     out = {"family": self.family, "quant": self.quants[0], "quants": list(self.quants), "storage": self.storage,
            "coupled_rows": [dict(r) for r in self.rows], "threads_within_subgroup": self.one_subgroup}
+    if self.family == Q6_FOUR_WARP_FAMILY:  # the split a caller needs: 16-lane sub-groups per warp, 256-element blocks
+      from tinygrad.llm.q6k_v_mmvq import POS, WARPS_PER_ROW
+      out["lanes_per_block_slice"], out["block_elems"] = POS, 256
+      out["installed_rule"] = {"warps_per_row": WARPS_PER_ROW}
     if self.family == BLOCK_QUANT_FAMILY:  # the layout facts a caller needs to propose its own rows: code bytes per block
       from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS
       out["code_unit_bytes"] = 2
@@ -67,6 +71,16 @@ def _q6_parameters(schedule:Mapping[str, Any], rows:int, k:int) -> dict[str, Any
 
 
 BLOCK_QUANT_FAMILY = "block_quant_gemv.v1"
+Q6_FOUR_WARP_FAMILY = "q6_four_warp_gemv.v1"
+
+
+def _q6_four_warp_parameters(schedule:Mapping[str, Any], rows:int, k:int, quant:str, wave:int) -> dict[str, Any]:
+  """warps_per_row = threads / wave (one row per CTA, tile.n 1); tile.k is one sweep of the CTA over k (256-element
+  blocks x warps x sub-groups), so k a multiple of it is the emitter's own split rule."""
+  threads, tile = schedule["launch"]["threads"], schedule["tile"]["n"]
+  if tile != 1 or threads % wave: raise ValueError(f"the Q6_K four-warp emitter runs whole {wave}-lane warps on one row a CTA")
+  if schedule["memory"]["b"]["vector_width"] != 2: raise ValueError("the Q6_K four-warp emitter reads 16-bit halfs")
+  return {"rows": rows, "k": k, "warps_per_row": threads // wave}
 
 
 def _block_quant_row(lane_bytes:int, warps_per_cta:int, wave:int, block_elems:int) -> dict[str, Any]:
@@ -95,6 +109,8 @@ FAMILIES: tuple[EmitterFamily, ...] = (
                 _q6_parameters),
   # rows here are the route's own choice (block_quant_gemv_geometry); a caller proposes its own from the chip's facts
   EmitterFamily(BLOCK_QUANT_FAMILY, ("Q8_0", "Q5_0", "Q4_0", "Q5_K"), "uint16", (), False, _bq_parameters),
+  # warps per row are the search dimension; a caller proposes them from the chip's thread limit
+  EmitterFamily(Q6_FOUR_WARP_FAMILY, ("Q6_K",), "uint16", (), False, _q6_four_warp_parameters),
 )
 BY_FAMILY = {f.family: f for f in FAMILIES}
 
@@ -117,7 +133,7 @@ def installed_row(family:EmitterFamily, backend:str | None, architecture:str | N
     linear = SimpleNamespace(route_admission=SimpleNamespace(capability=SimpleNamespace(backend=backend, architecture=architecture)))
     style = _q4k_single_projection_load_style(linear)
     return _row(32, 1, 16 if style == "vector" else 4)
-  if family.family == BLOCK_QUANT_FAMILY:
+  if family.family in (BLOCK_QUANT_FAMILY, Q6_FOUR_WARP_FAMILY):
     return None  # shape- and device-dependent: the family's installed_rule (and installed_block_quant_row) say it
   from tinygrad.llm.decode_kernels import q6k_coop_row_tile_for_target
   tile = q6k_coop_row_tile_for_target(backend, architecture)
@@ -154,7 +170,7 @@ def build(candidate:Mapping[str, Any], device:str, raw=None):
   quant = next((q for q in family.quants if q.replace("_", "") == str(workload["operands"]["b"]["quantization"]).upper().replace("_", "")), None)
   if quant is None: raise ValueError(f"{family.family} reads {list(family.quants)}, not {workload['operands']['b']['quantization']}")
   rows, k = int(workload["shape"]["n"]), int(workload["shape"]["k"])
-  if family.family == BLOCK_QUANT_FAMILY:
+  if family.family in (BLOCK_QUANT_FAMILY, Q6_FOUR_WARP_FAMILY):
     params = family.parameters(schedule, rows, k, quant, int(workload["target"]["subgroup_size"]))
   else: params = family.parameters(schedule, rows, k)
   emitter = build_registered_llm_emitter(family.family, params)
@@ -197,5 +213,5 @@ def fixture_activation(k:int):
   return np.array([1.0 + (i % 7) / 16 for i in range(k)], dtype=np.float16)
 
 
-__all__ = ["BLOCK_QUANT_FAMILY", "BY_FAMILY", "EMITTER_PLAN_KIND", "installed_block_quant_row", "reference", "FAMILIES", "EmitterFamily", "build", "emitters_apply", "fixture_activation",
+__all__ = ["BLOCK_QUANT_FAMILY", "Q6_FOUR_WARP_FAMILY", "BY_FAMILY", "EMITTER_PLAN_KIND", "installed_block_quant_row", "reference", "FAMILIES", "EmitterFamily", "build", "emitters_apply", "fixture_activation",
            "fixture_bytes", "installed_row"]
