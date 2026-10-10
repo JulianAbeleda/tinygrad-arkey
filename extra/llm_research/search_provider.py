@@ -21,6 +21,7 @@ ACTIONS = ("describe", "admit", "compile", "check", "measure", "capability")
 # fork's decode emitters (extra/llm_research/decode_emitter_space.py), offered where the model's decode binds them.
 EMITTER_PLAN_KIND = "tinygrad_decode_emitter.v1"
 PLAN_KINDS = ("tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1", EMITTER_PLAN_KIND)
+SWEEP_BYTES = 256 << 20  # the read sweep before each timed sample: larger than any last-level cache the fork has met
 ERROR_CODES = ("invalid_json", "invalid_envelope", "protocol_mismatch", "unsupported_action", "backend_unavailable",
                "hardware_absent", "dirty_tree", "revision_mismatch", "timeout", "identity_mismatch", "unsupported_plan",
                "admission_rejected", "resource_limit", "invalid_evidence", "provider_failure")
@@ -391,6 +392,7 @@ class DeviceAdapter:
   _exact_models: dict[tuple[str, str], _ExactModelCacheEntry] = field(default_factory=dict, init=False, repr=False, compare=False)
   _prepared_cache: dict[str, PreparedWorkload] = field(default_factory=dict, init=False, repr=False, compare=False)
   _compile_cache: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False, repr=False, compare=False)
+  _sweeps: dict[str, Any] = field(default_factory=dict, init=False, repr=False, compare=False)
 
   def _device(self, payload: Mapping[str, Any]) -> str:
     candidate = payload.get("candidate")
@@ -580,6 +582,17 @@ class DeviceAdapter:
     kinds = ["tinygrad_opt_sequence.v1", "tinygrad_heuristic.v1"] + ([EMITTER_PLAN_KIND] if applies else [])
     return kinds, {"binds_through": EMITTER_PLAN_KIND if applies else "tinygrad_opt_sequence.v1", "reason": why}
 
+  def _sweep(self, payload: Mapping[str, Any]):
+    """A compiled read-only sum over SWEEP_BYTES, or twice the device's L2 when it reports a larger one."""
+    dev = self._device(payload)
+    if dev not in self._sweeps:
+      from tinygrad import Tensor, dtypes
+      size = max(SWEEP_BYTES, 2 * int(self._facts(payload).get("l2_bytes") or 0))
+      buf = Tensor.ones(size // 4, dtype=dtypes.float32, device=dev).contiguous().realize()
+      from tinygrad.engine.realize import compile_linear
+      self._sweeps[dev] = (buf, compile_linear(buf.sum().schedule_linear()))
+    return self._sweeps[dev][1]
+
   def _check_emitter(self, prepared: "PreparedWorkload", fixtures: list[dict[str, Any]]) -> Mapping[str, Any]:
     """The emitter's output against the canonical packed reference on the same fixture bytes."""
     import numpy as np
@@ -732,15 +745,21 @@ class DeviceAdapter:
     prepared = self._prepared(payload); _, raw, call, _, geometry, rows, k = prepared
     before = self._facts(payload).get("current_allocated_bytes")
     for _ in range(warmups): time_call(call)
-    # the device's own cache invalidation before each timed sample: a decode reads its weights from DRAM, so a
-    # kernel time from a warm cache is not the time the model sees
-    raw_ns = [int(time_call(call, clear_l2=True) * 1e9) for _ in range(samples)]
+    # a read sweep over more bytes than the last-level cache before each timed sample: a decode reads its weights
+    # from DRAM, so a warm-cache time is not the model's; a store scrub would leave dirty lines that drain into the
+    # timed kernel, so the sweep only reads
+    from tinygrad.engine.realize import run_linear
+    sweep = self._sweep(payload)
+    raw_ns = []
+    for _ in range(samples):
+      run_linear(sweep, jit=True, wait=True)
+      raw_ns.append(int(time_call(call) * 1e9))
     after = self._facts(payload).get("current_allocated_bytes")
     m, _, _, block_bytes = geometry
     source_bytes = prepared.packed_source_bytes if prepared.packed_source_bytes is not None else raw.nbytes()
     operations, bytes_ = 2*m*rows*k, source_bytes + m*k*2 + m*rows*4
     mean = sum(raw_ns) / len(raw_ns)
-    return {**compiled, "timing_mode": "tinygrad time_call: device timestamps, wait=True, device cache invalidated before each sample", "synchronized": True,
+    return {**compiled, "timing_mode": "tinygrad time_call: device timestamps, wait=True, a read sweep before each sample", "synchronized": True,
             "warmups": warmups, "samples_ns": raw_ns, "summary_ns": {"min": min(raw_ns), "mean": mean, "max": max(raw_ns),
             "range": max(raw_ns)-min(raw_ns)}, "working_set_after_bytes": after,
             "working_set_before_bytes": before, "work_bytes": {"status": "estimated", "provenance": "modeled logical packed input + fp16 activation/output; physical cache traffic unobserved", "operations": operations, "bytes": bytes_}}
