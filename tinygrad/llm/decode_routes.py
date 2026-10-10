@@ -996,8 +996,11 @@ def _probe_block_quant_gemv(s:DecodeRouteShapes) -> None:
   # only where QKPrimitiveCapability.satisfied, i.e. a 32-wide shuffle, so the probe builds that spec.
   from tinygrad.codegen.late.warp_reduce import WARP
   q_dim = s.n_heads * s.head_dim
+  # Only the promoted formats this model's weights are in (all promoted ones when the formats are not known): a
+  # format the model does not have must not refuse the route for the formats it does (K11).
+  formats = decode_q8_0_gemv_formats() if s.weight_formats is None else decode_q8_0_gemv_formats() & s.weight_formats
   for rows, k in ((s.hidden_dim, s.dim), (s.dim, s.hidden_dim), (q_dim, s.dim), (s.kv_dim, s.dim), (s.dim, q_dim), (s.vocab, s.dim)):
-    for fmt in decode_q8_0_gemv_formats():
+    for fmt in sorted(formats):
       block_quant_gemv_geometry(QUANT_FORMATS[fmt], rows, k, wave_size=WARP, sm_count=None, max_threads=None).validate()
 
 def _reduce_output_probe(epilogue:str) -> Callable[[DecodeRouteShapes], None]:

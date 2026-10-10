@@ -42,4 +42,6 @@ def test_q5_k_layout_and_geometry():
 def test_a_format_rolls_back_alone():
   from tinygrad.llm.model_route_plan import decode_q8_0_gemv_formats
   everything = decode_q8_0_gemv_formats(lambda k, d=0: "")
-  assert decode_q8_0_gemv_formats(lambda k, d=0: "Q5_K, Q9_9") == everything - {"Q5_K"}
+  assert decode_q8_0_gemv_formats(lambda k, d=0: "Q5_K") == everything - {"Q5_K"}
+  with pytest.raises(ValueError, match="unknown block-quant format"):  # a misspelled rollback is an error, not a no-op
+    decode_q8_0_gemv_formats(lambda k, d=0: "Q5_K, Q9_9")

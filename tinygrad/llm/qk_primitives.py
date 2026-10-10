@@ -274,6 +274,8 @@ def _install_block_quant_primitives(model, meta:dict, device_facts:object|None, 
   token_embd bytes. Per-weight admission is the kernel's own validate; a refused shape keeps the ordinary module."""
   from tinygrad import nn
   from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS, block_quant_gemv_geometry
+  from tinygrad.llm.model_route_plan import block_quant_formats
+  formats = block_quant_formats(formats, "block-quant installer formats")
   by_type = {lay.ggml_type: lay.quant for name, lay in BLOCK_QUANT_LAYOUTS.items() if name in formats}
   capability = qk_primitive_capability_from_device_facts(device_facts)
   admission = QKPrimitiveRouteAdmission(capability, True)

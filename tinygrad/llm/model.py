@@ -620,7 +620,15 @@ def _linear_shape_accepted(linear, validate) -> bool:
   except (ValueError, TypeError): return False
   return True
 
-def _decode_route_promotions(config, target:tuple[str|None, str|None], getenv_fn=getenv) -> DecodeRouteShapeGate:
+def _model_weight_formats(meta:dict|None) -> frozenset[str]|None:
+  """The GGML formats of a model's 2-D weights (the formats a block-quant route could serve), or None without metadata."""
+  if meta is None: return None
+  from tinygrad.llm.qk_layout import GGML_TYPE_FORMATS
+  return frozenset(GGML_TYPE_FORMATS[int(typ)].name for _name, dims, typ, _off in meta.get("tensor_infos", ())
+                   if len(dims) == 2 and int(typ) in GGML_TYPE_FORMATS)
+
+def _decode_route_promotions(config, target:tuple[str|None, str|None], getenv_fn=getenv,
+                             weight_formats:frozenset[str]|None=None) -> DecodeRouteShapeGate:
   """Resolve the shape-bearing promoted decode routes for THIS model once (model_route_plan.DecodeRouteShapeGate).
   A record names the target; the kernel's own validate (DECODE_ROUTE_SHAPE_PROBES, decode_routes.py) names the
   shape. A route whose kernel refuses the model's (rows, k) is not promoted for this model and is recorded on the
@@ -628,7 +636,8 @@ def _decode_route_promotions(config, target:tuple[str|None, str|None], getenv_fn
   gate.admitted(route) and never writes a shape constant of its own. Dependent routes are ANDed with their
   prerequisite exactly as before; the environment rollbacks stay where they were."""
   shapes = DecodeRouteShapes(dim=config.dim, hidden_dim=config.hidden_dim, n_heads=config.n_heads, n_kv_heads=config.n_kv_heads,
-                             head_dim=config.head_dim, vocab=config.vocab_size, eps=float(config.norm_eps), target=target)
+                             head_dim=config.head_dim, vocab=config.vocab_size, eps=float(config.norm_eps), target=target,
+                             weight_formats=weight_formats)
   gate = DecodeRouteShapeGate(shapes, DECODE_ROUTE_SHAPE_PROBES)
   gate.admit("decode_norm_fusion", decode_norm_fusion_promoted(target))
   gate.admit("decode_q4k_epilogue_resadd", decode_q4k_epilogue_resadd_promoted(target))
@@ -2462,10 +2471,14 @@ class Transformer:
     # The flash route for this model's attention shape, admitted by the kernel's own validate
     # (flash_decode_route_for); a refused shape keeps config.flash_decode False and decodes on plain attention.
     from tinygrad.llm.decode_routes import _FlashDecodeCandidate
-    from tinygrad.llm.flash_decode_attention import flash_decode_route_for
-    _flash_route = flash_decode_route_for(n_heads, n_kv_heads, head_dim, _device_facts.capabilities.max_workgroup_threads)
+    from tinygrad.llm.flash_decode_attention import flash_decode_route_for, flash_decode_route_refusal
+    _flash_threads = _device_facts.capabilities.max_workgroup_threads
+    _flash_route = flash_decode_route_for(n_heads, n_kv_heads, head_dim, _flash_threads)
     _flash_decode = _flash_route is not None and \
       _FlashDecodeCandidate(_flash_route).bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
+    # E5: a refused flash shape decodes on plain attention; its reason goes on the route plan (recorded on the gate below).
+    _flash_refusal = None if _flash_decode else (flash_decode_route_refusal(n_heads, n_kv_heads, head_dim, _flash_threads)
+      if _flash_route is None else "the live-split route is not admitted on this device (capability or target promotion)")
     # Warm the fused-attention spec-target cache at load time (decode's resolve-once pattern,
     # decode_routes.py:151): custom_kernel_attention runs inside a Tensor Function dispatch where
     # Device[...] is disallowed, so the runtime lookup must be a cache hit. Devices without a renderer
@@ -2560,7 +2573,9 @@ class Transformer:
     # Every shape-bearing promoted route below is read from ONE gate (_decode_route_promotions): the record names the
     # target, the kernel's own validate names the shape, and a route the kernel refuses for this model stays off
     # (plain kernels) with the reason recorded on the route plan. No shape constant lives here.
-    _gate = _decode_route_promotions(config, (_norm_cap.backend, _norm_cap.architecture))
+    _gate = _decode_route_promotions(config, (_norm_cap.backend, _norm_cap.architecture),
+                                     weight_formats=_model_weight_formats(q4k_meta))
+    if _flash_refusal is not None: _gate.refuse("decode_flash_live_split", _flash_refusal)
     model._decode_route_shape_gate = _gate
     _norm_promoted = _gate.admitted("decode_norm_fusion")
     model._decode_norm_fusion_promoted = _norm_promoted

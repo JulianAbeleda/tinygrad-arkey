@@ -698,16 +698,30 @@ def load_decode_q8_0_gemv_promotion(path:str) -> frozenset[Target]:
 _DECODE_Q8_0_GEMV_RECORD = pathlib.Path(__file__).with_name("generated") / "decode-q8-0-gemv-route-policy.json"
 _DECODE_Q8_0_GEMV_TARGETS = load_decode_q8_0_gemv_promotion(_DECODE_Q8_0_GEMV_RECORD)
 
+def block_quant_formats(names:Iterable[Any], source:str) -> frozenset[str]:
+  """The ONE check of a block-quant format name, wherever one is read (the record's formats, the per-format rollback,
+  the gate, the installer): a name the block-quant GEMV has no layout for is one clear error naming its source."""
+  from tinygrad.llm.decode_kernels import BLOCK_QUANT_LAYOUTS
+  names = tuple(names)
+  if unknown := sorted({str(n) for n in names if n not in BLOCK_QUANT_LAYOUTS}):
+    raise ValueError(f"{source}: unknown block-quant format(s) {unknown}; known: {sorted(BLOCK_QUANT_LAYOUTS)}")
+  return frozenset(names)
+
 def load_decode_q8_0_gemv_formats(path:str) -> frozenset[str]:
-  """The block formats the record promotes for the block-quant GEMV route (default: Q8_0 only)."""
+  """The block formats the record promotes for the block-quant GEMV route. The record must list them: a missing key is
+  an error, and an empty list promotes no format (never a default)."""
   data = json.loads(pathlib.Path(path).expanduser().read_text())
-  return frozenset(data.get("formats") or ("Q8_0",))
+  formats = data.get("formats")
+  if not isinstance(formats, list): raise ValueError(f"{path}: 'formats' must be a list of block-quant format names, got {formats!r}")
+  return block_quant_formats(formats, f"{path} formats")
 
 _DECODE_Q8_0_GEMV_FORMATS = load_decode_q8_0_gemv_formats(_DECODE_Q8_0_GEMV_RECORD)
 
 def decode_q8_0_gemv_formats(getenv_fn=getenv) -> frozenset[str]:
-  """The promoted formats less any named in TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE (comma list): a per-format rollback."""
-  off = {f.strip() for f in str(getenv_fn("TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE", "")).split(",") if f.strip()}
+  """The promoted formats less any named in TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE (comma list): a per-format rollback.
+  A name in the rollback that is not a block-quant format is an error, not a no-op."""
+  off = block_quant_formats((f.strip() for f in str(getenv_fn("TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE", "")).split(",") if f.strip()),
+                            "TINYGRAD_BLOCK_QUANT_FORMATS_DISABLE")
   return _DECODE_Q8_0_GEMV_FORMATS - off
 
 def decode_q8_0_gemv_promoted(target:Target, getenv_fn=getenv) -> bool:
@@ -720,6 +734,7 @@ class DecodeRouteShapes:
   exact kernel spec / epilogue the route would lower for the model, then calls that spec's own validate."""
   dim:int; hidden_dim:int; n_heads:int; n_kv_heads:int; head_dim:int; vocab:int; eps:float
   target:Target = (None, None)
+  weight_formats:frozenset[str]|None = None  # the GGML formats of the model's 2-D weights; None when not known
   @property
   def kv_dim(self) -> int: return self.n_kv_heads * self.head_dim
 
@@ -735,33 +750,59 @@ def route_policy_file(route:str) -> str:
   """decode_ffn_down_resadd -> decode-ffn-down-resadd-route-policy.json"""
   return route.replace("_", "-") + "-route-policy.json"
 
+# Every top-level key a route record may hold. A key outside this list is a misspelling (e.g. "measured_model"), and a
+# record with one refuses: a shape list the gate cannot read must never mean "no shape rule".
+ROUTE_RECORD_FIELDS = frozenset({"schema", "route", "description", "promoted_targets", "formats", "measured_shapes",
+                                 "measured_models", "measured_gemv_shapes", "measured_topologies", "measured_leases"})
+# The record fields a gate reads as measured shapes. ("measured_shapes" is the Q8_0 record's evidence list, never a gate.)
+MEASURED_SHAPE_FIELDS = frozenset({"measured_models", "measured_gemv_shapes", "measured_topologies", "measured_leases"})
+
 @functools.lru_cache(maxsize=None)
-def route_measured_shapes(route:str, directory:pathlib.Path|None=None, field:str="measured_models") -> tuple[dict[str, Any], ...]|None:
-  """The shapes a promotion record says the route was measured at, or None when the record names none (the kernel's
-  validate is then the only shape rule). "measured_models" holds model facts (dim, hidden_dim, heads, vocab, blocks),
-  read by the loader's gate; "measured_gemv_shapes" holds one GEMV's rows and k, read at a call site."""
+def route_record(route:str, directory:pathlib.Path|None=None) -> MappingProxyType:
+  """The route's promotion record. A missing record, or a key outside ROUTE_RECORD_FIELDS, raises ValueError."""
   path = (directory or _GENERATED_DIR) / route_policy_file(route)
-  if not path.is_file(): return None
-  shapes = json.loads(path.read_text()).get(field)
-  if shapes is None: return None
+  if not path.is_file(): raise ValueError(f"{route}: no promotion record at {path}")
+  data = json.loads(path.read_text())
+  if not isinstance(data, dict): raise ValueError(f"{path}: a route record must be a JSON object")
+  if unknown := sorted(set(data) - ROUTE_RECORD_FIELDS):
+    raise ValueError(f"{path}: unknown record field(s) {unknown} (misspelled?); known: {sorted(ROUTE_RECORD_FIELDS)}")
+  return MappingProxyType(data)
+
+def route_measured_shapes(route:str, directory:pathlib.Path|None=None, field:str="measured_models") -> tuple[dict[str, Any], ...]|None:
+  """The shapes a promotion record says the route was measured at, or None when the record holds no such field (the
+  kernel's validate is then the only shape rule). "measured_models" holds model facts (dim, hidden_dim, heads, vocab,
+  blocks), read by the loader's gate; "measured_gemv_shapes" holds one GEMV's rows and k, read at a call site.
+  A missing record, a misspelled record field or an unknown `field` raises ValueError: callers fail closed on it."""
+  if field not in MEASURED_SHAPE_FIELDS: raise ValueError(f"{field!r} is not a measured-shape field; known: {sorted(MEASURED_SHAPE_FIELDS)}")
+  record = route_record(route, directory)
+  if field not in record: return None
+  shapes = record[field]
   if not isinstance(shapes, list) or not all(isinstance(s, dict) and s for s in shapes):
-    raise ValueError(f"{path}: {field} must be a list of non-empty objects")
+    raise ValueError(f"{route}: {field} must be a list of non-empty objects")
   return tuple(dict(s) for s in shapes)
 
 def shape_measured(route:str, facts:Mapping[str, Any], directory:pathlib.Path|None=None, field:str="measured_models") -> bool:
   """Was the route measured at these shape facts? True when its record names no measured shapes; otherwise one
-  entry must name only facts given here, each equal. Widening a route is a new measurement, recorded as data."""
-  shapes = route_measured_shapes(route, directory, field)
+  entry must name only facts given here, each equal. Widening a route is a new measurement, recorded as data.
+  Fails closed: no record, or a record the reader cannot trust (a misspelled field), is False."""
+  try: shapes = route_measured_shapes(route, directory, field)
+  except ValueError: return False
   if shapes is None: return True
   return any(all(k in facts and facts[k] == v for k, v in s.items()) for s in shapes)
 
 def measured_entry(route:str, facts:Mapping[str, Any], *, field:str, directory:pathlib.Path|None=None) -> dict[str, Any]|None:
   """The first entry of a record's measured list whose keys that are facts all equal the given facts (other keys are
-  the entry's payload, e.g. a lease's block list), or None."""
-  for entry in route_measured_shapes(route, directory, field) or ():
+  the entry's payload, e.g. a lease's block list), or None (also for no record or an untrusted one)."""
+  try: entries = route_measured_shapes(route, directory, field) or ()
+  except ValueError: return None
+  for entry in entries:
     keys = [k for k in entry if k in facts]
     if keys and all(facts[k] == entry[k] for k in keys): return entry
   return None
+
+def _measured_refusal(route:str, facts:Mapping[str, Any]) -> str:
+  try: return f"its record measured {route_measured_shapes(route)}, not this model's {facts}"
+  except ValueError as e: return str(e)
 
 class DecodeRouteShapeGate:
   """ONE rule for every promoted decode route: the promotion record names the target; the kernel's own validate
@@ -782,10 +823,13 @@ class DecodeRouteShapeGate:
     if ok:
       facts = {k: getattr(self.shapes, k) for k in ("dim", "hidden_dim", "n_heads", "n_kv_heads", "head_dim", "vocab")}
       if not shape_measured(route, facts):
-        self.skipped.append(SkippedPromotion(route, f"its record measured {route_measured_shapes(route)}, not this model's {facts}"))
+        self.skipped.append(SkippedPromotion(route, _measured_refusal(route, facts)))
         ok = False
     self.decisions[route] = ok
     return ok
+  def refuse(self, route:str, reason:str) -> None:
+    """Record a route decided outside admit (e.g. the flash decode route's own validate) as refused, with its words."""
+    self.skipped.append(SkippedPromotion(route, reason)); self.decisions[route] = False
   def admitted(self, route:str) -> bool: return self.decisions.get(route, False)
   def report_lines(self) -> list[str]: return [s.line for s in self.skipped]
 

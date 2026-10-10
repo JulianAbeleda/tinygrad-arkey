@@ -34,7 +34,12 @@ ATTENTION_ROUTES = ("decode_shared_q8_attention", "decode_q4_direct_shared_q8_at
                     "decode_qk_norm_rope", "decode_q6k_v_four_warp_fp16_geometry", "decode_q4k_kv_pair")
 
 
-def test_gate_rule_record_first_then_the_kernels_validate():
+def test_gate_rule_record_first_then_the_kernels_validate(tmp_path, monkeypatch):
+  import json
+  from tinygrad.llm import model_route_plan as mrp
+  for route in ("refused", "accepted", "no_probe"):
+    (tmp_path / mrp.route_policy_file(route)).write_text(json.dumps({"schema": "boltbeam.route_policy.v1", "promoted_targets": []}))
+  monkeypatch.setattr(mrp, "_GENERATED_DIR", tmp_path); mrp.route_record.cache_clear()
   shapes = DecodeRouteShapes(5120, 17408, 24, 4, 256, 248320, 1e-6, NV)
   asked = []
   def refuses(s): asked.append(s); raise ValueError("needs rows=4096")
@@ -43,8 +48,11 @@ def test_gate_rule_record_first_then_the_kernels_validate():
   assert gate.admit("refused", True) is False and asked == [shapes]        # open record, kernel refuses: not promoted
   assert gate.admit("accepted", True) is True
   assert gate.admit("no_probe", True) is True                              # no probe: the record alone decides
+  assert gate.admit("no_record", True) is False                            # no record: refused, never every shape
   assert gate.admitted("refused") is False and gate.admitted("accepted") and gate.admitted("never_asked") is False
-  assert gate.report_lines() == ["refused: needs rows=4096; plain kernels used"]
+  assert gate.report_lines()[0] == "refused: needs rows=4096; plain kernels used"
+  assert gate.report_lines()[1].startswith("no_record: no_record: no promotion record at ")
+  mrp.route_record.cache_clear()
   assert shapes.kv_dim == 1024
 
 
