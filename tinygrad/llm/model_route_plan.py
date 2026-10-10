@@ -785,8 +785,11 @@ def _default(name:str, quant:str, role:str, rows:int, cols:int) -> tuple[int, tu
     if family in ("ffn_gate_up", "attn_qo", "attn_kv"): return 1, ("LOCAL:0:64",)
     if family == "ffn_down": return 4, ("LOCAL:0:32",)
   if quant == "Q6_K":
-    if family == "ffn_down" or family == "lm_head" or name == "output.weight": return 1, ("LOCAL:0:64",)
+    # Every Q6_K weight the decode reads as a GEMV: parts=1 binds the coop emitter wherever its validate admits the
+    # shape (rows % row_tile), else the partial path. The one exception is a measured placement, kept: attn_v reads
+    # with 4 parts (the 8B's ffn_down/lm_head/attn_v census and timing are unchanged by this rule).
     if family == "attn_kv" and _module_path(name).rsplit(".", 1)[-1] == "attn_v": return 4, ("LOCAL:0:32",)
+    return 1, ("LOCAL:0:64",)
   return None
 
 def primitive_route_entry_for_tensor(name:str, typ:int, rows:int, cols:int, *, module_path:str|None=None,

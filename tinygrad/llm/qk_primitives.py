@@ -479,6 +479,8 @@ def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallS
     try: module = _module_at(model, choice.module_path)
     except (AttributeError, IndexError, ValueError): skipped["missing_module"] += 1; continue
     if not hasattr(module, "weight"): skipped["missing_weight"] += 1; continue
+    from tinygrad import nn
+    if isinstance(module, nn.Embedding): skipped["embedding"] += 1; continue  # a row gather, never a decode GEMV
     if getattr(module, "bias", None) is not None: skipped["bias"] += 1; continue
     source_bytes = prod(dims) // 256 * spec.block_bytes
     persistent_bytes = source_bytes if storage_mode == "sidecar" else 0
