@@ -1106,9 +1106,20 @@ class FlashAdapter:
     return dict(self._read["facts"]), self._read["source"]
 
   def describe(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    del payload
+    """The GPU's flash facts; with payload "attention" ({"Hq", "Hkv", "Hd"}), the geometry the model's decode installs
+    for that shape (flash_decode_route_for) or the kernel's own words for why it refuses the shape."""
     facts, source = self.facts()
+    installed = None
+    attention = payload.get("attention") if isinstance(payload, Mapping) else None
+    if isinstance(attention, Mapping):
+      from tinygrad.llm.flash_decode_attention import flash_decode_route_for, flash_decode_route_refusal
+      shape = tuple(int(attention[k]) for k in ("Hq", "Hkv", "Hd"))
+      route = flash_decode_route_for(*shape)
+      installed = {"route_id": route.route_id, "split_count": route.split_size, "query_group_size": route.query_group_size,
+                   "stage_width": route.stage_width, "staging": route.staging} if route is not None else \
+                  {"refused": flash_decode_route_refusal(*shape)}
     return {"provider_revision": _revision(), "target": facts, "facts_source": source, "backend_live": self.live_backend,
+            "installed": installed,
             "supported_plan_kinds": ["tinygrad_primitive_graph.v1"], "compiler_transforms": [],
             "limitations": ["flash geometry legality is fact-driven; this adapter owns no compiler Opt transforms",
                             "no model execution or route promotion"]}

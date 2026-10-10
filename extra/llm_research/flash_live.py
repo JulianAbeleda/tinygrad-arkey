@@ -132,11 +132,47 @@ class LiveFlash:
     self._tiles[key] = (call.replace(src=(program, *call.src[1:])), program, spec)
     return self._tiles[key]
 
+  def kernels(self, payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Both launches as a caller rebuilds them: the tile (q, KV cache -> partials) and the combine (partials ->
+    output), each with its source, function, launch and buffers labelled by what they hold."""
+    from tinygrad import Tensor, dtypes
+    from tinygrad.codegen import to_program
+    from tinygrad.device import Device
+    from tinygrad.helpers import to_function_name
+    from tinygrad.llm.kernel_program import execute_research_program
+    tc = context_tokens(payload)
+    _call, _program, spec = self.compiled_tile(payload, descriptor)
+    tile = spec.tile
+    q, cache = self.inputs(descriptor["tile"])
+    partial = execute_research_program(Tensor.empty(tile.Hq * tile.split_count * (tile.Hd + 2), dtype=dtypes.float32, device=self.device),
+                                       q, cache, program=self._program(spec, tc, fused=False))
+    out_dtype = dtypes.float16 if spec.combine.output_fp16 else dtypes.float32
+    out = execute_research_program(Tensor.empty(tile.Hq * tile.Hd, dtype=out_dtype, device=self.device), partial,
+                                   program=self._program(spec, tc, fused=True))
+    records = []
+    for name, result, named in (("tile", partial, {"value:q": q, "value:kv_cache": cache}), ("combine", out, {"value:partial": partial})):
+      linear = result.schedule_linear()
+      calls = [c for c in linear.src if c.src and getattr(c.src[0], "arg", None) is not None]
+      call = calls[-1]
+      program = to_program(call.src[0], Device[self.device].renderer)
+      info = program.arg
+      if info.vars: raise ProtocolError("unsupported_plan", "a flash kernel with symbolic variables cannot be described for replay")
+      ids = {id(t.uop.buffer): label for label, t in named.items()}
+      buffers = []
+      for index in info.globals:
+        buf = call.src[1 + index].buffer
+        label = ids.get(id(buf), "value:partial" if name == "tile" else "out")
+        buffers.append({"index": index, "dtype": buf.dtype.name, "nbytes": buf.nbytes, "role": label})
+      records.append({"name": name, "source": program.src[3].arg, "function": to_function_name(info.name),
+                      "global_size": [int(x) for x in info.global_size], "local_size": [int(x) for x in (info.local_size or (1, 1, 1))],
+                      "buffers": buffers})
+    return records
+
   def compile(self, payload: Mapping[str, Any], descriptor: Mapping[str, Any]) -> dict[str, Any]:
     from tinygrad.device import Device
     call, program, spec = self.compiled_tile(payload, descriptor)
     source, binary = program.src[3].arg, program.src[4].arg
-    return {"compiler": type(Device[self.device].compiler).__name__, "device": self.device,
+    return {"compiler": type(Device[self.device].compiler).__name__, "device": self.device, "kernels": self.kernels(payload, descriptor),
             "source_sha256": _sha256(source), "binary_sha256": _sha256(binary),
             "launch": {"global_size": list(program.arg.global_size or ()), "local_size": list(program.arg.local_size or ())},
             "kernel_name": spec.tile.kernel_name, "context_tokens": context_tokens(payload),
