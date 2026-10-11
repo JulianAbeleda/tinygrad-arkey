@@ -2642,6 +2642,9 @@ def propagate_memory_semantic(source:UOp, target:UOp) -> UOp:
   if owner is None: return target
   if (other := memory_semantic_owner(target)) is not None and other != owner:
     raise ValueError(f"conflicting explicit semantic owners: {owner!r} and {other!r}")
+  # A target that already carries this owner (a buffer bound to it) stays bare: a realized owned tensor must read back
+  # as its buffer, or a later STORE into it materializes the marker and writes a copy instead of the buffer.
+  if other == owner: return target
   return target if target.op is Ops.MEMORY_SEMANTIC else UOp(Ops.MEMORY_SEMANTIC, target.dtype, (target,), owner)
 
 # ******** ops in python ********
