@@ -58,5 +58,11 @@ class TestCapturedGraphs(unittest.TestCase):
     for ren in (CUDARenderer(Target.parse("NV:CUDA:sm_120")), Device["CPU"].renderer):
       with self.subTest(renderer=type(ren).__name__): do_to_program(ast, ren)
 
+  def test_movement_over_marked_native_output(self):
+    # RESHAPE(MEMORY_SEMANTIC(native rmsnorm AFTER)): rangeify indexed the AFTER under the marker and kept the
+    # RESHAPE ("bad reshape: () -> (2560,)")
+    from tinygrad.schedule.rangeify import _get_kernel_graph
+    _get_kernel_graph(pickle.loads((FIXTURES / "marked_rmsnorm_reshape_sink.pkl").read_bytes()))
+
 if __name__ == "__main__":
   unittest.main()
