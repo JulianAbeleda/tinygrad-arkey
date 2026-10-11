@@ -251,12 +251,33 @@ def _reduce_scalarized_reg_partials(base:UOp, arg:tuple[int, ...], st:UOp) -> UO
   value = values[0] if len(values) == 1 else UOp(Ops.STACK, st.dtype.scalar().vec(len(values)), tuple(values))
   return target.store(value)
 
+def _value_lane(u:UOp, i:int, cache:dict) -> UOp:
+  """Lane i of a vector value as a scalar expression: elementwise ops (ALU, CAST, BITCAST) map lane-wise, GEP and
+  STACK select, and any other vector node (a LOAD, a REG read) stays as GEP(node, i)."""
+  if u.dtype.count == 1: return u
+  if (key:=(u, i)) in cache: return cache[key]
+  if u.op is Ops.GEP and isinstance(u.arg, tuple): ret = _value_lane(u.src[0], u.arg[i], cache)
+  elif u.op is Ops.STACK and len(u.src) == u.dtype.count: ret = u.src[i]
+  elif u.op in {*GroupOp.ALU, Ops.CAST, Ops.BITCAST}:
+    ret = u.replace(dtype=u.dtype.scalar(), src=tuple(_value_lane(x, i, cache) for x in u.src))
+  else: ret = u.gep((i,))
+  cache[key] = ret
+  return ret
+
 def reduce_duplicate_output_store(gep:UOp, st:UOp) -> UOp|None:
   """Preserve additive REG projection partials before generic GEP-store inversion drops duplicates."""
   base = gep.src[0]
   global_index = base.op is Ops.INDEX and bool(base.src) and isinstance(base.src[0].dtype, PtrDType) and base.src[0].dtype.addrspace is AddrSpace.GLOBAL
   global_ptrcat = base.op is Ops.PTRCAT and bool(base.src) and all(isinstance(x.dtype, PtrDType) and x.dtype.addrspace is AddrSpace.GLOBAL for x in base.src)
   if not (global_index or global_ptrcat): return None
+  if (ret:=_reduce_duplicate_projection(gep, st)) is not None: return ret
+  # A vector value whose accumulator sits under other ops (a WHERE/CAST epilogue) gets the per-lane proof on its
+  # lanes: one REG leaf per lane, every lane identical but for that leaf.
+  if st.op is Ops.STACK or st.dtype.count == 1 or not isinstance(gep.arg, tuple) or st.dtype.count != len(gep.arg): return None
+  return _reduce_scalarized_reg_partials(base, gep.arg, UOp(Ops.STACK, st.dtype, tuple(_value_lane(st, i, {}) for i in range(st.dtype.count))))
+
+def _reduce_duplicate_projection(gep:UOp, st:UOp) -> UOp|None:
+  base = gep.src[0]
   if not isinstance(gep.arg, tuple) or st.dtype.count != len(gep.arg): return None
   if (scalarized:=_reduce_scalarized_reg_partials(base, gep.arg, st)) is not None: return scalarized
   keyed_groups = _destination_groups(gep.arg)
