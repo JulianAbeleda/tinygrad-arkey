@@ -28,8 +28,8 @@ from tinygrad.uop.ops import UOp
 from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 from tinygrad.llm.kernel_program import (KernelProgram, KernelProgramProvenance, OutputSpec,
                                          execute_research_program)
-from extra.llm_research.bubblebeam_futuresight import build_flash_legality, build_flash_static_priority
 from extra.llm_research.decode.nv_flash_geometry_population import SM120_IDENTITY, SM120_TARGET_ID, candidate_target, flash_candidate
+from boltbeam.search.futuresight import build_flash_legality, build_flash_static_priority  # noqa: E402  (the population module ran require_boltbeam)
 
 SCHEMA = "tinygrad.nv_flash_geometry_search.v1"
 Hq, Hkv, Hd, MAXC, Tc = 32, 8, 128, 4608, 513

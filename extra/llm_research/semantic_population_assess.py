@@ -2,7 +2,9 @@
 from __future__ import annotations
 import json, pathlib
 from typing import Any, Mapping
-from extra.llm_research.bubblebeam_futuresight import candidate_report, build_static_legality, build_static_priority
+from extra.llm_research.boltbeam_checkout import require_boltbeam
+require_boltbeam("boltbeam.search.futuresight")
+from boltbeam.search.futuresight import candidate_report, build_static_legality, build_static_priority  # noqa: E402
 def assess_population(population:Mapping[str,Any])->dict[str,Any]:
   candidates=[row["candidate"]|{"candidate_hash":row["candidate_hash"]} for row in population["candidates"]]
   legality=build_static_legality(population["workload_facts"],population["compiler_facts"])

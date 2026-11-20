@@ -23,11 +23,11 @@ _ROOT = str(Path(__file__).resolve().parents[3])
 if _ROOT not in sys.path:
   sys.path.insert(0, _ROOT)
 
-import extra.llm_research.bubblebeam_futuresight as futuresight
 from extra.llm_research.boltbeam_checkout import require_boltbeam
 from tinygrad.llm.flash_decode_attention import describe_flash_decode_attention
 
-require_boltbeam("boltbeam.search.flash_decode_candidate", "boltbeam.plan.resolved_target")
+require_boltbeam("boltbeam.search.flash_decode_candidate", "boltbeam.search.futuresight", "boltbeam.plan.resolved_target")
+import boltbeam.search.futuresight as futuresight  # noqa: E402
 from boltbeam.plan.resolved_target import candidate_target as boltbeam_candidate_target, resolved_target_document  # noqa: E402
 from boltbeam.search.flash_decode_candidate import FLASH_DECODE_CANDIDATE_SCHEMA_VERSION, FlashDecodeCandidate  # noqa: E402
 

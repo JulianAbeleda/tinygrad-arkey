@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """The historical Q4_K lane map: which packed-word index a lane should read.
 
-This is the half of the old bubblebeam_futuresight module that is genuinely tinygrad work. It scores
+This is the half of the fork's old BubbleBeam/FutureSight module that is genuinely tinygrad work. It scores
 candidate index expressions over UOps and picks the one whose lanes read adjacent words, so it belongs
 with the other lane-partition code in this folder rather than with search policy. The policy half lives
-in BoltBeam and is re-exported by bubblebeam_futuresight.
+in BoltBeam (boltbeam/search/bubblebeam.py, boltbeam/search/futuresight.py); research code imports it from there.
 
 Kept for the record. Nothing in the fork calls it today: the promoted route reaches the same conclusion
 through the route manifest, and this is the reasoning that put it there.

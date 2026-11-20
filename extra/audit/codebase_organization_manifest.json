@@ -690,9 +690,9 @@
       "domain": "tooling",
       "duplication_group": null,
       "evidence": [
-        "research only: imported by extra/llm_research/bubblebeam_futuresight.py, decode/nv_flash_geometry_population.py and, lazily for flash requests, search_provider.py (the worker BoltBeam launches with only the tinygrad root on PYTHONPATH); no tinygrad/ file imports it (test/unit/test_bubblebeam_futuresight.py::test_production_tinygrad_never_imports_the_shim_or_the_loader)",
+        "research only: imported by decode/nv_flash_geometry_population.py, semantic_population_assess.py and, lazily for flash requests, search_provider.py (the worker BoltBeam launches with only the tinygrad root on PYTHONPATH); no tinygrad/ file imports it (test/unit/test_boltbeam_checkout.py::test_production_tinygrad_never_imports_the_loader)",
         "lookup order BOLTBEAM_ROOT, then an importable boltbeam, then <repository parent>/BoltBeam; the sibling path is the same root extra/llm_research/boltbeam_authority.py uses for BOLTBEAM_SOURCE_LEDGER",
-        "test_missing_boltbeam_names_every_place_tried and test_a_wrong_boltbeam_root_fails_the_research_import_loudly pin the failure message"
+        "test/unit/test_boltbeam_checkout.py: test_missing_boltbeam_names_every_place_tried and test_a_wrong_boltbeam_root_fails_the_research_import_loudly pin the failure message"
       ],
       "path": "extra/llm_research/boltbeam_checkout.py",
       "promotion_target": null,
@@ -712,72 +712,6 @@
       "surface": "off_default",
       "test_role": "not_test_like",
       "workflow_ids": []
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering",
-        "quant_mmq",
-        "route_authority",
-        "search_promotion"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "search_promotion",
-      "duplication_group": null,
-      "evidence": [
-        "policy names, including build_flash_legality and build_flash_static_priority, are BoltBeam objects re-exported from boltbeam/search/bubblebeam.py and boltbeam/search/futuresight.py through extra/llm_research/boltbeam_checkout.py; test/unit/test_bubblebeam_futuresight.py::test_policy_names_are_the_boltbeam_objects checks identity",
-        "no tinygrad/ file imports this module (static import graph and a runtime import of every tinygrad/llm module, 2026-09-22); test_production_tinygrad_never_imports_the_shim_or_the_loader enforces it",
-        "research importers: decode/nv_flash_geometry_population.py and decode/nv_flash_geometry_search.py (flash builders on BoltBeam flash candidates), semantic_campaign_export.py, semantic_population_assess.py, scratchpad/campaign_ffn_gate_up_precontract.py (policy); the fork flash schema extra/llm_research/flash_candidate_schema.py was deleted when its users moved to boltbeam/search/flash_decode_candidate.py",
-        "the Q4_K wrapper has no caller outside test/unit/test_bubblebeam_futuresight.py; the tinygrad/llm/route_ops.py lazy re-export was deleted in ab6092a39",
-        "docs/moe-fast-design-scope-20260722.md:23,44 and docs/flash-prefill-wmma-mvp-scope-20260721.md:75,211,215 cite this file as the intended geometry-search tool for future/MVP-deferred work, not a shipped default",
-        "imports extra.llm_research.route_manifest.ROUTES directly to read decode_q4k_g3_generated shape_guards, so it is a consumer of route_manifest, not an authority for it"
-      ],
-      "path": "extra/llm_research/bubblebeam_futuresight.py",
-      "promotion_target": null,
-      "public_surface": [
-        "propose_legal_dimensions",
-        "dimension_mapping",
-        "LegalDimensionProposal",
-        "ScheduleVocabulary",
-        "target_schedule_vocabulary",
-        "build_static_legality",
-        "build_static_priority",
-        "classify_candidates",
-        "apply_coupled_row",
-        "classify_coupled_rows",
-        "rank_static_candidates",
-        "candidate_report",
-        "build_flash_legality",
-        "build_flash_static_priority",
-        "score_candidate",
-        "rank_candidates",
-        "q4k_lane_partition_candidates",
-        "choose_q4k_candidate",
-        "score_layout_transform",
-        "q4k_g3_manifest_shape",
-        "should_route_q4k_lane_partition"
-      ],
-      "purpose": "Fork-side names for BoltBeam's BubbleBeam/FutureSight policy, including the flash decode legality and priority builders: re-exports them from BoltBeam and keeps the historical Q4_K lane-map coalescing wrapper.",
-      "responsibilities": [
-        "re-export BoltBeam's BubbleBeam dimension proposals and FutureSight static legality/ordering (flash builders included) under the fork's names",
-        "static coalescing scoring/ranking of candidate index expressions (Q4_K wrapper)",
-        "Q4_K route-manifest-shape-gated selector (should_route_q4k_lane_partition)"
-      ],
-      "retention_criterion": "the BoltBeam re-exports stay while fork callers import these names; the Q4_K wrapper stays while test/unit/test_bubblebeam_futuresight.py covers it",
-      "reusable_assets": [
-        "route-spec"
-      ],
-      "role": "adapter",
-      "status": "active_research",
-      "surface": "off_default",
-      "test_role": "orphan_unknown",
-      "workflow_ids": [
-        "q4k-lane-layout-search",
-        "coalesce-candidate-scoring"
-      ]
     },
     {
       "allowed_dependency_domains": [
@@ -4585,7 +4519,7 @@
       "duplication_group": null,
       "evidence": [
         "route_manifest.py:1-22 module docstring self-describes as 'the single declarative source of truth for which decode/prefill routes exist'",
-        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.llm_research.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.llm_research.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, bubblebeam_futuresight, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
+        "tinygrad/llm/route_ops.py:11-12 automatic_promoted_prefill_graph_policy(*args,**kwargs) -> _attr('extra.llm_research.route_manifest', 'automatic_promoted_prefill_graph_policy') -- this is the ONLY route_manifest symbol route_ops.py imports/re-exports; route_ops.py otherwise fans out to many other extra.llm_research.* modules (quant.q4_k_gemv_primitive, prefill.q4k_prefill_route_spec, gemv_g3_codegen_lowering, q6k_route_spec, decode.flash_decode_attention_executor, pure_search_guard, prefill.packed_wmma_prefill_candidates, mmq_ds4_logical_emitter, layout, quantize) -- route_manifest is not the sole thing route_ops depends on, but is the sole route_manifest entry point production touches through that boundary file",
         "grep: route_manifest imported by 15 test/unit files and extra/audit/pure_machine_search_default_path_census.py",
         "extra/audit/pure_machine_search_default_path_census.py:31 'This census used to re-declare all of that as a second parallel copy; it now DERIVES ... extra/llm_research/route_manifest.ROUTES'"
       ],
@@ -4973,10 +4907,6 @@
     {
       "path": "extra/llm_research/pure_search_guard.py",
       "question": "Its docstring claims model.py calls assert_pure_machine_search() at Transformer init, but model.py calls only install_memory_adaptive_model_adapters and automatic_promoted_prefill_graph_policy. Is the purity guard meant to be live-enforced, or is it a test-only contract?"
-    },
-    {
-      "path": "extra/llm_research/bubblebeam_futuresight.py",
-      "question": "Shares a name with the BUBBLEBEAM_FUTURESIGHT env var but never reads os.environ. Confirm the naming collision is harmless or rename one of them."
     },
     {
       "path": "extra/audit/pure_machine_search_default_path_census.py",
