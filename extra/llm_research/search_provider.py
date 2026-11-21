@@ -17,6 +17,8 @@ from typing import Any, Callable, Mapping, Protocol, TextIO
 
 PROTOCOL = "tinygrad.search_provider.v1"
 ACTIONS = ("describe", "admit", "compile", "check", "measure", "capability")
+# The fork no longer generates regions: "generate" is refused by name, and capability does not advertise it.
+REGION_GENERATOR_MOVED = "the region generator moved to diwa-gen (private); BoltBeam reaches it through search/generator_repo"
 # The v2 plan kinds a device adapter serves: tinygrad's own scheduler (heuristic or an explicit Opt sequence) and the
 # fork's decode emitters (extra/llm_research/decode_emitter_space.py), offered where the model's decode binds them.
 EMITTER_PLAN_KIND = "tinygrad_decode_emitter.v1"
@@ -97,6 +99,8 @@ class Request:
     if body["protocol"] != PROTOCOL: raise ProtocolError("protocol_mismatch", f"protocol must be {PROTOCOL}")
     if not isinstance(body["request_id"], str) or not body["request_id"]:
       raise ProtocolError("invalid_envelope", "request_id must be a non-empty string")
+    if body["action"] == "generate":
+      raise ProtocolError("unsupported_action", REGION_GENERATOR_MOVED, details={"action": "generate", "moved_to": "diwa-gen"})
     if body["action"] not in ACTIONS:
       raise ProtocolError("unsupported_action", "action is not supported", details={"action": body["action"], "supported": list(ACTIONS)})
     return cls(body["request_id"], body["action"], _json(body["payload"], "payload"))

@@ -60,6 +60,21 @@ def test_malformed_envelope_unknown_action_and_adapter_crash_are_structured_erro
                                "retryable": False, "details": {"exception_type": "RuntimeError"}}
 
 
+def test_generate_is_refused_because_the_region_generator_moved_and_capability_does_not_offer_it(monkeypatch):
+  for adapter in (None, MockAdapter(), provider.DeviceRouter(flash=MockAdapter(), native=MockAdapter(), primitive=MockAdapter())):
+    out = provider.process(request("generate", {"window": {}}), adapter=adapter)
+    assert out["status"] == "blocked" and out["action"] == "generate"
+    assert out["error"]["code"] == "unsupported_action"
+    assert out["error"]["message"] == provider.REGION_GENERATOR_MOVED
+    assert "diwa-gen" in out["error"]["message"] and "search/generator_repo" in out["error"]["message"]
+  assert "generate" not in provider.ACTIONS
+  monkeypatch.setattr(provider.DeviceAdapter, "_facts", lambda self, payload: {"backend": "cpu", "architecture": "x86", "name": "mock"})
+  monkeypatch.setattr(provider.DeviceAdapter, "_plan_kinds", lambda self, dev: (["tinygrad_heuristic.v1"], {}))
+  cap = provider.DeviceAdapter().capability({"devices": ["CPU"]})
+  assert set(cap) == {"provider_revision", "devices"}
+  assert not any("region" in key or "generat" in key for row in cap["devices"] for key in row)
+
+
 def test_json_lines_keeps_rows_independent_and_never_emits_non_json():
   source = io.StringIO(json.dumps(request()) + "\nnot-json\n" + json.dumps(request("measure", {"candidate": {}}, "r3")) + "\n")
   sink = io.StringIO()
