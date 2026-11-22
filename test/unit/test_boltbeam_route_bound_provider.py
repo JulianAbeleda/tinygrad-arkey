@@ -1,6 +1,5 @@
 import pytest
-from extra.llm_research.boltbeam_kernel_provider import candidate_hash, generate_route_bound_candidate
-from extra.llm_research.boltbeam_authority import lower_authorized_candidate
+from tinygrad.llm.boltbeam_authority import lower_authorized_candidate
 
 def _candidate(family, parameters, route, component):
   return {"schema":"boltbeam.route_bound_candidate.v1","target":"nvidia_sm120","family":family,"parameters":parameters,
@@ -20,20 +19,16 @@ def _candidate(family, parameters, route, component):
     "decode_native_argmax", "finite_fp32_argmax"),
   _candidate("kv_rope_store.v1", {"Hkv":8,"Hd":128,"max_context":4096,"vparts":1},
     "decode_kv_store_fusion", "kv_rope_store"),
-  _candidate("q4_k_four_warp.v1", {"rows":1024,"k":4096}, "decode_q4k_k_four_warp", "q4_k_four_warp"),
   _candidate("shared_q8_provider.v1", {"k":4096,"source_dtype":"fp16"},
     "decode_shared_q8_attention", "shared_q8_provider"),
   _candidate("decode_rmsnorm.v1", {"rows":1,"dim":4096,"eps":1e-6,"warps_per_row":16,
     "x_dtype":"dtypes.float","weight_dtype":"dtypes.half","out_dtype":"dtypes.float","x_rank":1},
     "decode_rmsnorm_native_lowering", "decode_rmsnorm"),
 ])
-def test_route_bound_packed_family_generates_registered_emitter(candidate):
-  generated = generate_route_bound_candidate(candidate, candidate_hash(candidate))
-  assert generated.kind == "uop" and callable(generated.artifact)
-
-def test_route_bound_provider_rejects_identity_drift():
-  candidate = _candidate("q6_v.v1", {}, "decode_q6k_v_four_warp_fp16_geometry", "q6_v_four_warp_fp16")
-  with pytest.raises(ValueError): generate_route_bound_candidate(candidate, "0" * 64)
+def test_route_bound_packed_family_lowers_registered_emitter(candidate):
+  emitter,_ = lower_authorized_candidate({"family":candidate["family"], **candidate["parameters"]},
+    tuple((a["route_id"], a["component"]) for a in candidate["authorities"]))
+  assert callable(emitter)
 
 def test_lowering_returns_emitter_and_matching_ticket():
   emitter,ticket = lower_authorized_candidate({"family":"q6_v.v1"},

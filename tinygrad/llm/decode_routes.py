@@ -116,14 +116,6 @@ class _Q4KDecodeCandidate:
       from tinygrad.llm.q4k_ffn_down_mmvq import q4k_ffn_down_mmvq_call
       if (mmvq := q4k_ffn_down_mmvq_call(ffn_down_mmvq_admission,linear,x,binding,epilogue_inputs or {})) is not None:
         return mmvq
-    # Closed-default Q4_K attention-K four-warp exact route. Normal model
-    # loads carry no admission object, so this returns None before constructing
-    # any graph. A research harness installs the admission on exact Q4_K
-    # 1024x4096 attn_kv linears; Q4 V keeps its own shared-Q8 route.
-    if (q4k_k_admission := getattr(linear, "_q4k_k_four_warp_admission", None)) is not None:
-      from tinygrad.llm.q4k_k_four_warp import q4k_k_four_warp_call
-      if (k_four := q4k_k_four_warp_call(q4k_k_admission, linear, x, binding)) is not None:
-        return k_four
     # L1 M4: q4k GEMV epilogue absorption is gated by its own closed record
     # (decode-q4k-epilogue-fusion-route-policy.json, measured non-landing) -- NOT M2's
     # decode_epilogue_fusion record, which stays NV-promoted for the Q6K in-kernel merge only.

@@ -90,7 +90,7 @@ record_source_manifest() {
     printf '\n[source_manifest]\n'
     git -C "$REPO_ROOT" ls-files -- \
       extra/usbgpu/protocol extra/usbgpu/tests extra/usbgpu/tools extra/usbgpu/tbgpu/installer \
-      extra/llm_research/bench.py tinygrad/runtime/support/system.py test/unit | \
+      tinygrad/runtime/support/system.py test/unit | \
       LC_ALL=C sort | while IFS= read -r path; do shasum -a 256 "$REPO_ROOT/$path"; done
   } >> "$provenance_tmp"
 }

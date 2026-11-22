@@ -36,21 +36,6 @@ def _nv_pdl_body(name:str, kernel:list[str]) -> list[str]:
   return kernel
 
 
-def _nv_pdl_body_split_phase(name:str, kernel:list[str]) -> list[str]:
-  """Policy-driven PDL emission behind NV_SPLIT_PHASE=1 (interim scaffolding).
-
-  Reads the versioned NV_SPLIT_PHASE_POLICY JSON file via the memoized loader
-  in extra/llm_research/decode/nv_edge_aware_pdl_render_policy.py instead of
-  the process-wide NV_PDL_* name prefixes. This is not the production
-  interface: the target is per-program split policy carried in graph metadata.
-  """
-  try:
-    from extra.llm_research.decode.nv_edge_aware_pdl_render_policy import apply_nv_split_phase_policy
-  except ImportError as e:
-    raise ImportError("NV_SPLIT_PHASE=1 requires extra/llm_research/decode/nv_edge_aware_pdl_render_policy importable (run from the repo root)") from e
-  return apply_nv_split_phase_policy(name, kernel)
-
-
 def _nv_l2_streaming_weight_source(name:str, source:str) -> str:
   """Research gate: render direct loads from the second kernel buffer with ``__ldcs``.
 
@@ -419,10 +404,7 @@ class CUDARenderer(CStyleLanguage):
   uint2 r; asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0,%1},[%2];"
     : "=r"(r.x),"=r"(r.y) : "r"((unsigned)__cvta_generic_to_shared(p))); return r;
 }''')
-    if os.environ.get("NV_SPLIT_PHASE", "") not in ("", "0"):
-      kernel = _nv_pdl_body_split_phase(function_name, kernel)
-    else:
-      kernel = _nv_pdl_body(function_name, kernel)
+    kernel = _nv_pdl_body(function_name, kernel)
     # Buffer-argument dtypes count too: a kernel whose ONLY fp16/fp8/bf16 element is a `half*` parameter
     # (e.g. an fp16 KV cache stored from fp32 values) previously missed the header include and rendered
     # `half` undefined in the signature (NVRTC compile error). Body uops drive vector-prefix emission, so

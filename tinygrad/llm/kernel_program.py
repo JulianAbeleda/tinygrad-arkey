@@ -507,7 +507,7 @@ def _execute_outputs(output: Tensor | None, inputs: tuple[Tensor, ...], program:
     raise ValueError(f"{boundary} does not accept {program.provenance.value}; expected one of: {allowed_values}")
   if program.provenance in (KernelProgramProvenance.MACHINE_SEARCH_GENERATED,
                             KernelProgramProvenance.TINYGRAD_SCHEDULER_GENERATED):
-    from extra.llm_research.boltbeam_runtime_ticket import require_promoted_ticket
+    from tinygrad.llm.boltbeam_authority import require_promoted_ticket
     require_promoted_ticket(program.boltbeam_ticket, program.route_id, program.program_id)
   if output is None:
     if program.output_spec is None:

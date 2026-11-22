@@ -150,12 +150,6 @@ class Scheduler:
 
     globalizible_rngs = self._globalizable_rngs()
     rng = [x.replace(arg=x.arg[0:-1]+(AxisType.GLOBAL,)) if x in globalizible_rngs else x for x in self.rngs]
-    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
-      try:
-        from extra.llm_research.prefill.nv_compiler_streamk_codegen import STREAMK_RANGE_PROVENANCE
-        STREAMK_RANGE_PROVENANCE.setdefault("lineage", {}).update({old.key:(new.key,) for old,new in zip(self.rngs,rng) if old is not new})
-      except ImportError:
-        pass
     self.ast = self.ast.substitute(dict(zip(self.rngs, rng)))
 
   def colors(self) -> list[str]:
@@ -177,13 +171,6 @@ class Scheduler:
     replaced_rng = rng.replace(src=(old_sz,))
     sub_axis = (new_rng * old_sz + replaced_rng) if top else (replaced_rng * amount + new_rng)
     self.ast = self.ast.substitute({rng:sub_axis}, name=f"shift {rng.arg[:-1]} {amount} {str(new_type).split('.')[1].lower()}")
-    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
-      try:
-        from extra.llm_research.prefill.nv_compiler_streamk_codegen import STREAMK_RANGE_PROVENANCE
-        lineage = STREAMK_RANGE_PROVENANCE.setdefault("lineage", {})
-        lineage[rng.key] = tuple(x.key for x in (replaced_rng, new_rng, sub_axis))
-      except ImportError:
-        pass
     return replaced_rng, new_rng
 
   def ranges_of(self, *axis_type:AxisType) -> list[UOp]: return [r for r in self.rngs if r.arg[-1] in axis_type]
@@ -409,18 +396,6 @@ class Scheduler:
                                       reduceops:list[UOp]) -> None|list[UOp]:
     """Generic tensor-core optimization: pick a TC-compatible dot-product reduce and lower it to WMMA.
     No composite/backend-substitution knowledge lives here -- callers have already ruled that out."""
-    # Research-only Stream-K admission seam.  This is intentionally a no-op in phase one:
-    # the exact packed Q4/Q6 body below remains the implementation, while a flag-on compile
-    # proves the candidate context can reach this point without changing the ordinary AST.
-    # Keep this branch before any candidate-local state is consumed and fail closed for malformed
-    # contexts; the flag is never consulted on the production/default path.
-    if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
-      streamk = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
-      if streamk is not None:
-        validate = getattr(streamk, "validate", None)
-        if not callable(validate): raise KernelOptError("malformed Stream-K research context")
-        try: validate()
-        except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
@@ -566,32 +541,11 @@ class Scheduler:
             if candidate_axes is not None:
               from tinygrad.codegen.opt.kernel_lds import PrecontractKAxis, build_precontract_lds_stage
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
-              physical_outer_n = outer_n
-              streamk_ctx = None
-              if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
-                streamk_ctx = getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None)
-                if streamk_ctx is not None:
-                  object.__setattr__(streamk_ctx, "selected_n_key", outer_n.key)
-                  if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and outer_n.vmax + 1 in (32, 128):
-                    from extra.llm_research.prefill.nv_compiler_streamk_codegen import StreamKRangeState
-                    owners = 8 if outer_n.vmax + 1 == 32 else 32
-                    owner = UOp.range(owners, next(self.opt_range), AxisType.GLOBAL)
-                    serial = UOp.range(4, next(self.opt_range), AxisType.LOOP)
-                    mapped_outer_n = owner * 4 + serial
-                    object.__setattr__(streamk_ctx, "range_state", StreamKRangeState(owner, serial, mapped_outer_n, True, True, False, False))
-                    object.__setattr__(streamk_ctx, "selected_n_key", mapped_outer_n.key)
               range_by_id = {r.arg[0]:r for r in self.rngs}
               try: operands, thread_axes, contracts, allocation = candidate_contract.assemble(
-                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, logical_outer_n=(streamk_ctx.range_state.mapped_outer_n if streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None else None), wave_m=wave_m, wave_n=wave_n, lane=lane,
+                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, wave_m=wave_m, wave_n=wave_n, lane=lane,
                 tc_upcast_axes=tc_upcast_axes, range_by_id=range_by_id, allocation_id=None if candidate_contract.register_mode else lambda: _candidate_lds_buffer_id(self))
               except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
-              if os.environ.get("TINYGRAD_STREAMK_OWNER") == "1" and streamk_ctx is not None and getattr(streamk_ctx, "range_state", None) is not None:
-                state = streamk_ctx.range_state
-                object.__setattr__(state, "precontract_built", True)
-              if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
-                semantic_outer_n = (streamk_ctx.range_state.mapped_outer_n if getattr(streamk_ctx, "range_state", None) is not None and streamk_ctx.range_state.mapped_outer_n is not None else outer_n)
-                from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
-                record_range_provenance(tuple(operands), output_ranges=tuple(self._output_rngs()))
               factors, candidate_pipeline, register_mode = candidate_contract.factors, candidate_contract.pipeline, candidate_contract.register_mode
               pipeline_tc_uop = None
               if register_mode:
@@ -694,18 +648,11 @@ class Scheduler:
                 # Thread the renderer's own declared bank and ordering facts (Renderer.lds_bank_dwords/
                 # lds_bank_cycle_lanes, PG1; Renderer.lds_read_before_next_write_ordered, MB2) into the
                 # cooperative store -- never a per-target snapshot living here or in kernel_lds.py.
-                if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None:
-                  packed_b = next((o for o in operands if getattr(o, "role", None) == "B"), None)
-                  if packed_b is None or (semantic_outer_n*candidate_geometry.tile[1]).key != packed_b.row_tile_base.key:
-                    raise KernelOptError("Stream-K packed-B identity row base mismatch")
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
                   threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
                   subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None,
                   lds_bank_dwords=self.ren.lds_bank_dwords,lds_bank_cycle_lanes=self.ren.lds_bank_cycle_lanes,
-                  lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered,
-                    logical_row_tile_bases=({"A":next(o.row_tile_base for o in operands if o.role == "A"), "B":semantic_outer_n*candidate_geometry.tile[1]} if
-                    os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" and
-                    getattr(getattr(self.ast.arg, "candidate_context", None), "streamk", None) is not None else None))
+                  lds_read_before_next_write_ordered=self.ren.lds_read_before_next_write_ordered)
                 wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:
               wmma_srcs = [
@@ -768,7 +715,7 @@ class Scheduler:
               c_elem = fold_binary_axes(c_axes)
               local_m = wave_m*(factors.subtiles_m*tc.dims[1]) + subtile_m*tc.dims[1] + lane//4 + 8*(c_elem//2)
               local_n = wave_n*(factors.subtiles_n*tc.dims[0]) + subtile_n*tc.dims[0] + 2*(lane%4) + c_elem%2
-              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, (semantic_outer_n if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1" else outer_n)*candidate_geometry.tile[1]+local_n
+              logical_m, logical_n = outer_m*candidate_geometry.tile[0]+local_m, outer_n*candidate_geometry.tile[1]+local_n
               metadata_bytes_per_row = factors.vectors_per_row*4
               windows = {window.role:window for window in candidate_geometry.lds_windows}
               if all(windows[role].stride_bytes >= candidate_geometry.tile[2]+metadata_bytes_per_row for role in ("A", "B")):
@@ -1108,25 +1055,6 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
   k.bound_expanded_reduction_pressure()
-  # Research-only logical global-range mapping seam.  A context may provide a
-  # pure mapper(range)->UOp; the RANGE node itself remains the physical launch
-  # axis, while semantic consumers see the mapped logical coordinate.  No
-  # mapper is installed by default, so ordinary ASTs are untouched.
-  if os.environ.get("TINYGRAD_STREAMK_RESEARCH") == "1":
-    mapper = getattr(getattr(k.ast.arg, "candidate_context", None), "logical_global_range_map", None)
-    if callable(mapper):
-      selected = mapper(k.ast, k)
-      if selected is None: selected = {}
-      if not isinstance(selected, dict): raise KernelOptError("Stream-K range selector must return a dict")
-      ranges = {rng.key:rng for rng in k._output_rngs()}
-      substitutions = {}
-      for key, mapped in selected.items():
-        if key not in ranges: raise KernelOptError("Stream-K range selector returned an unknown output RANGE")
-        if not isinstance(mapped, UOp): raise KernelOptError("Stream-K logical range mapper must return UOp")
-        substitutions[ranges[key]] = mapped
-      if substitutions:
-        from extra.llm_research.prefill.nv_compiler_streamk_codegen import one_pass_substitute
-        k.ast = one_pass_substitute(k.ast, substitutions)
   optimized = k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
   if _Q6_PRE_SCHEDULER_HOOK is not None and getattr(k.ast.arg, "candidate_context", None) is not None:
     replacement = _Q6_PRE_SCHEDULER_HOOK(optimized)

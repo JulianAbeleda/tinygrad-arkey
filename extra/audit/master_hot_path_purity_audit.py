@@ -28,14 +28,14 @@ class Classification(str, Enum):
 # Actual production dispatch modules, rather than an emitter named by a
 # manifest. Literal dynamic imports in route_ops are resolved by _imports.
 CURRENT_DEFAULTS = {
-  "decode_q4k_g3_generated": ("tinygrad/llm/decode_routes.py", ["extra/llm_research/gemv_g3_codegen_lowering.py"]),
-  "decode_q6k_coop_generated": ("tinygrad/llm/decode_routes.py", ["extra/llm_research/q6k_route_spec.py"]),
-  "decode_flash_live_split_g4_kvboth": ("tinygrad/llm/decode_routes.py", ["extra/llm_research/flash_kernels.py"]),
-  "decode_flash_live_split_g5_kvboth": ("tinygrad/llm/decode_routes.py", ["extra/llm_research/flash_kernels.py"]),
+  "decode_q4k_g3_generated": ("tinygrad/llm/decode_routes.py", []),
+  "decode_q6k_coop_generated": ("tinygrad/llm/decode_routes.py", []),
+  "decode_flash_live_split_g4_kvboth": ("tinygrad/llm/decode_routes.py", []),
+  "decode_flash_live_split_g5_kvboth": ("tinygrad/llm/decode_routes.py", []),
   "prefill_flash_attention_generated": ("tinygrad/llm/fused_attention.py", ["tinygrad/schedule/wmma/kernels.py"]),
   "prefill_wmma_lds_dbuf_generated": ("tinygrad/llm/prefill_routes.py", []),
-  "prefill_q4k_direct_tile4x4_default": ("tinygrad/llm/prefill_routes.py", ["extra/llm_research/prefill/q4k_prefill_route_spec.py"]),
-  "prefill_q6k_direct_generated": ("tinygrad/llm/prefill_routes.py", ["extra/llm_research/prefill/q6k_prefill_route_spec.py"]),
+  "prefill_q4k_direct_tile4x4_default": ("tinygrad/llm/prefill_routes.py", []),
+  "prefill_q6k_direct_generated": ("tinygrad/llm/prefill_routes.py", []),
   "packed_wmma_prefill_generated": ("tinygrad/llm/prefill_routes.py", ["tinygrad/llm/packed_wmma_prefill.py"]),
 }
 

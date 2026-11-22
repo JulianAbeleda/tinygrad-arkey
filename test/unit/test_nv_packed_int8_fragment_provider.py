@@ -13,7 +13,7 @@ from tinygrad.codegen.opt.packed_weight import (PackedWeightTransform, Q4KInt8Fr
                                                 Q8Int8FragmentProvider, Q4KQ8GroupAccumulatorContract)
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
-from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
+from tinygrad.llm.prefill_candidate_runtime import KernelLDSWindow, KernelTileGeometry
 
 def test_q4_a_x4_fragment_contract_is_narrow_and_local_byte_addressed():
   spec=PackedFragmentSpec.q4k_a_k32()

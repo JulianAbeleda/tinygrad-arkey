@@ -32,19 +32,3 @@ if [ -n "$code_changed" ] && [ -z "$test_changed" ]; then
   echo "  add a regression test, or bypass with: git commit --no-verify" >&2
   exit 1
 fi
-
-harness_changed=$(printf '%s\n' "$authored" | grep -E '^extra/llm_research/decode/nv_.*_ab\.py$' || true)
-if [ -n "$harness_changed" ]; then
-  for f in $harness_changed; do
-    body=$(git show ":$f" 2>/dev/null)
-    case "$body" in
-      *COST_PREDICTION*validate_cost_prediction*) ;;
-      *)
-        echo "pre-commit: decode harness without the predicted-wall-delta contract (agreement Rule 3)" >&2
-        echo "  staged harness: $f" >&2
-        echo "  COST_PREDICTION + validate_cost_prediction are required (nv_fusion_cost_model.py); bypass with: git commit --no-verify" >&2
-        exit 1
-        ;;
-    esac
-  done
-fi

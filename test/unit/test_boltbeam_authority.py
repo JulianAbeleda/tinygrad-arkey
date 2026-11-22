@@ -1,8 +1,8 @@
 import ast
 from pathlib import Path
 import pytest
-from extra.llm_research.boltbeam_authority import (BOLTBEAM_SOURCE_LEDGER, DEFAULT_LEDGER, load_promoted_routes,
-                                                   ticket_for_authority, tickets_for_candidate)
+from tinygrad.llm.boltbeam_authority import (BOLTBEAM_SOURCE_LEDGER, DEFAULT_LEDGER, load_promoted_routes,
+                                             ticket_for_authority, tickets_for_candidate)
 
 def test_authority_ledger_has_promoted_routes():
   routes = load_promoted_routes()

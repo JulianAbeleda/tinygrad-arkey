@@ -348,6 +348,8 @@ def run_gate(gate:str, *, status_reader, endpoint_reader, process_reader=lambda:
              idle_s=None, include_post_idle=False, clock=time.monotonic, socket_reader=lambda:False, install_provenance=None,
              power_status_reader=None) -> dict:
   evidence, first_failure = {"gate":gate, "samples":[], "power_samples":[], "endpoint_checks":[], "commands":[], "command_results":[]}, None
+  # The model bench these gates drove (extra/llm_research/bench.py) left with the kernel generator; refuse without one.
+  if gate in ("A6", "A7", "A8", "A10") and bench_command is None: raise QualificationError(f"{gate} requires a model bench command")
   try:
     if endpoint_reader is None: raise QualificationError("endpoint reader is required")
     if model is not None:
@@ -498,13 +500,12 @@ def main(argv=None) -> int:
     power_cmd = [str(DEFAULT_APP), "power", "status"]
     hello_cmd = [str(DEFAULT_APP), "keepalive", "handshake"]
     minimal = [sys.executable, str(ROOT / "extra/usbgpu/tests/minimal_amd_compute.py")]
-    bench = [sys.executable, str(ROOT / "extra/llm_research/bench.py")]
     residency_artifact = ROOT / "docs/task_workflow/output" / \
       f"egpu-usb4-persistent-model-residency-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}.json"
     residency = [sys.executable, str(ROOT / "extra/usbgpu/tests/persistent_model_residency.py"), "--out", str(residency_artifact)]
     evidence = run_gate(args.gate, status_reader=lambda:status_command(status_cmd), power_status_reader=lambda:status_command(power_cmd),
                         handshake_reader=lambda:handshake_command(hello_cmd),
-                        installed_executable=DEFAULT_APP, model=args.model, minimal_command=minimal, bench_command=bench,
+                        installed_executable=DEFAULT_APP, model=args.model, minimal_command=minimal,
                         residency_command=residency, residency_artifact=residency_artifact,
                         endpoint_reader=default_endpoint_reader, process_reader=default_process_reader, terminator=lambda pid:os.kill(pid, signal.SIGTERM),
                         socket_reader=lambda:socket_reachable(DEFAULT_SOCKET), include_post_idle=args.include_post_idle, install_provenance=provenance,

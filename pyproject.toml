@@ -47,12 +47,6 @@ packages = [
   'tinygrad.schedule.wmma',
   'tinygrad.uop',
   'tinygrad.viz',
-  # tinygrad/llm (boltbeam_authority, kernel_program, model NV bindings, ...) imports these research
-  # modules; ship them so a pip install of the fork imports without a checkout.
-  'extra',
-  'extra.llm_research',
-  'extra.llm_research.decode',
-  'extra.llm_research.prefill',
 ]
 
 [tool.setuptools.package-data]

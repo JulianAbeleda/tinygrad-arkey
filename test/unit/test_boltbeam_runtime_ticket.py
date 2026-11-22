@@ -1,5 +1,5 @@
 import pytest
-from extra.llm_research.boltbeam_runtime_ticket import BoltbeamKernelTicket, require_promoted_ticket
+from tinygrad.llm.boltbeam_authority import BoltbeamKernelTicket, require_promoted_ticket
 
 def test_ticket_serializes_and_validates():
   t = BoltbeamKernelTicket("a" * 64, "b" * 64, "q8_provider", "sm120", "rev1")

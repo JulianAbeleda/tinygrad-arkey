@@ -9,7 +9,7 @@ from tinygrad.codegen.opt.tc import amd_cdna_161616, amd_rdna3
 from tinygrad import dtypes
 from tinygrad.helpers import Target
 from tinygrad.renderer.cstyle import HIPRenderer, MetalRenderer
-from extra.llm_research.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
+from tinygrad.llm.prefill_candidate_runtime import KernelLDSWindow, KernelTileGeometry
 
 
 def _geometry():

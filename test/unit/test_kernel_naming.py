@@ -1,12 +1,10 @@
 import hashlib, json, re, subprocess, sys
 
 from tinygrad.codegen import to_program, to_program_cache
-from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
-from extra.llm_research.kernel_vocabulary import KernelCandidateContext
 
 
 def _sink(value: int, info: KernelInfo|None=None) -> UOp:
@@ -49,11 +47,3 @@ print(json.dumps((program.arg.function_name, hashlib.sha256(source.encode()).hex
 """
   actual = tuple(json.loads(subprocess.check_output([sys.executable, "-c", script], text=True)))
   assert actual == expected
-
-
-def test_candidate_context_does_not_change_structural_name_and_override_is_preserved():
-  renderer = PythonRenderer(Target("PYTHON"))
-  contexts = [KernelCandidateContext("boltbeam.full_kernel_candidate.v1", digit * 64) for digit in ("1", "2")]
-  names = [apply_opts(_sink(1, KernelInfo(opts_to_apply=(), candidate_context=context)), renderer).arg.function_name for context in contexts]
-  assert names[0] == names[1]
-  assert apply_opts(_sink(1, KernelInfo(name="explicit-name", opts_to_apply=())), renderer).arg.name == "explicit-name"

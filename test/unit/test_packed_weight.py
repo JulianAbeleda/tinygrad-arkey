@@ -7,8 +7,11 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt.packed_weight import (PackedInt8Fragment, PackedWeightTile, PackedWeightTransform,
                                                 Q4KInt8FragmentProvider)
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
-from extra.llm_research.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
-from extra.llm_research.layout import Q4_K_BLOCK_BYTES, Q6_K_BLOCK_BYTES, q4_k_reference, q6_k_reference
+from tinygrad.llm.gguf import ggml_data_to_tensor
+from tinygrad.llm.qk_layout import GGML_Q4_K, GGML_Q6_K, Q4_K_BLOCK_BYTES, Q6_K_BLOCK_BYTES
+
+def q4_k_reference(t:Tensor, n:int) -> Tensor: return ggml_data_to_tensor(t, n, GGML_Q4_K)
+def q6_k_reference(t:Tensor, n:int) -> Tensor: return ggml_data_to_tensor(t, n, GGML_Q6_K)
 
 
 def _packed(fmt:str, rows:int, k:int, seed:int) -> Tensor:
@@ -221,15 +224,3 @@ def test_every_symbolic_decoder_load_stays_within_packed_storage(fmt, rows, k):
   assert all(offset.vmin >= 0 for offset in offsets)
   assert all(offset.vmax < desc.packed_bytes // desc.storage_width for offset in offsets)
 
-
-def test_candidate_context_carries_validated_packed_transform_only_with_geometry():
-  desc = PackedWeightTransform("Q4_K", 16, 256)
-  identity = "1" * 64
-  with pytest.raises(ValueError, match="geometry"):
-    KernelCandidateContext("boltbeam.full_kernel_candidate.v1", identity, packed_weight=desc)
-  geometry = KernelTileGeometry((128, 128, 32), (2, 2), 128, 32,
-    (KernelLDSWindow("A", 0, 8192, 64), KernelLDSWindow("B", 8192, 16384, 64)))
-  context = KernelCandidateContext("boltbeam.full_kernel_candidate.v1", identity, geometry=geometry, packed_weight=desc)
-  assert context.packed_weight is desc
-  with pytest.raises(TypeError, match="PackedWeightTransform"):
-    KernelCandidateContext("boltbeam.full_kernel_candidate.v1", identity, geometry=geometry, packed_weight={"quant_format":"Q4_K"})

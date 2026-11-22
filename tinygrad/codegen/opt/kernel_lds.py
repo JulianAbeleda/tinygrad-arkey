@@ -481,7 +481,6 @@ class PrecontractCandidateContract:
     return cls(context, tc, factors, register_mode)
 
   def assemble(self, *, in0:UOp, in1:UOp, original_axes:tuple[UOp, UOp, UOp], outer_n:UOp, outer_m:UOp,
-               logical_outer_n:UOp|None = None,
                wave_m:UOp, wave_n:UOp, lane:UOp, tc_upcast_axes:tuple[tuple[tuple[int, int], ...], ...],
                range_by_id:dict[int, UOp], allocation_id:Callable[[], int]|None
                ) -> tuple[tuple[PrecontractOperand, ...], PrecontractThreadAxes, tuple[PrecontractContractSpec, ...], UOp|None]:
@@ -492,7 +491,6 @@ class PrecontractCandidateContract:
           not isinstance(getattr(self.context,"packed_weight",None),PackedWeightTransform) or
           getattr(self.context.packed_weight.quant_format,"name",None)!="Q4_K"):
         raise ValueError("swapped packed operands require the exact symmetric NVIDIA Q4/Q8 descriptor")
-    packed_outer_n = outer_n if logical_outer_n is None else logical_outer_n
     contracts = []
     for operand_idx, role in enumerate(("A", "B")):
       axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[operand_idx] if size == 2)
@@ -554,7 +552,7 @@ class PrecontractCandidateContract:
       fragment_spec = PackedFragmentSpec.q6k_k64() if isinstance(fragment_provider, Q6KInt8FragmentProvider) else \
         PackedFragmentSpec.q4k_a_k32() if swapped and getattr(self.context,"native_weight_fragment",None)=="q4_a_x4" else None
       weight_operand = PackedPrecontractOperandTemplate("A" if swapped else "B",packed_params[0],packed_weight,weight_row_axis,
-        original_axes[2],outer_m*geometry.tile[0] if swapped else packed_outer_n*geometry.tile[1],fragment_provider,fragment_spec)
+        original_axes[2],outer_m*geometry.tile[0] if swapped else outer_n*geometry.tile[1],fragment_provider,fragment_spec)
     operands:tuple[PrecontractOperand, ...] = (weight_operand,activation_operand) if swapped else (activation_operand,weight_operand)
     validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="candidate")
     return operands, PrecontractThreadAxes(wave_m, wave_n, lane), contracts, allocation
@@ -1084,8 +1082,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
                                 contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None,
                                 lds_bank_dwords:int|None=None, lds_bank_cycle_lanes:int|None=None,
-                                lds_read_before_next_write_ordered:bool|None=None,
-                                logical_row_tile_bases:tuple[UOp|None,UOp|None]|dict[str,UOp|None]|None=None) -> PrecontractLDSStage:
+                                lds_read_before_next_write_ordered:bool|None=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist.
 
   ``lds_bank_dwords``/``lds_bank_cycle_lanes`` are the calling renderer's declared bank facts
@@ -1107,11 +1104,6 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
   if any(getattr(w, "xor_swizzle", False) for w in geometry.lds_windows):
     raise ValueError("XOR-swizzled LDS windows are expressed only by precontract pipelines")
-  try:
-    from extra.llm_research.prefill.nv_compiler_streamk_codegen import record_range_provenance
-    record_range_provenance(operands)
-  except ImportError:
-    pass
   for operand in operands:
     if operand.row_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract row tile base must be integer")
   validate_precontract_thread_axes(geometry, factors, threads, subtile_m, subtile_n, context="precontract")
@@ -1172,8 +1164,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                   stride_bytes=window.stride_bytes, vector_bytes=vector_bytes,
                                   bank_dwords=lds_bank_dwords, bank_cycle_lanes=lds_bank_cycle_lanes)
       logical_k = vector * vector_elements
-      logical_base = (logical_row_tile_bases.get(operand.role) if isinstance(logical_row_tile_bases, dict) else logical_row_tile_bases[0 if operand.role == "A" else 1]) if logical_row_tile_bases is not None else None
-      logical_row = (logical_base if logical_base is not None else operand.row_tile_base) + row
+      logical_row = operand.row_tile_base + row
       if isinstance(operand, PackedPrecontractOperandTemplate):
         value = operand.fragment_provider.fragment(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
           if operand.fragment_provider is not None else \
